@@ -175,7 +175,7 @@ export default function CanvassAreaPull({ shape, onClearShape, status, onPreview
           </span>
         )}
         {preview && preview.willDeliver > 0 && (
-          <button type="button" onClick={pull} disabled={busy !== null} className="text-sm px-3 py-2 rounded-lg bg-brick text-white font-medium hover:bg-brick-dark disabled:opacity-50">
+          <button type="button" onClick={pull} disabled={busy !== null} className="text-sm px-3 py-2 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark disabled:opacity-50">
             {busy === 'pull' ? 'Pulling…' : `📇 Pull contacts · ${Math.min(preview.willDeliver, count)} homes · ${usd(Math.min(preview.willDeliver, count) * CREDITS_PER_LEAD_ROW)}`}
           </button>
         )}

@@ -121,7 +121,7 @@ export default function JobPhotos({ externalId, onChanged }: { externalId: strin
           disabled={!!busy}
           // The most-used field action in the app — sized for a thumb, the way
           // canvass.tsx sizes its one-handed controls.
-          className="text-xs px-3 py-2 rounded-lg bg-brick text-white font-medium hover:bg-brick-dark disabled:opacity-50"
+          className="text-xs px-3 py-2 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark disabled:opacity-50"
         >
           {busy ? `Uploading ${busy.done}/${busy.total}…` : '＋ Add photos'}
         </button>

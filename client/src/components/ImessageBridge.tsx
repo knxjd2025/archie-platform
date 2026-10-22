@@ -51,7 +51,7 @@ export default function ImessageBridge() {
       </div>
       {st?.configured && <p className="text-xs text-gray-500">{st.messages.toLocaleString()} messages synced{st.all ? ' · syncing every thread' : ' · client threads only'}.</p>}
       <div className="flex flex-wrap gap-2">
-        <button onClick={make} disabled={busy} className="text-sm px-3 py-2 rounded-lg bg-brick text-white font-medium hover:bg-brick-dark disabled:opacity-50">{st?.configured ? 'New token' : 'Set up the bridge'}</button>
+        <button onClick={make} disabled={busy} className="text-sm px-3 py-2 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark disabled:opacity-50">{st?.configured ? 'New token' : 'Set up the bridge'}</button>
         {st?.configured && <button onClick={remove} className="text-sm px-3 py-2 rounded-lg bg-gray-100 text-gray-600">Disconnect</button>}
       </div>
       {token && (

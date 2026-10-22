@@ -127,7 +127,7 @@ export default function ReportRefineChat({ externalId, reportId, onChanged }: {
           className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:ring-1 focus:ring-blue-400 disabled:bg-gray-100"
         />
         <button onClick={() => send(text)} disabled={busy || !text.trim()}
-          className="text-sm px-3 py-1.5 rounded-lg bg-brick text-white font-medium hover:bg-brick-dark disabled:opacity-50">
+          className="text-sm px-3 py-1.5 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark disabled:opacity-50">
           {busy ? '…' : 'Send'}
         </button>
       </div>

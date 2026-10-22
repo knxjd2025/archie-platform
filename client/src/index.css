@@ -23,6 +23,15 @@
   --input: 214.3 31.8% 91.4%;
   --ring: 221.2 83.2% 53.3%;
   --radius: 0.5rem;
+
+  /* Company brand colors as "r g b" triplets (tailwind `brand-*`). These are
+     Archie's defaults; client/src/lib/brand.ts replaces them with the signed-in
+     company's colors. Keep in step with brandThemeVars(null). */
+  --brand: 31 58 95;
+  --brand-light: 65 88 119;
+  --brand-dark: 23 44 71;
+  --brand-accent: 201 160 75;
+  --on-brand: 255 255 255;
 }
 
 .dark {
@@ -52,12 +61,12 @@
 }
 
 body {
-  background-color: #f5f1ea; /* brand cream */
+  background-color: #f5f6f8; /* Archie canvas */
   color: hsl(var(--foreground));
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
-/* Editorial serif headings — matches bestroofingnow.com (Fraunces over Inter). */
+/* Editorial serif headings (Fraunces over Inter). */
 h1, h2 {
   font-family: 'Fraunces', Georgia, Cambria, serif;
 }

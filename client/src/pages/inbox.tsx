@@ -92,7 +92,7 @@ export default function Inbox({ onNavigate, onOpenClient }: { onNavigate: (page:
           </p>
         </div>
         <div className="text-right">
-          <button onClick={scan} disabled={scanning || summary?.canScan === false} className="px-4 py-2.5 rounded-lg bg-brick text-white font-medium hover:bg-brick-dark disabled:opacity-50">
+          <button onClick={scan} disabled={scanning || summary?.canScan === false} className="px-4 py-2.5 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark disabled:opacity-50">
             {scanning ? 'Scanning…' : '🔍 Scan for leads'}
           </button>
           {nextWindow && <p className="text-[11px] text-gray-400 mt-1">{nextWindow.firstScan ? 'First scan: the past 72 hours' : `Only what's new since ${fmt(nextWindow.from)} (${nextWindow.hours}h)`}</p>}
@@ -112,7 +112,7 @@ export default function Inbox({ onNavigate, onOpenClient }: { onNavigate: (page:
         </div>
         <div className="flex gap-1 bg-white border border-gray-200 rounded-full p-0.5">
           {(['new', 'handled', 'dismissed'] as const).map((t) => (
-            <button key={t} onClick={() => setTab(t)} aria-pressed={tab === t} className={`px-3 py-1 text-sm rounded-full capitalize ${tab === t ? 'bg-navy text-white' : 'text-gray-600'}`}>{t}</button>
+            <button key={t} onClick={() => setTab(t)} aria-pressed={tab === t} className={`px-3 py-1 text-sm rounded-full capitalize ${tab === t ? 'bg-ink text-white' : 'text-gray-600'}`}>{t}</button>
           ))}
         </div>
       </div>
@@ -149,7 +149,7 @@ export default function Inbox({ onNavigate, onOpenClient }: { onNavigate: (page:
                   <a href={gmailUrl(it.threadId, summary?.mailbox || '')} target="_blank" rel="noopener noreferrer" className="text-xs px-2.5 py-1.5 rounded-lg bg-gray-100 text-gray-700 font-medium hover:bg-gray-200">✉️ Open in Gmail</a>
                   {tab === 'new' && (
                     <>
-                      {!it.matchedExternalId && it.category !== 'other' && <button onClick={() => makeLead(it)} className="text-xs px-2.5 py-1.5 rounded-lg bg-brick text-white font-medium hover:bg-brick-dark">＋ Make it a lead</button>}
+                      {!it.matchedExternalId && it.category !== 'other' && <button onClick={() => makeLead(it)} className="text-xs px-2.5 py-1.5 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark">＋ Make it a lead</button>}
                       <button onClick={() => followUp(it)} className="text-xs px-2.5 py-1.5 rounded-lg bg-gray-100 text-gray-700 font-medium hover:bg-gray-200">🔔 Follow-up tomorrow</button>
                       <button onClick={() => setStatus(it, 'handled')} className="text-xs px-2.5 py-1.5 rounded-lg bg-gray-100 text-gray-700 font-medium hover:bg-gray-200">✅ Handled</button>
                       <button onClick={() => setStatus(it, 'dismissed')} className="text-xs px-2.5 py-1.5 rounded-lg text-gray-500 hover:bg-gray-100">Not important</button>

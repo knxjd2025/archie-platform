@@ -85,7 +85,7 @@ export default function Playbook({ initialDocId, initialExternalId, onOpenClient
           {group !== 'all' && <p className="text-xs text-gray-500 px-1 pb-1">{PLAYBOOK_GROUPS.find((g) => g.key === group)?.blurb}</p>}
           {docs.length === 0 && <p className="text-sm text-gray-400 px-1 py-6 text-center">Nothing matches. Try a different word.</p>}
           {docs.map((d) => (
-            <button key={d.id} onClick={() => setDocId(d.id)} className={`w-full text-left rounded-xl border px-3 py-2.5 transition ${docId === d.id ? 'border-navy bg-blue-50/60' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
+            <button key={d.id} onClick={() => setDocId(d.id)} className={`w-full text-left rounded-xl border px-3 py-2.5 transition ${docId === d.id ? 'border-ink bg-blue-50/60' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
               <div className="flex items-center gap-2">
                 <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${KIND_COLOR[d.kind]}`}>{KIND_LABEL[d.kind]}</span>
                 {d.audience && <span className="text-[10px] text-gray-400 capitalize">{d.audience}</span>}
@@ -105,7 +105,7 @@ export default function Playbook({ initialDocId, initialExternalId, onOpenClient
 }
 
 function Chip({ active, onClick, children, title }: { active: boolean; onClick: () => void; children: React.ReactNode; title?: string }) {
-  return <button onClick={onClick} title={title} aria-pressed={active} className={`px-3 py-1.5 text-xs rounded-full ${active ? 'bg-navy text-white' : 'bg-white border border-gray-200 text-gray-600 hover:border-gray-300'}`}>{children}</button>;
+  return <button onClick={onClick} title={title} aria-pressed={active} className={`px-3 py-1.5 text-xs rounded-full ${active ? 'bg-ink text-white' : 'bg-white border border-gray-200 text-gray-600 hover:border-gray-300'}`}>{children}</button>;
 }
 
 function DocView({ doc, ctx, ctxCurrent, onBack, onPickCustomer, flash, onOpenDoc }: {
@@ -217,7 +217,7 @@ function DocView({ doc, ctx, ctxCurrent, onBack, onPickCustomer, flash, onOpenDo
               <div className="grid sm:grid-cols-2 gap-2 pt-1">
                 <label className="text-[11px] font-semibold text-gray-500">Referral gift<input value={gift} onChange={(e) => setGift(e.target.value)} placeholder="e.g. a $100 gift card" className="mt-0.5 w-full text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 font-normal" /></label>
                 <label className="text-[11px] font-semibold text-gray-500">Google review link<input value={review} onChange={(e) => setReview(e.target.value)} placeholder="https://g.page/r/…/review" className="mt-0.5 w-full text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 font-normal" /></label>
-                <div className="sm:col-span-2"><button onClick={saveSettings} className="text-xs px-3 py-1.5 rounded-lg bg-navy text-white font-medium">Save for every rep</button></div>
+                <div className="sm:col-span-2"><button onClick={saveSettings} className="text-xs px-3 py-1.5 rounded-lg bg-ink text-white font-medium">Save for every rep</button></div>
               </div>
             )}
             {filled && filled.remaining.length > 0 && (
@@ -242,7 +242,7 @@ function DocView({ doc, ctx, ctxCurrent, onBack, onPickCustomer, flash, onOpenDo
           {/* The app's WebView has no print dialog and a blank window.open page is
               a dead end with no way back, so Print only shows on the website. */}
           {!isNativeApp() && <button className={btn} onClick={print}>{doc.kind === 'letter' ? 'Print on letterhead' : 'Print / Save PDF'}</button>}
-          {doc.kind === 'email' && ctx?.customerExternalId && <button className="text-xs px-3 py-1.5 rounded-lg bg-brick text-white font-medium hover:bg-brick-dark disabled:opacity-50" disabled={sending || !ctxCurrent} title={ctxCurrent ? undefined : 'Loading this customer…'} onClick={sendEmail}>{sending ? 'Sending…' : `Email ${ctx.customerLabel?.split(' ')[0] || 'customer'} via GHL`}</button>}
+          {doc.kind === 'email' && ctx?.customerExternalId && <button className="text-xs px-3 py-1.5 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark disabled:opacity-50" disabled={sending || !ctxCurrent} title={ctxCurrent ? undefined : 'Loading this customer…'} onClick={sendEmail}>{sending ? 'Sending…' : `Email ${ctx.customerLabel?.split(' ')[0] || 'customer'} via GHL`}</button>}
           {relatedChecklist && <button className={btn} onClick={() => onOpenDoc(relatedChecklist.id)}>Open the {relatedChecklist.title} →</button>}
         </div>
 

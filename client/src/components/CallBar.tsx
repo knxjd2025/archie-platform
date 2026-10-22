@@ -45,13 +45,13 @@ export default function CallBar({ onOpenClient }: { onOpenClient?: (externalId: 
               id="softphone-to"
               value={toDial}
               onChange={(e) => setToDial(e.target.value)}
-              placeholder="(704) 555-1234"
+              placeholder="(555) 555-1234"
               type="tel"
               inputMode="tel"
               autoFocus
               className="text-sm border border-gray-200 rounded-lg px-3 py-2 w-44 focus:ring-1 focus:ring-blue-400"
             />
-            <button type="submit" className="text-sm px-4 py-2 rounded-lg bg-navy text-white font-medium">Call</button>
+            <button type="submit" className="text-sm px-4 py-2 rounded-lg bg-ink text-white font-medium">Call</button>
             <button
               type="button"
               onClick={() => { setDialOpen(false); setToDial(''); }}
@@ -64,7 +64,7 @@ export default function CallBar({ onOpenClient }: { onOpenClient?: (externalId: 
           <button
             onClick={() => setDialOpen(true)}
             title={phone.number ? `Call from ${phone.number}` : undefined}
-            className="text-sm px-4 py-2.5 rounded-full bg-navy text-white font-medium shadow-lg hover:bg-navy/90"
+            className="text-sm px-4 py-2.5 rounded-full bg-ink text-white font-medium shadow-lg hover:bg-ink/90"
           >
             📞 New call
           </button>
@@ -80,7 +80,7 @@ export default function CallBar({ onOpenClient }: { onOpenClient?: (externalId: 
   const tone = ringing
     ? 'bg-emerald-600'
     : onCall
-      ? 'bg-navy'
+      ? 'bg-ink'
       : 'bg-red-700';
 
   return (
@@ -145,7 +145,7 @@ export default function CallBar({ onOpenClient }: { onOpenClient?: (externalId: 
                 onClick={phone.toggleMute}
                 aria-pressed={phone.muted}
                 className={`text-sm px-4 py-1.5 rounded-lg font-medium ${
-                  phone.muted ? 'bg-white text-navy' : 'bg-white/15 hover:bg-white/25'
+                  phone.muted ? 'bg-white text-ink' : 'bg-white/15 hover:bg-white/25'
                 }`}
               >
                 {phone.muted ? 'Unmute' : 'Mute'}

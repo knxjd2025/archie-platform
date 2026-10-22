@@ -108,7 +108,7 @@ function FieldInput({ field, value, onChange, id }: { field: InspectionField; va
 }
 
 /**
- * The BRN field inspection checklist, filled by the rep on-site (not JobTread
+ * The field inspection checklist, filled by the rep on-site (not JobTread
  * — see shared/inspection-form.ts). Its answers feed report generation
  * directly. A commercial job (lead.propertyType, or the rep's choice before
  * starting) gets the low-slope checklist, which routes the job to the
@@ -296,7 +296,7 @@ export default function InspectionForm({ jobExternalId, propertyType }: { jobExt
           {submission.status === 'draft' && (
             <div className="flex items-center justify-between">
               <span className="text-xs text-gray-400">{saving ? 'Saving…' : 'Autosaved'}</span>
-              <button onClick={submit} disabled={submitting || missing.length > 0} className="text-sm px-4 py-2 rounded-lg bg-brick text-white font-medium hover:bg-brick-dark disabled:opacity-50">
+              <button onClick={submit} disabled={submitting || missing.length > 0} className="text-sm px-4 py-2 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark disabled:opacity-50">
                 {submitting ? 'Submitting…' : missing.length ? `${missing.length} required field${missing.length === 1 ? '' : 's'} left` : 'Submit Inspection'}
               </button>
             </div>

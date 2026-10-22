@@ -115,12 +115,12 @@ export default function Assignments({ onOpenClient }: { onOpenClient?: (external
           <h2 className="text-2xl font-bold text-gray-900">Unassigned clients</h2>
           <p className="text-sm text-gray-500 mt-1">
             {counts
-              ? <><span className="font-semibold text-brick">{counts.active}</span> active {counts.active === 1 ? 'job has' : 'jobs have'} nobody on {counts.active === 1 ? 'it' : 'them'} · {counts.total} in total</>
+              ? <><span className="font-semibold text-red-600">{counts.active}</span> active {counts.active === 1 ? 'job has' : 'jobs have'} nobody on {counts.active === 1 ? 'it' : 'them'} · {counts.total} in total</>
               : 'Checking…'}
           </p>
         </div>
         <button onClick={loadSuggestions} disabled={loading}
-          className="px-3 py-2 text-sm bg-brick text-white rounded-lg font-medium hover:bg-brick-dark disabled:opacity-60">
+          className="px-3 py-2 text-sm bg-brand text-on-brand rounded-lg font-medium hover:bg-brand-dark disabled:opacity-60">
           {loading ? 'Working out owners…' : jobs.length ? 'Reload suggestions' : 'Suggest owners'}
         </button>
       </div>
@@ -155,7 +155,7 @@ export default function Assignments({ onOpenClient }: { onOpenClient?: (external
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <button onClick={() => onOpenClient?.(j.externalId)}
-                  className="text-sm font-semibold text-gray-900 hover:text-brick text-left truncate">
+                  className="text-sm font-semibold text-gray-900 hover:text-brand text-left truncate">
                   {j.jobName || j.customerName} <span className="text-blue-600">›</span>
                 </button>
                 <p className="text-xs text-gray-500 truncate">
@@ -174,7 +174,7 @@ export default function Assignments({ onOpenClient }: { onOpenClient?: (external
                   <button key={r.teamMemberId} onClick={() => setPrimary(j, r.teamMemberId)}
                     className={`text-xs px-2.5 py-1.5 rounded-full border ${
                       st.primary === r.teamMemberId
-                        ? 'bg-brick text-white border-brick'
+                        ? 'bg-brand text-on-brand border-brand'
                         : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'}`}>
                     {r.repName}
                   </button>
@@ -199,7 +199,7 @@ export default function Assignments({ onOpenClient }: { onOpenClient?: (external
 
             <div className="flex items-center gap-2 pt-1">
               <button onClick={() => accept(j)} disabled={!st.primary || busy === j.externalId}
-                className="text-sm px-3 py-2 rounded-lg bg-brick text-white font-medium hover:bg-brick-dark disabled:opacity-50">
+                className="text-sm px-3 py-2 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark disabled:opacity-50">
                 {busy === j.externalId ? 'Saving…' : 'Assign'}
               </button>
               <a href={`https://app.jobtread.com/jobs/${j.externalId}`} target="_blank" rel="noopener noreferrer"

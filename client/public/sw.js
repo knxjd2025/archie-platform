@@ -10,6 +10,9 @@
 // BUILD_ID is stamped in by vite.config.ts at build time, so each deploy gets a
 // fresh cache and the old ones are dropped on activate.
 const BUILD_ID = '__BUILD_ID__';
+// The 'brn-' prefix is the app's original cache name, kept so a deploy still
+// finds and cleans up the caches devices already hold (and pinned by
+// server/__tests__/service-worker.test.ts). It is never shown to anyone.
 const CACHE_PREFIX = 'brn-';
 const CACHE = CACHE_PREFIX + BUILD_ID;
 

@@ -29,7 +29,7 @@ export default function CanvassAssessment({ p, enrichment }: { p: Property; enri
     <div className="grid gap-2 sm:grid-cols-3">{assessment.factors.map(f => <div key={f.label} className="bg-white rounded-lg border border-blue-100 p-3"><p className="text-xs font-semibold text-gray-800">{f.label} · {f.points}/{f.max}</p><p className="text-xs text-gray-600 mt-1">{f.detail}</p></div>)}</div>
     <p className="text-sm font-medium text-gray-800">Next action: {assessment.nextAction}</p>
     <details className="text-xs text-gray-600"><summary className="cursor-pointer font-medium">Evidence gaps ({assessment.gaps.length})</summary><ul className="list-disc pl-5 mt-2 space-y-1">{assessment.gaps.map(g => <li key={g}>{g}</li>)}</ul></details>
-    <button type="button" onClick={reviewEvidence} disabled={busy} className="rounded-lg bg-navy text-white px-3 py-2 text-sm disabled:opacity-50">{busy ? 'Reviewing evidence…' : 'AI review of this property'}</button>
+    <button type="button" onClick={reviewEvidence} disabled={busy} className="rounded-lg bg-ink text-white px-3 py-2 text-sm disabled:opacity-50">{busy ? 'Reviewing evidence…' : 'AI review of this property'}</button>
     {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
     {review && <div aria-live="polite" className="rounded-lg bg-white border border-blue-100 p-3"><p className="text-xs font-semibold text-gray-700">AI review · {new Date(review.generatedAt).toLocaleString()}</p>{review.fingerprint !== fingerprint ? <p className="text-sm text-amber-800 mt-2">Property data changed. Run a new AI review for the current evidence.</p> : <p className="text-sm text-gray-700 whitespace-pre-wrap mt-2">{review.text}</p>}</div>}
   </section>;

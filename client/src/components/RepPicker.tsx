@@ -104,7 +104,7 @@ export default function RepPicker({
                 // click handler fires after blur has already closed the list.
                 onMouseDown={(e) => { e.preventDefault(); choose(r); }}
                 onMouseEnter={() => setActive(i)}
-                className={`w-full text-left px-3 py-2 text-sm ${i === active ? 'bg-blue-50' : ''} ${r.id === teamMemberId ? 'font-semibold text-navy' : 'text-gray-700'}`}
+                className={`w-full text-left px-3 py-2 text-sm ${i === active ? 'bg-blue-50' : ''} ${r.id === teamMemberId ? 'font-semibold text-ink' : 'text-gray-700'}`}
               >
                 {r.name}
                 {r.email && <span className="block text-[11px] text-gray-400">{r.email}</span>}

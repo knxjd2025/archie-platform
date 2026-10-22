@@ -130,7 +130,7 @@ export default function CommissionMoneyLine({
                     className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5" />
                 </label>
                 <button type="button" onClick={commitEdit} disabled={editing.amount === '' || !(Number(editing.amount) >= 0)}
-                  className="text-xs px-3 py-1.5 rounded-lg bg-navy text-white font-medium disabled:opacity-40">Save</button>
+                  className="text-xs px-3 py-1.5 rounded-lg bg-ink text-white font-medium disabled:opacity-40">Save</button>
                 <button type="button" onClick={() => setEditing(null)} className="text-xs px-2 py-1.5 text-gray-500">Cancel</button>
               </div>
               {s.kind === 'doc' && s.docAmount != null && (
@@ -202,7 +202,7 @@ export default function CommissionMoneyLine({
               placeholder="0.00" className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5" />
           </label>
           <button type="button" onClick={commitManual} disabled={!(Number(manual.amount) >= 0) || manual.amount === ''}
-            className="text-xs px-3 py-1.5 rounded-lg bg-navy text-white font-medium disabled:opacity-40">Add</button>
+            className="text-xs px-3 py-1.5 rounded-lg bg-ink text-white font-medium disabled:opacity-40">Add</button>
           <button type="button" onClick={() => setManual(null)} className="text-xs px-2 py-1.5 text-gray-500">Cancel</button>
         </div>
       )}

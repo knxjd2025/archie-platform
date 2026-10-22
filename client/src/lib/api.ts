@@ -12,7 +12,7 @@ interface RequestOptions extends RequestInit {
   timeoutMs?: number;
 }
 
-export const SESSION_EXPIRED_EVENT = 'brn:session-expired';
+export const SESSION_EXPIRED_EVENT = 'archie:session-expired';
 
 // Fired once per expiry, not once per failed request: a dashboard makes a
 // dozen calls, and a dozen identical prompts is worse than none.

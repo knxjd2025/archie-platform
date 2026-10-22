@@ -91,7 +91,7 @@ export default function CanvassHouseDetails(props: Props) {
       </div>
 
       {missing && (
-        <button onClick={props.onPullAll} disabled={busy} className="w-full sm:w-auto text-sm px-4 py-2.5 rounded-lg bg-navy text-white font-medium hover:opacity-90 disabled:opacity-50">
+        <button onClick={props.onPullAll} disabled={busy} className="w-full sm:w-auto text-sm px-4 py-2.5 rounded-lg bg-ink text-white font-medium hover:opacity-90 disabled:opacity-50">
           ⚡ {busy ? 'Pulling…' : `Pull everything${tracerfyOn && !enrichment ? ` · ${usd(CREDITS_PER_PROPERTY_LOOKUP)}` : ''}`}
           <span className="block text-[11px] font-normal opacity-80">
             {[!p.stormSummary && 'storm history', !p.measurements && 'roof size', tracerfyOn && !enrichment && 'owner & phone'].filter(Boolean).join(' · ')}
@@ -142,7 +142,7 @@ export default function CanvassHouseDetails(props: Props) {
         {/* A converted lead calls/texts through GoHighLevel; a bare property (no lead yet) still uses the phone's own apps. */}
         {p.phone && <span title={formatPhone(p.phone)}><ContactActions externalId={p.leadExternalId} phone={p.phone} size="md" showEmail={false} /></span>}
         {!p.leadExternalId && (
-          <button onClick={props.onConvert} disabled={busy} className="text-sm px-3 py-2 rounded-lg bg-brick text-white font-medium hover:bg-brick-dark disabled:opacity-50">＋ Make it a lead</button>
+          <button onClick={props.onConvert} disabled={busy} className="text-sm px-3 py-2 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark disabled:opacity-50">＋ Make it a lead</button>
         )}
       </div>
 

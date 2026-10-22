@@ -104,9 +104,9 @@ export default function BugReportButton({ page }: BugReportButtonProps) {
             {sent ? (
               <div className="text-center py-4">
                 <p className="text-3xl" aria-hidden>✅</p>
-                <h2 id="bug-title" className="text-lg font-semibold text-gray-900 mt-2">Thanks — James has it</h2>
+                <h2 id="bug-title" className="text-lg font-semibold text-gray-900 mt-2">Thanks, your admin has it</h2>
                 <p className="text-sm text-gray-600 mt-1">Your report went through with the page you were on and the last few things the app did.</p>
-                <button onClick={() => setOpen(false)} className="mt-4 text-sm px-4 py-2 rounded-lg bg-navy text-white font-medium">Done</button>
+                <button onClick={() => setOpen(false)} className="mt-4 text-sm px-4 py-2 rounded-lg bg-ink text-white font-medium">Done</button>
               </div>
             ) : (
               <>
@@ -147,7 +147,7 @@ export default function BugReportButton({ page }: BugReportButtonProps) {
 
                 <div className="flex justify-end gap-2 mt-5">
                   <button onClick={() => setOpen(false)} disabled={busy} className="text-sm px-3 py-2 rounded-lg bg-gray-100 text-gray-700 font-medium hover:bg-gray-200 disabled:opacity-50">Cancel</button>
-                  <button onClick={send} disabled={busy} className="text-sm px-4 py-2 rounded-lg bg-brick text-white font-medium hover:bg-brick-dark disabled:opacity-60">
+                  <button onClick={send} disabled={busy} className="text-sm px-4 py-2 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark disabled:opacity-60">
                     {busy ? 'Sending…' : 'Send report'}
                   </button>
                 </div>

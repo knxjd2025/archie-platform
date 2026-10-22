@@ -1,10 +1,18 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { SESSION_EXPIRED_EVENT, resetSessionExpiredNotice } from './api';
+import { applyBrandTheme } from './brand';
 import type { TeamRole } from '../../../shared/rbac';
+import type { CompanyProfile } from '../../../shared/company';
 
 export interface AuthUser { email: string; name: string; role: TeamRole }
 interface AuthState {
   user: AuthUser | null;
+  /**
+   * The signed-in person's company, as /api/auth/me describes it (name,
+   * contact details, colors). Null before sign-in. Read it through
+   * useCompany() (lib/company.tsx), which fills in a neutral profile.
+   */
+  profile: CompanyProfile | null;
   loading: boolean;
   expired: boolean;
   /** The last session check couldn't reach the server — we are offline, not signed out. */
@@ -12,7 +20,7 @@ interface AuthState {
   signOut: () => Promise<void>;
 }
 
-const Ctx = createContext<AuthState>({ user: null, loading: true, expired: false, offline: false, signOut: async () => {} });
+const Ctx = createContext<AuthState>({ user: null, profile: null, loading: true, expired: false, offline: false, signOut: async () => {} });
 
 /**
  * Who was signed in last time the server answered.
@@ -23,7 +31,9 @@ const Ctx = createContext<AuthState>({ user: null, loading: true, expired: false
  * stay usable — and a real 401 still clears it, so this never keeps someone
  * signed in after the server has said otherwise.
  */
-const CACHE_KEY = 'brn.session';
+const CACHE_KEY = 'archie.session';
+/** The company that went with that session, so the app keeps its name and colors offline. */
+const COMPANY_CACHE_KEY = 'archie.company';
 
 function readCachedUser(): AuthUser | null {
   try {
@@ -39,6 +49,22 @@ function writeCachedUser(u: AuthUser | null): void {
     if (u) localStorage.setItem(CACHE_KEY, JSON.stringify(u));
     else localStorage.removeItem(CACHE_KEY);
   } catch { /* private window or blocked storage — the app still works online */ }
+}
+
+function readCachedProfile(): CompanyProfile | null {
+  try {
+    const raw = localStorage.getItem(COMPANY_CACHE_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw);
+    return p && typeof p.displayName === 'string' && p.colors && typeof p.colors.primary === 'string' ? (p as CompanyProfile) : null;
+  } catch { return null; }
+}
+
+function writeCachedProfile(p: CompanyProfile | null): void {
+  try {
+    if (p) localStorage.setItem(COMPANY_CACHE_KEY, JSON.stringify(p));
+    else localStorage.removeItem(COMPANY_CACHE_KEY);
+  } catch { /* private window or blocked storage */ }
 }
 
 /** How long to wait before asking the server again while it isn't answering. */
@@ -69,6 +95,7 @@ export function offlineRetry(run: () => void, ms = OFFLINE_RETRY_MS): { schedule
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [profile, setProfile] = useState<CompanyProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [expired, setExpired] = useState(false);
   const [offline, setOffline] = useState(false);
@@ -76,7 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // When the session goes, drop to the sign-in screen rather than leaving a
   // shell where every panel fails differently.
   useEffect(() => {
-    const onExpired = () => { setUser(null); setExpired(true); setOffline(false); writeCachedUser(null); };
+    const onExpired = () => { setUser(null); setProfile(null); setExpired(true); setOffline(false); writeCachedUser(null); writeCachedProfile(null); };
     window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
     return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
   }, []);
@@ -92,10 +119,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (r.ok) {
           const d = await r.json().catch(() => null);
           const u = (d?.user ?? null) as AuthUser | null;
+          const p = (u && d?.profile ? d.profile : null) as CompanyProfile | null;
           retry.cancel();
           setUser(u);
+          setProfile(p);
           setOffline(false);
           writeCachedUser(u);
+          writeCachedProfile(p);
           if (u) { setExpired(false); resetSessionExpiredNotice(); }
           return;
         }
@@ -104,8 +134,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // cached session goes with it.
           retry.cancel();
           setUser(null);
+          setProfile(null);
           setOffline(false);
           writeCachedUser(null);
+          writeCachedProfile(null);
           return;
         }
         // A 502 or 503 while a deploy rolls out or the server cold-starts is
@@ -113,6 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // session mid-job. Treat it like no signal: keep the last confirmed
         // session and say we can't reach the server.
         setUser(readCachedUser());
+        setProfile(readCachedProfile());
         setOffline(true);
         retry.schedule();
       } catch {
@@ -122,6 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
         const cached = readCachedUser();
         setUser(cached);
+        setProfile(cached ? readCachedProfile() : null);
         setOffline(true);
         retry.schedule();
       } finally {
@@ -141,13 +175,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function signOut() {
     await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
     setUser(null);
+    setProfile(null);
     setExpired(false);
     setOffline(false);
     writeCachedUser(null);
+    writeCachedProfile(null);
     resetSessionExpiredNotice();
   }
 
-  return <Ctx.Provider value={{ user, loading, expired, offline, signOut }}>{children}</Ctx.Provider>;
+  // The company's colors on every brand-* class; Archie's when signed out.
+  useEffect(() => { applyBrandTheme(profile?.colors ?? null); }, [profile]);
+
+  return <Ctx.Provider value={{ user, profile, loading, expired, offline, signOut }}>{children}</Ctx.Provider>;
 }
 
 export function useAuth() { return useContext(Ctx); }

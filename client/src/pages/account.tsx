@@ -122,7 +122,7 @@ export default function AccountPage({ onOpenClient }: { onOpenClient?: (external
           <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
             {(['mine', 'all'] as const).map((s) => (
               <button key={s} onClick={() => setScope(s)} aria-pressed={scope === s}
-                className={`px-3 py-1.5 ${scope === s ? 'bg-navy text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+                className={`px-3 py-1.5 ${scope === s ? 'bg-ink text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
                 {s === 'mine' ? 'My book' : 'Everyone'}
               </button>
             ))}
@@ -167,7 +167,7 @@ export default function AccountPage({ onOpenClient }: { onOpenClient?: (external
                 </div>
               )
             ) : (
-              <div className="text-2xl font-semibold text-navy">{c.v}</div>
+              <div className="text-2xl font-semibold text-ink">{c.v}</div>
             )}
             <div className="text-[11px] uppercase tracking-wide text-gray-500 mt-0.5">{c.k}</div>
           </div>
@@ -189,7 +189,7 @@ export default function AccountPage({ onOpenClient }: { onOpenClient?: (external
           ['messages', `Messages${recent ? ` (${recent.length})` : ''}`],
         ] as const).map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)} aria-pressed={tab === k}
-            className={`px-3 py-2 text-sm border-b-2 -mb-px ${tab === k ? 'border-brick text-brick font-medium' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            className={`px-3 py-2 text-sm border-b-2 -mb-px ${tab === k ? 'border-brand text-brand font-medium' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
             {label}
           </button>
         ))}

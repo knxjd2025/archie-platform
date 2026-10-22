@@ -320,7 +320,7 @@ export default function Leads({ onOpenClient, initialStatus, initialNew, initial
           </label>
           <button
             onClick={() => setShowNew((s) => !s)}
-            className="px-4 py-2 bg-brick text-white rounded-lg text-sm font-medium hover:bg-brick-dark transition-colors"
+            className="px-4 py-2 bg-brand text-on-brand rounded-lg text-sm font-medium hover:bg-brand-dark transition-colors"
           >
             ＋ New Lead
           </button>
@@ -390,7 +390,7 @@ export default function Leads({ onOpenClient, initialStatus, initialNew, initial
             <p className="text-xs text-gray-400 mt-2">Goes on that rep's Google Calendar with the address, and shows on the Schedule tab.</p>
           </div>
           <div className="flex gap-2 mt-3">
-            <button onClick={createLead} disabled={busy} className="text-sm px-4 py-2 rounded-lg bg-brick text-white font-medium hover:bg-brick-dark disabled:opacity-50">{busy ? 'Saving…' : appt.on ? 'Add lead + book' : 'Add lead'}</button>
+            <button onClick={createLead} disabled={busy} className="text-sm px-4 py-2 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark disabled:opacity-50">{busy ? 'Saving…' : appt.on ? 'Add lead + book' : 'Add lead'}</button>
             <button onClick={() => { setShowNew(false); setNf(emptyNew); setAppt(emptyAppt); setCreated(null); }} className="text-sm px-3 py-2 rounded-lg bg-gray-100 text-gray-600">Close</button>
           </div>
           {created && (
@@ -559,7 +559,7 @@ export default function Leads({ onOpenClient, initialStatus, initialNew, initial
                     <button
                       onClick={saveAssign}
                       disabled={assignSaving || !assignPrimary}
-                      className="text-sm px-3 py-1.5 rounded-lg bg-brick text-white font-medium hover:bg-brick-dark disabled:opacity-50"
+                      className="text-sm px-3 py-1.5 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark disabled:opacity-50"
                     >
                       {assignSaving ? 'Saving…' : 'Save'}
                     </button>

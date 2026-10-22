@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
+import { useCompany } from '../lib/company';
 import { ADVISOR_FOCUS } from '../../../shared/advisors';
 
 interface Agent {
@@ -25,6 +26,7 @@ interface Props {
 }
 
 export default function Chat({ initialAgent }: Props) {
+  const company = useCompany();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -273,7 +275,7 @@ export default function Chat({ initialAgent }: Props) {
               <p className="text-sm">
                 {selectedAgent && ADVISOR_FOCUS[selectedAgent.role]
                   ? `${selectedAgent.name} — ${ADVISOR_FOCUS[selectedAgent.role]}`
-                  : `Start a conversation with ${selectedAgent?.name || 'an agent'}. Ask about business metrics, leads, finances, or anything else related to Best Roofing Now.`}
+                  : `Start a conversation with ${selectedAgent?.name || 'an agent'}. Ask about business metrics, leads, finances, or anything else related to ${company.displayName}.`}
               </p>
             </div>
           )}

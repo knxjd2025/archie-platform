@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { useCompany } from '../lib/company';
 import {
   DAY_END_HOUR, DAY_START_HOUR, SLOT_MINS, addDays, conflictsFor, etInstant, etParts, etToday, label12, layoutDay, minutesToHhmm, openSlots,
 } from '../../../shared/schedule-board';
@@ -85,7 +86,7 @@ export default function AvailabilityBoard({ onOpenClient }: { onOpenClient?: (ex
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center rounded-lg border border-gray-200 bg-white overflow-hidden">
           <button onClick={() => setDate((d) => addDays(d, -1))} className="px-2.5 py-1.5 text-sm hover:bg-gray-50" aria-label="Previous day">‹</button>
-          <button onClick={() => setDate(etToday())} className={`px-3 py-1.5 text-sm border-x border-gray-200 ${date === today ? 'bg-navy text-white' : 'hover:bg-gray-50'}`}>Today</button>
+          <button onClick={() => setDate(etToday())} className={`px-3 py-1.5 text-sm border-x border-gray-200 ${date === today ? 'bg-ink text-white' : 'hover:bg-gray-50'}`}>Today</button>
           <button onClick={() => setDate((d) => addDays(d, 1))} className="px-2.5 py-1.5 text-sm hover:bg-gray-50" aria-label="Next day">›</button>
         </div>
         <input type="date" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} aria-label="Pick a day" className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white" />
@@ -201,8 +202,8 @@ export default function AvailabilityBoard({ onOpenClient }: { onOpenClient?: (ex
                 );
               })}
               {nowMins !== null && nowMins >= DAY_START_HOUR * 60 && nowMins <= DAY_END_HOUR * 60 && (
-                <div className="absolute left-14 right-0 z-20 pointer-events-none border-t-2 border-brick" style={{ top: (nowMins - DAY_START_HOUR * 60) * PX_PER_MIN }}>
-                  <span className="absolute -left-1.5 -top-[5px] w-2 h-2 rounded-full bg-brick" />
+                <div className="absolute left-14 right-0 z-20 pointer-events-none border-t-2 border-red-500" style={{ top: (nowMins - DAY_START_HOUR * 60) * PX_PER_MIN }}>
+                  <span className="absolute -left-1.5 -top-[5px] w-2 h-2 rounded-full bg-red-500" />
                 </div>
               )}
             </div>
@@ -246,6 +247,7 @@ function BookingDialog({ slot, people, events, defaultDuration, onClose, onBooke
   onClose: () => void; onBooked: (message: string) => void; onOpenClient?: (externalId: string) => void;
 }) {
   const { user } = useAuth();
+  const company = useCompany();
   const [personEmail, setPersonEmail] = useState(slot.person.email);
   const [date, setDate] = useState(slot.date);
   const [time, setTime] = useState(slot.time);
@@ -253,7 +255,7 @@ function BookingDialog({ slot, people, events, defaultDuration, onClose, onBooke
   const [type, setType] = useState('Inspection');
   const [notes, setNotes] = useState('');
   const [mode, setMode] = useState<'new' | 'existing'>('new');
-  const [nf, setNf] = useState({ firstName: '', lastName: '', phone: '', email: '', address: '', city: '', state: 'NC', zip: '' });
+  const [nf, setNf] = useState({ firstName: '', lastName: '', phone: '', email: '', address: '', city: '', state: company.state, zip: '' });
   const [q, setQ] = useState('');
   const [hits, setHits] = useState<LeadHit[]>([]);
   const [client, setClient] = useState<LeadHit | null>(null);
@@ -325,7 +327,7 @@ function BookingDialog({ slot, people, events, defaultDuration, onClose, onBooke
         <p className="text-sm text-emerald-800 bg-emerald-50 rounded-lg px-3 py-2">{done.message}</p>
         <div className="flex gap-2 mt-3">
           {done.externalId && onOpenClient && <button onClick={() => { onBooked(done.message); onOpenClient(done.externalId!); }} className="text-sm px-3 py-1.5 rounded-lg border border-gray-200 bg-white">Open client</button>}
-          <button onClick={() => onBooked(done.message)} className="text-sm px-3 py-1.5 rounded-lg bg-navy text-white font-medium">Back to calendars</button>
+          <button onClick={() => onBooked(done.message)} className="text-sm px-3 py-1.5 rounded-lg bg-ink text-white font-medium">Back to calendars</button>
         </div>
       </Modal>
     );
@@ -367,8 +369,8 @@ function BookingDialog({ slot, people, events, defaultDuration, onClose, onBooke
         )}
 
         <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
-          <button onClick={() => setMode('new')} className={`flex-1 py-1.5 ${mode === 'new' ? 'bg-navy text-white' : 'bg-white text-gray-600'}`}>New lead</button>
-          <button onClick={() => setMode('existing')} className={`flex-1 py-1.5 ${mode === 'existing' ? 'bg-navy text-white' : 'bg-white text-gray-600'}`}>Existing client</button>
+          <button onClick={() => setMode('new')} className={`flex-1 py-1.5 ${mode === 'new' ? 'bg-ink text-white' : 'bg-white text-gray-600'}`}>New lead</button>
+          <button onClick={() => setMode('existing')} className={`flex-1 py-1.5 ${mode === 'existing' ? 'bg-ink text-white' : 'bg-white text-gray-600'}`}>Existing client</button>
         </div>
 
         {mode === 'new' ? (
@@ -381,7 +383,8 @@ function BookingDialog({ slot, people, events, defaultDuration, onClose, onBooke
             <label><span className={lbl}>City</span><input value={nf.city} onChange={(e) => setNf({ ...nf, city: e.target.value })} className={input} /></label>
             <div className="grid grid-cols-2 gap-2">
               <label><span className={lbl}>State</span>
-                <select value={nf.state} onChange={(e) => setNf({ ...nf, state: e.target.value })} className={input}><option>NC</option><option>SC</option></select>
+                {/* Starts on the company's own state; any two-letter state can be typed. */}
+                <input value={nf.state} onChange={(e) => setNf({ ...nf, state: e.target.value.toUpperCase().slice(0, 2) })} className={input} maxLength={2} placeholder="ST" autoCapitalize="characters" />
               </label>
               <label><span className={lbl}>ZIP</span><input value={nf.zip} onChange={(e) => setNf({ ...nf, zip: e.target.value })} className={input} inputMode="numeric" /></label>
             </div>
@@ -416,7 +419,7 @@ function BookingDialog({ slot, people, events, defaultDuration, onClose, onBooke
         {err && <p className="text-sm text-red-700 bg-red-50 rounded-lg px-3 py-2">{err}</p>}
         <div className="flex justify-end gap-2">
           <button onClick={onClose} className="text-sm px-3 py-2 rounded-lg border border-gray-200 bg-white">Cancel</button>
-          <button onClick={submit} disabled={!canSubmit} className="text-sm px-4 py-2 rounded-lg bg-brick text-white font-medium hover:bg-brick-dark disabled:opacity-50">
+          <button onClick={submit} disabled={!canSubmit} className="text-sm px-4 py-2 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark disabled:opacity-50">
             {busy ? 'Booking…' : `Book ${type.toLowerCase()} on ${who} calendar`}
           </button>
         </div>

@@ -448,7 +448,7 @@ export default function RoofReports({ externalId }: { externalId: string; defaul
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-gray-800">🏠 Roof reports</h3>
-        {cfg.configured && <button onClick={() => setOpen((v) => !v)} className="text-xs px-2.5 py-1 rounded-lg bg-brick text-white font-medium hover:bg-brick-dark">＋ New report</button>}
+        {cfg.configured && <button onClick={() => setOpen((v) => !v)} className="text-xs px-2.5 py-1 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark">＋ New report</button>}
       </div>
 
       {toast && <div className="px-4 py-2 text-sm bg-gray-900 text-white">{toast}</div>}
@@ -525,10 +525,10 @@ export default function RoofReports({ externalId }: { externalId: string; defaul
                               disabled={full}
                               onClick={() => setPicked((ps) => ps.includes(p.url) ? ps.filter((u) => u !== p.url) : [...ps, p.url])}
                               title={full ? `That's the ${analyzeLimit}-photo limit — unpick one first` : p.caption || 'Job photo'}
-                              className={`relative aspect-square rounded-lg overflow-hidden border-2 ${on ? 'border-brick' : 'border-transparent'} ${full ? 'opacity-40 cursor-not-allowed' : ''}`}
+                              className={`relative aspect-square rounded-lg overflow-hidden border-2 ${on ? 'border-brand' : 'border-transparent'} ${full ? 'opacity-40 cursor-not-allowed' : ''}`}
                             >
                               <img src={p.url} alt={p.caption || 'Job photo'} loading="lazy" className="w-full h-full object-cover" />
-                              {on && <span className="absolute top-0.5 right-0.5 bg-brick text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center">✓</span>}
+                              {on && <span className="absolute top-0.5 right-0.5 bg-brand text-on-brand text-[10px] w-4 h-4 rounded-full flex items-center justify-center">✓</span>}
                             </button>
                           );
                         })}
@@ -552,7 +552,7 @@ export default function RoofReports({ externalId }: { externalId: string; defaul
                   {type === 'estimate' && (
                     <div className="flex gap-2">
                       {(['repair', 'replacement', 'both'] as const).map((m) => (
-                        <button key={m} onClick={() => setEstimateMode(m)} aria-pressed={estimateMode === m} className={`flex-1 text-xs px-2.5 py-1.5 rounded-lg border font-medium ${estimateMode === m ? 'bg-brick text-white border-brick' : 'bg-white border-gray-200 text-gray-600'}`}
+                        <button key={m} onClick={() => setEstimateMode(m)} aria-pressed={estimateMode === m} className={`flex-1 text-xs px-2.5 py-1.5 rounded-lg border font-medium ${estimateMode === m ? 'bg-brand text-on-brand border-brand' : 'bg-white border-gray-200 text-gray-600'}`}
                           title={m === 'both' ? 'Show the repair price and the new-roof price side by side, with a recommendation' : undefined}>
                           {m === 'repair' ? 'Repair' : m === 'replacement' ? 'Replacement' : 'Both — let them choose'}
                         </button>
@@ -877,7 +877,7 @@ export default function RoofReports({ externalId }: { externalId: string; defaul
               )}
               <textarea value={photos} onChange={(e) => setPhotos(e.target.value)} rows={2} placeholder="Extra photo URLs (optional, one per line)" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:ring-1 focus:ring-blue-400" />
               <div className="flex gap-2">
-                <button onClick={generate} disabled={busy || !replacementReady} title={!replacementReady ? 'Pick all three tiers and enter the roof size first' : undefined} className="text-sm px-3 py-1.5 rounded-lg bg-brick text-white font-medium hover:bg-brick-dark disabled:opacity-50">{busy ? (reusesPrior ? 'Building…' : 'Generating… (2–5 min)') : 'Generate report'}</button>
+                <button onClick={generate} disabled={busy || !replacementReady} title={!replacementReady ? 'Pick all three tiers and enter the roof size first' : undefined} className="text-sm px-3 py-1.5 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark disabled:opacity-50">{busy ? (reusesPrior ? 'Building…' : 'Generating… (2–5 min)') : 'Generate report'}</button>
                 <button onClick={() => setOpen(false)} className="text-sm px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600">Cancel</button>
               </div>
               <p className="text-xs text-gray-400">{reusesPrior
@@ -952,7 +952,7 @@ export default function RoofReports({ externalId }: { externalId: string; defaul
                           title="Edit anything — layout, photos, findings, pricing, text — with a live preview"
                           // The primary action in this row, and it was the
                           // smallest thing in it — ~20px is not a thumb target.
-                          className="text-xs px-2.5 py-1.5 rounded bg-brick text-white font-medium hover:bg-brick-dark"
+                          className="text-xs px-2.5 py-1.5 rounded bg-brand text-on-brand font-medium hover:bg-brand-dark"
                         >
                           ✎ Edit
                         </button>

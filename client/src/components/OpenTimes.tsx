@@ -12,7 +12,7 @@ export interface TimeChoice { date: string; time: string; forEmail: string | nul
 const DEFAULT_DAYS = 5;
 const SOURCE_LABEL: Record<BoardEvent['source'], string> = { google: 'Google', ghl: 'GoHighLevel', both: 'GHL + Google' };
 
-/** Clock time of an instant, in Charlotte time. */
+/** Clock time of an instant, in the schedule board's time zone (Eastern, see shared/schedule-board). */
 const timeOf = (iso: string) => label12(etParts(iso).minutes);
 
 const same = (a: string | null | undefined, b: string | null | undefined) =>
@@ -150,7 +150,7 @@ export default function OpenTimes({ durationMins, value, onChange, preferRep, da
                 key={d.date}
                 type="button"
                 onClick={() => setDay(d.date)}
-                className={`flex-shrink-0 text-[11px] px-2.5 py-1.5 rounded-lg border text-left ${d.date === selected?.date ? 'bg-navy text-white border-navy' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-400'}`}
+                className={`flex-shrink-0 text-[11px] px-2.5 py-1.5 rounded-lg border text-left ${d.date === selected?.date ? 'bg-ink text-white border-ink' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-400'}`}
               >
                 <span className="font-medium">{dayLabel(d.date, today)}</span>
                 <span className={`block text-[10px] ${d.date === selected?.date ? 'text-white/70' : d.times.length ? 'text-emerald-700' : 'text-gray-400'}`}>
@@ -170,7 +170,7 @@ export default function OpenTimes({ durationMins, value, onChange, preferRep, da
                       key={t}
                       type="button"
                       onClick={() => pick(selected.date, t)}
-                      className={`text-xs px-2.5 py-1.5 rounded-full border ${on ? 'bg-brick text-white border-brick' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-400'}`}
+                      className={`text-xs px-2.5 py-1.5 rounded-full border ${on ? 'bg-brand text-on-brand border-brand' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-400'}`}
                     >
                       {timeLabel(t)}
                     </button>

@@ -20,7 +20,8 @@ const when = (iso: string | null) =>
 /**
  * The switch between GoHighLevel and our own phone stack.
  *
- * Only James sees this — the server answers 404 to anyone else, so a rep
+ * Only the comms owner sees this (COMMS_VERSION_OWNER on the server) — the
+ * server answers 404 to anyone else, so a rep
  * poking at the URL learns nothing. It is temporary scaffolding for running
  * the real business on V2 for an afternoon and putting it straight back, and
  * it comes out with the V1 code once V2 has held up.
@@ -92,7 +93,7 @@ export default function CommsVersionToggle() {
               aria-pressed={active}
               title={v === 'v2' && blocked ? blocked : undefined}
               className={`text-left rounded-lg border p-3 transition ${
-                active ? 'border-navy bg-navy text-white' : 'border-gray-200 bg-white hover:border-gray-300'
+                active ? 'border-ink bg-ink text-white' : 'border-gray-200 bg-white hover:border-gray-300'
               } ${disabled && !active ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               <span className="block text-sm font-semibold">{state.labels[v]}</span>

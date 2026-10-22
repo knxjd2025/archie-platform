@@ -129,7 +129,7 @@ export default function CallsPage({ onOpenClient }: { onOpenClient?: (externalId
                       <button
                         onClick={() => setPlaying(playing === c.id ? null : c.id)}
                         aria-expanded={playing === c.id}
-                        className="text-xs px-3 py-1.5 rounded-lg bg-navy text-white font-medium"
+                        className="text-xs px-3 py-1.5 rounded-lg bg-ink text-white font-medium"
                       >
                         {playing === c.id ? 'Hide' : '▶ Recording'}
                       </button>

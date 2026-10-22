@@ -1,5 +1,5 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
-<title>BRN Commercial Roof Training</title>
+<title>Commercial Roof Training · Archie</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
@@ -167,7 +167,7 @@ ol.steps p{color:var(--ink)}
 </style>
 
 <header class="top"><div class="wrap">
-  <div class="eyebrow">Best Roofing Now &middot; Team Training</div>
+  <div class="eyebrow">Archie &middot; Team Training</div>
   <h1>Commercial Roof Training</h1>
   <p class="sub">How to walk a commercial roof, what a correct roof looks like, the problems you will find, and how to document them. Read each module, watch the videos, then take the ready check at the end.</p>
   <div class="stats"><div><b>8</b>modules</div><div><b>36</b>videos</div><div><b>~178</b>minutes of video</div></div>
@@ -185,7 +185,7 @@ ol.steps p{color:var(--ink)}
 <li><b>Never go up alone.</b> Text the office the address and when you go up and come down.</li>
 <li><b>Check in first.</b> Meet the building manager. Ask about roof access, alarms on the hatch, and anything dangerous up top.</li>
 <li><b>Ladders:</b> tie it off, keep 3 points of contact, and the ladder should stick up 3 feet past the roof edge.</li>
-<li><b>Stay back from edges.</b> Keep at least 15 feet from any edge with no parapet or rail. Closer than that, you need fall protection. Follow BRN's fall protection rule every time.</li>
+<li><b>Stay back from edges.</b> Keep at least 15 feet from any edge with no parapet or rail. Closer than that, you need fall protection. Follow your company's fall protection rule every time.</li>
 <li><b>Skylights are holes.</b> Never step on, sit on, or lean on a skylight or plastic panel. People die falling through them.</li>
 <li><b>Slick surfaces.</b> Dew, frost, or rain on TPO or PVC is like ice. Wait for it to dry.</li>
 <li><b>Watch your feet.</b> Soft spots, ridges, wires, gas lines, and conduit are trip and fall points.</li>
@@ -432,9 +432,10 @@ ol.steps p{color:var(--ink)}
 
 <script>
 (function(){
-  var KEY='brn-comm-training-v1';
+  var KEY='archie-comm-training-v1';
   var state={};
-  try{state=JSON.parse(localStorage.getItem(KEY)||'{}')||{}}catch(e){state={}}
+  // Progress saved under the page's earlier key carries over once.
+  try{state=JSON.parse(localStorage.getItem(KEY)||localStorage.getItem('brn-comm-training-v1')||'{}')||{}}catch(e){state={}}
   var boxes=[].slice.call(document.querySelectorAll('[data-done]'));
   function save(){try{localStorage.setItem(KEY,JSON.stringify(state))}catch(e){}}
   function paint(){

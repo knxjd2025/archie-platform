@@ -44,7 +44,7 @@ export default function GoalsCard({ onOpenPlaybook }: { onOpenPlaybook?: (docId:
     </label>
   );
   const bar = (actual: number, target: number) => (
-    <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${actual >= target ? 'bg-emerald-500' : 'bg-navy'}`} style={{ width: `${Math.min(100, target ? (actual / target) * 100 : 0)}%` }} /></div>
+    <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${actual >= target ? 'bg-emerald-500' : 'bg-ink'}`} style={{ width: `${Math.min(100, target ? (actual / target) * 100 : 0)}%` }} /></div>
   );
 
   return (
@@ -68,7 +68,7 @@ export default function GoalsCard({ onOpenPlaybook }: { onOpenPlaybook?: (docId:
             {num('avgCommission', 'Average commission per sale', '$')}
             {num('closeRate', 'Close rate', '', '%')}
             {num('sellingMonths', 'Selling months a year')}
-            <div className="col-span-2 sm:col-span-4"><button onClick={save} disabled={saving} className="text-xs px-3 py-1.5 rounded-lg bg-navy text-white font-medium disabled:opacity-50">{saving ? 'Saving…' : 'Save my plan'}</button></div>
+            <div className="col-span-2 sm:col-span-4"><button onClick={save} disabled={saving} className="text-xs px-3 py-1.5 rounded-lg bg-ink text-white font-medium disabled:opacity-50">{saving ? 'Saving…' : 'Save my plan'}</button></div>
           </div>
         )}
         {g && plan && (
@@ -124,7 +124,7 @@ export default function GoalsCard({ onOpenPlaybook }: { onOpenPlaybook?: (docId:
 
 function Tile({ label, value, strong }: { label: string; value: number; strong?: boolean }) {
   return (
-    <div className={`rounded-lg px-2 py-2 ${strong ? 'bg-navy text-white' : 'bg-gray-50'}`}>
+    <div className={`rounded-lg px-2 py-2 ${strong ? 'bg-ink text-white' : 'bg-gray-50'}`}>
       <p className={`text-lg font-bold tabular-nums ${strong ? '' : 'text-gray-900'}`}>{Number.isInteger(value) ? value : value.toFixed(1)}</p>
       <p className={`text-[10px] ${strong ? 'text-blue-100' : 'text-gray-500'}`}>{label}</p>
     </div>

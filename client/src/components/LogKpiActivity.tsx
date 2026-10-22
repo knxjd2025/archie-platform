@@ -56,7 +56,7 @@ export default function LogKpiActivity({ canPickRep, onLogged }: { canPickRep: b
   if (!open) {
     return (
       <button onClick={() => setOpen(true)}
-        className="text-xs px-2.5 py-1 rounded-lg bg-brick text-white font-medium hover:bg-brick-dark">
+        className="text-xs px-2.5 py-1 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark">
         ＋ Log referral / lead given
       </button>
     );
@@ -108,7 +108,7 @@ export default function LogKpiActivity({ canPickRep, onLogged }: { canPickRep: b
 
       <div className="flex gap-2">
         <button onClick={submit} disabled={busy}
-          className="text-sm px-3 py-1.5 rounded-lg bg-brick text-white font-medium hover:bg-brick-dark disabled:opacity-50">
+          className="text-sm px-3 py-1.5 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark disabled:opacity-50">
           {busy ? 'Saving…' : 'Log it'}
         </button>
         <button onClick={() => { setOpen(false); setMsg(null); setError(null); }}

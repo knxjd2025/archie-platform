@@ -71,7 +71,7 @@ export default function Kpis({ onOpenPlaybook }: { onOpenPlaybook?: (docId: stri
 
       <div className="flex gap-2">
         {RANGES.map((r) => (
-          <button key={r.key} onClick={() => setRange(r.key)} aria-pressed={range === r.key} className={`px-3 py-1.5 text-sm rounded-full ${range === r.key ? 'bg-navy text-white' : 'bg-white border border-gray-200 text-gray-600'}`}>
+          <button key={r.key} onClick={() => setRange(r.key)} aria-pressed={range === r.key} className={`px-3 py-1.5 text-sm rounded-full ${range === r.key ? 'bg-ink text-white' : 'bg-white border border-gray-200 text-gray-600'}`}>
             {r.label}
           </button>
         ))}

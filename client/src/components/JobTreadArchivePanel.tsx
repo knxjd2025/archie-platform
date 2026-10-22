@@ -84,7 +84,7 @@ export default function JobTreadArchivePanel() {
         </div>
         <div className="flex gap-2">
           <button onClick={load} disabled={!!busy} className="text-xs px-3 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-600 disabled:opacity-50">Refresh</button>
-          <button onClick={runNow} disabled={!!busy || status?.finished} className="text-xs px-3 py-1.5 rounded-lg bg-brick text-white font-medium disabled:opacity-50">{busy === 'run' ? 'Running…' : 'Run now'}</button>
+          <button onClick={runNow} disabled={!!busy || status?.finished} className="text-xs px-3 py-1.5 rounded-lg bg-brand text-on-brand font-medium disabled:opacity-50">{busy === 'run' ? 'Running…' : 'Run now'}</button>
         </div>
       </div>
 

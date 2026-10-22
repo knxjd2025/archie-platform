@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../lib/auth';
 import { isNativeApp, startNativeSignIn } from '../lib/native';
+import { ArchieMark, PRODUCT_NAME } from '../lib/company';
 
 export default function Login() {
   const { expired } = useAuth();
@@ -36,27 +37,24 @@ export default function Login() {
   }, []);
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-b from-navy to-navy-deep">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-b from-ink to-ink-deep">
       <div className="bg-white shadow-xl rounded-2xl w-full max-w-sm text-center overflow-hidden">
-        {/* Gold accent rule */}
-        <div className="h-1.5 bg-gold" />
+        {/* Accent rule. No company is known before sign-in, so this is Archie's own. */}
+        <div className="h-1.5 bg-brand-accent" />
         <div className="p-8">
-          <img src="/logo.jpg" alt="Best Roofing Now" className="h-16 w-auto mx-auto mb-5" />
-          <h1 className="text-2xl font-semibold text-navy">Team App</h1>
-          <p className="text-sm text-gray-500 mb-6">Company Assistant Console</p>
+          <ArchieMark size={64} className="mx-auto mb-5" />
+          <h1 className="text-2xl font-semibold text-ink">{PRODUCT_NAME}</h1>
+          <p className="text-sm text-gray-500 mb-6">Sign in to your team's workspace</p>
           {error && (
             <div className="mb-4">
-              <p className="text-sm text-brick font-medium">
+              <p className="text-sm text-red-600 font-medium">
                 {error === 'not_authorized' ? 'That account is not authorized.'
                   : error === 'cancelled' ? 'Sign-in was not finished. Try again.'
                   : 'Sign-in failed. Try again.'}
               </p>
               {error !== 'not_authorized' && error !== 'cancelled' && (
                 <p className="text-xs text-gray-400 mt-1">
-                  If this keeps happening,{' '}
-                  <a href="mailto:admin@bestroofingnow.com" className="text-blue-600 hover:underline">
-                    contact your admin
-                  </a>.
+                  If this keeps happening, ask your company's {PRODUCT_NAME} admin.
                 </p>
               )}
             </div>
@@ -70,7 +68,7 @@ export default function Login() {
             href="/api/auth/login/google"
             onClick={onSignIn}
             aria-disabled={clicking}
-            className={`inline-flex w-full items-center justify-center gap-2 rounded-lg bg-navy px-4 py-3 text-sm font-medium text-white hover:bg-navy-dark transition-colors ${clicking ? 'opacity-70 pointer-events-none' : ''}`}
+            className={`inline-flex w-full items-center justify-center gap-2 rounded-lg bg-ink px-4 py-3 text-sm font-medium text-white hover:bg-ink-dark transition-colors ${clicking ? 'opacity-70 pointer-events-none' : ''}`}
           >
             {clicking ? (
               <>
@@ -81,7 +79,7 @@ export default function Login() {
               'Sign in with Google'
             )}
           </a>
-          <p className="mt-5 text-[11px] text-gray-400">Veteran-owned · Charlotte, NC</p>
+          <p className="mt-5 text-[11px] text-gray-400">{PRODUCT_NAME} · the team app for home service companies</p>
         </div>
       </div>
     </div>

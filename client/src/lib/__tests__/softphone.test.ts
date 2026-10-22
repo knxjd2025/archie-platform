@@ -3,8 +3,8 @@ import { prettyFrom, callClock, tokenRefreshDelay } from '../softphone';
 
 describe('prettyFrom', () => {
   it('formats a US number a person can read aloud', () => {
-    expect(prettyFrom('+17045551234')).toBe('(704) 555-1234');
-    expect(prettyFrom('7045551234')).toBe('(704) 555-1234');
+    expect(prettyFrom('+12025551234')).toBe('(202) 555-1234');
+    expect(prettyFrom('2025551234')).toBe('(202) 555-1234');
   });
   it('strips the client: prefix Twilio puts on browser-to-browser calls', () => {
     expect(prettyFrom('client:office')).toBe('office');

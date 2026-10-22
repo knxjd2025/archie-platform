@@ -152,7 +152,7 @@ export default function Payouts({ onOpenClient }: { onOpenClient?: (externalId: 
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="bg-brick text-white rounded-xl p-4">
+        <div className="bg-brand text-on-brand rounded-xl p-4">
           <p className="text-xs uppercase tracking-wide text-white/70">Due now</p>
           <p className="text-3xl font-bold mt-0.5">{money0(due.amount)}</p>
           <p className="text-xs text-white/80 mt-0.5">{plural(due.count, 'job')} approved, waiting to be paid</p>
@@ -177,7 +177,7 @@ export default function Payouts({ onOpenClient }: { onOpenClient?: (externalId: 
             key={t.key}
             onClick={() => setTab(t.key)}
             aria-pressed={tab === t.key}
-            className={`text-sm px-3 py-1.5 rounded-full ${tab === t.key ? 'bg-navy text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            className={`text-sm px-3 py-1.5 rounded-full ${tab === t.key ? 'bg-ink text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
           >
             {t.label} ({countOf(t.status)})
           </button>
@@ -212,7 +212,7 @@ export default function Payouts({ onOpenClient }: { onOpenClient?: (externalId: 
                     <button
                       onClick={() => askPay(batchKey, `${plural(payable.length, 'job')} for ${g.repName}`, payable.map((r) => r.splitId!), payoutTotal(payable))}
                       disabled={!!paying}
-                      className="text-xs px-3 py-1.5 rounded-lg bg-navy text-white font-medium hover:bg-navy/90 disabled:opacity-50"
+                      className="text-xs px-3 py-1.5 rounded-lg bg-ink text-white font-medium hover:bg-ink/90 disabled:opacity-50"
                     >
                       {paying === batchKey ? 'Marking…' : `Mark all ${payable.length} paid`}
                     </button>
@@ -278,7 +278,7 @@ export default function Payouts({ onOpenClient }: { onOpenClient?: (externalId: 
                               {paying === rowKey ? 'Marking…' : 'Mark paid'}
                             </button>
                           ) : (
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap ${r.status === 'paid' ? 'bg-navy text-white' : 'bg-amber-100 text-amber-700'}`}>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap ${r.status === 'paid' ? 'bg-ink text-white' : 'bg-amber-100 text-amber-700'}`}>
                               {JOB_COMMISSION_STATUS_LABEL[r.status]}
                             </span>
                           )}
@@ -316,7 +316,7 @@ function ConfirmBar({ text, onConfirm, onCancel }: { text: string; onConfirm: ()
     <div className="px-4 py-2.5 bg-amber-50 border-y border-amber-100 flex flex-wrap items-center gap-2">
       <p className="text-xs text-amber-900 mr-auto">{text}</p>
       <button onClick={onCancel} className="text-xs px-3 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-700">Cancel</button>
-      <button onClick={onConfirm} className="text-xs px-3 py-1.5 rounded-lg bg-brick text-white font-medium hover:bg-brick-dark">Yes, mark paid</button>
+      <button onClick={onConfirm} className="text-xs px-3 py-1.5 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark">Yes, mark paid</button>
     </div>
   );
 }
