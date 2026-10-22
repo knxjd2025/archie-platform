@@ -12,7 +12,8 @@
 import { fetchWithTimeout } from '../lib/fetch-timeout';
 import { toE164, last10Digits } from '../../shared/comms';
 
-const GHL_API_BASE = 'https://services.leadconnectorhq.com';
+import { GHL_API_BASE, ghlConnection, ghlHeaders, GhlNotConnectedError, type GhlConnection } from './ghl/connection';
+export { GhlNotConnectedError };
 
 /** How many fuzzy-search hits to check for an exact phone match. */
 const PHONE_SEARCH_LIMIT = 20;
@@ -92,35 +93,38 @@ export interface GHLOpportunity {
   createdAt: string;
 }
 
+/**
+ * GHL for the current company. Each call reads the company's own connection
+ * (./ghl/connection.ts); there is no app-wide token, so a company only ever
+ * reaches its own sub-account, and one that has not connected GHL gets
+ * GhlNotConnectedError.
+ */
 export class GoHighLevelClient {
-  private accessToken: string;
-  private locationId: string;
   private apiVersion: string = '2021-07-28';
+  private connPromise: Promise<GhlConnection> | null = null;
 
-  constructor() {
-    // GHL_PIT_TOKEN (Private Integration Token) is the canonical credential —
-    // same one server/brain/ghl-brain.ts uses. The other three are kept only
-    // as a fallback for stale deploys; do not rely on them going forward.
-    this.accessToken = process.env.GHL_PIT_TOKEN || process.env.GHL_LOCATION_API_KEY || process.env.GHL_AGENCY_API_KEY || process.env.GHL_ACCESS_TOKEN || '';
-    this.locationId = process.env.GHL_LOCATION_ID || '';
-
-    if (!this.accessToken) {
-      console.warn('GHL API key not set - GoHighLevel integration will be limited');
+  /** The company's connection, read once per client instance. */
+  private conn(): Promise<GhlConnection> {
+    if (!this.connPromise) {
+      this.connPromise = ghlConnection();
+      this.connPromise.catch(() => { this.connPromise = null; });
     }
+    return this.connPromise;
+  }
+
+  /** The company's GHL sub-account id. */
+  async location(): Promise<string> {
+    return (await this.conn()).locationId;
   }
 
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
+    const conn = await this.conn();
     const url = `${GHL_API_BASE}${endpoint}`;
 
-    const headers: Record<string, string> = {
-      'Authorization': `Bearer ${this.accessToken}`,
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'Version': this.apiVersion,
-    };
+    const headers: Record<string, string> = ghlHeaders(conn, this.apiVersion);
 
     const response = await fetchWithTimeout(url, {
       ...options,
@@ -146,7 +150,7 @@ export class GoHighLevelClient {
     startAfter?: string;
   }): Promise<{ contacts: GHLContact[]; meta: any }> {
     const searchParams = new URLSearchParams({
-      locationId: this.locationId,
+      locationId: (await this.location()),
       limit: String(params?.limit || 20),
     });
 
@@ -165,7 +169,7 @@ export class GoHighLevelClient {
       method: 'POST',
       body: JSON.stringify({
         ...contact,
-        locationId: this.locationId,
+        locationId: (await this.location()),
       }),
     });
   }
@@ -199,7 +203,7 @@ export class GoHighLevelClient {
     opts: { limit?: number; startAfterDate?: number } = {},
   ): Promise<{ conversations: GHLConversation[] }> {
     const searchParams = new URLSearchParams({
-      locationId: this.locationId,
+      locationId: (await this.location()),
     });
 
     if (contactId) searchParams.set('contactId', contactId);
@@ -319,7 +323,7 @@ export class GoHighLevelClient {
     limit?: number;
   }): Promise<{ opportunities: GHLOpportunity[] }> {
     const searchParams = new URLSearchParams({
-      location_id: this.locationId,
+      location_id: (await this.location()),
       limit: String(params?.limit || 20),
     });
 
@@ -341,7 +345,7 @@ export class GoHighLevelClient {
       method: 'POST',
       body: JSON.stringify({
         ...opportunity,
-        locationId: this.locationId,
+        locationId: (await this.location()),
       }),
     });
   }
@@ -359,7 +363,7 @@ export class GoHighLevelClient {
   // ==================== CALENDAR ====================
 
   async getCalendars(): Promise<{ calendars: any[] }> {
-    return this.request(`/calendars/?locationId=${this.locationId}`);
+    return this.request(`/calendars/?locationId=${(await this.location())}`);
   }
 
   async getAppointments(params: {
@@ -368,7 +372,7 @@ export class GoHighLevelClient {
     endTime: string;
   }): Promise<{ events: any[] }> {
     const searchParams = new URLSearchParams({
-      locationId: this.locationId,
+      locationId: (await this.location()),
       calendarId: params.calendarId,
       startTime: params.startTime,
       endTime: params.endTime,
@@ -379,13 +383,13 @@ export class GoHighLevelClient {
 
   /** The location's GHL users (reps), so a GHL calendar can be matched to a roster email. */
   async getUsers(): Promise<{ users: any[] }> {
-    return this.request(`/users/?locationId=${this.locationId}`);
+    return this.request(`/users/?locationId=${(await this.location())}`);
   }
 
   /** Every appointment assigned to one GHL user across all calendars. Times are epoch milliseconds. */
   async getUserAppointments(params: { userId: string; startTime: number; endTime: number }): Promise<{ events: any[] }> {
     const searchParams = new URLSearchParams({
-      locationId: this.locationId,
+      locationId: (await this.location()),
       userId: params.userId,
       startTime: String(params.startTime),
       endTime: String(params.endTime),
@@ -405,7 +409,7 @@ export class GoHighLevelClient {
       method: 'POST',
       body: JSON.stringify({
         ...appointment,
-        locationId: this.locationId,
+        locationId: (await this.location()),
       }),
     });
   }
@@ -420,7 +424,7 @@ export class GoHighLevelClient {
       method: 'POST',
       body: JSON.stringify({
         ...params,
-        locationId: this.locationId,
+        locationId: (await this.location()),
       }),
     });
   }
@@ -474,29 +478,16 @@ export class GoHighLevelClient {
    * Uses the contacts endpoint as it's commonly available with the contacts.readonly scope
    */
   async healthCheck(): Promise<{ ok: boolean; error?: string }> {
-    if (!this.accessToken || !this.locationId) {
-      return {
-        ok: false,
-        error: 'Missing GHL Private Integration Token (GHL_PIT_TOKEN) or GHL_LOCATION_ID. Create a Private Integration in GHL Settings > Integrations > Private Integrations.',
-      };
-    }
-
     try {
       // Use contacts endpoint with limit=1 as it requires only contacts.readonly scope
-      await this.request<any>(`/contacts/?locationId=${this.locationId}&limit=1`);
+      await this.request<any>(`/contacts/?locationId=${await this.location()}&limit=1`);
       return { ok: true };
     } catch (error: any) {
-      // Provide helpful error message for common issues
-      if (error.message.includes('Invalid JWT')) {
-        return {
-          ok: false,
-          error: 'Invalid JWT - Ensure you are using a Private Integration Token (not an old API key). Create one in GHL Settings > Integrations > Private Integrations with the required scopes.',
-        };
+      if (error instanceof GhlNotConnectedError) return { ok: false, error: error.message };
+      if (String(error?.message).includes('Invalid JWT')) {
+        return { ok: false, error: 'GHL rejected the token. Reconnect GHL for this company.' };
       }
-      return {
-        ok: false,
-        error: error.message,
-      };
+      return { ok: false, error: error.message };
     }
   }
 }

@@ -8,7 +8,7 @@
 import type { Express, Request, Response } from 'express';
 import { desc, eq, ne } from 'drizzle-orm';
 import { db } from '../db';
-import { claims, personEnum } from '../../shared/schema';
+import { claims, teamMembers } from '../../shared/schema';
 import { requireAuth } from '../auth/middleware';
 import { isIsoDate } from '../../shared/et-periods';
 import { etInstant } from '../../shared/schedule-board';
@@ -21,7 +21,13 @@ import {
 import { nextOf, completeCurrentStep, jumpToStep, currentStep } from '../../shared/pipeline-core';
 import { type ClaimRow, claimStageOf as stageOf, claimStepsOf as stepsOf, claimContexts as contextFor, mirrorClaimToJobTread as mirrorToJobTread, moveClaimStage } from './store';
 
-const isPerson = (v: unknown): v is (typeof personEnum.enumValues)[number] => personEnum.enumValues.includes(v as any);
+/** A next-action owner is an active team member of this company, by email (row level security keeps it to this company). */
+async function ownerEmail(v: unknown): Promise<string | null> {
+  const email = String(v ?? '').trim().toLowerCase();
+  if (!email) return null;
+  const [m] = await db.select({ email: teamMembers.email, active: teamMembers.active }).from(teamMembers).where(eq(teamMembers.email, email));
+  return m?.active ? m.email : null;
+}
 
 function toRow(c: ClaimRow, ctx: ClaimGateContext, jtStage: string | null = null) {
   const stage = stageOf(c);
@@ -97,7 +103,7 @@ export function registerClaimsRoutes(app: Express) {
     const customerName = String(b.customerName || '').trim();
     const stage = isClaimPipelineStage(b.stage) ? b.stage : 'inspect';
     const nextAction = String(b.nextAction || '').trim() || CLAIM_NEXT_ACTION[stage];
-    const nextActionOwner = isPerson(b.nextActionOwner) ? b.nextActionOwner : 'james';
+    const nextActionOwner = (await ownerEmail(b.nextActionOwner)) ?? user.email;
     const nextActionDue = b.nextActionDue ? dueFrom(b.nextActionDue) : new Date(Date.now() + (CLAIM_DUE_DAYS[stage] ?? 7) * 864e5);
     if (!customerName) return res.status(400).json({ error: 'Customer name is required.' });
     if (Number.isNaN(nextActionDue.getTime())) return res.status(400).json({ error: 'A valid next-action due date is required.' });
@@ -198,8 +204,9 @@ export function registerClaimsRoutes(app: Express) {
       set.nextAction = na;
     }
     if (b.nextActionOwner !== undefined) {
-      if (!isPerson(b.nextActionOwner)) return res.status(400).json({ error: 'Invalid next-action owner.' });
-      set.nextActionOwner = b.nextActionOwner;
+      const owner = b.nextActionOwner === null || b.nextActionOwner === '' ? null : await ownerEmail(b.nextActionOwner);
+      if (owner === null && b.nextActionOwner) return res.status(400).json({ error: 'The next-action owner must be someone on the team.' });
+      set.nextActionOwner = owner;
     }
     if (b.nextActionDue !== undefined) {
       const d = dueFrom(b.nextActionDue);

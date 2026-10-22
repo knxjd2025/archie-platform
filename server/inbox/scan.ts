@@ -6,7 +6,7 @@ import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { db } from '../db';
 import { inboxItems, inboxScans, leads } from '../../shared/schema';
 import { getDelegatedGmail } from '../brain/gmail-delegated';
-import { completeJson } from '../brain/llm';
+import { completeJson } from '../lib/llm-json';
 import {
   scanWindow, readWindowOldestFirst, gmailQuery, parseFrom, heuristicClassify, needsModel, classifyPrompt, parseClassifications, CLASSIFY_SYSTEM, isActionable,
   type InboxMessage, type KnownContact, type Classification, type ScanWindow,

@@ -1582,75 +1582,8 @@ export type PlaidTransaction = typeof plaidTransactions.$inferSelect;
 export type InsertPlaidTransaction = typeof plaidTransactions.$inferInsert;
 
 // ============================================================
-// OPS BRAIN (spec: docs/superpowers/specs/2026-07-18-ops-brain-design.md)
+// CLAIMS
 // ============================================================
-
-export const personEnum = pgEnum('brain_person', ['james', 'thomas', 'banning', 'admin', 'unassigned']);
-
-export const loopKindEnum = pgEnum('loop_kind', [
-  'unanswered_inbound',
-  'new_lead_untouched',
-  'promise_made',
-  'claim_milestone',
-  'estimate_stale',
-  'invoice_unpaid',
-  'appointment_conflict',
-  'appointment_stale_confirmed',
-  'callback_requested',
-  'integration_failure',
-  'custom',
-]);
-
-export const loopUrgencyEnum = pgEnum('loop_urgency', ['emergency', 'urgent', 'normal', 'low']);
-
-export const loopStateEnum = pgEnum('loop_state', ['open', 'nudged', 'escalated', 'snoozed', 'done', 'dismissed']);
-
-export const loopSourceEnum = pgEnum('loop_source', ['gmail', 'ghl', 'jobtread', 'calendar', 'sms', 'manual']);
-
-export const claimStageEnum = pgEnum('claim_stage', [
-  'intake',
-  'inspection_done',
-  'sa_signed',
-  'adjuster_scheduled',
-  'adjuster_met',
-  'decision_pending',
-  'approved',
-  'supplementing',
-  'build_scheduled',
-  'build_done',
-  'final_invoiced',
-  'depreciation_pending',
-  'closed',
-  'denied_dispute',
-]);
-
-export const nudgeChannelEnum = pgEnum('nudge_channel', ['sms', 'email']);
-
-export const nudgeStatusEnum = pgEnum('nudge_status', ['sent', 'delivered', 'failed', 'queued_quiet_hours', 'dry_run']);
-
-export const openLoops = pgTable('open_loops', {
-  companyId: companyId(),
-  id: serial('id').primaryKey(),
-  kind: loopKindEnum('kind').notNull(),
-  source: loopSourceEnum('source').notNull(),
-  sourceRef: text('source_ref').notNull(),
-  dedupeKey: text('dedupe_key').notNull(),
-  contact: jsonb('contact').$type<{ name?: string; phone?: string; email?: string }>(),
-  summary: text('summary').notNull(),
-  evidence: jsonb('evidence').$type<{ quotes: string[]; links?: string[] }>(),
-  owner: personEnum('owner').notNull().default('unassigned'),
-  urgency: loopUrgencyEnum('urgency').notNull().default('normal'),
-  dueAt: timestamp('due_at'),
-  state: loopStateEnum('state').notNull().default('open'),
-  snoozeUntil: timestamp('snooze_until'),
-  claimId: integer('claim_id'),
-  openedAt: timestamp('opened_at').defaultNow().notNull(),
-  lastEventAt: timestamp('last_event_at').defaultNow().notNull(),
-  closedAt: timestamp('closed_at'),
-  closedBy: text('closed_by'),
-}, (t) => ({
-  companyKeyUq: uniqueIndex('open_loops_company_dedupe_key_uq').on(t.companyId, t.dedupeKey),
-}));
 
 export const claims = pgTable('claims', {
   companyId: companyId(),
@@ -1672,47 +1605,10 @@ export const claims = pgTable('claims', {
   history: jsonb('history').$type<Array<{ stage: string; at: string; by: string }>>().notNull().default([]),
   stageEnteredAt: timestamp('stage_entered_at').defaultNow().notNull(),
   nextAction: text('next_action').notNull(),
-  nextActionOwner: personEnum('next_action_owner').notNull().default('james'),
+  /** Team member email who owns the next action; null until someone is assigned. */
+  nextActionOwner: text('next_action_owner'),
   nextActionDue: timestamp('next_action_due').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
-
-export const nudges = pgTable('nudges', {
-  companyId: companyId(),
-  id: serial('id').primaryKey(),
-  loopId: integer('loop_id').notNull(),
-  toPerson: personEnum('to_person').notNull(),
-  channel: nudgeChannelEnum('channel').notNull(),
-  body: text('body').notNull(),
-  idempotencyKey: text('idempotency_key').notNull(),
-  escalationLevel: integer('escalation_level').notNull().default(0),
-  status: nudgeStatusEnum('status').notNull().default('sent'),
-  providerRef: text('provider_ref'),
-  sentAt: timestamp('sent_at').defaultNow().notNull(),
-  ackAt: timestamp('ack_at'),
-}, (t) => ({
-  companyKeyUq: uniqueIndex('nudges_company_idempotency_key_uq').on(t.companyId, t.idempotencyKey),
-}));
-
-export const brainRuns = pgTable('brain_runs', {
-  companyId: companyId(),
-  id: serial('id').primaryKey(),
-  kind: text('kind').notNull().default('sweep'),
-  startedAt: timestamp('started_at').defaultNow().notNull(),
-  finishedAt: timestamp('finished_at'),
-  eventsSeen: integer('events_seen').notNull().default(0),
-  loopsOpened: integer('loops_opened').notNull().default(0),
-  loopsClosed: integer('loops_closed').notNull().default(0),
-  errors: jsonb('errors').$type<Array<{ source: string; message: string }>>().default([]),
-});
-
-export const watchCursors = pgTable('watch_cursors', {
-  companyId: companyId(),
-  id: serial('id').primaryKey(),
-  source: text('source').notNull(),
-  channel: text('channel').notNull().default(''),
-  cursor: text('cursor').notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 

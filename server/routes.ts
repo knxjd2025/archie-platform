@@ -61,7 +61,7 @@ import { getGmailClient } from './integrations/gmail';
 import knowledgeRouter from './routes/knowledge';
 import financialRouter from './routes/financial';
 import twilioRouter from './routes/twilio';
-import brainRouter from './routes/brain';
+
 import vapiRouter from './routes/vapi';
 import { getTwilioClient } from './integrations/twilio';
 import { sendUpstreamFailure } from './lib/upstream';
@@ -185,7 +185,7 @@ export function registerRoutes(app: Express) {
   // anyone, signed in or not — the API sweep found it and it is now gone.
 
   // ==================== OPS BRAIN (sweep + digest crons) ====================
-  app.use('/api', brainRouter);
+  
 
   // ==================== VAPI VOICE ASSISTANT TOOLS ====================
   app.use('/api/vapi', vapiRouter);

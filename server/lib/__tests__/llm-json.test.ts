@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { parseJsonResponse, completeJson } from '../llm';
+import { parseJsonResponse, completeJson } from '../llm-json';
 
 describe('parseJsonResponse', () => {
   it('parses plain JSON', () => {

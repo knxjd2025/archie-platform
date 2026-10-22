@@ -1,31 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import { buildMimeMessage, buildMimeWithAttachments, parseGmailMessage } from '../gmail-delegated';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 
-const fixture = {
-  id: 'm1',
-  threadId: 't1',
-  internalDate: '1784500000000',
-  labelIds: ['INBOX', 'UNREAD'],
-  payload: {
-    headers: [
-      { name: 'From', value: 'Jane Homeowner <jane@gmail.com>' },
-      { name: 'Subject', value: 'Roof leak question' },
-    ],
-  },
-  snippet: 'Hi, my roof is leaking near the chimney...',
-};
+const tenant = vi.hoisted(() => ({ companyId: null as string | null }));
+vi.mock('../../tenant/context', () => ({ currentCompanyId: () => tenant.companyId }));
 
-describe('parseGmailMessage', () => {
-  it('normalizes a message into a BrainEvent', () => {
-    const ev = parseGmailMessage(fixture as any, 'thomas@bestroofingnow.com');
-    expect(ev.source).toBe('gmail');
-    expect(ev.sourceRef).toBe('t1');
-    expect(ev.mailbox).toBe('thomas@bestroofingnow.com');
-    expect(ev.direction).toBe('inbound');
-    expect(ev.contact?.email).toBe('jane@gmail.com');
-    expect(ev.text).toContain('Roof leak question');
-  });
-});
+import { buildMimeMessage, buildMimeWithAttachments, canDelegateMailbox, getDelegatedGmail, GoogleWorkspaceUnavailableError } from '../google-workspace';
+
+const runInCompany = (id: string, fn: () => void) => { tenant.companyId = id; try { fn(); } finally { tenant.companyId = null; } };
 
 const decode = (raw: string) => Buffer.from(raw, 'base64url').toString('utf8');
 const img = (over: Partial<{ filename: string; contentType: string; base64: string; contentId: string }> = {}) => ({
@@ -35,14 +15,14 @@ const img = (over: Partial<{ filename: string; contentType: string; base64: stri
 describe('a message with photos', () => {
   it('carries each photo inline, referenced by content id', () => {
     const mime = decode(buildMimeWithAttachments(
-      'james@bestroofingnow.com', 'claims@carrier.test', 'Depreciation release',
+      'james@acme-roofing.test', 'claims@carrier.test', 'Depreciation release',
       '<p>See <img src="cid:p1"></p>', [img({ contentId: 'p1' })],
     ));
     expect(mime).toContain('Content-Type: multipart/related; type="text/html"');
     expect(mime).toContain('Content-ID: <p1>');
     expect(mime).toContain('Content-Disposition: inline; filename="roof.jpg"');
     expect(mime).toContain('Content-Transfer-Encoding: base64');
-    expect(mime).toContain('From: james@bestroofingnow.com');
+    expect(mime).toContain('From: james@acme-roofing.test');
   });
 
   it('falls back to the plain single-part message when there is nothing to attach', () => {
@@ -52,7 +32,7 @@ describe('a message with photos', () => {
 
   it('refuses to let a filename or content type forge extra headers', () => {
     const mime = decode(buildMimeWithAttachments(
-      'james@bestroofingnow.com', 'claims@carrier.test', 'S', '<p>x</p>',
+      'james@acme-roofing.test', 'claims@carrier.test', 'S', '<p>x</p>',
       [img({ filename: 'a"\r\nBcc: someone@else.test\r\n.jpg', contentType: 'image/jpeg\r\nBcc: x@y.test' })],
     ));
     expect(mime).not.toMatch(/\r\nBcc:/);
@@ -110,9 +90,24 @@ describe('a message carrying a document', () => {
 });
 
 
-describe('parseGmailMessage keeps where the message sits in the mailbox history', () => {
-  it('carries the history id that added it, so the cursor can be held there', () => {
-    const msg = { id: 'm1', threadId: 't1', internalDate: '1792000000000', payload: { headers: [{ name: 'From', value: 'a@b.com' }] } };
-    expect((parseGmailMessage(msg as any, 'james@bestroofingnow.com', '4242').raw as any).historyId).toBe('4242');
+describe('Google delegation is per company and off by default', () => {
+  const A = '11111111-1111-4111-8111-111111111111';
+  const B = '22222222-2222-4222-8222-222222222222';
+  const env = { ...process.env };
+  afterEach(() => { process.env = { ...env }; });
+
+  it('refuses every mailbox when the operator has not delegated a domain', () => {
+    process.env.GOOGLE_SA_KEY = 'x'; process.env.GOOGLE_SA_EMAIL = 'sa@x.test'; delete process.env.ARCHIE_GOOGLE_DWD;
+    runInCompany(A, () => expect(canDelegateMailbox('a@acme.test')).toBe(false));
+  });
+
+  it('allows only the delegated company, and only mailboxes on its domain', () => {
+    process.env.GOOGLE_SA_KEY = 'x'; process.env.GOOGLE_SA_EMAIL = 'sa@x.test'; process.env.ARCHIE_GOOGLE_DWD = `${A}=acme.test`;
+    runInCompany(A, () => {
+      expect(canDelegateMailbox('dana@acme.test')).toBe(true);
+      expect(canDelegateMailbox('dana@other.test')).toBe(false);
+      expect(() => getDelegatedGmail('dana@other.test')).toThrow(GoogleWorkspaceUnavailableError);
+    });
+    runInCompany(B, () => expect(canDelegateMailbox('dana@acme.test')).toBe(false));
   });
 });

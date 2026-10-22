@@ -1,7 +1,7 @@
 /**
  * The morning check-in every sales rep gets: what to update today.
  *
- * One message per rep, 8 AM Eastern, Monday to Saturday, listing:
+ * One message per rep, 8 AM in the company's time zone, Monday to Saturday, listing:
  *   - canvassed houses whose follow-up date has come
  *   - hot houses (interested / appointment / inspected) nobody has touched in days
  *   - today's appointments, and yesterday's that still need an outcome logged
@@ -21,11 +21,12 @@ import {
 } from '../../shared/schema';
 import { ownedLeadWhere, type SessionUser } from '../access/rep-scope';
 import { ownerSql } from './access';
-import { sendAsMailbox } from '../brain/gmail-delegated';
-import { sendGhlSms, upsertContactByPhone } from '../brain/ghl-brain';
-import { TEAM } from '../brain/types';
+import { sendCompanyEmail } from '../integrations/company-mail';
+import { sendGhlSms, upsertContactByPhone } from '../integrations/ghl/messaging';
+import { currentProfile } from '../tenant/context';
 
-const ZONE = 'America/New_York';
+/** The company's own time zone (its profile), so "8 AM" is 8 AM where it works. */
+const zone = (): string => currentProfile().timeZone;
 const SEND_HOUR = 8;
 const STALE_HOUSE_DAYS = 3;
 const STALE_LEAD_DAYS = 3;
@@ -42,7 +43,7 @@ export interface EasternNow { dateIso: string; hour: number; weekday: number }
 export function easternNow(now: Date): EasternNow {
   const parts = Object.fromEntries(
     new Intl.DateTimeFormat('en-US', {
-      timeZone: ZONE, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hour12: false, weekday: 'short',
+      timeZone: zone(), year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hour12: false, weekday: 'short',
     }).formatToParts(now).map((p) => [p.type, p.value]),
   );
   const weekday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(parts.weekday);
@@ -101,7 +102,7 @@ const STATUS_WORDS: Record<string, string> = {
 const statusWord = (s: string): string => STATUS_WORDS[s] ?? s.replace(/_/g, ' ');
 
 const timeOf = (d: Date): string =>
-  new Intl.DateTimeFormat('en-US', { timeZone: ZONE, hour: 'numeric', minute: '2-digit' }).format(d);
+  new Intl.DateTimeFormat('en-US', { timeZone: zone(), hour: 'numeric', minute: '2-digit' }).format(d);
 
 const plural = (n: number, one: string, many = `${one}s`): string => `${n} ${n === 1 ? one : many}`;
 
@@ -155,7 +156,7 @@ export function buildRepReminder(input: ReminderInput, appUrl: string): Reminder
     counts.staleHouses && plural(counts.staleHouses, 'hot door') + ' going cold',
     counts.staleLeads && plural(counts.staleLeads, 'lead') + ' to update',
   ].filter(Boolean);
-  const sms = `BRN morning check-in, ${first}: ${bits.join(', ')}. Update them here: ${url}/`;
+  const sms = `Morning check-in, ${first}: ${bits.join(', ')}. Update them here: ${url}/`;
   return { subject, html, sms, counts };
 }
 
@@ -291,7 +292,7 @@ async function deliver(rep: Rep, msg: ReminderMessage, mode: 'on' | 'dry_run', a
   else if (rep.notifyEmail) {
     if (mode === 'dry_run') emailStatus = 'dry_run';
     else {
-      try { await sendAsMailbox(TEAM.james.email, rep.email, msg.subject, msg.html); emailStatus = 'sent'; }
+      try { await sendCompanyEmail({ to: rep.email, toName: rep.name, subject: msg.subject, html: msg.html }); emailStatus = 'sent'; }
       catch (e: any) { emailStatus = 'failed'; errors.push(`email: ${String(e?.message || e).slice(0, 200)}`); }
     }
   }
@@ -300,7 +301,7 @@ async function deliver(rep: Rep, msg: ReminderMessage, mode: 'on' | 'dry_run', a
     if (mode === 'dry_run') smsStatus = 'dry_run';
     else {
       try {
-        const contactId = await upsertContactByPhone(`${rep.name} (BRN team)`, rep.phone);
+        const contactId = await upsertContactByPhone(`${rep.name} (team)`, rep.phone);
         if (!contactId) throw new Error('no GoHighLevel contact for that number');
         await sendGhlSms(contactId, msg.sms);
         smsStatus = 'sent';

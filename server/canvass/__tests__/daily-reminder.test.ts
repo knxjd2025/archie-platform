@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('../../db', () => ({ db: {} }));
-vi.mock('../../brain/gmail-delegated', () => ({ sendAsMailbox: vi.fn() }));
-vi.mock('../../brain/ghl-brain', () => ({ sendGhlSms: vi.fn(), upsertContactByPhone: vi.fn() }));
+vi.mock('../../integrations/company-mail', () => ({ sendCompanyEmail: vi.fn() }));
+vi.mock('../../integrations/ghl/messaging', () => ({ sendGhlSms: vi.fn(), upsertContactByPhone: vi.fn() }));
 
 import {
   easternNow, isSendWindow, easternMidnight, addDaysIso, buildRepReminder, reminderNeedsRetry, type ReminderInput,
@@ -57,7 +57,7 @@ describe('the message', () => {
     expect(msg.html).toContain('proposal sent, 6 days since last contact');
     expect(msg.html).toContain('never contacted');
     expect(msg.html).toContain('href="https://app.example.com/"');
-    expect(msg.sms).toBe('BRN morning check-in, Dana: 1 appt today, 1 appt to log, 1 follow-up due, 1 hot door going cold, 2 leads to update. Update them here: https://app.example.com/');
+    expect(msg.sms).toBe('Morning check-in, Dana: 1 appt today, 1 appt to log, 1 follow-up due, 1 hot door going cold, 2 leads to update. Update them here: https://app.example.com/');
     expect(msg.counts).toEqual({ followUpsDue: 1, staleHouses: 1, appointmentsToday: 1, appointmentsToLog: 1, staleLeads: 2 });
   });
 

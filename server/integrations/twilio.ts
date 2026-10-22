@@ -186,7 +186,7 @@ export class TwilioClient {
    *
    * Without this, anyone who finds the webhook URL can forge `From`/`Body`
    * and get treated as a real inbound text — including the ops-brain control
-   * commands in sms-control.ts (DONE/SNOOZE/reassign), which trust `From` to
+   * commands, which trust `From` to
    * identify a team member with zero other authentication.
    */
   validateWebhookSignature(url: string, params: Record<string, any>, signature: string): boolean {

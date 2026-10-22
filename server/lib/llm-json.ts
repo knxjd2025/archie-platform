@@ -1,10 +1,10 @@
-// Ops Brain LLM — Claude (Anthropic), mirroring server/agents/base-agent.ts's
+// JSON completions from Claude (Anthropic), mirroring server/agents/base-agent.ts's
 // raw-fetch pattern (no SDK, for Vercel bundling).
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_VERSION = '2023-06-01';
 // Default must be a model that exists: 'claude-opus-4-8' never did, so with
 // neither env var set every triage and digest call 404'd in silence.
-const MODEL = process.env.ANTHROPIC_MODEL_BRAIN || process.env.ANTHROPIC_MODEL || 'claude-sonnet-5';
+const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5';
 const MAX_TOKENS = 8192;
 
 /**

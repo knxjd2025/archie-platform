@@ -39,21 +39,6 @@ router.post('/twilio', async (req, res) => {
       return res.type('text/xml').send(twilio.generateTwiML(''));
     }
 
-    // Ops Brain control commands from team members (DONE 42 / SNOOZE 42 2d / 42 -> thomas)
-    const { applyControlCommand } = await import('../brain/sms-control');
-    const confirmation = await applyControlCommand(payload.From, payload.Body ?? '');
-    if (confirmation) {
-      try {
-        await twilio.sendSms(payload.From, confirmation);
-      } catch (e: any) {
-        // The control command (DONE/SNOOZE/reassign) already applied — a
-        // failed confirmation text shouldn't turn into a 500 that makes
-        // Twilio retry and re-run the command a second time.
-        console.error('[twilio] control-command confirmation send failed:', e?.message || e);
-      }
-      return res.type('text/xml').send('<Response></Response>');
-    }
-
     console.log('📱 Twilio SMS received:', {
       from: payload.From,
       body: payload.Body?.substring(0, 50),

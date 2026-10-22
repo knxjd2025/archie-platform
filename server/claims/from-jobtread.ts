@@ -1,6 +1,6 @@
 import { eq, inArray } from 'drizzle-orm';
 import { db } from '../db';
-import { claims, leads } from '../../shared/schema';
+import { claims, leads, teamMembers } from '../../shared/schema';
 import {
   JT_STATUS_TO_CLAIM, CLAIM_NEXT_ACTION as NEXT_ACTION, CLAIM_DUE_DAYS as DUE_DAYS,
   claimStageIndex, freshDisputeSteps,
@@ -33,15 +33,20 @@ export function disputeStepFor(stage: string | null | undefined): string | null 
   return JT_STATUS_TO_CLAIM[stage.trim().toLowerCase()]?.step ?? null;
 }
 
-const PEOPLE = ['james', 'thomas', 'banning', 'admin'] as const;
-type Person = (typeof PEOPLE)[number] | 'unassigned';
+export interface RosterEntry { email: string; name: string; jobtreadSalesRep?: string | null }
 
-/** Map the owning rep to the brain_person enum the board uses. */
-export function ownerFor(repName: string | null | undefined): Person {
-  const n = (repName || '').trim().toLowerCase();
-  if (!n) return 'unassigned';
-  const first = n.split(/\s+/)[0];
-  return (PEOPLE as readonly string[]).includes(first) ? (first as Person) : 'unassigned';
+const norm = (v: string | null | undefined) => (v || '').trim().toLowerCase().replace(/\s+/g, ' ');
+
+/**
+ * The team member (by email) who owns a job's claim: the one whose JobTread
+ * sales-rep name, or failing that whose own name, matches the job's rep.
+ * Null when nobody matches; most jobs have no rep.
+ */
+export function ownerFor(repName: string | null | undefined, roster: RosterEntry[]): string | null {
+  const n = norm(repName);
+  if (!n) return null;
+  const hit = roster.find((m) => norm(m.jobtreadSalesRep) === n) ?? roster.find((m) => norm(m.name) === n);
+  return hit?.email ?? null;
 }
 
 export interface SyncClaimsResult {
@@ -79,6 +84,7 @@ export async function syncClaimsFromJobTread(now: Date = new Date()): Promise<Sy
     .where(inArray(claims.jobtreadJobId, claimJobs.map((c) => c.externalId as string)));
   const byJob = new Map(existing.map((e) => [e.jobtreadJobId as string, e]));
 
+  const roster = await db.select({ email: teamMembers.email, name: teamMembers.name, jobtreadSalesRep: teamMembers.jobtreadSalesRep }).from(teamMembers);
   for (const job of claimJobs) {
     const stage = claimStageFor(job.stage)!;
     const found = byJob.get(job.externalId as string);
@@ -98,7 +104,7 @@ export async function syncClaimsFromJobTread(now: Date = new Date()): Promise<Sy
         history: [{ stage, at: now.toISOString(), by: 'system:jobtread-sync' }],
         stageEnteredAt: now,
         nextAction: NEXT_ACTION[stage],
-        nextActionOwner: ownerFor(job.jtSalesRep) as any,
+        nextActionOwner: ownerFor(job.jtSalesRep, roster),
         nextActionDue: new Date(now.getTime() + (DUE_DAYS[stage] ?? 7) * 864e5),
       });
       out.created++;

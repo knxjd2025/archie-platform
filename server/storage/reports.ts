@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, gt, gte, inArray, lt, lte, type SQL } from 'drizzle-orm';
 import { db } from '../db';
-import { deals, invoices, appointments, leads, openLoops } from '../../shared/schema';
+import { deals, invoices, appointments, leads } from '../../shared/schema';
 import { num } from '../../shared/num';
 
 const iso = (v: unknown): string | null =>
@@ -191,22 +191,10 @@ export function shapeLoop(r: any): WatchItem {
   };
 }
 
-// The "Lead Watchdog"/Brain's still-open flagged items (from email, texts,
-// JobTread, and the calendar). Ordered emergency-first, then most-recent activity.
-const OPEN_STATES = ['open', 'nudged', 'escalated', 'snoozed'] as const;
+// The BRN ops brain's flagged items. Archie has no brain, so the watchlist is
+// empty; kept so the assistant's tool answers "nothing flagged" until it is retired.
 export async function fetchWatchlist(
-  opts: { source?: string; urgency?: string; limit?: number } = {},
+  _opts: { source?: string; urgency?: string; limit?: number } = {},
 ): Promise<WatchItem[]> {
-  // Spread, don't cast: widening to string[] drops the enum's literal union and
-  // no inArray overload accepts it, which broke `tsc --noEmit` on main.
-  const clauses: any[] = [inArray(openLoops.state, [...OPEN_STATES])];
-  if (opts.source) clauses.push(eq(openLoops.source, opts.source as any));
-  if (opts.urgency) clauses.push(eq(openLoops.urgency, opts.urgency as any));
-  const rows = await db
-    .select()
-    .from(openLoops)
-    .where(and(...clauses))
-    .orderBy(asc(openLoops.urgency), desc(openLoops.lastEventAt))
-    .limit(cap(opts.limit));
-  return rows.map(shapeLoop);
+  return [];
 }

@@ -12,7 +12,7 @@
 import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, lte, ne, sql } from 'drizzle-orm';
 import { db } from '../db';
 import {
-  appointments, claims, deals, followUps, invoices, jobCommissions, imessages, inboxItems, leads, openLoops,
+  appointments, claims, deals, followUps, invoices, jobCommissions, imessages, inboxItems, leads,
   repAssignments, productionPipeline, salesPipeline, teamMembers,
 } from '../../shared/schema';
 import { CLAIM_PIPELINE_STAGES } from '../../shared/claims-pipeline';
@@ -430,20 +430,6 @@ async function salesAgenda(mondayIso: string): Promise<MeetingAgenda> {
       .map((s) => ({ label: s.label, value: String(pipeline.filter((p) => p.stage === s.key).length) }))
       .filter((r) => r.value !== '0'),
     empty: 'The sales pipeline is empty.',
-  });
-
-  const due = await db.select({ summary: openLoops.summary, dueAt: openLoops.dueAt, owner: openLoops.owner })
-    .from(openLoops)
-    .where(and(isNull(openLoops.closedAt), isNotNull(openLoops.dueAt), lt(openLoops.dueAt, new Date(Date.now() + 7 * 86400000))))
-    .orderBy(openLoops.dueAt).limit(20);
-  sections.push({
-    heading: 'Follow-ups due this week',
-    rows: due.map((d) => ({
-      label: d.summary.slice(0, 80),
-      value: d.dueAt ? etWeekday(d.dueAt, { month: 'short', day: 'numeric' }) : '',
-      note: d.owner ?? '',
-    })),
-    empty: 'Nothing falls due in the next seven days.',
   });
 
   // What ran, what is booked, and who has written to us without an answer.

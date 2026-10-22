@@ -1,13 +1,12 @@
 /**
- * Telling James. A person's report is emailed straight away — they took the
+ * Telling the Archie operators (server/integrations/operator-mail.ts). A person's report is emailed straight away — they took the
  * trouble to write it. A caught error is emailed the first time it is seen,
  * and only then: the hundredth occurrence is a number on the Bugs page and in
  * the morning digest, not another email.
  */
-import { sendAsMailbox } from '../brain/gmail-delegated';
-import { TEAM } from '../brain/types';
+import { sendOperatorEmail } from '../integrations/operator-mail';
 
-const appUrl = (): string => (process.env.APP_BASE_URL || 'https://app.bestroofingnow.com').replace(/\/+$/, '');
+const appUrl = (): string => (process.env.APP_BASE_URL || '').replace(/\/+$/, '');
 
 export const escapeHtml = (s: unknown): string =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
@@ -30,9 +29,9 @@ function underAlertCap(bucket: string, now = Date.now()): boolean {
 /** A line break in a subject would start a new email header. */
 export const subjectLine = (s: string): string => s.replace(/[\r\n]+/g, ' ').slice(0, 150);
 
-async function sendToJames(subject: string, html: string): Promise<void> {
+async function sendToOperators(subject: string, html: string): Promise<void> {
   try {
-    await sendAsMailbox(TEAM.james.email, TEAM.james.email, subjectLine(subject), html);
+    await sendOperatorEmail(subjectLine(subject), html);
   } catch (e) {
     console.error('[bugs] could not email the alert:', e instanceof Error ? e.message : e);
   }
@@ -50,7 +49,7 @@ export function alertPersonReport(r: ReportAlert): Promise<void> {
     ${r.details ? `<p><b>What they were doing:</b> ${escapeHtml(r.details).replace(/\n/g, '<br>')}</p>` : ''}
     ${r.hasScreenshot ? '<p>They attached a screenshot.</p>' : ''}
     <p><a href="${appUrl()}/">Open the Bugs page</a> (Setup ▸ Bugs) — report #${r.id}.</p>`;
-  return sendToJames(`🐞 Bug report from ${r.userEmail}: ${r.message.slice(0, 60)}`, html);
+  return sendToOperators(`🐞 Bug report from ${r.userEmail}: ${r.message.slice(0, 60)}`, html);
 }
 
 export interface ErrorAlert {
@@ -70,7 +69,7 @@ export function alertNewError(e: ErrorAlert): Promise<void> {
     <p><b>Where:</b> ${escapeHtml(e.where)}${e.page ? ` · page <b>${escapeHtml(e.page)}</b>` : ''}${e.userEmail ? ` · ${escapeHtml(e.userEmail)}` : ''}</p>
     <pre style="white-space:pre-wrap;background:#f5f5f5;padding:8px;border-radius:6px">${escapeHtml(e.message.slice(0, 1500))}</pre>
     <p>Repeats are counted on the Bugs page, not emailed. Error #${e.id}.</p>`;
-  return sendToJames(`${e.reopened ? '🔁 Came back' : '⚠️ New'} ${side} error: ${e.message.slice(0, 70)}`, html);
+  return sendToOperators(`${e.reopened ? '🔁 Came back' : '⚠️ New'} ${side} error: ${e.message.slice(0, 70)}`, html);
 }
 
 export interface DigestRow {

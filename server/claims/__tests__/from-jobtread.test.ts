@@ -59,21 +59,21 @@ describe('claimStageFor', () => {
 });
 
 describe('ownerFor', () => {
-  it('maps a rep name to the board owner', () => {
-    expect(ownerFor('Banning Rumsey')).toBe('banning');
-    expect(ownerFor('Thomas Bramhill')).toBe('thomas');
-    expect(ownerFor('James Turner')).toBe('james');
+  const roster = [
+    { email: 'dana@acme.test', name: 'Dana Reed', jobtreadSalesRep: 'Dana R.' },
+    { email: 'sam@acme.test', name: 'Sam Ortiz', jobtreadSalesRep: null },
+  ];
+
+  it('matches the JobTread rep name first, then the member name', () => {
+    expect(ownerFor('Dana R.', roster)).toBe('dana@acme.test');
+    expect(ownerFor('Sam Ortiz', roster)).toBe('sam@acme.test');
   });
 
-  it('falls back to unassigned rather than an invalid enum value', () => {
-    // 400 of 420 jobs have no rep, so this is the common path — and an
-    // out-of-enum value would fail the insert outright.
-    for (const v of [null, undefined, '', 'Mac Jacinto', 'Some Vendor']) {
-      expect(ownerFor(v)).toBe('unassigned');
-    }
+  it('is null when nobody matches', () => {
+    for (const v of [null, undefined, '', 'Some Vendor']) expect(ownerFor(v, roster)).toBe(null);
   });
 
-  it('is case-insensitive', () => {
-    expect(ownerFor('  banning rumsey ')).toBe('banning');
+  it('ignores case and extra spaces', () => {
+    expect(ownerFor('  sam   ortiz ', roster)).toBe('sam@acme.test');
   });
 });

@@ -11,11 +11,11 @@ import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { waitUntil } from '@vercel/functions';
 import { db } from '../db';
+import { runAsSystem } from '../tenant/context';
 import { requireAuth, requireRole } from '../auth/middleware';
 import { rateLimit } from '../lib/rate-limit';
 import { sendFailure, onServerFailure } from '../lib/failure';
-import { sendAsMailbox } from '../brain/gmail-delegated';
-import { TEAM } from '../brain/types';
+import { sendOperatorEmail } from '../integrations/operator-mail';
 import { parseNaiveTimestampAsUtc } from '../lib/pg-timestamps';
 import { redactSecrets } from './fingerprint';
 import { clip, ensureBugTable, recordCaughtError, recordPersonReport } from './store';
@@ -237,15 +237,16 @@ export function registerBugRoutes(app: Express) {
     if (!cronAuthorized(req)) return res.status(401).json({ error: 'unauthorized' });
     try {
       await ensureBugTable();
-      const result = await db.execute(sql`
+      // The digest is for the Archie operators, across every company.
+      const result = await runAsSystem('morning bug digest', () => db.execute(sql`
         SELECT id, kind, status, message, page, user_email, occurrences
         FROM bug_reports
         WHERE status IN ('new', 'fixing') AND last_seen > NOW() - INTERVAL '24 hours'
-        ORDER BY last_seen DESC LIMIT 200`);
+        ORDER BY last_seen DESC LIMIT 200`));
       const digest = buildDigest(result.rows as unknown as DigestRow[]);
       if (!digest) return res.json({ ok: true, sent: false, reason: 'nothing open in the last 24 hours' });
-      await sendAsMailbox(TEAM.james.email, TEAM.james.email, subjectLine(digest.subject), digest.html);
-      res.json({ ok: true, sent: true, rows: result.rows.length });
+      const sent = await sendOperatorEmail(subjectLine(digest.subject), digest.html);
+      res.json({ ok: true, sent, rows: result.rows.length });
     } catch (e) {
       return sendFailure(res, e, 'GET /api/cron/bug-digest');
     }
