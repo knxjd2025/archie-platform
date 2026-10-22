@@ -40,21 +40,30 @@ interface Claim {
 
 type Item = Omit<Claim, 'id'> & { id: string; claimId: number; value: number | null; blocker: string | null };
 
-const OWNER_LABEL: Record<string, string> = { james: 'James', thomas: 'Thomas', banning: 'Banning', admin: 'Admin', unassigned: 'Unassigned' };
-const OWNERS = ['james', 'thomas', 'banning', 'admin', 'unassigned'];
+/**
+ * Who owns a claim's next action. The server stores a fixed set of person keys
+ * (brain_person in shared/schema.ts) rather than a team member, so the only
+ * keys offered here are the role-shaped ones every company has. A claim that
+ * already carries a person key keeps it: ownerChoices() adds it to its own
+ * select, and ownerLabel() shows it, so editing never silently changes it.
+ */
+const OWNER_LABEL: Record<string, string> = { admin: 'Admin', unassigned: 'Unassigned' };
+const OWNERS = ['admin', 'unassigned'];
+const ownerLabel = (key: string) => OWNER_LABEL[key] || (key ? key[0].toUpperCase() + key.slice(1) : 'Unassigned');
+const ownerChoices = (current: string) => (current && !OWNERS.includes(current) ? [current, ...OWNERS] : OWNERS);
 
 
 const emptyForm = {
   customerName: '', phone: '', email: '', jobtreadJobId: '',
   carrier: '', policyNumber: '', claimNumber: '', dateOfLoss: '',
-  nextAction: '', nextActionOwner: 'james', nextActionDue: '',
+  nextAction: '', nextActionOwner: 'unassigned', nextActionDue: '',
 };
 
 const emptyEdit = {
   carrier: '', policyNumber: '', claimNumber: '', dateOfLoss: '', jobtreadJobId: '',
   phone: '', email: '', adjusterName: '', adjusterPhone: '', adjusterEmail: '',
   deductible: '', acv: '', rcv: '', firstCheck: '', supplements: '',
-  nextAction: '', nextActionOwner: 'james', nextActionDue: '',
+  nextAction: '', nextActionOwner: 'unassigned', nextActionDue: '',
 };
 
 export default function Claims({ onOpenClient }: { onOpenClient?: (externalId: string) => void }) {
@@ -195,7 +204,7 @@ export default function Claims({ onOpenClient }: { onOpenClient?: (externalId: s
               ⚑ Needs attention · {attentionCount}
             </button>
           )}
-          <button onClick={() => setShowNew((v) => !v)} className="px-3 py-1.5 text-sm bg-brick text-white rounded-lg font-medium hover:bg-brick-dark">＋ New claim</button>
+          <button onClick={() => setShowNew((v) => !v)} className="px-3 py-1.5 text-sm bg-brand text-on-brand rounded-lg font-medium hover:bg-brand-dark">＋ New claim</button>
           <button onClick={load} disabled={loading} className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg disabled:opacity-60">{loading ? 'Refreshing…' : 'Refresh'}</button>
         </div>
       </div>
@@ -218,12 +227,12 @@ export default function Claims({ onOpenClient }: { onOpenClient?: (externalId: s
               <input type="date" value={nf.dateOfLoss} onChange={(e) => setNf({ ...nf, dateOfLoss: e.target.value })} className={`w-full ${input}`} />
             </div>
             <input value={nf.jobtreadJobId} onChange={(e) => setNf({ ...nf, jobtreadJobId: e.target.value })} placeholder="JobTread job ID (optional)" className={input} />
-            <select value={nf.nextActionOwner} onChange={(e) => setNf({ ...nf, nextActionOwner: e.target.value })} className={input}>
-              {OWNERS.map((o) => <option key={o} value={o}>{OWNER_LABEL[o]}</option>)}
+            <select value={nf.nextActionOwner} onChange={(e) => setNf({ ...nf, nextActionOwner: e.target.value })} className={input} aria-label="Next action owner">
+              {OWNERS.map((o) => <option key={o} value={o}>{ownerLabel(o)}</option>)}
             </select>
           </div>
           <div className="flex gap-2">
-            <button onClick={createClaim} disabled={creating || !nf.customerName.trim()} className="px-3 py-1.5 text-sm bg-brick text-white rounded-lg font-medium hover:bg-brick-dark disabled:opacity-50">
+            <button onClick={createClaim} disabled={creating || !nf.customerName.trim()} className="px-3 py-1.5 text-sm bg-brand text-on-brand rounded-lg font-medium hover:bg-brand-dark disabled:opacity-50">
               {creating ? 'Creating…' : 'Create claim'}
             </button>
             <button onClick={() => { setShowNew(false); setNf(emptyForm); }} className="px-3 py-1.5 text-sm bg-gray-100 text-gray-600 rounded-lg">Cancel</button>
@@ -318,7 +327,7 @@ export default function Claims({ onOpenClient }: { onOpenClient?: (externalId: s
                   onToggle={(key, value) => write(claim, () => api.post(`/api/claims/${c.claimId}/check`, { key, value }), `${c.customerName}: ${checks[c.stage]?.find((x) => x.key === key)?.label || key}${value ? '' : ' (cleared)'}`)} />
 
                 <div className={`mt-1.5 text-[11px] rounded px-1.5 py-1 ${c.stage !== 'closed' && isOverdue(c.nextActionDue) ? 'bg-red-50 text-red-700' : 'bg-gray-50 text-gray-500'}`}>
-                  <span className="font-medium">{OWNER_LABEL[c.nextActionOwner] || c.nextActionOwner}:</span> {c.nextAction}
+                  <span className="font-medium">{ownerLabel(c.nextActionOwner)}:</span> {c.nextAction}
                   {' · due '}{fmtDate(dueDay(c.nextActionDue))}
                 </div>
 
@@ -357,7 +366,7 @@ export default function Claims({ onOpenClient }: { onOpenClient?: (externalId: s
                     <input value={edit.nextAction} onChange={(e) => setEdit({ ...edit, nextAction: e.target.value })} placeholder="What happens next" className={`w-full ${small}`} />
                     <div className="grid grid-cols-2 gap-1.5">
                       <select value={edit.nextActionOwner} onChange={(e) => setEdit({ ...edit, nextActionOwner: e.target.value })} className={small}>
-                        {OWNERS.map((o) => <option key={o} value={o}>{OWNER_LABEL[o]}</option>)}
+                        {ownerChoices(edit.nextActionOwner).map((o) => <option key={o} value={o}>{ownerLabel(o)}</option>)}
                       </select>
                       <input type="date" value={edit.nextActionDue} onChange={(e) => setEdit({ ...edit, nextActionDue: e.target.value })} className={small} />
                     </div>

@@ -94,6 +94,15 @@ const TABS: Array<{ key: Tab; label: string; icon: string }> = [
 ];
 const TIER_LABEL = { good: 'Good', better: 'Better', best: 'Best' } as const;
 
+/**
+ * Message names between this editor and the preview page's script, which the
+ * server writes (server/reports/routes.ts). The server still speaks the
+ * legacy "brn:" names; the "archie:" names are accepted and sent too, so the
+ * server can rename its side without breaking the editor.
+ */
+const PREVIEW_SECTION_MSGS: unknown[] = ['archie:section', 'brn:section'];
+const PREVIEW_SCROLL_MSGS = ['archie:scrollTo', 'brn:scrollTo'];
+
 export default function ReportEditor({
   externalId, reportId, onBack,
 }: { externalId: string; reportId: string; onBack: () => void }) {
@@ -205,12 +214,14 @@ export default function ReportEditor({
   useEffect(() => {
     const onMsg = (e: MessageEvent) => {
       const d = e.data || {};
-      if (d.type === 'brn:section' && typeof d.key === 'string') { setTab('layout'); setFlashKey(d.key); setTimeout(() => setFlashKey(null), 1500); }
+      if (PREVIEW_SECTION_MSGS.includes(d.type) && typeof d.key === 'string') { setTab('layout'); setFlashKey(d.key); setTimeout(() => setFlashKey(null), 1500); }
     };
     window.addEventListener('message', onMsg);
     return () => window.removeEventListener('message', onMsg);
   }, []);
-  const scrollPreviewTo = (key: string) => frameRef.current?.contentWindow?.postMessage({ type: 'brn:scrollTo', key }, '*');
+  const scrollPreviewTo = (key: string) => {
+    for (const type of PREVIEW_SCROLL_MSGS) frameRef.current?.contentWindow?.postMessage({ type, key }, '*');
+  };
 
   // Re-render the preview as the draft changes (debounced).
   useEffect(() => {
@@ -446,7 +457,7 @@ export default function ReportEditor({
         <button onClick={redo} disabled={!future.length} title="Redo (Shift+Ctrl/Cmd+Z)" aria-label="Redo" className="text-sm px-2 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100 disabled:opacity-30">↷</button>
         {dirty && <button onClick={load} disabled={saving} className="text-xs px-2 py-1.5 text-gray-500 hover:text-gray-700">Discard</button>}
         <button onClick={save} disabled={!dirty || saving}
-          className="text-sm px-4 py-1.5 rounded-lg bg-brick text-white font-medium hover:bg-brick-dark disabled:opacity-40">
+          className="text-sm px-4 py-1.5 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark disabled:opacity-40">
           {saving ? 'Saving…' : 'Save'}
         </button>
       </header>
@@ -463,7 +474,7 @@ export default function ReportEditor({
           <nav className={`gap-1 p-2 border-b border-gray-100 flex-shrink-0 ${tabs.length > 5 ? 'grid grid-cols-3' : 'flex overflow-x-auto'}`}>
             {tabs.map((t) => (
               <button key={t.key} onClick={() => { setTab(t.key); setFilter(''); }}
-                className={`flex-1 text-sm px-2 py-2 rounded-lg font-medium whitespace-nowrap ${tab === t.key ? 'bg-brick text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
+                className={`flex-1 text-sm px-2 py-2 rounded-lg font-medium whitespace-nowrap ${tab === t.key ? 'bg-brand text-on-brand' : 'text-gray-600 hover:bg-gray-100'}`}>
                 {t.icon} {t.label}
               </button>
             ))}
@@ -483,7 +494,7 @@ export default function ReportEditor({
                   <SortableContext items={movable.map((s) => s.key)} strategy={verticalListSortingStrategy}>
                     <ul className="space-y-1">
                       {sections.map((s) => (
-                        <SortableRow key={s.key} id={s.key} disabled={s.fixed || s.last} className={flashKey === s.key ? 'ring-2 ring-gold' : ''}>
+                        <SortableRow key={s.key} id={s.key} disabled={s.fixed || s.last} className={flashKey === s.key ? 'ring-2 ring-brand-accent' : ''}>
                           {(handle) => (
                             <>
                             <div className={`flex items-center gap-2 px-2 py-2 rounded-lg border ${s.hidden ? 'bg-gray-50 border-dashed border-gray-200 text-gray-400' : 'bg-white border-gray-100'} ${!s.present ? 'opacity-60' : ''}`}>
@@ -665,7 +676,7 @@ export default function ReportEditor({
                     {tiers.map((t) => {
                       const v = tierView(t);
                       return (
-                        <div key={t.tier} className={`p-2 rounded-lg border ${selectedTier === t.tier ? 'border-navy bg-blue-50/40' : 'border-gray-100'}`}>
+                        <div key={t.tier} className={`p-2 rounded-lg border ${selectedTier === t.tier ? 'border-ink bg-blue-50/40' : 'border-gray-100'}`}>
                           <div className="flex items-center justify-between gap-2">
                             <label className="flex items-center gap-1.5 text-sm font-medium text-gray-900">
                               <input type="radio" name="tier" checked={selectedTier === t.tier} onChange={() => setDraft((d) => ({ ...d, tiers: { ...d.tiers, selectedTier: t.tier } }))} />
@@ -928,7 +939,7 @@ function PhotoPick({ label, value, options, onPick }: { label: string; value?: s
         <div className="grid grid-cols-6 gap-1 max-h-32 overflow-y-auto">
           {options.map((a) => (
             <button key={a.url} onClick={() => { onPick(a.url); setOpen(false); }} title={a.caption}
-              className={`aspect-square rounded overflow-hidden border-2 ${a.url === value ? 'border-brick' : 'border-transparent'}`}>
+              className={`aspect-square rounded overflow-hidden border-2 ${a.url === value ? 'border-brand' : 'border-transparent'}`}>
               <img src={a.url} alt="" loading="lazy" className="w-full h-full object-cover" />
             </button>
           ))}
@@ -948,7 +959,7 @@ function SwapMenu({ current, options, disabled, onPick }: { current: string; opt
         <div className="w-full grid grid-cols-6 gap-1 max-h-32 overflow-y-auto pt-1">
           {options.map((a) => (
             <button key={a.url} onClick={() => { onPick(a.url); setOpen(false); }} title={a.caption}
-              className={`aspect-square rounded overflow-hidden border-2 ${a.url === current ? 'border-brick' : 'border-transparent'}`}>
+              className={`aspect-square rounded overflow-hidden border-2 ${a.url === current ? 'border-brand' : 'border-transparent'}`}>
               <img src={a.url} alt="" loading="lazy" className="w-full h-full object-cover" />
             </button>
           ))}

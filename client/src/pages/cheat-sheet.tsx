@@ -89,7 +89,7 @@ export default function CheatSheet() {
   // moment they tapped away.
   const [checkedItems, setCheckedItems] = useState<Set<number>>(() => {
     try {
-      const saved = localStorage.getItem('brn.cheatSheetChecked');
+      const saved = localStorage.getItem('archie.cheatSheetChecked');
       return saved ? new Set(JSON.parse(saved)) : new Set();
     } catch { return new Set(); }
   });
@@ -98,7 +98,7 @@ export default function CheatSheet() {
       const next = new Set(prev);
       if (next.has(i)) next.delete(i);
       else next.add(i);
-      try { localStorage.setItem('brn.cheatSheetChecked', JSON.stringify([...next])); } catch { /* ignore */ }
+      try { localStorage.setItem('archie.cheatSheetChecked', JSON.stringify([...next])); } catch { /* ignore */ }
       return next;
     });
   };
@@ -136,7 +136,7 @@ export default function CheatSheet() {
             key={s.id}
             href={`#${s.id}`}
             className={`flex-shrink-0 text-xs px-3 py-1.5 rounded-full border font-medium whitespace-nowrap ${
-              activeSection === s.id ? 'bg-navy text-white border-navy' : 'bg-white border-gray-200 text-gray-600'
+              activeSection === s.id ? 'bg-ink text-white border-ink' : 'bg-white border-gray-200 text-gray-600'
             }`}
           >
             {s.label}
@@ -144,11 +144,11 @@ export default function CheatSheet() {
         ))}
       </div>
 
-      <Section id="process" title="The 6-Step Sales Process" accent="bg-navy">
+      <Section id="process" title="The 6-Step Sales Process" accent="bg-ink">
         <ol className="space-y-3">
           {STEPS.map((s) => (
             <li key={s.n} className="flex gap-3">
-              <span className="w-6 h-6 rounded-full bg-navy text-white text-xs font-bold flex items-center justify-center flex-shrink-0">{s.n}</span>
+              <span className="w-6 h-6 rounded-full bg-ink text-white text-xs font-bold flex items-center justify-center flex-shrink-0">{s.n}</span>
               <div><span className="font-semibold text-gray-900">{s.title}</span> <span className="text-gray-600">— {s.body}</span></div>
             </li>
           ))}
@@ -163,7 +163,7 @@ export default function CheatSheet() {
         </ul>
       </Section>
 
-      <Section id="quickread" title="Retail vs Insurance: Quick Read" accent="bg-gold" >
+      <Section id="quickread" title="Retail vs Insurance: Quick Read" accent="bg-brand-accent" >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
           <div className="bg-gray-50 rounded-lg p-3">
             <p className="font-semibold text-gray-900 mb-1">Retail signals</p>
@@ -202,14 +202,14 @@ export default function CheatSheet() {
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
           {INSURANCE_TERMS.map((t) => (
             <div key={t.term} className="bg-gray-50 rounded-lg p-3">
-              <dt className="font-semibold text-navy">{t.term}</dt>
+              <dt className="font-semibold text-ink">{t.term}</dt>
               <dd className="text-gray-600">{t.def}</dd>
             </div>
           ))}
         </dl>
       </Section>
 
-      <Section id="filing" title="Filing the Claim — In Order" accent="bg-navy">
+      <Section id="filing" title="Filing the Claim — In Order" accent="bg-ink">
         <ol className="space-y-2">
           {FILING_STEPS.map((s, i) => (
             <li key={i} className="flex gap-3 text-sm text-gray-700">
@@ -247,7 +247,7 @@ export default function CheatSheet() {
         </ul>
       </Section>
 
-      <Section id="never" title="Never Do This" accent="bg-brick">
+      <Section id="never" title="Never Do This" accent="bg-red-600">
         <ul className="space-y-2">
           {NEVER_DO.map((n) => (
             <li key={n} className="text-sm text-red-800 bg-red-50 rounded-lg px-3 py-2">{n}</li>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
+import { useCompany } from '../lib/company';
 import { fmtDate, formatPhone, money } from '../lib/format';
 import { toDateInput } from '../lib/canvass';
 import FollowUps from '../components/FollowUps';
@@ -58,6 +59,7 @@ const STAGE_OPTIONS = [
 
 
 export default function ClientDetail({ externalId, onBack, onOpenPlaybook }: { externalId: string; onBack: () => void; onOpenPlaybook?: (docId: string) => void }) {
+  const company = useCompany();
   const [lead, setLead] = useState<Lead | null>(null);
   const [docs, setDocs] = useState<Doc[]>([]);
   const [insurance, setInsurance] = useState<Record<string, any>>({});
@@ -95,7 +97,7 @@ export default function ClientDetail({ externalId, onBack, onOpenPlaybook }: { e
 
   // Pre-fill the text composer with a payment reminder (human reviews + sends).
   const paymentReminder = () => {
-    setReply("Hi, this is Best Roofing Now — just a friendly reminder about the balance on your account. Happy to answer any questions or take care of it over the phone whenever works for you. Thank you!");
+    setReply(`Hi, this is ${company.displayName}. Just a friendly reminder about the balance on your account. Happy to answer any questions or take care of it over the phone whenever works for you. Thank you!`);
     focusComposer();
   };
 
@@ -321,7 +323,7 @@ export default function ClientDetail({ externalId, onBack, onOpenPlaybook }: { e
               </div>
               <input value={bk.notes} onChange={(e) => setBk({ ...bk, notes: e.target.value })} placeholder="Notes (optional)" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:ring-1 focus:ring-blue-400" />
               <div className="flex gap-2">
-                <button onClick={book} disabled={booking || !bk.date || !bk.time} className="text-sm px-3 py-1.5 rounded-lg bg-brick text-white font-medium hover:bg-brick-dark disabled:opacity-50">{booking ? 'Booking…' : 'Book it'}</button>
+                <button onClick={book} disabled={booking || !bk.date || !bk.time} className="text-sm px-3 py-1.5 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark disabled:opacity-50">{booking ? 'Booking…' : 'Book it'}</button>
                 <button onClick={() => setBookOpen(false)} className="text-sm px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600">Cancel</button>
               </div>
               <p className="text-xs text-gray-400">Times come from that person's live Google Calendar and GoHighLevel appointments. Booking adds it to their calendar — it'll show on the Schedule tab.</p>

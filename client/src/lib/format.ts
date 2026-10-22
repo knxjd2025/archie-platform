@@ -1,7 +1,7 @@
 export const money = (n?: number | null): string | null =>
   n == null ? null : n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 
-// (704) 555-1234 for US 10/11-digit numbers; otherwise returns the input unchanged.
+// (555) 555-1234 for US 10/11-digit numbers; otherwise returns the input unchanged.
 export function formatPhone(p?: string | null): string {
   if (!p) return '';
   const d = p.replace(/\D/g, '');

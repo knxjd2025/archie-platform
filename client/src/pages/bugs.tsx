@@ -91,7 +91,7 @@ export default function Bugs() {
         {TABS.map((t) => (
           <button
             key={t.key} onClick={() => { setTab(t.key); setOpenId(null); }}
-            className={`text-sm px-3 py-1.5 rounded-full font-medium ${tab === t.key ? 'bg-navy text-white' : 'bg-white border border-gray-200 text-gray-700'}`}
+            className={`text-sm px-3 py-1.5 rounded-full font-medium ${tab === t.key ? 'bg-ink text-white' : 'bg-white border border-gray-200 text-gray-700'}`}
           >
             {t.label} {openCount(t.key) > 0 && <span className="ml-1 text-xs opacity-80">({openCount(t.key)} open)</span>}
           </button>
@@ -204,7 +204,7 @@ function BugRow({ bug, expanded, onToggle, onUpdate }: BugRowProps) {
             />
             <button
               onClick={() => onUpdate(bug.id, { notes: notes.trim() || null })} disabled={(bug.notes ?? '') === notes}
-              className="text-xs px-3 py-1.5 rounded-lg bg-navy text-white disabled:opacity-40"
+              className="text-xs px-3 py-1.5 rounded-lg bg-ink text-white disabled:opacity-40"
             >
               Save
             </button>

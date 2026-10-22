@@ -125,7 +125,7 @@ export default function Commission({ onOpenClient, onNavigate }: { onOpenClient?
             <span id="comm-lead-source" className="block text-xs font-semibold text-gray-600 mb-1">Lead Source</span>
             <div role="group" aria-labelledby="comm-lead-source" className="flex gap-2">
               {(['self', 'company'] as const).map((v) => (
-                <button key={v} onClick={() => setLeadSource(v)} aria-pressed={leadSource === v} className={`flex-1 text-sm px-3 py-2 rounded-lg border font-medium ${leadSource === v ? 'bg-navy text-white border-navy' : 'bg-white border-gray-200 text-gray-600'}`}>
+                <button key={v} onClick={() => setLeadSource(v)} aria-pressed={leadSource === v} className={`flex-1 text-sm px-3 py-2 rounded-lg border font-medium ${leadSource === v ? 'bg-ink text-white border-ink' : 'bg-white border-gray-200 text-gray-600'}`}>
                   {v === 'self' ? 'Self-Generated' : 'Company-Provided'}
                 </button>
               ))}
@@ -135,7 +135,7 @@ export default function Commission({ onOpenClient, onNavigate }: { onOpenClient?
             <span id="comm-job-type" className="block text-xs font-semibold text-gray-600 mb-1">Job Type</span>
             <div role="group" aria-labelledby="comm-job-type" className="flex gap-2">
               {(['retail', 'insurance'] as const).map((v) => (
-                <button key={v} onClick={() => setJobType(v)} aria-pressed={jobType === v} className={`flex-1 text-sm px-3 py-2 rounded-lg border font-medium capitalize ${jobType === v ? 'bg-navy text-white border-navy' : 'bg-white border-gray-200 text-gray-600'}`}>
+                <button key={v} onClick={() => setJobType(v)} aria-pressed={jobType === v} className={`flex-1 text-sm px-3 py-2 rounded-lg border font-medium capitalize ${jobType === v ? 'bg-ink text-white border-ink' : 'bg-white border-gray-200 text-gray-600'}`}>
                   {v}
                 </button>
               ))}
@@ -144,7 +144,7 @@ export default function Commission({ onOpenClient, onNavigate }: { onOpenClient?
         </div>
 
         <div className="bg-gray-50 border border-dashed border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-600">
-          Overhead rate: <b className="text-navy">{override ? Number(manualPct) || 0 : OVERHEAD_RATES[`${leadSource}-${jobType}`]}%</b> {override ? '(manual override)' : `(${LABELS[`${leadSource}-${jobType}`]})`}
+          Overhead rate: <b className="text-ink">{override ? Number(manualPct) || 0 : OVERHEAD_RATES[`${leadSource}-${jobType}`]}%</b> {override ? '(manual override)' : `(${LABELS[`${leadSource}-${jobType}`]})`}
         </div>
 
         {isManagerPlus && (
@@ -187,7 +187,7 @@ export default function Commission({ onOpenClient, onNavigate }: { onOpenClient?
             <tr><td className="py-2 text-gray-600">Material Cost</td><td className="py-2 text-right text-red-600">−{moneyPrecise(Number(material) || 0)}</td></tr>
             <tr><td className="py-2 text-gray-600">Labor Cost</td><td className="py-2 text-right text-red-600">−{moneyPrecise(Number(labor) || 0)}</td></tr>
             <tr><td className="py-2 text-gray-600">Other Expenses</td><td className="py-2 text-right text-red-600">−{moneyPrecise(Number(other) || 0)}</td></tr>
-            <tr className="border-t-2 border-navy"><td className="pt-3 font-bold text-navy">Job Profit</td><td className={`pt-3 text-right font-bold ${result.profit < 0 ? 'text-red-600' : 'text-navy'}`}>{moneyPrecise(result.profit)}</td></tr>
+            <tr className="border-t-2 border-ink"><td className="pt-3 font-bold text-ink">Job Profit</td><td className={`pt-3 text-right font-bold ${result.profit < 0 ? 'text-red-600' : 'text-ink'}`}>{moneyPrecise(result.profit)}</td></tr>
           </tbody>
         </table>
         {result.profit < 0 && (
@@ -195,11 +195,11 @@ export default function Commission({ onOpenClient, onNavigate }: { onOpenClient?
             ⚠️ This job is currently unprofitable — costs and overhead exceed revenue. Double-check the numbers before saving.
           </p>
         )}
-        <div className="mt-4 bg-navy rounded-xl px-5 py-4 flex items-center justify-between flex-wrap gap-2">
-          <span className="text-xs uppercase tracking-wide text-gold">Sales Rep Commission (50% of Job Profit)</span>
+        <div className="mt-4 bg-ink rounded-xl px-5 py-4 flex items-center justify-between flex-wrap gap-2">
+          <span className="text-xs uppercase tracking-wide text-brand-accent">Sales Rep Commission (50% of Job Profit)</span>
           <span className={`text-2xl font-bold ${result.profit < 0 ? 'text-red-300' : 'text-white'}`}>{moneyPrecise(result.commission)}</span>
         </div>
-        <button onClick={save} disabled={saving || !jobName.trim() || !repName.trim()} className="mt-4 text-sm px-4 py-2 rounded-lg bg-brick text-white font-medium hover:bg-brick-dark disabled:opacity-50">
+        <button onClick={save} disabled={saving || !jobName.trim() || !repName.trim()} className="mt-4 text-sm px-4 py-2 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark disabled:opacity-50">
           {saving ? 'Saving…' : 'Save as Draft'}
         </button>
       </div>
@@ -210,7 +210,7 @@ export default function Commission({ onOpenClient, onNavigate }: { onOpenClient?
             <h2 className="text-sm font-semibold text-gray-800">Sold-job commissions live on Payouts</h2>
             <p className="text-xs text-gray-500">What's owed to each rep, what's still waiting on costs, and paying it out.</p>
           </div>
-          <button onClick={() => onNavigate?.('payouts')} className="text-sm px-3 py-1.5 rounded-lg bg-navy text-white font-medium">Open Payouts →</button>
+          <button onClick={() => onNavigate?.('payouts')} className="text-sm px-3 py-1.5 rounded-lg bg-ink text-white font-medium">Open Payouts →</button>
         </div>
       )}
 

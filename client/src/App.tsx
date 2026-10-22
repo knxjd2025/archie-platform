@@ -8,6 +8,7 @@ import OutreachDashboard from './pages/outreach/OutreachDashboard';
 import CampaignWizard from './pages/outreach/CampaignWizard';
 import OutreachLeads from './pages/outreach/OutreachLeads';
 import { useAuth } from './lib/auth';
+import { CompanyMark, PRODUCT_NAME, useCompany } from './lib/company';
 import { canSeeMoney, type TeamRole } from '../../shared/rbac';
 import Login from './pages/Login';
 import Team from './pages/Team';
@@ -47,7 +48,7 @@ type Page = 'monday' | 'dashboard' | 'inbox' | 'leads' | 'sales' | 'client' | 'c
  * a `group`, because a flat list of seventeen is a list nobody reads — grouped,
  * the same seventeen are four short columns you can scan in one look.
  *
- * `short` is the bottom-bar label: "BRN Advisor" wrapped onto two lines at
+ * `short` is the bottom-bar label: a two-word label wrapped onto two lines at
  * 390px and pushed the row out of alignment.
  */
 type NavGroup = 'sell' | 'deliver' | 'money' | 'learn' | 'setup';
@@ -67,8 +68,8 @@ const NAV: {
   { page: 'dashboard', label: 'Home', icon: '🏠', primary: true },
   { page: 'leads', label: 'Leads', icon: '👥', primary: true },
   { page: 'conversations', label: 'Messages', icon: '✉️', primary: true },
-  // Shown only while FEATURES.brnAdvisor is on (canSeePage filters it out otherwise).
-  { page: 'chat', label: 'BRN Advisor', icon: '✨', primary: true, short: 'Advisor' },
+  // Shown only while the Advisor feature flag is on (canSeePage filters it out otherwise).
+  { page: 'chat', label: 'Archie Advisor', icon: '✨', primary: true, short: 'Advisor' },
   { page: 'schedule', label: 'Schedule', icon: '📅', primary: true },
 
   { page: 'calls', label: 'Calls', icon: '📞', group: 'sell' },
@@ -111,7 +112,7 @@ const ROLE_LABEL: Record<string, string> = {
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>(() => {
     try {
-      const saved = localStorage.getItem('brn.page') as Page | null;
+      const saved = localStorage.getItem('archie.page') as Page | null;
       return saved && saved !== 'client' ? saved : 'dashboard';
     } catch { return 'dashboard'; }
   });
@@ -129,6 +130,7 @@ function App() {
   const [clientOrigin, setClientOrigin] = useState<Page>('leads');
 
   const { user, loading, offline, signOut } = useAuth();
+  const company = useCompany();
 
   useEffect(() => {
     if (!user) return;
@@ -160,7 +162,7 @@ function App() {
   useEffect(() => {
     window.scrollTo({ top: 0 });
     if (currentPage !== 'client' && !currentPage.startsWith('outreach')) {
-      try { localStorage.setItem('brn.page', currentPage); } catch { /* ignore */ }
+      try { localStorage.setItem('archie.page', currentPage); } catch { /* ignore */ }
     }
     // Built from NAV so a new page can never quietly fall back to the
     // generic title; only the pages NAV does not list are named here.
@@ -172,7 +174,7 @@ function App() {
       'outreach-leads': 'Outreach Leads',
       'outreach-campaign': 'Campaign',
     };
-    document.title = `${titles[currentPage] || 'Best Roofing Now'} · Best Roofing Now`;
+    document.title = titles[currentPage] ? `${titles[currentPage]} · ${PRODUCT_NAME}` : PRODUCT_NAME;
   }, [currentPage]);
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-500">Loading…</div>;
@@ -203,7 +205,7 @@ function App() {
     // regardless of whose book the job is in), but stays in the same sales+ band.
     if (page === 'conversations' || page === 'calls' || page === 'production' || page === 'claims' || page === 'documents') return isSalesPlus;
     if (page === 'leads' || page === 'inbox' || page === 'sales' || page === 'client' || page === 'canvass' || page === 'kpis' || page === 'cheat-sheet' || page === 'playbook' || page === 'sales-journey' || page === 'commercial-training') return isSalesPlus;
-    // The BRN Advisor follows its switch (shared/features.ts): when that is
+    // The Advisor follows its switch (shared/features.ts): when that is
     // off the page is refused here and so drops out of the nav as well.
     if (page === 'chat') return FEATURES.brnAdvisor;
     // Every role may open Monday; /api/meetings returns only the meetings
@@ -259,11 +261,11 @@ function App() {
   const initial = (user.name || user.email || '?').trim()[0]?.toUpperCase() || '?';
 
   return (
-    <div className="min-h-screen bg-cream">
+    <div className="min-h-screen bg-canvas">
       {/* Keyboard users had to tab the whole navigation on every page. */}
       <a
         href="#main"
-        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-2 focus:left-2 focus:bg-white focus:text-navy focus:px-3 focus:py-2 focus:rounded-lg focus:shadow-lg focus:ring-2 focus:ring-blue-400"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-2 focus:left-2 focus:bg-white focus:text-ink focus:px-3 focus:py-2 focus:rounded-lg focus:shadow-lg focus:ring-2 focus:ring-blue-400"
       >
         Skip to content
       </a>
@@ -285,19 +287,27 @@ function App() {
       )}
 
       {/* Header */}
-      <header className="bg-navy text-white border-b border-black/20 sticky top-0 z-40 shadow-sm" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+      <header className="bg-ink text-white border-b border-black/20 sticky top-0 z-40 shadow-sm" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16 gap-3">
             <button
               onClick={() => go('dashboard')}
               className="flex items-center gap-2.5 min-w-0 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
-              title="Best Roofing Now — Home"
+              title={`${company.displayName} on ${PRODUCT_NAME}: Home`}
               aria-label="Go to Home"
             >
-              <span className="bg-white rounded-lg px-2 py-1 flex items-center shadow-sm flex-shrink-0">
-                <img src="/logo.jpg" alt="Best Roofing Now" className="h-6 sm:h-7 w-auto" />
+              {company.logoUrl ? (
+                <span className="bg-white rounded-lg px-2 py-1 flex items-center shadow-sm flex-shrink-0">
+                  <CompanyMark profile={company} className="h-6 sm:h-7 w-auto max-w-[8rem] object-contain" />
+                </span>
+              ) : (
+                <span className="flex-shrink-0 rounded-lg ring-1 ring-white/20"><CompanyMark profile={company} markSize={32} /></span>
+              )}
+              <span className="min-w-0 text-left leading-tight">
+                {/* Whose app this is, then the product. A company with a logo already shows its name in it. */}
+                {!company.logoUrl && company.id && <span className="block text-sm font-semibold text-white truncate max-w-[10rem] sm:max-w-[14rem]">{company.displayName}</span>}
+                <span className={`block text-xs font-medium tracking-wide text-white/60 ${company.logoUrl || company.id ? 'hidden sm:block' : ''}`}>{PRODUCT_NAME}</span>
               </span>
-              <p className="hidden sm:block text-xs text-white/60 font-medium tracking-wide">Team App</p>
             </button>
 
             <div className="flex items-center gap-1 sm:gap-2 min-w-0">
@@ -309,13 +319,13 @@ function App() {
                   onClick={() => go(n.page)}
                   aria-current={isActive(n.page) ? 'page' : undefined}
                   className={`relative px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${
-                    isActive(n.page) ? 'bg-white text-navy shadow-sm' : 'text-white/75 hover:bg-white/10 hover:text-white'
+                    isActive(n.page) ? 'bg-white text-ink shadow-sm' : 'text-white/75 hover:bg-white/10 hover:text-white'
                   }`}
                 >
                   {n.label}
                   {badgeFor(n.page) > 0 && (
                     <span
-                      className="absolute -top-0.5 -right-0.5 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-brick text-white text-[10px] font-semibold flex items-center justify-center"
+                      className="absolute -top-0.5 -right-0.5 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-red-600 text-white text-[10px] font-semibold flex items-center justify-center"
                       aria-label={`${badgeFor(n.page)} new`}
                     >
                       {badgeLabel(badgeFor(n.page))}
@@ -330,7 +340,7 @@ function App() {
                     aria-expanded={navMoreOpen}
                     aria-haspopup="true"
                     className={`px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${
-                      activeGroup ? 'bg-white text-navy shadow-sm' : 'text-white/75 hover:bg-white/10 hover:text-white'
+                      activeGroup ? 'bg-white text-ink shadow-sm' : 'text-white/75 hover:bg-white/10 hover:text-white'
                     }`}
                   >
                     {/* Saying which section you are in beats a bare "More" */}
@@ -358,7 +368,7 @@ function App() {
                                 onClick={() => go(n.page)}
                                 aria-current={isActive(n.page) ? 'page' : undefined}
                                 className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
-                                  isActive(n.page) ? 'bg-blue-50 text-navy font-semibold' : 'text-gray-700 hover:bg-gray-50'
+                                  isActive(n.page) ? 'bg-blue-50 text-ink font-semibold' : 'text-gray-700 hover:bg-gray-50'
                                 }`}
                               >
                                 <span className="text-base w-5 text-center flex-shrink-0" aria-hidden>{n.icon}</span>
@@ -395,7 +405,9 @@ function App() {
                 aria-haspopup="true"
                 className="flex items-center gap-2 rounded-full hover:bg-white/10 p-1 sm:pr-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
               >
-                <span className="w-8 h-8 rounded-full bg-brick text-white text-sm font-semibold flex items-center justify-center">{initial}</span>
+                {/* The company color, ringed so it still shows on the header when the
+                    company's color is navy like the header. */}
+                <span className="w-8 h-8 rounded-full bg-brand text-on-brand ring-2 ring-white/30 text-sm font-semibold flex items-center justify-center">{initial}</span>
                 <span className="hidden lg:block text-sm text-white/85 max-w-[9rem] truncate">{user.name || user.email}</span>
               </button>
               {userMenuOpen && (

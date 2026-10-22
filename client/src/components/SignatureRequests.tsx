@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { useCompany } from '../lib/company';
 import {
   STATUS_LABEL, STATUS_STYLE, describeDevice, describeGeo, describeProximity, signedAtProperty, stamp,
   type SignatureRequestView, type SignatureSourceKind, type SignerView,
@@ -87,6 +88,7 @@ function SignerRow({ signer }: { signer: SignerView }) {
  */
 export default function SignatureRequests({ externalId }: { externalId: string }) {
   const { user } = useAuth();
+  const company = useCompany();
   const [open, setOpen] = useState(false);
   const [docs, setDocs] = useState<DocsPayload | null>(null);
   const [requests, setRequests] = useState<SignatureRequestView[]>([]);
@@ -245,7 +247,7 @@ export default function SignatureRequests({ externalId }: { externalId: string }
                     <button
                       onClick={() => setSigners((l) => [...l, { name: docs.me.name || user?.name || '', email: docs.me.email, phone: '', role: 'company' }])}
                       className="text-blue-600 hover:underline"
-                    >+ Countersign for Best Roofing Now</button>
+                    >+ Countersign for {company.displayName}</button>
                   )}
                 </div>
               </div>

@@ -187,7 +187,7 @@ export default function Monday({ onNavigate }: { onNavigate?: (page: string) => 
             onClick={() => setTab(m.key)}
             aria-current={tab === m.key ? 'page' : undefined}
             className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-              tab === m.key ? 'bg-navy text-white' : 'text-gray-600 hover:bg-gray-100'
+              tab === m.key ? 'bg-ink text-white' : 'text-gray-600 hover:bg-gray-100'
             }`}
           >
             {m.label}

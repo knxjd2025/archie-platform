@@ -165,8 +165,8 @@ export default function Team() {
           {ALL_ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
         </select>
         <div className="w-56"><RepSelect options={repOptions} value={form.jobtreadSalesRep} onChange={(v) => setForm({ ...form, jobtreadSalesRep: v })} /></div>
-        <button disabled={submitting} className="bg-brick text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-brick-dark transition-colors disabled:opacity-50">{submitting ? 'Adding…' : 'Add'}</button>
-        {error && <span className="text-sm text-brick">{error}</span>}
+        <button disabled={submitting} className="bg-brand text-on-brand rounded-lg px-4 py-2 text-sm font-medium hover:bg-brand-dark transition-colors disabled:opacity-50">{submitting ? 'Adding…' : 'Add'}</button>
+        {error && <span className="text-sm text-red-600">{error}</span>}
       </form>
 
       <p className="text-xs text-gray-400 -mt-2">
@@ -175,7 +175,7 @@ export default function Team() {
       </p>
 
       {loadError && (
-        <div className="flex items-center gap-2 text-sm text-brick"><span>{loadError}</span><button onClick={load} className="underline hover:no-underline">Retry</button></div>
+        <div className="flex items-center gap-2 text-sm text-red-600"><span>{loadError}</span><button onClick={load} className="underline hover:no-underline">Retry</button></div>
       )}
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -219,7 +219,7 @@ export default function Team() {
                     <td className="px-4 py-2 whitespace-nowrap">
                       <button onClick={() => saveEdit(m)} disabled={saving} className="text-xs px-2.5 py-1 rounded-lg bg-blue-600 text-white disabled:opacity-50">{saving ? 'Saving…' : 'Save'}</button>
                       <button onClick={cancelEdit} disabled={saving} className="ml-1 text-xs px-2.5 py-1 rounded-lg bg-gray-100 text-gray-600">Cancel</button>
-                      {editError && <p className="text-xs text-brick mt-1 max-w-[14rem]">{editError}</p>}
+                      {editError && <p className="text-xs text-red-600 mt-1 max-w-[14rem]">{editError}</p>}
                     </td>
                   </tr>
                 ) : (
@@ -253,11 +253,11 @@ export default function Team() {
           </div>
           <div className="flex items-center gap-2">
             <button onClick={loadJt} className="text-xs px-2.5 py-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200">Refresh</button>
-            <button onClick={syncFromJobTread} disabled={syncing} className="text-xs px-3 py-1.5 rounded-lg bg-navy text-white font-medium disabled:opacity-50">{syncing ? 'Syncing…' : 'Sync from JobTread'}</button>
+            <button onClick={syncFromJobTread} disabled={syncing} className="text-xs px-3 py-1.5 rounded-lg bg-ink text-white font-medium disabled:opacity-50">{syncing ? 'Syncing…' : 'Sync from JobTread'}</button>
           </div>
         </div>
         {jtError ? (
-          <div className="px-4 py-4 flex items-center gap-2 text-sm text-brick"><span>{jtError}</span><button onClick={loadJt} className="underline">Retry</button></div>
+          <div className="px-4 py-4 flex items-center gap-2 text-sm text-red-600"><span>{jtError}</span><button onClick={loadJt} className="underline">Retry</button></div>
         ) : !jt ? (
           <p className="px-4 py-4 text-sm text-gray-400">Reading JobTread…</p>
         ) : (

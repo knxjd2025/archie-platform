@@ -55,7 +55,7 @@ const timeRange = (start: string | null, end: string | null) => {
   return 'All day';
 };
 
-const VIEW_KEY = 'brn.schedule.view';
+const VIEW_KEY = 'archie.schedule.view';
 
 /**
  * Two ways to look at the same calendars: Availability (everyone side by side
@@ -74,8 +74,8 @@ export default function Schedule({ onOpenClient }: { onOpenClient?: (externalId:
           <p className="text-sm text-gray-500 mt-1">{view === 'board' ? 'Every connected calendar, Google and GoHighLevel, side by side. Click an open time to book.' : 'Inspections and appointments coming up.'}</p>
         </div>
         <div className="flex rounded-lg border border-gray-200 bg-white overflow-hidden text-sm" role="tablist">
-          <button role="tab" aria-selected={view === 'board'} onClick={() => pick('board')} className={`px-3 py-1.5 ${view === 'board' ? 'bg-navy text-white' : 'text-gray-600 hover:bg-gray-50'}`}>Availability</button>
-          <button role="tab" aria-selected={view === 'agenda'} onClick={() => pick('agenda')} className={`px-3 py-1.5 border-l border-gray-200 ${view === 'agenda' ? 'bg-navy text-white' : 'text-gray-600 hover:bg-gray-50'}`}>Agenda</button>
+          <button role="tab" aria-selected={view === 'board'} onClick={() => pick('board')} className={`px-3 py-1.5 ${view === 'board' ? 'bg-ink text-white' : 'text-gray-600 hover:bg-gray-50'}`}>Availability</button>
+          <button role="tab" aria-selected={view === 'agenda'} onClick={() => pick('agenda')} className={`px-3 py-1.5 border-l border-gray-200 ${view === 'agenda' ? 'bg-ink text-white' : 'text-gray-600 hover:bg-gray-50'}`}>Agenda</button>
         </div>
       </div>
       {view === 'board' ? <AvailabilityBoard onOpenClient={onOpenClient} /> : <Agenda onOpenClient={onOpenClient} />}
@@ -186,7 +186,7 @@ function Agenda({ onOpenClient }: { onOpenClient?: (externalId: string) => void 
                         {a.client && onOpenClient ? (
                           <button
                             onClick={() => onOpenClient(a.client!.externalId)}
-                            className="text-sm font-medium text-gray-900 truncate hover:text-brick text-left w-full"
+                            className="text-sm font-medium text-gray-900 truncate hover:text-brand text-left w-full"
                             title={`Open ${a.client.name}`}
                           >
                             {a.title || 'Appointment'}

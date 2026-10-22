@@ -149,10 +149,10 @@ export function PhotoField({ jobExternalId, field, value, onChange, disabled, pr
                   onClick={() => onChange(chosen
                     ? items.filter((x) => x.fileId !== p.fileId)
                     : [...items, { fileId: p.fileId, name: p.name }])}
-                  className={`relative aspect-square rounded-lg overflow-hidden border-2 ${chosen ? 'border-brick' : 'border-transparent hover:border-gray-300'}`}
+                  className={`relative aspect-square rounded-lg overflow-hidden border-2 ${chosen ? 'border-brand' : 'border-transparent hover:border-gray-300'}`}
                 >
                   <img src={p.url} alt={p.name} loading="lazy" className="w-full h-full object-cover" />
-                  {chosen && <span className="absolute top-0.5 right-0.5 bg-brick text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center">✓</span>}
+                  {chosen && <span className="absolute top-0.5 right-0.5 bg-brand text-on-brand text-[10px] w-4 h-4 rounded-full flex items-center justify-center">✓</span>}
                 </button>
               );
             })}
@@ -367,7 +367,7 @@ export default function PreConstructionChecklist({ jobExternalId, stage }: { job
           {checklist.status === 'draft' && (
             <div className="flex items-center justify-between">
               <span className="text-xs text-gray-400">{saving ? 'Saving…' : 'Autosaved'}</span>
-              <button onClick={submit} disabled={submitting || missing.length > 0} className="text-sm px-4 py-2 rounded-lg bg-brick text-white font-medium hover:bg-brick-dark disabled:opacity-50">
+              <button onClick={submit} disabled={submitting || missing.length > 0} className="text-sm px-4 py-2 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark disabled:opacity-50">
                 {submitting ? 'Submitting…' : missing.length ? `${missing.length} required item${missing.length === 1 ? '' : 's'} left` : 'Submit Checklist'}
               </button>
             </div>

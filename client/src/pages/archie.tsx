@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { PRODUCT_NAME, useCompany } from '../lib/company';
 import Chat from './chat';
 
 interface Msg { id: string; role: 'user' | 'assistant'; content: string; toolsUsed?: string[]; isError?: boolean; retryText?: string; }
 
-const CHIPS: { label: string; text: string; min: 'production' | 'sales' | 'manager' | 'admin' }[] = [
+/** Starter questions; `state` is the company's state, so the permit question is about where it works. */
+const chipsFor = (state: string): { label: string; text: string; min: 'production' | 'sales' | 'manager' | 'admin' }[] => [
   { label: "This week's schedule", text: "What's on the schedule this week?", min: 'production' },
   { label: 'New leads', text: 'Show me the newest leads', min: 'sales' },
   { label: 'Open proposals', text: 'Which proposals are still open?', min: 'sales' },
@@ -13,13 +15,14 @@ const CHIPS: { label: string; text: string; min: 'production' | 'sales' | 'manag
   { label: 'Win rate', text: "What's our win rate this month?", min: 'manager' },
   { label: 'Bills due', text: 'What bills are due?', min: 'admin' },
   // What the Advisor knows beyond the company's own data — open to everyone.
-  { label: 'Permit rules', text: 'When does a reroof need a permit in North Carolina?', min: 'production' },
+  { label: 'Permit rules', text: `When does a reroof need a permit${state ? ` in ${state}` : ' here'}?`, min: 'production' },
   { label: 'ACV vs RCV', text: 'Explain ACV and RCV on an insurance claim in plain words.', min: 'production' },
 ];
 const RANK = { production: 0, sales: 1, manager: 2, admin: 3 } as const;
 
 export default function Archie() {
   const { user } = useAuth();
+  const company = useCompany();
   const [mode, setMode] = useState<'archie' | 'advisors'>('archie');
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
@@ -43,7 +46,7 @@ export default function Archie() {
   }, []);
 
   const role = (user?.role ?? 'production') as keyof typeof RANK;
-  const chips = CHIPS.filter((c) => RANK[role] >= RANK[c.min]);
+  const chips = chipsFor(company.state).filter((c) => RANK[role] >= RANK[c.min]);
 
   const send = async (text?: string) => {
     const content = (text ?? input).trim();
@@ -66,7 +69,7 @@ export default function Archie() {
   if (mode === 'advisors') {
     return (
       <div>
-        <button onClick={() => setMode('archie')} className="mb-4 text-sm text-blue-600 hover:underline">← Back to BRN Advisor</button>
+        <button onClick={() => setMode('archie')} className="mb-4 text-sm text-blue-600 hover:underline">← Back to the Advisor</button>
         <Chat initialAgent={null} />
       </div>
     );
@@ -77,7 +80,7 @@ export default function Archie() {
       <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gray-50">
         <div className="flex items-center gap-3">
           <span className="text-3xl" aria-hidden>🤖</span>
-          <div><h2 className="font-semibold text-gray-900 text-base leading-tight">BRN Advisor</h2><p className="text-sm text-gray-500">Your team assistant</p></div>
+          <div><h2 className="font-semibold text-gray-900 text-base leading-tight">{PRODUCT_NAME} Advisor</h2><p className="text-sm text-gray-500">{company.id ? `${company.displayName} team assistant` : 'Your team assistant'}</p></div>
         </div>
         <button onClick={() => setMode('advisors')} className="text-sm text-gray-500 hover:text-gray-700">Talk to advisors →</button>
       </div>
@@ -85,8 +88,8 @@ export default function Archie() {
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.length === 0 && (
           <div className="text-center text-gray-500 py-8">
-            <p className="text-lg mb-2">👋 Hi! I'm your BRN Advisor.</p>
-            <p className="text-sm mb-4">Ask me about your leads, jobs, schedule or money, or about North Carolina roofing code, permits, insurance claims and what we offer.</p>
+            <p className="text-lg mb-2">👋 Hi! I'm your {PRODUCT_NAME} Advisor.</p>
+            <p className="text-sm mb-4">Ask me about your leads, jobs, schedule or money, or about local building code, permits, insurance claims and what we offer.</p>
             <div className="flex flex-wrap gap-2 justify-center">
               {chips.map((c) => (
                 <button key={c.label} onClick={() => send(c.text)} className="px-3 py-1.5 text-sm bg-blue-50 text-blue-700 rounded-full hover:bg-blue-100">{c.label}</button>

@@ -59,7 +59,7 @@ const STATUS_STYLE: Record<JobCommissionStatus, string> = {
   open: 'bg-amber-100 text-amber-700',
   approved: 'bg-emerald-100 text-emerald-700',
   denied: 'bg-red-100 text-red-700',
-  paid: 'bg-navy text-white',
+  paid: 'bg-ink text-white',
 };
 
 /**
@@ -370,7 +370,7 @@ export default function JobCommission({ externalId }: { externalId: string }) {
             <div role="group" aria-labelledby="jc-lead-source" className="flex gap-2">
               {(['self', 'company'] as const).map((v) => (
                 <button key={v} type="button" disabled={!open || busy === 'leadSource'} onClick={() => patch({ leadSource: v }, 'leadSource')} aria-pressed={rec.leadSource === v}
-                  className={`flex-1 text-sm px-3 py-2 rounded-lg border font-medium disabled:opacity-60 ${rec.leadSource === v ? 'bg-navy text-white border-navy' : 'bg-white border-gray-200 text-gray-600'}`}>
+                  className={`flex-1 text-sm px-3 py-2 rounded-lg border font-medium disabled:opacity-60 ${rec.leadSource === v ? 'bg-ink text-white border-ink' : 'bg-white border-gray-200 text-gray-600'}`}>
                   {v === 'self' ? 'Self-Generated' : 'Company-Provided'}
                 </button>
               ))}
@@ -382,7 +382,7 @@ export default function JobCommission({ externalId }: { externalId: string }) {
             <div role="group" aria-labelledby="jc-job-type" className="flex gap-2">
               {(['retail', 'insurance'] as const).map((v) => (
                 <button key={v} type="button" disabled={!open || busy === 'jobType'} onClick={() => patch({ jobType: v }, 'jobType')} aria-pressed={rec.jobType === v}
-                  className={`flex-1 text-sm px-3 py-2 rounded-lg border font-medium capitalize disabled:opacity-60 ${rec.jobType === v ? 'bg-navy text-white border-navy' : 'bg-white border-gray-200 text-gray-600'}`}>
+                  className={`flex-1 text-sm px-3 py-2 rounded-lg border font-medium capitalize disabled:opacity-60 ${rec.jobType === v ? 'bg-ink text-white border-ink' : 'bg-white border-gray-200 text-gray-600'}`}>
                   {v}
                 </button>
               ))}
@@ -462,15 +462,15 @@ export default function JobCommission({ externalId }: { externalId: string }) {
             <tr><td className="py-1.5 text-gray-600">Material</td><td className="py-1.5 text-right text-red-600">−{moneyPrecise(lineValue('material'))}</td></tr>
             <tr><td className="py-1.5 text-gray-600">Labor</td><td className="py-1.5 text-right text-red-600">−{moneyPrecise(lineValue('labor'))}</td></tr>
             <tr><td className="py-1.5 text-gray-600">Other</td><td className="py-1.5 text-right text-red-600">−{moneyPrecise(lineValue('other'))}</td></tr>
-            <tr className="border-t-2 border-navy"><td className="pt-2 font-bold text-navy">Job profit</td><td className={`pt-2 text-right font-bold ${live && live.profit < 0 ? 'text-red-600' : 'text-navy'}`}>{live ? moneyPrecise(live.profit) : '—'}</td></tr>
+            <tr className="border-t-2 border-ink"><td className="pt-2 font-bold text-ink">Job profit</td><td className={`pt-2 text-right font-bold ${live && live.profit < 0 ? 'text-red-600' : 'text-ink'}`}>{live ? moneyPrecise(live.profit) : '—'}</td></tr>
           </tbody>
         </table>
         {live && live.profit < 0 && (
           <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">⚠️ Costs and overhead exceed revenue — this job pays no commission as entered.</p>
         )}
-        <div className="bg-navy rounded-xl px-4 py-3 space-y-1.5">
+        <div className="bg-ink rounded-xl px-4 py-3 space-y-1.5">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <span className="text-xs uppercase tracking-wide text-gold">
+            <span className="text-xs uppercase tracking-wide text-brand-accent">
               {ownShare ? 'Your share of the commission' : shown?.isManual ? 'Rep commission (set by hand)' : 'Rep commission (50% of job profit)'}
             </span>
             <span className={`text-lg font-bold ${live && live.profit < 0 ? 'text-red-300' : 'text-white'}`}>{shown ? moneyPrecise(shown.commission) : 'Set lead source'}</span>
@@ -485,7 +485,7 @@ export default function JobCommission({ externalId }: { externalId: string }) {
                 <span className="text-sm">−{moneyPrecise(shown.advancesPaid)}</span>
               </div>
               <div className="flex items-center justify-between flex-wrap gap-2 border-t border-white/20 pt-1.5">
-                <span className="text-xs uppercase tracking-wide text-gold">
+                <span className="text-xs uppercase tracking-wide text-brand-accent">
                   {shown.balanceDue < 0 ? 'Overpaid — to recover' : 'Still owed to the rep'}
                 </span>
                 <span className={`text-xl font-bold ${shown.balanceDue < 0 ? 'text-red-300' : 'text-white'}`}>
@@ -562,7 +562,7 @@ export default function JobCommission({ externalId }: { externalId: string }) {
           <div className="flex flex-wrap items-center gap-2 pt-1">
             {open && (
               <button onClick={() => transition('approve')} disabled={blockers.length > 0 || !!busy}
-                className="text-sm px-4 py-2 rounded-lg bg-brick text-white font-medium hover:bg-brick-dark disabled:opacity-50">
+                className="text-sm px-4 py-2 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark disabled:opacity-50">
                 {busy === 'approve' ? 'Approving…' : moneyDirty ? 'Save & approve' : 'Approve commission'}
               </button>
             )}

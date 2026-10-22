@@ -32,7 +32,7 @@ export default class ErrorBoundary extends Component<Props, State> {
     if (!error) return this.props.children;
 
     return (
-      <div className="min-h-screen bg-cream flex items-center justify-center p-6">
+      <div className="min-h-screen bg-canvas flex items-center justify-center p-6">
         <div className="bg-white rounded-xl border border-gray-200 p-6 max-w-md w-full">
           <h1 className="text-lg font-semibold text-gray-900">That screen hit a problem</h1>
           <p className="text-sm text-gray-600 mt-2">
@@ -43,7 +43,7 @@ export default class ErrorBoundary extends Component<Props, State> {
           <div className="flex gap-2 mt-4">
             <button
               onClick={() => window.location.reload()}
-              className="text-sm px-4 py-2 rounded-lg bg-brick text-white font-medium hover:bg-brick-dark"
+              className="text-sm px-4 py-2 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark"
             >
               Reload
             </button>

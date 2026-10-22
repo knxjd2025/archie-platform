@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api';
 import { isNativeApp } from '../lib/native';
+import { letterhead, useCompany } from '../lib/company';
 import { shrinkImage } from './JobPhotos';
 import {
   INSURANCE_LETTERS, LETTER_FORMATS, buildInsuranceLetter, depreciationDue, letterDef, letterWarnings,
@@ -35,6 +36,7 @@ const label = 'block text-[11px] font-semibold text-gray-500 mb-0.5';
  * it before it goes.
  */
 export default function InsuranceLetters({ externalId }: { externalId: string }) {
+  const company = useCompany();
   const [open, setOpen] = useState(false);
   const [ctx, setCtx] = useState<Ctx | null>(null);
   const [f, setF] = useState<ClaimLetterFields | null>(null);
@@ -163,19 +165,18 @@ export default function InsuranceLetters({ externalId }: { externalId: string })
     if (!built || !f) return;
     const w = window.open('', '_blank');
     if (!w) { flash('Allow pop-ups to print.'); return; }
+    // The company's letterhead; the name, office and phone on this claim's form win.
+    const lh = letterhead(company, { name: f.companyName, address: f.officeAddress, phone: f.companyPhone });
     w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(built.subject)}</title>
       <style>
         @page { margin: 0.9in; }
         body { font: 12pt/1.5 Georgia, 'Times New Roman', serif; color: #1a1a1a; max-width: 7in; margin: 0 auto; padding: 24px; }
-        .lh { display:flex; align-items:center; justify-content:space-between; border-bottom: 3px solid #b8322b; padding-bottom: 10px; margin-bottom: 22px; }
-        .lh b { font: 700 20pt Georgia, serif; color: #0e1f57; }
-        .lh span { font: 10pt Arial, sans-serif; color: #555; text-align: right; }
+        ${lh.css}
         p { margin: 0 0 12px; } ul { margin: 0 0 12px 20px; padding: 0; } li { margin: 0 0 4px; }
-        .foot { margin-top: 28px; border-top: 1px solid #ddd; padding-top: 8px; font: 9.5pt Arial, sans-serif; color: #666; }
       </style></head><body>
-      <div class="lh"><b>${esc(f.companyName)}</b><span>${esc(f.officeAddress)}<br>${esc(f.companyPhone)} · bestroofingnow.com</span></div>
+      ${lh.head}
       ${built.html}
-      <div class="foot">${esc(f.companyName)} LLC · ${esc(f.officeAddress)} · ${esc(f.companyPhone)}</div>
+      ${lh.foot}
       <script>window.onload = function(){ window.print(); }</script></body></html>`);
     w.document.close();
     recordSent('printed');
@@ -280,7 +281,7 @@ export default function InsuranceLetters({ externalId }: { externalId: string })
                     type="button"
                     onClick={() => chooseLetter(l.kind)}
                     title={l.use}
-                    className={`text-xs px-2.5 py-1.5 rounded-full border ${letter === l.kind ? 'bg-navy text-white border-navy' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-400'}`}
+                    className={`text-xs px-2.5 py-1.5 rounded-full border ${letter === l.kind ? 'bg-ink text-white border-ink' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-400'}`}
                   >
                     {l.label}
                   </button>
@@ -322,8 +323,8 @@ export default function InsuranceLetters({ externalId }: { externalId: string })
                 <div className="flex flex-wrap items-center gap-2 mb-2">
                   <p className="text-[11px] font-semibold text-gray-600 mr-auto">The figures — from the claim record, editable</p>
                   <div className="flex rounded-lg border border-gray-200 overflow-hidden text-[11px]">
-                    <button type="button" onClick={() => set('manualTotal', false)} className={`px-2 py-1 ${f.manualTotal ? 'bg-white text-gray-600' : 'bg-navy text-white'}`}>Work it out</button>
-                    <button type="button" onClick={() => set('manualTotal', true)} className={`px-2 py-1 ${f.manualTotal ? 'bg-navy text-white' : 'bg-white text-gray-600'}`}>I'll type the total</button>
+                    <button type="button" onClick={() => set('manualTotal', false)} className={`px-2 py-1 ${f.manualTotal ? 'bg-white text-gray-600' : 'bg-ink text-white'}`}>Work it out</button>
+                    <button type="button" onClick={() => set('manualTotal', true)} className={`px-2 py-1 ${f.manualTotal ? 'bg-ink text-white' : 'bg-white text-gray-600'}`}>I'll type the total</button>
                   </div>
                 </div>
                 {!f.manualTotal && (
@@ -398,10 +399,10 @@ export default function InsuranceLetters({ externalId }: { externalId: string })
                           disabled={full}
                           onClick={() => setPicked((x) => (on ? x.filter((i) => i !== p.id) : [...x, p.id]))}
                           title={full ? 'Six photos is the limit' : p.description || p.name}
-                          className={`relative flex-shrink-0 w-16 h-16 rounded-md overflow-hidden border-2 ${on ? 'border-brick' : 'border-transparent'} ${full ? 'opacity-40 cursor-not-allowed' : ''}`}
+                          className={`relative flex-shrink-0 w-16 h-16 rounded-md overflow-hidden border-2 ${on ? 'border-brand' : 'border-transparent'} ${full ? 'opacity-40 cursor-not-allowed' : ''}`}
                         >
                           <img src={p.url!} alt={p.name} loading="lazy" className="w-full h-full object-cover" />
-                          {on && <span className="absolute top-0.5 right-0.5 bg-brick text-white text-[9px] rounded px-1">✓</span>}
+                          {on && <span className="absolute top-0.5 right-0.5 bg-brand text-on-brand text-[9px] rounded px-1">✓</span>}
                         </button>
                       );
                     })}
@@ -490,7 +491,7 @@ export default function InsuranceLetters({ externalId }: { externalId: string })
 
               <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
                 {LETTER_FORMATS.map((k: typeof LETTER_FORMATS[number]) => (
-                  <button key={k.kind} onClick={() => setKind(k.kind)} className={`flex-1 py-1.5 ${kind === k.kind ? 'bg-navy text-white' : 'bg-white text-gray-600'}`}>{k.label}</button>
+                  <button key={k.kind} onClick={() => setKind(k.kind)} className={`flex-1 py-1.5 ${kind === k.kind ? 'bg-ink text-white' : 'bg-white text-gray-600'}`}>{k.label}</button>
                 ))}
               </div>
               <p className="text-[11px] text-gray-400">{LETTER_FORMATS.find((k) => k.kind === kind)!.use}</p>
@@ -515,7 +516,7 @@ export default function InsuranceLetters({ externalId }: { externalId: string })
                   <button
                     onClick={send}
                     disabled={sending || missing.length > 0 || !to.trim()}
-                    className="text-sm px-4 py-2 rounded-lg bg-brick text-white font-medium hover:bg-brick-dark disabled:opacity-50"
+                    className="text-sm px-4 py-2 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark disabled:opacity-50"
                   >
                     {sending ? 'Sending…' : `Send${previewImages.length || attachedDocs.length
                       ? ` with ${[previewImages.length && `${previewImages.length} photo${previewImages.length === 1 ? '' : 's'}`, attachedDocs.length && `${attachedDocs.length} attachment${attachedDocs.length === 1 ? '' : 's'}`].filter(Boolean).join(' + ')}`

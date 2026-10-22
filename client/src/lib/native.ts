@@ -59,7 +59,7 @@ export async function openExternal(url: string): Promise<boolean> {
 
 export type NativeSignInResult = 'signed-in' | 'cancelled' | 'failed' | 'unavailable';
 
-// After the in-app browser closes, how long to wait for the brnapp:// link
+// After the in-app browser closes, how long to wait for the app's <scheme>://auth link
 // before calling it a cancel. On Android the Custom Tab reports "finished" a
 // beat before the deep link reaches the app, so settling at once would turn a
 // good sign-in into a cancel.
@@ -70,7 +70,8 @@ const BROWSER_CLOSED_GRACE_MS = 1500;
  *
  * Google refuses OAuth inside an embedded WebView, so the consent screen has
  * to happen in the real browser. The server sends that browser back to
- * `brnapp://auth?t=…`; the listener below catches it and trades the token for
+ * `<scheme>://auth?t=…` (NATIVE_APP_SCHEME on the server; it must match the
+ * URL scheme registered in the native projects); the listener below catches it and trades the token for
  * a session cookie in this WebView — which is the only jar that matters here.
  *
  * Always settles. A rep who closes the browser without signing in used to
@@ -89,7 +90,7 @@ export async function startNativeSignIn(): Promise<NativeSignInResult> {
 
   return new Promise<NativeSignInResult>((resolve) => {
     let settled = false;
-    let handling = false;              // a brnapp://auth link arrived; it owns the outcome now
+    let handling = false;              // a <scheme>://auth link arrived; it owns the outcome now
     let graceTimer: ReturnType<typeof setTimeout> | null = null;
     const handles: Array<Promise<any> | any> = [];
 

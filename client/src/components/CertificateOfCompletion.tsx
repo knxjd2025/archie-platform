@@ -195,7 +195,7 @@ export default function CertificateOfCompletion({ externalId }: { externalId: st
                   ) : (
                     <>
                       <input value={signName} onChange={(e) => setSignName(e.target.value)} placeholder="Type your full name" className={input} />
-                      <button onClick={sign} disabled={!!busy || signName.trim().length < 3} className="mt-2 w-full text-sm px-3 py-2 rounded-lg bg-navy text-white font-medium disabled:opacity-50">
+                      <button onClick={sign} disabled={!!busy || signName.trim().length < 3} className="mt-2 w-full text-sm px-3 py-2 rounded-lg bg-ink text-white font-medium disabled:opacity-50">
                         {busy === 'sign' ? 'Signing…' : 'Sign it'}
                       </button>
                     </>
@@ -218,7 +218,7 @@ export default function CertificateOfCompletion({ externalId }: { externalId: st
                         onClick={send}
                         disabled={!!busy || !email.trim() || !cert.signatures.companySignedAt}
                         title={cert.signatures.companySignedAt ? undefined : 'Sign it yourself first'}
-                        className="mt-2 w-full text-sm px-3 py-2 rounded-lg bg-brick text-white font-medium hover:bg-brick-dark disabled:opacity-50"
+                        className="mt-2 w-full text-sm px-3 py-2 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark disabled:opacity-50"
                       >
                         {busy === 'send' ? 'Sending…' : cert.sentAt ? 'Send the link again' : 'Send for signature'}
                       </button>

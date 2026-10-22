@@ -165,7 +165,7 @@ export default function Dashboard({ onNavigate, onOpenClient }: Props) {
             <span className="text-sm font-semibold text-gray-800">
               📬 Inbox leads
               {n > 0
-                ? <span className="text-brick font-normal whitespace-nowrap"> · {n} waiting</span>
+                ? <span className="text-red-600 font-normal whitespace-nowrap"> · {n} waiting</span>
                 : <span className="text-gray-400 font-normal whitespace-nowrap"> · nothing waiting</span>}
             </span>
             <span className="text-xs text-gray-500 sm:shrink-0 sm:text-right">
@@ -186,7 +186,7 @@ export default function Dashboard({ onNavigate, onOpenClient }: Props) {
       {fus.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <div className="px-5 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-800">🔔 Follow-ups{(() => { const n = fus.filter((f) => f.overdue || f.dueToday).length; return n > 0 ? <span className="text-brick font-normal"> · {n} due</span> : null; })()}</h2>
+            <h2 className="text-sm font-semibold text-gray-800">🔔 Follow-ups{(() => { const n = fus.filter((f) => f.overdue || f.dueToday).length; return n > 0 ? <span className="text-red-600 font-normal"> · {n} due</span> : null; })()}</h2>
           </div>
           {toast && <p className="px-5 py-2 text-xs text-white bg-gray-900">{toast}</p>}
           <div className="divide-y divide-gray-50">
@@ -199,7 +199,7 @@ export default function Dashboard({ onNavigate, onOpenClient }: Props) {
                   <p className="text-sm text-gray-800 truncate">{f.note}</p>
                   <p className="text-xs text-gray-500 truncate">
                     {f.clientName ? f.clientName : 'No client'}
-                    {f.dueDate && <span className={f.overdue ? 'text-brick font-medium' : f.dueToday ? 'text-amber-600 font-medium' : ''}> · {f.overdue ? 'Overdue' : f.dueToday ? 'Due today' : `Due ${fmtDay(f.dueDate)}`}</span>}
+                    {f.dueDate && <span className={f.overdue ? 'text-red-600 font-medium' : f.dueToday ? 'text-amber-600 font-medium' : ''}> · {f.overdue ? 'Overdue' : f.dueToday ? 'Due today' : `Due ${fmtDay(f.dueDate)}`}</span>}
                   </p>
                 </button>
               </div>

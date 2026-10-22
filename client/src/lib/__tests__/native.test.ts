@@ -56,7 +56,7 @@ describe('startNativeSignIn', () => {
     const p = startNativeSignIn();
     await vi.advanceTimersByTimeAsync(0);
     s.fire('browserFinished');
-    s.fire('appUrlOpen', { url: 'brnapp://auth?t=tok' });
+    s.fire('appUrlOpen', { url: 'archie://auth?t=tok' });
     await vi.advanceTimersByTimeAsync(2000);
     await expect(p).resolves.toBe('signed-in');
     expect(location.href).toBe('/');
@@ -65,8 +65,8 @@ describe('startNativeSignIn', () => {
   it('trades the token once, even if the link is delivered twice, and removes its listeners', async () => {
     const p = startNativeSignIn();
     await vi.advanceTimersByTimeAsync(0);
-    s.fire('appUrlOpen', { url: 'brnapp://auth?t=tok' });
-    s.fire('appUrlOpen', { url: 'brnapp://auth?t=tok' });
+    s.fire('appUrlOpen', { url: 'archie://auth?t=tok' });
+    s.fire('appUrlOpen', { url: 'archie://auth?t=tok' });
     await expect(p).resolves.toBe('signed-in');
     await vi.advanceTimersByTimeAsync(0);
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -76,7 +76,7 @@ describe('startNativeSignIn', () => {
   it("returns 'failed' without a token, so the page can offer Try again", async () => {
     const p = startNativeSignIn();
     await vi.advanceTimersByTimeAsync(0);
-    s.fire('appUrlOpen', { url: 'brnapp://auth' });
+    s.fire('appUrlOpen', { url: 'archie://auth' });
     await expect(p).resolves.toBe('failed');
     expect(fetchMock).not.toHaveBeenCalled();
   });

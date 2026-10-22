@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import QRCode from 'qrcode';
 import { api } from '../lib/api';
 import { isNativeApp } from '../lib/native';
+import { letterhead, useCompany } from '../lib/company';
 import {
   LETTER_KINDS, SUBJECT_LINES, defaultFields, renderLetter, unfilledPlaceholders, type LetterFields, type LetterKind,
 } from '../../../shared/neighbor-letters';
@@ -18,6 +19,7 @@ interface Ctx {
  * carries a QR code to the estimate tool). Nothing is stored.
  */
 export default function NeighborLetters({ externalId }: { externalId: string }) {
+  const company = useCompany();
   const [open, setOpen] = useState(false);
   const [ctx, setCtx] = useState<Ctx | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -69,20 +71,20 @@ export default function NeighborLetters({ externalId }: { externalId: string }) 
     }
     const w = window.open('', '_blank');
     if (!w) { flash('Allow pop-ups to print.'); return; }
+    // The company's own letterhead: its name, tagline, phone and website,
+    // each only when the company has entered it.
+    const lh = letterhead(company, { address: f.officeAddress });
     w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${kind === 'mailer' ? 'Neighbor letter' : 'Leave-behind letter'}</title>
       <style>
         @page { margin: 0.9in; }
         body { font: 12.5pt/1.55 Georgia, 'Times New Roman', serif; color: #1a1a1a; max-width: 7in; margin: 0 auto; padding: 24px; }
-        .lh { display:flex; align-items:center; justify-content:space-between; border-bottom: 3px solid #b8322b; padding-bottom: 10px; margin-bottom: 22px; }
-        .lh b { font: 700 20pt Georgia, serif; color: #0e1f57; }
-        .lh span { font: 10pt Arial, sans-serif; color: #555; text-align: right; }
+        ${lh.css}
         h3, p { margin: 0 0 12px; } ul { margin: 0 0 12px 20px; padding: 0; } li { margin: 0 0 4px; }
-        a { color: #0e1f57; }
-        .foot { margin-top: 28px; border-top: 1px solid #ddd; padding-top: 8px; font: 9.5pt Arial, sans-serif; color: #666; }
+        a { color: ${company.colors.primaryDark}; }
       </style></head><body>
-      <div class="lh"><b>Best Roofing Now</b><span>Charlotte's family-run roofing experts<br>(704) 605-6047 · bestroofingnow.com</span></div>
+      ${lh.head}
       ${html}
-      <div class="foot">Best Roofing Now LLC · ${esc(f.officeAddress)}</div>
+      ${lh.foot}
       <script>window.onload = function(){ window.print(); }</script></body></html>`);
     w.document.close();
     used('printed');
@@ -107,7 +109,7 @@ export default function NeighborLetters({ externalId }: { externalId: string }) 
           <h3 className="text-sm font-semibold text-gray-800">📬 Neighbor letters</h3>
           <p className="text-xs text-gray-400">A roof going up here is a reason to knock, email and mail the street. Filled in from this job.</p>
         </div>
-        <button onClick={() => setOpen((v) => !v)} className="text-xs px-2.5 py-1 rounded-lg bg-brick text-white font-medium hover:bg-brick-dark">{open ? 'Close' : 'Write letters'}</button>
+        <button onClick={() => setOpen((v) => !v)} className="text-xs px-2.5 py-1 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark">{open ? 'Close' : 'Write letters'}</button>
       </div>
       {open && (
         <div className="p-4 space-y-3">
@@ -119,7 +121,7 @@ export default function NeighborLetters({ externalId }: { externalId: string }) 
               <div className="flex gap-1 flex-wrap">
                 {LETTER_KINDS.map((k) => (
                   <button key={k.kind} onClick={() => setKind(k.kind)} title={k.use}
-                    className={`text-sm px-3 py-1.5 rounded-lg font-medium ${kind === k.kind ? 'bg-navy text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>{k.label}</button>
+                    className={`text-sm px-3 py-1.5 rounded-lg font-medium ${kind === k.kind ? 'bg-ink text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>{k.label}</button>
                 ))}
               </div>
               <p className="text-xs text-gray-500">{LETTER_KINDS.find((k) => k.kind === kind)?.use} Never the customer's name or house number.</p>
@@ -129,7 +131,7 @@ export default function NeighborLetters({ externalId }: { externalId: string }) 
                 <div className="space-y-2">
                   <div className="grid grid-cols-2 gap-2">
                     <div><label className={label}>Rep name</label><input value={f.repName} onChange={(e) => set({ repName: e.target.value })} className={input} /></div>
-                    <div><label className={label}>Rep cell</label><input value={f.repCell} onChange={(e) => set({ repCell: e.target.value })} placeholder="(704) 555-0100" className={input} /></div>
+                    <div><label className={label}>Rep cell</label><input value={f.repCell} onChange={(e) => set({ repCell: e.target.value })} placeholder="(555) 555-0100" className={input} /></div>
                     <div><label className={label}>Street (no house number)</label><input value={f.streetName} onChange={(e) => set({ streetName: e.target.value })} className={input} /></div>
                     <div><label className={label}>Neighborhood</label><input value={f.neighborhood} onChange={(e) => set({ neighborhood: e.target.value })} placeholder='or "this area"' className={input} /></div>
                     <div><label className={label}>Year homes were built</label><input value={f.yearBuilt} onChange={(e) => set({ yearBuilt: e.target.value })} placeholder='Redfin/Zillow, or "the same time"' className={input} /></div>
@@ -184,9 +186,9 @@ export default function NeighborLetters({ externalId }: { externalId: string }) 
                   <div className="border border-gray-200 rounded-lg p-3 text-[13px] leading-relaxed text-gray-800 max-h-[28rem] overflow-y-auto [&_p]:mb-2 [&_ul]:list-disc [&_ul]:ml-5 [&_ul]:mb-2 [&_li]:mb-0.5" dangerouslySetInnerHTML={{ __html: letter.html }} />
                   <div className="flex flex-wrap gap-2 mt-2">
                     <button onClick={copyText} className="text-sm px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 font-medium hover:bg-gray-200">Copy text</button>
-                    {kind === 'email' && <button onClick={copyHtml} className="text-sm px-3 py-1.5 rounded-lg bg-navy text-white font-medium">Copy for GHL email</button>}
+                    {kind === 'email' && <button onClick={copyHtml} className="text-sm px-3 py-1.5 rounded-lg bg-ink text-white font-medium">Copy for GHL email</button>}
                     {/* The app's WebView has no print dialog and a blank window.open page is a dead end there, so Print only shows on the website; Copy works everywhere. */}
-                    {kind !== 'email' && !isNativeApp() && <button onClick={print} className="text-sm px-3 py-1.5 rounded-lg bg-brick text-white font-medium hover:bg-brick-dark">Print on letterhead{kind === 'mailer' ? ' + QR' : ''}</button>}
+                    {kind !== 'email' && !isNativeApp() && <button onClick={print} className="text-sm px-3 py-1.5 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark">Print on letterhead{kind === 'mailer' ? ' + QR' : ''}</button>}
                   </div>
                 </div>
               </div>
@@ -200,4 +202,3 @@ export default function NeighborLetters({ externalId }: { externalId: string }) 
 
 // The office address is typed in settings and lands in a document.write page;
 // escape it like InsuranceLetters does so a stray < cannot become markup.
-const esc = (s: string) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');

@@ -7,13 +7,18 @@ import { LabelChips } from '../components/CanvassLabels';
 import type { AreaShape } from '../../../shared/canvass-areas';
 import { SUGGESTED_LABELS, labelMeta } from '../../../shared/canvass-labels';
 import { api } from '../lib/api';
+import { useCompany } from '../lib/company';
 import { assessLead } from '../../../shared/canvass-intelligence';
 import {
   STATUS_META, STATUS_ORDER, DOT_COLOR, isFollowUpDue,
   type HousePatch, type Measurements, type Property, type Rep, type Storm, type Weather,
 } from '../lib/canvass';
 
-const CHARLOTTE = { lat: 35.2271, lng: -80.8431 }; // fallback center when nothing is pinned yet
+/**
+ * Where the map opens when nothing is pinned and the company's city could not
+ * be found: the middle of the contiguous US, zoomed out to show the country.
+ */
+const US_CENTER = { lat: 39.8283, lng: -98.5795 };
 const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
 const MAP_LIBRARIES: ('drawing')[] = ['drawing']; // stable reference — the loader re-inits on a new array
 const NO_KNOCK = 'do not knock';
@@ -21,6 +26,7 @@ const NO_KNOCK = 'do not knock';
 interface CanvassList { properties: Property[]; truncated?: boolean; canManage?: boolean; reps?: Rep[] }
 
 export default function Canvass() {
+  const company = useCompany();
   const [items, setItems] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -50,7 +56,22 @@ export default function Canvass() {
   // the map each time a pin changed — yanking it away from wherever the rep
   // had panned to.
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null);
-  const { isLoaded: mapsLoaded } = useJsApiLoader({ googleMapsApiKey: MAPS_KEY || '', id: 'brn-canvass-map', libraries: MAP_LIBRARIES });
+  const { isLoaded: mapsLoaded } = useJsApiLoader({ googleMapsApiKey: MAPS_KEY || '', id: 'archie-canvass-map', libraries: MAP_LIBRARIES });
+  // With nothing pinned yet, open on the company's own city (from its profile),
+  // looked up once through the Maps geocoder.
+  const [cityCenter, setCityCenter] = useState<{ lat: number; lng: number } | null>(null);
+  const cityQuery = [company.city, company.state].filter(Boolean).join(', ');
+  useEffect(() => {
+    if (!mapsLoaded || !cityQuery || cityCenter || mapCenter) return;
+    let cancelled = false;
+    try {
+      new google.maps.Geocoder().geocode({ address: cityQuery, componentRestrictions: { country: 'US' } }, (results, status) => {
+        const loc = status === 'OK' ? results?.[0]?.geometry?.location : null;
+        if (!cancelled && loc) setCityCenter({ lat: loc.lat(), lng: loc.lng() });
+      });
+    } catch { /* the geocoder is not enabled on this key — the US view stands */ }
+    return () => { cancelled = true; };
+  }, [mapsLoaded, cityQuery, cityCenter, mapCenter]);
   // Tracerfy: owner/roof facts per home, drawn areas, and the drawing in progress.
   const [enrich, setEnrich] = useState<Record<number, Enrichment>>({});
   const [areas, setAreas] = useState<AreaRow[]>([]);
@@ -77,7 +98,7 @@ export default function Canvass() {
       setMapCenter((c) => {
         if (c) return c;
         const pinned = props.filter((p) => p.lat != null && p.lng != null);
-        if (!pinned.length) return CHARLOTTE;
+        if (!pinned.length) return null;
         return { lat: pinned.reduce((s, p) => s + p.lat!, 0) / pinned.length, lng: pinned.reduce((s, p) => s + p.lng!, 0) / pinned.length };
       });
     })
@@ -278,11 +299,11 @@ export default function Canvass() {
           value={addr}
           onChange={(e) => setAddr(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') addDoor(); }}
-          placeholder="123 Main St, Charlotte, NC"
+          placeholder={`123 Main St${company.cityState ? `, ${company.cityState}` : ', City, ST'}`}
           aria-label="Address"
           className="flex-1 text-base border border-gray-200 rounded-lg px-3 py-3 focus:ring-1 focus:ring-blue-400"
         />
-        <button onClick={() => addDoor()} disabled={busy || !addr.trim()} className="px-4 py-3 rounded-lg bg-brick text-white font-medium hover:bg-brick-dark disabled:opacity-50">
+        <button onClick={() => addDoor()} disabled={busy || !addr.trim()} className="px-4 py-3 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark disabled:opacity-50">
           {busy ? 'Adding…' : '＋ Add house'}
         </button>
         <button onClick={addHere} disabled={locating || busy} title="Save with your current GPS location" className="px-4 py-3 rounded-lg bg-gray-100 text-gray-700 font-medium hover:bg-gray-200 disabled:opacity-50">
@@ -313,8 +334,8 @@ export default function Canvass() {
           )}
         </div>
         <div className="flex gap-1 bg-white border border-gray-200 rounded-full p-0.5">
-          <button onClick={() => setView('list')} aria-pressed={view === 'list'} className={`px-3 py-1 text-sm rounded-full ${view === 'list' ? 'bg-navy text-white' : 'text-gray-600'}`}>☰ List</button>
-          <button onClick={() => setView('map')} aria-pressed={view === 'map'} className={`px-3 py-1 text-sm rounded-full ${view === 'map' ? 'bg-navy text-white' : 'text-gray-600'}`}>🗺️ Map</button>
+          <button onClick={() => setView('list')} aria-pressed={view === 'list'} className={`px-3 py-1 text-sm rounded-full ${view === 'list' ? 'bg-ink text-white' : 'text-gray-600'}`}>☰ List</button>
+          <button onClick={() => setView('map')} aria-pressed={view === 'map'} className={`px-3 py-1 text-sm rounded-full ${view === 'map' ? 'bg-ink text-white' : 'text-gray-600'}`}>🗺️ Map</button>
         </div>
       </div>
 
@@ -363,8 +384,8 @@ export default function Canvass() {
           <div className="rounded-xl border border-gray-200 overflow-hidden">
             <GoogleMap
               mapContainerStyle={{ width: '100%', height: '32rem' }}
-              center={mapCenter ?? CHARLOTTE}
-              zoom={items.some((p) => p.lat != null) ? 13 : 11}
+              center={mapCenter ?? cityCenter ?? US_CENTER}
+              zoom={items.some((p) => p.lat != null) ? 13 : cityCenter ? 11 : 4}
               onClick={() => setPinId(null)}
             >
               {tracerfyOn && (

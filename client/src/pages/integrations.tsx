@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../lib/api';
+import { useCompany } from '../lib/company';
 import { formatPhone } from '../lib/format';
 
 interface GoogleStatus {
@@ -130,6 +131,9 @@ function contactDisplayName(c?: { companyName?: string; firstName?: string; last
 }
 
 export default function Integrations() {
+  const company = useCompany();
+  // The company's email domain, when its profile has an email, to name the Workspace domain.
+  const workspaceDomain = company.email.includes('@') ? company.email.split('@').pop() : '';
   const [activeTab, setActiveTab] = useState<ActiveTab>('jobtread');
   const [jobtreadTab, setJobtreadTab] = useState<JobTreadTab>('jobs');
 
@@ -353,7 +357,7 @@ export default function Integrations() {
                     unavailable, an admin needs to check one of:
                   </p>
                   <ol className="list-decimal list-inside space-y-1 text-blue-700">
-                    <li>Your mailbox is on the <strong>@bestroofingnow.com</strong> Workspace domain</li>
+                    <li>Your mailbox is on the company's Google Workspace domain{workspaceDomain && <> (<strong>@{workspaceDomain}</strong>)</>}</li>
                     <li>The service account's <strong>domain-wide delegation</strong> in Workspace admin lists the Calendar, Gmail and Drive scopes</li>
                     <li><code className="bg-blue-100 px-1 rounded">GOOGLE_SA_EMAIL</code> and <code className="bg-blue-100 px-1 rounded">GOOGLE_SA_KEY</code> are set on the server</li>
                   </ol>

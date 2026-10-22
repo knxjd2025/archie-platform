@@ -64,7 +64,7 @@ export default function FollowUps({ jobExternalId, clientName }: { jobExternalId
           className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 focus:ring-1 focus:ring-blue-400"
         />
         <input type="date" value={due} onChange={(e) => setDue(e.target.value)} aria-label="Due date" className="text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-600 focus:ring-1 focus:ring-blue-400" />
-        <button onClick={add} disabled={busy || !note.trim()} className="text-sm px-3 py-2 rounded-lg bg-brick text-white font-medium hover:bg-brick-dark disabled:opacity-50">{busy ? 'Adding…' : 'Add'}</button>
+        <button onClick={add} disabled={busy || !note.trim()} className="text-sm px-3 py-2 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark disabled:opacity-50">{busy ? 'Adding…' : 'Add'}</button>
       </div>
       {opError && <p className="px-4 pt-2 -mb-1 text-xs text-red-600">{opError}</p>}
       {loading ? (
@@ -87,7 +87,7 @@ export default function FollowUps({ jobExternalId, clientName }: { jobExternalId
               <div className="min-w-0 flex-1">
                 <p className={`text-sm ${f.done ? 'text-gray-400 line-through' : 'text-gray-800'}`}>{f.note}</p>
                 {f.dueDate && !f.done && (
-                  <p className={`text-xs ${f.overdue ? 'text-brick font-medium' : f.dueToday ? 'text-amber-600 font-medium' : 'text-gray-400'}`}>
+                  <p className={`text-xs ${f.overdue ? 'text-red-600 font-medium' : f.dueToday ? 'text-amber-600 font-medium' : 'text-gray-400'}`}>
                     {f.overdue ? 'Overdue · ' : f.dueToday ? 'Due today · ' : 'Due '}{fmtDate(f.dueDate)}
                   </p>
                 )}
