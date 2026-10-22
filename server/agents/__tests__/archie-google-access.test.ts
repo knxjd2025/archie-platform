@@ -60,11 +60,11 @@ describe('calendarMailboxes', () => {
   const m = (email: string, active = true) => ({ email, active });
 
   it('sweeps every active member, including new hires', () => {
-    // The hard-coded list omitted thomas@ entirely, so his appointments were
-    // invisible app-wide even though delegation worked for his mailbox.
+    // A hard-coded list once omitted a rep entirely, so their appointments were
+    // invisible app-wide even though delegation worked for their mailbox.
     expect(
-      calendarMailboxes([m('james@bestroofingnow.com'), m('thomas@bestroofingnow.com')]),
-    ).toEqual(['james@bestroofingnow.com', 'thomas@bestroofingnow.com']);
+      calendarMailboxes([m('pat@acme.test'), m('morgan@acme.test')]),
+    ).toEqual(['morgan@acme.test', 'pat@acme.test']);
   });
 
   it('skips deactivated people', () => {
@@ -83,7 +83,7 @@ describe('calendarMailboxes', () => {
     // An empty sweep would wipe the team schedule to zero rows, which reads as
     // "no appointments" instead of as a failure.
     for (const empty of [[], [m('gone@x.com', false)]]) {
-      expect(calendarMailboxes(empty)).toContain('james@bestroofingnow.com');
+      expect(calendarMailboxes(empty).length).toBeGreaterThan(0);
     }
   });
 });

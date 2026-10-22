@@ -5,42 +5,51 @@ import { eq, desc, and, gte, sql } from 'drizzle-orm';
 import { GoHighLevelClient } from '../integrations/gohighlevel';
 import { JobTreadClient } from '../integrations/jobtread';
 import { leadScope, viewerCanSeeLead } from './sales-tools';
+import { currentProfile } from '../tenant/context';
 
 /** Most leads get_lead_pipeline returns in one call. */
 const PIPELINE_MAX_LIMIT = 50;
 
-// Charlotte NC service area counties
-const SERVICE_AREA_COUNTIES = [
-  'mecklenburg',
-  'union',
-  'cabarrus',
-  'gaston',
-  'lincoln',
-  'iredell',
-  'rowan',
-  'stanly',
-  'anson',
-  'york', // SC but close
-  'lancaster', // SC but close
-];
+/** Where a lead is relative to the company's service area: in it, outside it, or not known. */
+export type AreaMatch = 'in' | 'out' | 'unknown';
 
-const SERVICE_AREA_ZIPS = [
-  // Charlotte and surrounding
-  '28201', '28202', '28203', '28204', '28205', '28206', '28207', '28208', '28209', '28210',
-  '28211', '28212', '28213', '28214', '28215', '28216', '28217', '28218', '28219', '28220',
-  '28221', '28222', '28223', '28224', '28226', '28227', '28228', '28229', '28230', '28231',
-  '28232', '28233', '28234', '28235', '28236', '28237', '28241', '28242', '28243', '28244',
-  '28246', '28247', '28250', '28253', '28254', '28255', '28256', '28258', '28260', '28262',
-  '28263', '28265', '28266', '28269', '28270', '28271', '28272', '28273', '28274', '28275',
-  '28277', '28278', '28280', '28281', '28282', '28284', '28285', '28287', '28288', '28289',
-  '28290', '28296', '28297', '28299',
-  // Surrounding areas
-  '28012', '28016', '28018', '28025', '28027', '28031', '28032', '28034', '28036', '28052',
-  '28054', '28056', '28070', '28078', '28079', '28083', '28098', '28101', '28103', '28104',
-  '28105', '28106', '28107', '28110', '28112', '28120', '28123', '28124', '28125', '28126',
-  '28127', '28128', '28129', '28130', '28134', '28144', '28146', '28147', '28150', '28152',
-  '28159', '28160', '28163', '28164', '28166', '28167', '28168', '28169', '28173', '28174',
-];
+const words = (s: string): string[] => s.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+
+/**
+ * Is a lead in the company's service area? Judged only from what the company
+ * entered in its profile — its city, ZIP and service area description — so it
+ * never assumes an area the company has not stated:
+ * - the lead's city is the company's city, or is named in the service area text;
+ * - the lead's ZIP is named in the service area text, or shares its first three
+ *   digits (the same postal region) with the company's ZIP.
+ * 'unknown' when the company has entered nothing to judge by, or the lead has
+ * no city or ZIP; 'out' only when the company described its area or gave a ZIP
+ * and nothing matched (a company city alone never rules a lead out).
+ */
+export function serviceAreaMatch(
+  lead: { city?: string | null; zip?: string | null },
+  company: { city: string; zip: string; serviceArea: string },
+): AreaMatch {
+  const city = (lead.city || '').trim().toLowerCase();
+  const zip = (lead.zip || '').trim().slice(0, 5);
+  const area = company.serviceArea.toLowerCase();
+  const hasArea = !!(company.city || /^\d{5}/.test(company.zip) || area);
+  if (!hasArea || (!city && !/^\d{5}$/.test(zip))) return 'unknown';
+  if (city) {
+    if (company.city && city === company.city.toLowerCase()) return 'in';
+    const cityWords = words(city);
+    const areaWords = words(area);
+    // Every word of the lead's city appears, in order, in the area text ("Fort Worth" in "Dallas, Fort Worth and nearby").
+    if (cityWords.length && areaWords.some((_, i) => cityWords.every((w, j) => areaWords[i + j] === w))) return 'in';
+  }
+  if (/^\d{5}$/.test(zip)) {
+    if (new RegExp(`\\b${zip}\\b`).test(area)) return 'in';
+    if (/^\d{5}/.test(company.zip) && company.zip.slice(0, 3) === zip.slice(0, 3)) return 'in';
+  }
+  // A city alone is not a service area: a lead from the next town may well be
+  // served. Only call it 'out' when the company described its area or gave a ZIP.
+  return area || /^\d{5}/.test(company.zip) ? 'out' : 'unknown';
+}
 
 export class CMOAgent extends BaseAgent {
   private ghl: GoHighLevelClient;
@@ -317,18 +326,15 @@ export class CMOAgent extends BaseAgent {
     let score = 0;
     const factors: string[] = [];
 
-    // Check if in service area (by zip or city)
-    const zip = lead.zip?.trim();
-    const city = lead.city?.toLowerCase().trim();
-    const inServiceArea = (zip && SERVICE_AREA_ZIPS.includes(zip)) ||
-                          city === 'charlotte' ||
-                          SERVICE_AREA_COUNTIES.some(c => city?.includes(c));
-
-    if (inServiceArea) {
+    // Check if in the company's service area (by zip or city, from its profile)
+    const area = serviceAreaMatch(lead, currentProfile());
+    if (area === 'in') {
       score += 3;
-      factors.push('In Charlotte service area (+3)');
-    } else if (zip || city) {
+      factors.push('In service area (+3)');
+    } else if (area === 'out') {
       factors.push('Outside primary service area (+0)');
+    } else if (lead.zip || lead.city) {
+      factors.push('Service area not set in the company profile; location not scored (+0)');
     }
 
     // Check contact info completeness
@@ -532,12 +538,15 @@ export class CMOAgent extends BaseAgent {
 
   // Draft a review request message
   private async draftReviewRequest(customerName: string, jobType: string) {
-    const message = `Hi ${customerName}! Thank you for choosing Best Roofing Now for your ${jobType}. We hope you're completely satisfied with our work! If you have a moment, we'd really appreciate a review on Google - it helps other Charlotte homeowners find quality roofing services. Here's the link: [GOOGLE_REVIEW_LINK] Thank you! - The Best Roofing Now Team`;
+    const company = currentProfile();
+    const link = company.reviewUrl || '[REVIEW_LINK]';
+    const neighbors = company.city ? `other ${company.city} homeowners` : 'other homeowners';
+    const message = `Hi ${customerName}! Thank you for choosing ${company.displayName} for your ${jobType}. We hope you're completely satisfied with our work! If you have a moment, we'd really appreciate a review - it helps ${neighbors} find a contractor they can trust. Here's the link: ${link} Thank you! - The ${company.displayName} Team`;
 
     return {
       message,
       channels: ['sms', 'email'],
-      note: 'Replace [GOOGLE_REVIEW_LINK] with actual Google Business Profile review link',
+      ...(company.reviewUrl ? {} : { note: 'No review link is set in the company profile: replace [REVIEW_LINK] with your review page link.' }),
     };
   }
 
@@ -562,6 +571,8 @@ export class CMOAgent extends BaseAgent {
     actionsTaken: string[];
   }> {
     const actionsTaken: string[] = [];
+    const company = currentProfile();
+    const callUs = company.phone ? ` or call us at ${company.phone}` : '';
 
     // 1. Create lead in database
     const [lead] = await db
@@ -581,7 +592,7 @@ export class CMOAgent extends BaseAgent {
     // 3. If qualified, send immediate response
     if (qualification.qualified && lead.phone) {
       const serviceDesc = lead.serviceType || 'roofing service';
-      const smsMessage = `Hi ${lead.firstName || 'there'}! Thanks for contacting Best Roofing Now! We received your request for ${serviceDesc}. A team member will call you within the hour. Questions? Reply to this text or call us at (704) 555-ROOF. - Best Roofing Now`;
+      const smsMessage = `Hi ${lead.firstName || 'there'}! Thanks for contacting ${company.displayName}! We received your request for ${serviceDesc}. A team member will call you soon. Questions? Reply to this text${callUs}. - ${company.displayName}`;
 
       try {
         await this.sendSmsToLead(lead.id, smsMessage);
@@ -605,10 +616,13 @@ export class CMOAgent extends BaseAgent {
     } else if (!qualification.qualified && lead.phone) {
       // Send polite response for non-qualified leads
       let message: string;
-      if (!lead.zip || !SERVICE_AREA_ZIPS.includes(lead.zip)) {
-        message = `Hi ${lead.firstName || 'there'}! Thanks for reaching out to Best Roofing Now. Unfortunately, we primarily serve the Charlotte, NC metro area. We recommend searching for a local roofer in your area. Best of luck with your project!`;
+      // "We don't serve your area" only when the profile says where the
+      // company works and the lead is clearly outside it.
+      const where = company.serviceArea || (company.cityState && `the ${company.cityState} area`);
+      if (where && serviceAreaMatch(lead, company) === 'out') {
+        message = `Hi ${lead.firstName || 'there'}! Thanks for reaching out to ${company.displayName}. Unfortunately, we primarily serve ${where}. We recommend searching for a local contractor in your area. Best of luck with your project!`;
       } else {
-        message = `Hi ${lead.firstName || 'there'}! Thanks for contacting Best Roofing Now. We've received your inquiry and will review it shortly. If you have an urgent roofing emergency, please call us directly at (704) 555-ROOF.`;
+        message = `Hi ${lead.firstName || 'there'}! Thanks for contacting ${company.displayName}. We've received your inquiry and will review it shortly.${company.phone ? ` If it's an emergency, please call us directly at ${company.phone}.` : ''}`;
       }
 
       try {

@@ -5,6 +5,8 @@ import { eq } from 'drizzle-orm';
 import { getKnowledgeService, type KnowledgeCategory } from '../rag/knowledge-service';
 import type { AgentViewer } from './viewer';
 import { ROLE_LABEL } from '../../shared/rbac';
+import { currentProfile } from '../tenant/context';
+import { companyBrief } from './advisor-knowledge';
 
 // Types for chat completions (matching OpenAI/Groq format)
 export interface ChatCompletionToolCall {
@@ -108,7 +110,7 @@ const DEFAULT_PROVIDER_FOR_ROLE: Record<string, AdvisorProvider> = {
   sales_manager: 'open',
   customer_service: 'open',
   estimator: 'open',
-  // The BRN Advisor — the one assistant everyone uses. Open-weight by
+  // Archie, the team advisor — the one assistant everyone uses. Open-weight by
   // decision: it runs on every question from every person, all day.
   archie: 'open',
   project_coordinator: 'open',
@@ -130,7 +132,7 @@ const OPEN_DEFAULT_MODEL = 'meta-llama/llama-4-maverick';
 const FAL_BASE_URL = 'https://fal.run/openrouter/router/openai/v1';
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 
-// The BRN Advisor is the exception to "Maverick for chat": it is the one
+// Archie (the team advisor) is the exception to "Maverick for chat": it is the one
 // assistant the whole company leans on, answering code, insurance and
 // multi-step data questions, so it gets the strongest open model the app
 // already runs (Kimi K2.6, the report-writing model — a reasoning model with
@@ -190,8 +192,8 @@ export function toolResultContent(result: unknown, max = MAX_TOOL_RESULT_CHARS):
 }
 
 const LOG_TEXT_KEYS = new Set(['message', 'body', 'content', 'text', 'note', 'notes', 'html', 'subject']);
-// A US number in any usual spelling (+1 704 555 0199, (704) 555-0199,
-// 7045550199). Shaped 3-3-4 so dates and ids are left alone.
+// A US number in any usual spelling (+1 312 555 0199, (312) 555-0199,
+// 3125550199). Shaped 3-3-4 so dates and ids are left alone.
 const PHONE_RE = /(?<!\d)(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}(?!\d)/g;
 
 /**
@@ -237,13 +239,13 @@ function openClient(): OpenAI {
     return new OpenAI({
       apiKey: 'not-needed',
       baseURL: FAL_BASE_URL,
-      defaultHeaders: { Authorization: `Key ${fk}`, 'X-Title': 'Best Roofing Now Team App' },
+      defaultHeaders: { Authorization: `Key ${fk}`, 'X-Title': 'Archie' },
     });
   }
   return new OpenAI({
     apiKey: process.env.OPENROUTER_API_KEY,
     baseURL: OPENROUTER_BASE_URL,
-    defaultHeaders: { 'X-Title': 'Best Roofing Now Team App' },
+    defaultHeaders: { 'X-Title': 'Archie' },
   });
 }
 
@@ -474,7 +476,7 @@ export abstract class BaseAgent {
     // Knowledge base search tool - available to all agents
     this.registerTool({
       name: 'search_knowledge_base',
-      description: 'Search the company knowledge base for information about Best Roofing Now, services, pricing, service area, policies, scripts, and more. Use this when you need accurate company information to answer questions or make decisions.',
+      description: 'Search the company knowledge base for information about the company, its services, pricing, service area, policies, scripts, and more. Use this when you need accurate company information to answer questions or make decisions.',
       parameters: {
         type: 'object',
         properties: {
@@ -549,9 +551,15 @@ export abstract class BaseAgent {
       ? `\nYou are talking with ${v.name}${v.role ? ` (${ROLE_LABEL[v.role] || v.role})` : ''}. Every tool you have already returns only what ${v.name} is allowed to see, so use them freely and speak to their own work directly. Never guess a number a tool can fetch.\n`
       : '';
 
+    // The company comes from its profile when the prompt is built, so an
+    // edit to the profile reaches the next chat without re-seeding.
+    const company = currentProfile();
+    const where = company.cityState ? ` based in ${company.cityState}` : '';
+    const serviceArea = company.serviceArea ? `\n- The company's service area: ${company.serviceArea}` : '';
+
     return `${this.config.systemPrompt}
 
-You are ${this.config.name}, the ${this.config.title} at Best Roofing Now LLC, a roofing company based in Charlotte, NC.
+You are ${this.config.name}, the ${this.config.title} at ${company.legalName}, a ${company.trade} company${where}.
 
 ${this.config.persona}
 ${viewerLine}
@@ -562,10 +570,12 @@ IMPORTANT GUIDELINES:
 - Make decisions based on data when available
 - Log important decisions with clear reasoning
 - Coordinate with other agents when needed
-- Prioritize customer satisfaction and business growth
-- For Charlotte NC service area (Mecklenburg, Union, Cabarrus, Gaston, Lincoln, Iredell counties)
+- Prioritize customer satisfaction and business growth${serviceArea}
+- Never state a company fact (warranty, certification, price, service area, years in business) that is not in the company brief below or the knowledge base. If the two disagree, the brief is current.
 
-When using tools, always explain what you're doing and why.`;
+When using tools, always explain what you're doing and why.
+
+${companyBrief(company)}`;
   }
 
   // Register a tool that the agent can use

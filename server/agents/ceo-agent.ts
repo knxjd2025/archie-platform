@@ -5,6 +5,7 @@ import { eq, desc, gte, sql, and } from 'drizzle-orm';
 import { JobTreadClient } from '../integrations/jobtread';
 import { GoHighLevelClient } from '../integrations/gohighlevel';
 import { calculateCommissionTool, listCommissionsTool } from './team-agents';
+import { currentProfile } from '../tenant/context';
 
 export class CEOAgent extends BaseAgent {
   private jobtread: JobTreadClient;
@@ -160,7 +161,7 @@ export class CEOAgent extends BaseAgent {
   // Generate the daily business briefing
   async generateDailyBriefing(): Promise<string> {
     const { response } = await this.chat(`
-Please generate my daily briefing for Best Roofing Now. Include:
+Please generate my daily briefing for ${currentProfile().displayName}. Include:
 1. Today's key metrics (use get_daily_metrics with comparison)
 2. Recent agent activity (use get_agent_activity)
 3. JobTread lead KPIs for this month (use get_jobtread_lead_kpis)

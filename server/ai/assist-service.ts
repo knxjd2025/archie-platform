@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { currentProfile } from '../tenant/context';
 
 // Open-source model access via an OpenAI-compatible router. Prefer fal.ai (uses
 // the existing FAL_KEY; its LLM router is powered by OpenRouter's catalog, so the
@@ -30,25 +31,37 @@ export function client(): OpenAI {
     return new OpenAI({
       apiKey: 'not-needed',
       baseURL: FAL_BASE_URL,
-      defaultHeaders: { Authorization: `Key ${fk}`, 'X-Title': 'Best Roofing Now Team App' },
+      defaultHeaders: { Authorization: `Key ${fk}`, 'X-Title': 'Archie' },
     });
   }
   return new OpenAI({
     apiKey: process.env.OPENROUTER_API_KEY,
     baseURL: OPENROUTER_BASE_URL,
-    defaultHeaders: { 'X-Title': 'Best Roofing Now Team App' },
+    defaultHeaders: { 'X-Title': 'Archie' },
   });
 }
 
-// James's customer voice — the guardrail for every drafted message.
-const VOICE_SYSTEM = `You write customer messages for Best Roofing Now, a roofing company in Charlotte, NC, on behalf of the owner, James.
-Voice: warm, friendly, professional, concise, and human — like a trusted local roofer, not a corporate bot.
+/** "Acme Roofing, a roofing company in Springfield, IL" — only the parts the profile has. */
+function companyLine(): string {
+  const p = currentProfile();
+  return `${p.displayName}, a ${p.trade} company${p.cityState ? ` in ${p.cityState}` : ''}`;
+}
+
+/**
+ * The company's customer voice — the guardrail for every drafted message.
+ * Built per call from the company's profile.
+ */
+export function voiceSystem(): string {
+  const p = currentProfile();
+  return `You write customer messages for ${companyLine()}, on behalf of the team member sending them.
+Voice: warm, friendly, professional, concise, and human — like a trusted local ${p.trade} pro, not a corporate bot.
 Rules:
-- Never invent prices, dates, measurements, or commitments. If you don't have a fact, keep it general or say you'll confirm.
+- Never invent prices, dates, measurements, warranties, or commitments. If you don't have a fact, keep it general or say you'll confirm.
 - Do not pressure a customer who has an active insurance claim.
 - For text messages: short and plain — no markdown, no subject line, no email signature.
-- For emails: you may add a simple sign-off like "— James, Best Roofing Now".
+- For emails: you may add a simple sign-off like "— The ${p.displayName} team".
 - Output ONLY the message text. No preamble, no quotes, no explanation.`;
+}
 
 // Every helper below has a person waiting on it (or the nightly summary job's
 // time budget). Without an explicit timeout the SDK waits 10 minutes and then
@@ -76,7 +89,7 @@ async function chat(system: string, user: string, maxTokens = 1800, timeoutMs = 
 type TextResult = { text: string } | { error: string };
 const NOT_CONFIGURED = { error: 'AI not configured — add OPENROUTER_API_KEY to enable it.' };
 
-const SUMMARY_SYSTEM = `You summarize one day of an internal work chat between a Best Roofing Now team member and their AI assistant.
+const summarySystem = (): string => `You summarize one day of an internal work chat between a ${currentProfile().displayName} team member and their AI assistant.
 Write a compact daily record the assistant can re-read weeks later to recall what happened.
 Rules:
 - 3-8 short bullets, plain text (use "- " for bullets). No preamble, no closing line.
@@ -93,7 +106,7 @@ Rules:
 export async function summarizeConversation(transcript: string, opts: { timeoutMs?: number } = {}): Promise<string | null> {
   if (!assistConfigured() || !transcript.trim()) return null;
   try {
-    const text = await chat(SUMMARY_SYSTEM, `Transcript:\n\n${transcript}`, 1200, opts.timeoutMs ?? ASSIST_TIMEOUT_MS);
+    const text = await chat(summarySystem(), `Transcript:\n\n${transcript}`, 1200, opts.timeoutMs ?? ASSIST_TIMEOUT_MS);
     return text.trim() || null;
   } catch {
     return null;
@@ -104,7 +117,7 @@ export async function draftReply(p: { contactName: string; channel: string; rece
   if (!assistConfigured()) return NOT_CONFIGURED;
   try {
     const text = await chat(
-      VOICE_SYSTEM,
+      voiceSystem(),
       `You are drafting the next ${p.channel} message to send to ${p.contactName || 'the customer'}.\n\nRecent conversation (most recent last):\n${p.recentMessages || '(no earlier messages yet — write a warm, helpful check-in)'}\n\nReply with ONLY the message text to send now — friendly and helpful. Do not leave it blank.`,
     );
     return { text };
@@ -120,7 +133,7 @@ export async function fromInstruction(p: { contactName: string; channel: string;
   try {
     const ctx = p.recentMessages ? `\n\nFor context, recent conversation:\n${p.recentMessages}` : '';
     const text = await chat(
-      VOICE_SYSTEM,
+      voiceSystem(),
       `Write a ${p.channel} message to ${p.contactName || 'the customer'}. What to say: ${p.instruction}${ctx}`,
     );
     return { text };
@@ -135,7 +148,7 @@ export async function polish(p: { text: string; channel: string }): Promise<Text
   if (!assistConfigured()) return NOT_CONFIGURED;
   try {
     const text = await chat(
-      VOICE_SYSTEM,
+      voiceSystem(),
       `Polish this ${p.channel} message — fix grammar and tone, keep the meaning. Return only the improved message:\n\n${p.text}`,
     );
     return { text };
@@ -162,7 +175,7 @@ export async function adjustTone(p: { text: string; tone: string; channel: strin
   if (!isValidTone(p.tone)) return { error: `Unknown tone "${p.tone}"` };
   try {
     const text = await chat(
-      VOICE_SYSTEM,
+      voiceSystem(),
       `Rewrite this ${p.channel} message to be ${TONE_MAP[p.tone]}. Keep the meaning. Return only the message:\n\n${p.text}`,
     );
     return { text };
@@ -209,7 +222,7 @@ export interface LeadSignal {
   summary: string;
 }
 
-const LEAD_SYSTEM = `You screen inbound emails for a roofing company (Best Roofing Now, Charlotte NC) to find NEW CUSTOMER LEADS — a person or business asking about roof repair, replacement, inspection, a quote/estimate, storm/hail damage, or insurance-claim help for THEIR OWN property.
+const leadSystem = (): string => `You screen inbound emails for ${companyLine()}, to find NEW CUSTOMER LEADS — a person or business asking about ${currentProfile().trade === 'roofing' ? 'roof repair, replacement, inspection, a quote/estimate, storm/hail damage, or insurance-claim help' : `${currentProfile().trade} repair, replacement, installation, service, a quote/estimate, or insurance-claim help`} for THEIR OWN property.
 NOT leads: vendor/supplier emails, invoices/bills, newsletters, marketing, job boards / bid invites (PlanHub, BuildingConnected), Google Alerts, internal team email, calendar/meeting notices, receipts, spam.
 Return ONLY compact JSON: {"isLead":true|false,"confidence":0-100,"name":"person or company","service":"short label","summary":"one short line on what they want"}. No text outside the JSON.`;
 
@@ -233,7 +246,7 @@ export async function classifyLead(p: { from: string; subject: string; body: str
   if (!assistConfigured()) return NOT_CONFIGURED;
   try {
     const raw = await chat(
-      LEAD_SYSTEM,
+      leadSystem(),
       `From: ${p.from || '(unknown)'}\nSubject: ${p.subject || '(none)'}\nBody:\n${(p.body || '').slice(0, 3000)}`,
     );
     return parseLeadSignal(raw);

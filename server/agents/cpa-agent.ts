@@ -26,7 +26,7 @@ export class CPAAgent extends BaseAgent {
         properties: {
           folder: {
             type: 'string',
-            description: 'Filter by folder name (e.g., "Bank Statements US BANK", "First Bank", "Federal Taxes", "State Taxes")',
+            description: 'Filter by folder name (e.g., "Federal Taxes", "State Taxes", or a bank statement folder)',
           },
           type: {
             type: 'string',
@@ -66,7 +66,7 @@ export class CPAAgent extends BaseAgent {
         properties: {
           folder: {
             type: 'string',
-            description: 'Which bank folder ("Bank Statements US BANK" or "First Bank")',
+            description: 'Which bank statement folder, as list_financial_documents names it',
           },
           date: {
             type: 'string',
@@ -114,7 +114,7 @@ export class CPAAgent extends BaseAgent {
         properties: {
           folder: {
             type: 'string',
-            description: 'Folder name (e.g., "Federal Taxes", "State Taxes", "Bank Statements US BANK", "First Bank")',
+            description: 'Folder name (e.g., "Federal Taxes", "State Taxes", or a bank statement folder)',
           },
           filename: {
             type: 'string',
@@ -217,8 +217,7 @@ export class CPAAgent extends BaseAgent {
           },
           bank: {
             type: 'string',
-            description: 'Which bank to reconcile',
-            enum: ['US Bank', 'First Bank'],
+            description: 'Bank statement folder to reconcile, as list_financial_documents names it (optional: all statements)',
           },
         },
         required: ['month'],
@@ -226,7 +225,7 @@ export class CPAAgent extends BaseAgent {
       execute: async (params) => {
         const result: any = {
           period: params.month,
-          bank: params.bank || 'US Bank',
+          bank: params.bank || 'all linked accounts',
           sources: [],
         };
 
@@ -253,8 +252,7 @@ export class CPAAgent extends BaseAgent {
           result.sources.push('Plaid');
         } catch {
           // Plaid not available — fall back to PDF statement
-          const folder = params.bank === 'First Bank' ? 'First Bank' : 'Bank Statements US BANK';
-          const statements = listFinancialDocuments({ folder, type: 'bank_statement' });
+          const statements = listFinancialDocuments({ folder: params.bank || undefined, type: 'bank_statement' });
           const statement = statements.find(d => d.date?.startsWith(params.month));
 
           if (statement) {

@@ -1,45 +1,113 @@
 /**
- * The BRN Advisor reading bestroofingnow.com live — services, costs guides,
- * warranties, FAQs, neighborhood pages — so what it tells the team matches
- * what the company tells the public, even after the site changes.
+ * The team advisor reading the company's own website live — services, cost
+ * guides, warranties, FAQs, service-area pages — so what it tells the team
+ * matches what the company tells the public, even after the site changes.
  *
- * Locked to the company's own domain: the advisor passes a path or URL, and
- * anything that doesn't resolve to bestroofingnow.com is refused before a
- * request is made, and again after redirects. That keeps this from becoming a
- * way to make the server fetch arbitrary addresses.
+ * The site is the one in the company's profile (currentProfile().website);
+ * with none entered, the tools are not offered. Locked to that site's domain:
+ * the advisor passes a path or URL, and anything that doesn't resolve to the
+ * company's own host is refused before a request is made. Because the address
+ * is entered by the company, not fixed in code, it is also checked so it can't
+ * be used to make the server fetch internal addresses: https only, a public
+ * host name (no IP literals, localhost or internal names), every address it
+ * resolves to must be public, and redirects are followed one hop at a time
+ * with the same checks.
  */
+import { lookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
 import type { Tool } from './base-agent';
+import { currentProfile } from '../tenant/context';
 
-export const SITE_ORIGIN = 'https://www.bestroofingnow.com';
-const SITEMAP_INDEX = `${SITE_ORIGIN}/sitemap.xml`;
-const ALLOWED_HOSTS = new Set(['bestroofingnow.com', 'www.bestroofingnow.com']);
 const FETCH_TIMEOUT_MS = 10_000;
 const MAX_BYTES = 2_000_000;
 const PAGE_TEXT_LIMIT = 8_000;
 const PAGE_TTL_MS = 60 * 60 * 1000;
 const SITEMAP_TTL_MS = 12 * 60 * 60 * 1000;
 const MAX_SUB_SITEMAPS = 20;
+const MAX_REDIRECTS = 5;
 // Image/video sitemaps list media, not pages worth reading.
 const SKIP_SITEMAP = /\/(images|videos)(\.xml)?$/i;
 
+/** A company's site: its https origin and the host names that count as the same site. */
+export interface CompanySite { origin: string; hosts: ReadonlySet<string> }
+
+const INTERNAL_HOST = /(^|\.)(localhost|local|internal|intranet|lan|home|corp|localdomain|test|invalid|example)$/i;
+
+/** True for a host name the server may fetch: a dotted public name, not an IP literal or an internal name. */
+export function isPublicHostName(host: string): boolean {
+  const h = host.toLowerCase().replace(/\.$/, '');
+  if (!h || isIP(h.replace(/^\[|\]$/g, '')) || !h.includes('.')) return false;
+  if (INTERNAL_HOST.test(h)) return false;
+  return /^[a-z0-9.-]+$/.test(h);
+}
+
+/**
+ * The company's website, from a profile's website field, as a site the
+ * advisor may read — or null when there is none or it is not a public https
+ * address.
+ */
+export function siteFromWebsite(website: string | null | undefined): CompanySite | null {
+  const raw = (website || '').trim();
+  if (!raw) return null;
+  let url: URL;
+  try {
+    url = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
+  } catch {
+    return null;
+  }
+  if (url.port || url.username || url.password) return null;
+  const host = url.hostname.toLowerCase();
+  if (!isPublicHostName(host)) return null;
+  const bare = host.replace(/^www\./, '');
+  return { origin: `https://${host}`, hosts: new Set([bare, `www.${bare}`]) };
+}
+
+/** The current company's site, or null when it has none the advisor can read. */
+export function companyWebsite(): CompanySite | null {
+  return siteFromWebsite(currentProfile().website);
+}
+
 /** A path or URL → an absolute URL on the company site, or null if it points anywhere else. */
-export function toSiteUrl(input: unknown): string | null {
-  if (typeof input !== 'string' || !input.trim()) return null;
+export function toSiteUrl(input: unknown, site: CompanySite | null = companyWebsite()): string | null {
+  if (!site || typeof input !== 'string' || !input.trim()) return null;
   const raw = input.trim();
+  const bareHost = /^(www\.)?[a-z0-9-]+(\.[a-z0-9-]+)+(\/|$)/i;
   let url: URL;
   try {
     url = /^https?:\/\//i.test(raw)
       ? new URL(raw)
-      : /^(www\.)?bestroofingnow\.com(\/|$)/i.test(raw)
+      : bareHost.test(raw) && site.hosts.has(raw.split('/')[0].toLowerCase())
         ? new URL(`https://${raw}`)
-        : new URL(raw.startsWith('/') ? raw : `/${raw}`, SITE_ORIGIN);
+        : new URL(raw.startsWith('/') ? raw : `/${raw}`, site.origin);
   } catch {
     return null;
   }
   if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
-  if (!ALLOWED_HOSTS.has(url.hostname.toLowerCase())) return null;
+  if (!site.hosts.has(url.hostname.toLowerCase())) return null;
   if (url.port || url.username || url.password) return null;
-  return `${SITE_ORIGIN}${url.pathname}${url.search}`;
+  return `${site.origin}${url.pathname}${url.search}`;
+}
+
+/** True for an IP address in a private, loopback, link-local or otherwise non-public range. */
+export function isPrivateAddress(ip: string): boolean {
+  const v = ip.toLowerCase();
+  if (isIP(v) === 4) {
+    const [a, b] = v.split('.').map(Number);
+    return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254)
+      || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 198 && (b === 18 || b === 19)) || a >= 224;
+  }
+  if (isIP(v) === 6) {
+    const mapped = v.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+    if (mapped) return isPrivateAddress(mapped[1]);
+    return v === '::' || v === '::1' || /^f[cd]/.test(v) || /^fe[89ab]/.test(v) || /^ff/.test(v);
+  }
+  return true;
+}
+
+/** Refuse a host that resolves to any non-public address. */
+async function assertPublicHost(host: string): Promise<void> {
+  const addrs = await lookup(host, { all: true, verbatim: true });
+  if (!addrs.length || addrs.some((a) => isPrivateAddress(a.address))) throw new Error('The company website does not resolve to a public address.');
 }
 
 const ENTITIES: Record<string, string> = {
@@ -93,12 +161,13 @@ const slugWords = (url: string): string[] => {
   }
 };
 
-// Words every Charlotte page carries — matching them says nothing about the topic.
-const NOISE = new Set(['charlotte', 'nc', 'sc', 'the', 'a', 'an', 'of', 'for', 'to', 'in', 'and', 'my', 'is', 'what', 'how', 'do', 'does', 'i', 'roof', 'roofing']);
+// Words nearly every page on a contractor's site carries — matching them says nothing about the topic.
+const NOISE = new Set(['the', 'a', 'an', 'of', 'for', 'to', 'in', 'and', 'my', 'is', 'what', 'how', 'do', 'does', 'i', 'roof', 'roofing']);
 
-/** Rank site URLs by how many query words appear in their slug; shorter slugs win ties. */
-export function rankUrls(urls: readonly string[], query: string, limit = 8): string[] {
-  const words = query.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 1 && !NOISE.has(w));
+/** Rank site URLs by how many query words appear in their slug; shorter slugs win ties. `extraNoise` words are ignored. */
+export function rankUrls(urls: readonly string[], query: string, limit = 8, extraNoise: readonly string[] = []): string[] {
+  const noise = new Set([...NOISE, ...extraNoise.map((w) => w.toLowerCase())]);
+  const words = query.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 1 && !noise.has(w));
   const loose = query.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w === 'roof' || w === 'roofing');
   if (!words.length && !loose.length) return [];
   return Array.from(new Set(urls))
@@ -113,22 +182,32 @@ export function rankUrls(urls: readonly string[], query: string, limit = 8): str
     .map((x) => x.u);
 }
 
-async function fetchSite(url: string, accept: string): Promise<string> {
+async function fetchSite(site: CompanySite, url: string, accept: string): Promise<string> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const res = await fetch(url, {
-      signal: controller.signal,
-      redirect: 'follow',
-      headers: { Accept: accept, 'User-Agent': 'BRN-Team-App/1.0 (+https://www.bestroofingnow.com)' },
-    });
-    // A redirect off the company's own domain is refused, not read.
-    if (!toSiteUrl(res.url || url)) throw new Error('Redirected off bestroofingnow.com');
-    if (!res.ok) throw new Error(`bestroofingnow.com returned ${res.status}`);
-    const len = Number(res.headers.get('content-length') || 0);
-    if (len > MAX_BYTES) throw new Error('Page too large');
-    const body = await res.text();
-    return body.length > MAX_BYTES ? body.slice(0, MAX_BYTES) : body;
+    let current = url;
+    for (let hop = 0; ; hop++) {
+      const target = toSiteUrl(current, site);
+      // A redirect off the company's own site is refused, not read.
+      if (!target) throw new Error(`Redirected off ${site.origin.replace(/^https:\/\//, '')}`);
+      await assertPublicHost(new URL(target).hostname);
+      const res = await fetch(target, {
+        signal: controller.signal,
+        redirect: 'manual',
+        headers: { Accept: accept, 'User-Agent': 'Archie-Advisor/1.0' },
+      });
+      if (res.status >= 300 && res.status < 400 && res.headers.get('location')) {
+        if (hop >= MAX_REDIRECTS) throw new Error('Too many redirects');
+        current = new URL(res.headers.get('location')!, target).toString();
+        continue;
+      }
+      if (!res.ok) throw new Error(`${site.origin.replace(/^https:\/\//, '')} returned ${res.status}`);
+      const len = Number(res.headers.get('content-length') || 0);
+      if (len > MAX_BYTES) throw new Error('Page too large');
+      const body = await res.text();
+      return body.length > MAX_BYTES ? body.slice(0, MAX_BYTES) : body;
+    }
   } finally {
     clearTimeout(timer);
   }
@@ -136,36 +215,39 @@ async function fetchSite(url: string, accept: string): Promise<string> {
 
 interface Cached<T> { at: number; value: T }
 const pageCache = new Map<string, Cached<PageText>>();
-let sitemapCache: Cached<string[]> | null = null;
+/** Per site origin: every company has its own sitemap. */
+const sitemapCache = new Map<string, Cached<string[]>>();
 
 /** Clear caches — tests only. */
 export function resetWebsiteCache(): void {
   pageCache.clear();
-  sitemapCache = null;
+  sitemapCache.clear();
 }
 
 /** All page URLs on the site, from the sitemap index and its sub-sitemaps. Cached for 12 hours. */
-export async function siteUrls(): Promise<string[]> {
-  if (sitemapCache && Date.now() - sitemapCache.at < SITEMAP_TTL_MS) return sitemapCache.value;
-  const index = parseSitemap(await fetchSite(SITEMAP_INDEX, 'application/xml,text/xml'));
+export async function siteUrls(site: CompanySite): Promise<string[]> {
+  const hit = sitemapCache.get(site.origin);
+  if (hit && Date.now() - hit.at < SITEMAP_TTL_MS) return hit.value;
+  const index = parseSitemap(await fetchSite(site, `${site.origin}/sitemap.xml`, 'application/xml,text/xml'));
   const isIndex = index.some((u) => /\/sitemaps?\//i.test(u) || /sitemap.*\.xml$/i.test(u));
   let urls = index;
   if (isIndex) {
-    const subs = index.filter((u) => toSiteUrl(u) && !SKIP_SITEMAP.test(u)).slice(0, MAX_SUB_SITEMAPS);
-    const settled = await Promise.allSettled(subs.map((u) => fetchSite(toSiteUrl(u)!, 'application/xml,text/xml')));
+    const subs = index.filter((u) => toSiteUrl(u, site) && !SKIP_SITEMAP.test(u)).slice(0, MAX_SUB_SITEMAPS);
+    const settled = await Promise.allSettled(subs.map((u) => fetchSite(site, toSiteUrl(u, site)!, 'application/xml,text/xml')));
     urls = settled.flatMap((s) => (s.status === 'fulfilled' ? parseSitemap(s.value) : []));
   }
-  const pages = Array.from(new Set(urls.map((u) => toSiteUrl(u)).filter((u): u is string => !!u)));
-  sitemapCache = { at: Date.now(), value: pages };
+  const pages = Array.from(new Set(urls.map((u) => toSiteUrl(u, site)).filter((u): u is string => !!u)));
+  sitemapCache.set(site.origin, { at: Date.now(), value: pages });
   return pages;
 }
 
-export async function readSitePage(input: unknown): Promise<PageText & { url: string; truncated: boolean }> {
-  const url = toSiteUrl(input);
-  if (!url) throw new Error('Only pages on bestroofingnow.com can be read.');
+export async function readSitePage(input: unknown, site: CompanySite | null = companyWebsite()): Promise<PageText & { url: string; truncated: boolean }> {
+  if (!site) throw new Error('No company website is set in the company profile.');
+  const url = toSiteUrl(input, site);
+  if (!url) throw new Error(`Only pages on ${site.origin.replace(/^https:\/\//, '')} can be read.`);
   const hit = pageCache.get(url);
   const fresh = !!hit && Date.now() - hit.at < PAGE_TTL_MS;
-  const page = fresh ? hit!.value : htmlToText(await fetchSite(url, 'text/html'));
+  const page = fresh ? hit!.value : htmlToText(await fetchSite(site, url, 'text/html'));
   if (!fresh) pageCache.set(url, { at: Date.now(), value: page });
   const truncated = page.text.length > PAGE_TEXT_LIMIT;
   return { url, ...page, text: truncated ? `${page.text.slice(0, PAGE_TEXT_LIMIT)}…` : page.text, truncated };
@@ -175,22 +257,26 @@ const errorOf = (e: unknown) => ({ error: e instanceof Error ? e.message : 'Webs
 
 export function searchWebsiteTool(): Tool {
   return {
-    name: 'search_bestroofingnow',
+    name: 'search_company_website',
     description:
-      "Find pages on the company website, bestroofingnow.com, by topic — services, materials, cost guides, warranties, financing, FAQs, insurance-claim guides, service-area and neighborhood pages. Returns matching page URLs; then use read_bestroofingnow_page to read one. Use this whenever the question is what Best Roofing Now offers, says, or charges publicly.",
+      "Find pages on the company's own website by topic — services, materials, cost guides, warranties, financing, FAQs, insurance-claim guides, service-area pages. Returns matching page URLs; then use read_company_website_page to read one. Use this whenever the question is what the company offers, says, or charges publicly.",
     parameters: {
       type: 'object',
       properties: {
-        query: { type: 'string', description: 'Topic words, e.g. "metal roof cost", "warranty", "Mooresville", "insurance claim denied"' },
+        query: { type: 'string', description: 'Topic words, e.g. "metal roof cost", "warranty", a town name, "insurance claim denied"' },
       },
       required: ['query'],
     },
     execute: async (p) => {
       try {
+        const site = companyWebsite();
+        if (!site) return { error: 'No company website is set in the company profile.' };
         const query = String(p.query || '').trim();
         if (!query) return { error: 'A query is required.' };
-        const urls = await siteUrls();
-        const matches = rankUrls(urls, query);
+        const urls = await siteUrls(site);
+        // The company's own town and state are on most of its pages too.
+        const { city, state } = currentProfile();
+        const matches = rankUrls(urls, query, 8, [...city.split(/[^a-z0-9]+/i), state].filter((w) => w.length > 1));
         return matches.length
           ? { matches, totalPages: urls.length }
           : { matches: [], totalPages: urls.length, note: 'No page slug matched. Try a broader word, or read /faq, /about, /services or /reviews.' };
@@ -201,13 +287,13 @@ export function searchWebsiteTool(): Tool {
 
 export function readWebsiteTool(): Tool {
   return {
-    name: 'read_bestroofingnow_page',
+    name: 'read_company_website_page',
     description:
-      "Read the text of one page on bestroofingnow.com (the company's own site — nothing else). Pass a path like \"/about\" or a full bestroofingnow.com URL from search_bestroofingnow. Quote the site accurately and give the link when it helps.",
+      "Read the text of one page on the company's own website (nothing else). Pass a path like \"/about\" or a full URL from search_company_website. Quote the site accurately and give the link when it helps.",
     parameters: {
       type: 'object',
       properties: {
-        url: { type: 'string', description: 'Path ("/faq") or full bestroofingnow.com URL' },
+        url: { type: 'string', description: 'Path ("/faq") or full URL on the company website' },
       },
       required: ['url'],
     },
