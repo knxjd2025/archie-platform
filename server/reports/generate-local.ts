@@ -252,8 +252,8 @@ export async function generateReport(input: GenerateInput): Promise<GenerateOutp
   // channels that are actually read: photos, measurements and job type.
   const inspectorNotes = input.notes?.trim() || undefined;
 
-  // JobTread stores the FULL formatted address ("550 Manning Dr, Charlotte, NC
-  // 28209, USA"), but the engine appends city/state/zip itself — concatenating
+  // JobTread stores the FULL formatted address ("123 Main St, Springfield, IL
+  // 62701, USA"), but the engine appends city/state/zip itself — concatenating
   // both produces a duplicated string that geocoders reject outright. Split it
   // back into parts and prefer those.
   const parsed = parseUsAddress(input.address);

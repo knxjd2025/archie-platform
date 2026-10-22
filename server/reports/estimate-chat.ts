@@ -102,7 +102,7 @@ export async function editEstimateByChat(
 // Whole-document chat: one place to ask for any change
 // ---------------------------------------------------------------------------
 
-const DOC_SYSTEM = `You edit a roof report for Best Roofing Now. A customer reads the result, so accuracy matters more than polish.
+const DOC_SYSTEM = `You edit a roof report for the roofing company that wrote it. A customer reads the result, so accuracy matters more than polish.
 
 You are given the report's editable fields as JSON and an instruction from a sales rep.
 Return ONLY a JSON object describing the changes to make — no markdown fence, no prose outside it:

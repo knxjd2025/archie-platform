@@ -1,6 +1,7 @@
 import { BaseAgent, AgentConfig } from './base-agent';
 import { getEvereeClient } from '../integrations/everee';
 import { getQuickBooksClient } from '../integrations/quickbooks';
+import { currentProfile } from '../tenant/context';
 import {
   listFinancialDocuments,
   readPdfDocument,
@@ -62,7 +63,7 @@ export class TaxAccountantAgent extends BaseAgent {
         properties: {
           folder: {
             type: 'string',
-            description: 'Folder name (e.g., "Federal Taxes", "State Taxes", "Bank Statements US BANK", "First Bank")',
+            description: 'Folder name (e.g., "Federal Taxes", "State Taxes", or a bank statement folder)',
           },
           filename: {
             type: 'string',
@@ -111,7 +112,7 @@ export class TaxAccountantAgent extends BaseAgent {
     // Tool: Get tax filings
     this.registerTool({
       name: 'get_tax_filings',
-      description: 'List and summarize filed tax returns including federal 941, 940, W3, and NC state filings',
+      description: 'List and summarize filed tax returns including federal 941, 940, W3, and state filings',
       parameters: {
         type: 'object',
         properties: {
@@ -157,7 +158,8 @@ export class TaxAccountantAgent extends BaseAgent {
         }
 
         if (level === 'state' || level === 'all') {
-          result.northCarolina = {
+          result.state = {
+            state: currentProfile().state || 'not set in the company profile',
             sit: state.filter(d => d.name.includes('sit') || d.name.includes('nc-')).map(d => ({
               name: d.name,
               date: d.date,

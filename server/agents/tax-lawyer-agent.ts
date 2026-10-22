@@ -1,5 +1,6 @@
 import { BaseAgent, AgentConfig } from './base-agent';
 import { getEvereeClient } from '../integrations/everee';
+import { currentProfile } from '../tenant/context';
 import {
   listFinancialDocuments,
   readPdfDocument,
@@ -61,7 +62,7 @@ export class TaxLawyerAgent extends BaseAgent {
         properties: {
           folder: {
             type: 'string',
-            description: 'Folder name (e.g., "Federal Taxes", "State Taxes", "Bank Statements US BANK", "First Bank")',
+            description: 'Folder name (e.g., "Federal Taxes", "State Taxes", or a bank statement folder)',
           },
           filename: {
             type: 'string',
@@ -173,16 +174,17 @@ export class TaxLawyerAgent extends BaseAgent {
           issues.push(`1099-NECs ${params.year}: NOT FOUND - check if subcontractors were paid`);
         }
 
-        // Check NC state quarterly
+        // Check state quarterly filings (the company's state, from its profile)
+        const st = currentProfile().state || 'State';
         for (let q = 1; q <= 4; q++) {
           const hasSIT = state.some(d => d.name.includes(`Q${q}_${params.year}`) && d.name.includes('sit'));
           const hasSUTA = state.some(d => d.name.includes(`Q${q}_${params.year}`) && d.name.includes('suta'));
 
-          if (hasSIT) compliant.push(`NC SIT Q${q}: Filed`);
-          else issues.push(`NC State Income Tax Q${q}: NOT FOUND`);
+          if (hasSIT) compliant.push(`${st} SIT Q${q}: Filed`);
+          else issues.push(`${st} State Income Tax Q${q}: NOT FOUND`);
 
-          if (hasSUTA) compliant.push(`NC SUTA Q${q}: Filed`);
-          else issues.push(`NC Unemployment (SUTA) Q${q}: NOT FOUND`);
+          if (hasSUTA) compliant.push(`${st} SUTA Q${q}: Filed`);
+          else issues.push(`${st} Unemployment (SUTA) Q${q}: NOT FOUND`);
         }
 
         return {
@@ -263,7 +265,7 @@ export class TaxLawyerAgent extends BaseAgent {
           penalties: {
             misclassification: 'Employer portion of FICA (7.65%) + interest + penalties',
             willful: 'Up to $50 per unfiled W-2, plus 100% of unpaid FICA',
-            ncSpecific: 'NC follows federal guidelines; state penalties may also apply',
+            state: 'State penalties may also apply; check your state revenue and employment departments',
           },
           recommendation: 'For roofing subcontractors: Ensure each has their own insurance, tools, and serves multiple clients. Keep signed subcontractor agreements on file.',
         };
@@ -340,14 +342,15 @@ export class TaxLawyerAgent extends BaseAgent {
 
         // State filings (2 points)
         const stateFilings = filings.filter(d => d.folder.includes('State') || d.name.includes('northcarolina'));
+        const st = currentProfile().state ? `${currentProfile().state} state` : 'State';
         if (stateFilings.length >= 4) {
           score += 2;
-          checklist.push({ item: 'NC state filings present', status: 'pass', points: 2 });
+          checklist.push({ item: `${st} filings present`, status: 'pass', points: 2 });
         } else if (stateFilings.length > 0) {
           score += 1;
-          checklist.push({ item: `NC state filings: ${stateFilings.length} found`, status: 'partial', points: 1 });
+          checklist.push({ item: `${st} filings: ${stateFilings.length} found`, status: 'partial', points: 1 });
         } else {
-          checklist.push({ item: 'NC state filings', status: 'fail', points: 0 });
+          checklist.push({ item: `${st} filings`, status: 'fail', points: 0 });
         }
 
         const rating = score >= 9 ? 'Excellent' : score >= 7 ? 'Good' : score >= 5 ? 'Fair' : 'Needs Attention';
@@ -366,7 +369,7 @@ export class TaxLawyerAgent extends BaseAgent {
     // Tool: Review state filings
     this.registerTool({
       name: 'review_state_filings',
-      description: 'Review North Carolina state tax filings for compliance with SIT and SUTA requirements',
+      description: "Review the company's state tax filings (state income tax withholding and unemployment insurance) for compliance",
       parameters: {
         type: 'object',
         properties: {
@@ -399,26 +402,34 @@ export class TaxLawyerAgent extends BaseAgent {
           }
         }
 
+        // The state's filing rules are built in for North Carolina only; for any
+        // other state, say so rather than quote NC forms as if they applied.
+        const state = currentProfile().state;
+        const isNC = state === 'NC';
         return {
           year: params.year,
-          state: 'North Carolina',
+          state: state || 'not set in the company profile',
           filings: {
             stateIncomeTax: sit.map(d => ({ name: d.name, date: d.date })),
             unemployment: suta.map(d => ({ name: d.name, date: d.date })),
             stateW2: w2State.map(d => d.name),
             annualReconciliation: annual.map(d => d.name),
           },
-          requirements: {
-            ncSIT: 'NC-5 or NC-5Q filed quarterly for state income tax withholding',
-            ncSUTA: 'NCUI 101 filed quarterly for unemployment insurance',
-            ncAnnual: 'NC-3 annual withholding reconciliation due by January 31',
-            ncW2: 'State W-2 copies filed with NC Department of Revenue',
-          },
+          requirements: isNC
+            ? {
+              ncSIT: 'NC-5 or NC-5Q filed quarterly for state income tax withholding',
+              ncSUTA: 'NCUI 101 filed quarterly for unemployment insurance',
+              ncAnnual: 'NC-3 annual withholding reconciliation due by January 31',
+              ncW2: 'State W-2 copies filed with NC Department of Revenue',
+            }
+            : { note: `State-specific forms and deadlines are built in for North Carolina only. Check ${state || "the company's state"} revenue department (withholding) and employment security agency (unemployment insurance) for its forms and due dates.` },
           recentFilingContent: recentContent,
-          ncResources: {
-            sit: 'NC Department of Revenue - ncdor.gov',
-            suta: 'NC Division of Employment Security - des.nc.gov',
-          },
+          ...(isNC ? {
+            ncResources: {
+              sit: 'NC Department of Revenue - ncdor.gov',
+              suta: 'NC Division of Employment Security - des.nc.gov',
+            },
+          } : {}),
         };
       },
     });

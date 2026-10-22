@@ -222,7 +222,7 @@ async function imageUrlToBase64(imageUrl: string): Promise<string> {
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const response = await fetchWithTimeout(imageUrl, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; BRN-ReportDesk/1.0)', Accept: 'image/*' },
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Archie-ReportDesk/1.0)', Accept: 'image/*' },
       }, IMAGE_FETCH_TIMEOUT_MS);
       if (!response.ok) throw new Error(`Failed to fetch image: ${response.status}`);
       const buffer = Buffer.from(await response.arrayBuffer());
@@ -328,7 +328,7 @@ export async function analyzeRoofImageViaFal(
   try {
     const res = await fetchWithTimeout(url, {
       method: 'POST',
-      headers: { Authorization: auth, 'Content-Type': 'application/json', 'X-Title': 'Best Roofing Now Reports' },
+      headers: { Authorization: auth, 'Content-Type': 'application/json', 'X-Title': 'Archie Reports' },
       body: JSON.stringify({
         model,
         temperature: 0.2,

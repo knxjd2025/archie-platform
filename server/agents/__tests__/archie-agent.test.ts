@@ -1,6 +1,13 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { buildArchieForRole } from '../archie-agent';
 import { archieToolsForRole, isArchieToolAllowed, type ArchieToolName } from '../archie-tools';
+import { withProfile } from '../../tenant/context';
+import { TEST_PROFILE } from '../../__tests__/helpers/tenant';
+
+// TEST_PROFILE's site is on the reserved .test domain, which the website tools
+// refuse to fetch; these give it a public-looking site, and none.
+const WITH_SITE = { ...TEST_PROFILE, website: 'https://acme-roofing.com', websiteLabel: 'acme-roofing.com' };
+const NO_SITE = { ...TEST_PROFILE, website: '', websiteLabel: '' };
 
 // The Advisor runs on the open model, so it needs the fal key rather than Claude's.
 beforeAll(() => {
@@ -16,7 +23,7 @@ describe('buildArchieForRole', () => {
   it('registers exactly the role-allowed Archie tools (plus base knowledge tool)', () => {
     for (const role of ['admin', 'manager', 'sales', 'production'] as const) {
       // pass an email so the delegated Gmail tool (search_email) registers.
-      const names = new Set(buildArchieForRole(role, 'user@bestroofingnow.com').toolNames());
+      const names = new Set(buildArchieForRole(role, 'user@acme.test').toolNames());
       const allowed = new Set(archieToolsForRole(role));
       for (const t of allowed) expect(names.has(t)).toBe(true);
       for (const t of ALL_ARCHIE_TOOLS) {
@@ -25,7 +32,7 @@ describe('buildArchieForRole', () => {
     }
   });
   it('production Archie cannot see payables, leads, or the team schedule', () => {
-    const names = new Set(buildArchieForRole('production', 'crew@bestroofingnow.com').toolNames());
+    const names = new Set(buildArchieForRole('production', 'crew@acme.test').toolNames());
     expect(names.has('get_payables')).toBe(false);
     expect(names.has('get_leads')).toBe(false);
     // The team-wide appointments mirror is manager+; their own calendar is not.
@@ -44,21 +51,27 @@ describe('buildArchieForRole', () => {
   it('leaves the book out entirely when there is no viewer to scope it', () => {
     // An unscoped book would show one rep another rep's leads, so no viewer means no book.
     for (const role of ['admin', 'manager', 'sales', 'production'] as const) {
-      const names = new Set(buildArchieForRole(role, 'user@bestroofingnow.com').toolNames());
+      const names = new Set(buildArchieForRole(role, 'user@acme.test').toolNames());
       for (const t of BOOK_TOOLS) expect(names.has(t), `${role}:${t}`).toBe(false);
     }
   });
-  it('gives everyone the NC reference and the website tools', () => {
+  it("gives everyone the NC reference and the company's website tools", () => {
     for (const role of ['admin', 'manager', 'sales', 'production'] as const) {
-      const names = new Set(buildArchieForRole(role).toolNames());
-      for (const t of ['nc_roofing_reference', 'search_bestroofingnow', 'read_bestroofingnow_page']) {
+      const names = new Set(withProfile(WITH_SITE, () => buildArchieForRole(role)).toolNames());
+      for (const t of ['nc_roofing_reference', 'search_company_website', 'read_company_website_page']) {
         expect(names.has(t), `${role}:${t}`).toBe(true);
       }
     }
   });
+  it('leaves the website tools out when the company has no website', () => {
+    const names = new Set(withProfile(NO_SITE, () => buildArchieForRole('admin')).toolNames());
+    expect(names.has('nc_roofing_reference')).toBe(true);
+    expect(names.has('search_company_website')).toBe(false);
+    expect(names.has('read_company_website_page')).toBe(false);
+  });
   it('security invariant: never registers a tool above the caller role', () => {
     for (const role of ['admin', 'manager', 'sales', 'production'] as const) {
-      for (const name of buildArchieForRole(role, 'user@bestroofingnow.com').toolNames()) {
+      for (const name of buildArchieForRole(role, 'user@acme.test').toolNames()) {
         if ((ALL_ARCHIE_TOOLS as readonly string[]).includes(name)) {
           expect(isArchieToolAllowed(role, name as ArchieToolName)).toBe(true);
         }

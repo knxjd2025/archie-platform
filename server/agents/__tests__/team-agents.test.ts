@@ -21,10 +21,10 @@ const cfg = (role: string, viewer?: AgentViewer): AgentConfig => ({ id: 99, name
 const tools = (a: any): string[] => Array.from(a.tools.keys());
 const BOOK = ['search_knowledge_base', 'get_my_leads', 'get_pipeline_summary', 'get_project', 'get_my_schedule'];
 
-const REP: AgentViewer = { repNames: ['banning rumsey'], memberIds: [2], emails: ['b@brn.com'], email: 'b@brn.com', name: 'Banning', role: 'sales', teamMemberId: 2 };
+const REP: AgentViewer = { repNames: ['riley carter'], memberIds: [2], emails: ['b@acme.test'], email: 'b@acme.test', name: 'Riley', role: 'sales', teamMemberId: 2 };
 const CS: AgentViewer = { ...REP, role: 'customer_service' };
 const LEADER: AgentViewer = { ...REP, role: 'manager' };
-const ADMIN: AgentViewer = { repNames: null, memberIds: null, emails: null, email: 'j@brn.com', name: 'James', role: 'admin', teamMemberId: 1 };
+const ADMIN: AgentViewer = { repNames: null, memberIds: null, emails: null, email: 'p@acme.test', name: 'Pat', role: 'admin', teamMemberId: 1 };
 
 describe('team advisors — each has the shared book plus its own specialty', () => {
   it('Sales Manager: book + KPIs + follow-ups + pay', () => {

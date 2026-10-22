@@ -27,7 +27,7 @@ describe('scopeInvoices', () => {
 
 // The no-session paths (no DB lookups): the voice agent passes repNames only.
 describe('viewerCanSeeLead without a signed-in session', () => {
-  const lead = { externalId: 'job1', jtSalesRep: 'Banning Rumsey' };
+  const lead = { externalId: 'job1', jtSalesRep: 'Riley Carter' };
 
   it('denies when there is no viewer at all', async () => {
     expect(await viewerCanSeeLead(undefined, lead)).toBe(false);
@@ -38,9 +38,9 @@ describe('viewerCanSeeLead without a signed-in session', () => {
   });
 
   it('allows only the viewer\'s own reps otherwise', async () => {
-    expect(await viewerCanSeeLead({ repNames: ['banning rumsey'] }, lead)).toBe(true);
-    expect(await viewerCanSeeLead({ repNames: ['thomas bramhill'] }, lead)).toBe(false);
-    expect(await viewerCanSeeLead({ repNames: ['banning rumsey'] }, { externalId: 'x', jtSalesRep: null })).toBe(false);
+    expect(await viewerCanSeeLead({ repNames: ['riley carter'] }, lead)).toBe(true);
+    expect(await viewerCanSeeLead({ repNames: ['morgan lee'] }, lead)).toBe(false);
+    expect(await viewerCanSeeLead({ repNames: ['riley carter'] }, { externalId: 'x', jtSalesRep: null })).toBe(false);
   });
 });
 

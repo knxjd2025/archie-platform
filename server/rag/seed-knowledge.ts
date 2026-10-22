@@ -1,4 +1,6 @@
 import { getKnowledgeService, type KnowledgeCategory } from './knowledge-service';
+import { currentProfile } from '../tenant/context';
+import type { CompanyProfile } from '../../shared/company';
 
 interface KnowledgeSeedItem {
   title: string;
@@ -7,256 +9,261 @@ interface KnowledgeSeedItem {
   tags: string[];
 }
 
-// Initial knowledge base for Best Roofing Now LLC
-const KNOWLEDGE_SEED: KnowledgeSeedItem[] = [
-  // Company Information
-  {
+/*
+ * The starting knowledge base for one company, seeded once per company (as
+ * that company) when its knowledge base is empty.
+ *
+ * Two kinds of documents:
+ * - Company documents, written from the company's profile at seed time. They
+ *   state only what the company entered; a fact it has not entered is left
+ *   out, never filled in. (The advisors also get the profile itself in their
+ *   system prompt when each chat starts, so a later profile edit reaches them
+ *   even though these documents were written earlier.)
+ * - Trade knowledge for the company's trade: how the work is done, what the
+ *   materials are, how insurance claims work. General, not claims about any
+ *   one company. Only roofing has trade documents so far.
+ */
+
+const list = (items: readonly string[]): string => items.map((i) => `- ${i}`).join('\n');
+const section = (heading: string, body: string): string => (body.trim() ? `${heading}\n${body}` : '');
+const join = (...parts: string[]): string => parts.filter((p) => p.trim()).join('\n\n');
+
+/** Company documents: what this company says about itself, from its profile. */
+export function companyKnowledge(p: CompanyProfile): KnowledgeSeedItem[] {
+  const name = p.displayName;
+  const docs: KnowledgeSeedItem[] = [];
+
+  docs.push({
     title: 'Company Overview',
     category: 'company',
     tags: ['about', 'overview', 'introduction'],
-    content: `Best Roofing Now LLC is a professional roofing company serving the Charlotte, NC metropolitan area. We specialize in residential and commercial roofing services including roof replacements, repairs, inspections, and maintenance.
+    content: join(
+      `${p.legalName} is a ${p.trade} company${p.cityState ? ` based in ${p.cityState}` : ''}.${p.tagline ? ` ${p.tagline}` : ''}`,
+      p.foundedYear ? `In business since ${p.foundedYear}.` : '',
+      p.story ? `${p.story.heading}\n${p.story.paragraphs.join('\n\n')}` : '',
+      p.promise ? `Our promise: ${p.promise}` : '',
+      section('Our values:', list(p.values.map((v) => `${v.title}: ${v.text}`))),
+      section('Licenses:', list(p.licenses)),
+      section('Certifications:', list(p.certifications)),
+      section('Credentials:', list(p.credentials)),
+      section('Track record:', list(p.trustStats)),
+      section('Community:', list(p.community)),
+    ),
+  });
 
-Founded with a commitment to quality and customer satisfaction, Best Roofing Now has built a reputation for reliable, honest, and professional roofing services. Our team consists of licensed, bonded, and insured professionals who take pride in their work.
-
-Core Values:
-- Quality Workmanship: We never cut corners and use only premium materials
-- Customer First: Every customer is treated like family
-- Transparency: Honest assessments and upfront pricing
-- Timeliness: We respect your time and complete projects on schedule
-- Safety: All work follows OSHA guidelines and best practices
-
-Business Hours: Monday-Friday 7am-6pm, Saturday 8am-2pm
-Emergency Services: Available 24/7 for storm damage and urgent repairs`,
-  },
-  {
+  const contact = [
+    p.address && `Office: ${[p.address, [p.cityState, p.zip].filter(Boolean).join(' ')].filter(Boolean).join(', ')}`,
+    !p.address && p.cityState && `Based in: ${p.cityState}`,
+    p.phone && `Phone: ${p.phone}`,
+    p.email && `Email: ${p.email}`,
+    p.website && `Website: ${p.website}`,
+    p.reviewUrl && `Leave a review: ${p.reviewUrl}`,
+    ...p.links.map((l) => `${l.label}: ${l.url}`),
+  ].filter((l): l is string => !!l);
+  docs.push({
     title: 'Contact Information',
     category: 'company',
     tags: ['contact', 'phone', 'address', 'email'],
-    content: `Best Roofing Now LLC Contact Information:
+    content: join(
+      `${p.legalName} contact information:`,
+      contact.length ? contact.join('\n') : 'No contact details have been entered in the company profile yet. Ask the office.',
+      section('Service promises:', list(p.serviceFacts)),
+    ),
+  });
 
-Main Office: Charlotte, NC
-Service Area: Greater Charlotte Metropolitan Area
+  docs.push({
+    title: 'Service Area',
+    category: 'service_area',
+    tags: ['location', 'area', 'coverage'],
+    content: p.serviceArea
+      ? `${name} serves: ${p.serviceArea}\n\nFor a location that is not clearly inside this area, check with the office before saying yes or no.`
+      : `${name} has not described its service area in the company profile yet. Before telling a customer whether their address is served, check with the office.`,
+  });
 
-For new customer inquiries and estimates, our AI team responds within minutes during business hours. For urgent matters, emergency services are available 24/7.
+  const warranty = p.workmanshipWarranty || (p.workmanshipYears ? `${p.workmanshipYears}-year workmanship warranty` : '');
+  docs.push({
+    title: 'Warranty Information',
+    category: 'legal',
+    tags: ['warranty', 'guarantee', 'coverage'],
+    content: join(
+      warranty
+        ? `${name} workmanship warranty: ${warranty}. For the exact terms (what it covers, whether it transfers), see the written warranty given with the contract.`
+        : `${name} has not entered its workmanship warranty in the company profile. Do not quote a warranty length; ask the office for the written terms.`,
+      section('Certifications that can qualify a job for enhanced manufacturer warranties:', list(p.certifications)),
+      `Manufacturer material warranties come from the manufacturer and depend on the product and on the installer's certification level. Enhanced manufacturer warranties are only available through installers the manufacturer has certified for them.`,
+    ),
+  });
 
-Response Time Commitment:
-- New leads: Response within 5 minutes
-- Estimate requests: Scheduled within 24-48 hours
-- Emergency repairs: On-site within 2-4 hours`,
-  },
+  const payment = [
+    p.financingLine,
+    p.financing && `Financing partner: ${p.financing.partner}. Apply at ${p.financing.applyUrl}`,
+  ].filter((l): l is string => !!l);
+  if (payment.length || p.maintenancePlans.length) {
+    docs.push({
+      title: 'Financing and Maintenance Plans',
+      category: 'pricing',
+      tags: ['financing', 'payment', 'maintenance', 'plan'],
+      content: join(
+        section('Financing:', payment.join('\n')),
+        section('Maintenance plans:', list(p.maintenancePlans.map((m) => `${m.name}${m.tag ? ` (${m.tag})` : ''}: ${m.text}`))),
+      ),
+    });
+  }
 
-  // Services
+  docs.push({
+    title: `Why Choose ${name}`,
+    category: 'competitors',
+    tags: ['competition', 'differentiation', 'why us'],
+    content: join(
+      section(`Reasons customers choose ${name}:`, list(p.whyUs)),
+      section('Credentials:', list(p.credentials)),
+      `When a customer is comparing contractors, these are fair questions to ask any of them:
+- Are they licensed (where the state requires it) and insured?
+- Do they hold manufacturer certifications, and for which warranties?
+- How long is their workmanship warranty, and is it in writing?
+- Will they provide local references?
+- Do they pull permits where the work needs one?
+
+Answer them for ${name} only from the facts above or the company profile.`,
+    ),
+  });
+
+  docs.push({
+    title: 'Lead Follow-Up Scripts',
+    category: 'scripts',
+    tags: ['sms', 'text', 'follow-up', 'scripts'],
+    content: `Lead Response Scripts
+
+Initial Contact (Immediate):
+"Hi [Name], this is ${name}! We received your request for [service]. Thanks for reaching out! A team member will call you soon to talk about what you need. Reply STOP to opt out."
+
+No Answer Follow-Up (Same Day):
+"Hi [Name], we tried calling about your request. We'd love to help! When's a good time to chat? You can also reply here with questions."
+
+Next Day Follow-Up:
+"Hi [Name], just following up on your request. Would [day] work for us to come take a look?"
+
+Estimate Confirmation:
+"Hi [Name], confirming your appointment for [date/time]. [Rep name] from ${name} will see you then!"
+
+Post-Estimate Follow-Up (No Decision):
+"Hi [Name], thanks for meeting with us! Just checking if you have any questions about the estimate. We're here to help whenever you're ready."
+
+Review Request (After Job Completion):
+"Hi [Name], we hope you're enjoying the finished work! If you're happy with it, we'd really appreciate a review. It helps us help more homeowners like you. ${p.reviewUrl || '[review link]'}"`,
+  });
+
+  docs.push({
+    title: 'Review Response Templates',
+    category: 'reviews',
+    tags: ['google', 'review', 'response', 'templates'],
+    content: `Review Response Templates
+
+5-Star Review Response:
+"Thank you so much for the wonderful review, [Name]! We're thrilled you're happy with the work. It was a pleasure working with you, and we appreciate you trusting ${name} with your home. If you ever need anything, we're just a call away!"
+
+4-Star Review Response:
+"Thanks for the great review, [Name]! We're glad we could help. If there's anything we could have done to earn that 5th star, we'd love to hear your feedback. Thanks again for choosing ${name}!"
+
+3-Star Review Response:
+"Thank you for your feedback, [Name]. We aim for excellent work on every project, and we're sorry we didn't fully meet your expectations. We'd appreciate the chance to make this right. Please reach out to us directly at ${p.phone || p.email || '[contact]'}."
+
+Negative Review Response (Professional):
+"[Name], we're sorry to hear about your experience. This isn't the level of service we aim to provide. We take all feedback seriously and would like to resolve your concerns. Please contact us directly at ${p.phone || p.email || '[contact]'} so we can address this personally."
+
+Response to Unverified/Suspicious Review:
+"We don't have a record of this service in our system. Please contact us directly at ${p.phone || p.email || '[contact]'} with your project details so we can look into this further."
+
+Best Practices:
+- Respond within 24-48 hours
+- Keep responses professional and grateful
+- Never argue publicly
+- Take negative discussions offline
+- Thank all reviewers for their time`,
+  });
+
+  return docs;
+}
+
+/** General roofing knowledge: how the work is done and how claims work. No company claims. */
+const ROOFING_KNOWLEDGE: KnowledgeSeedItem[] = [
   {
-    title: 'Roof Replacement Services',
+    title: 'Roof Replacement: What It Involves',
     category: 'services',
     tags: ['replacement', 'new roof', 'installation'],
-    content: `Full Roof Replacement Services
+    content: `What a full roof replacement usually involves
 
-Best Roofing Now provides complete roof replacement services for residential and commercial properties. Our replacement process includes:
+1. Inspection and assessment
+   - Roof evaluation with photo documentation
+   - Decking and structure check
+   - Ventilation check
 
-1. Initial Inspection & Assessment
-   - Comprehensive roof evaluation
-   - Photo documentation
-   - Structural assessment
-   - Ventilation analysis
+2. Material options
+   - Architectural (dimensional) shingles: the most common choice
+   - 3-tab shingles: the economy option
+   - Metal roofing: long lifespan, higher upfront cost
+   - Flat/low-slope systems: TPO, EPDM, modified bitumen
+   - Tile and slate: premium options for specific homes
 
-2. Material Options
-   - Architectural Shingles (most popular, 30-50 year warranty)
-   - 3-Tab Shingles (economical option, 20-25 year warranty)
-   - Metal Roofing (premium durability, 40-70 year lifespan)
-   - Flat/Low-Slope Systems (TPO, EPDM, Modified Bitumen)
-   - Tile and Slate (premium options for specific applications)
+3. Installation
+   - Tear-off of the existing roofing
+   - Decking inspection and replacement where rotten or damaged
+   - Ice and water shield where the scope or code calls for it (often valleys and eaves)
+   - Underlayment over the rest of the deck
+   - Drip edge and new flashing
+   - Ridge or other exhaust ventilation balanced with intake
+   - Shingles installed to the manufacturer's instructions (the manufacturer warranty depends on it)
+   - Cleanup, including a magnetic sweep for nails
 
-3. Installation Process
-   - Complete tear-off of existing roofing
-   - Inspection of decking, repair as needed
-   - Installation of ice & water shield in valleys and edges
-   - Premium synthetic underlayment
-   - New drip edge and flashing
-   - Ridge vent installation for proper ventilation
-   - New roof installation with manufacturer specifications
-   - Thorough cleanup with magnetic nail sweep
-
-4. Warranty Coverage
-   - Workmanship warranty: 10 years
-   - Manufacturer warranty: Varies by product (25-50 years)
-   - We are certified installers for GAF, Owens Corning, and CertainTeed
-
-Typical Timeline: 1-3 days for residential, varies for commercial`,
+A typical house takes 1-3 days, depending on size, complexity and weather.
+Warranty and certifications vary by company: see the company's Warranty Information document.`,
   },
   {
-    title: 'Roof Repair Services',
+    title: 'Roof Repair: Common Problems',
     category: 'services',
     tags: ['repair', 'fix', 'leak', 'damage'],
-    content: `Roof Repair Services
+    content: `Common roof repairs
 
-We handle all types of roof repairs, from minor fixes to major restoration:
+- Leaks: find the entry point (often flashing, a pipe boot or a valley), not just the stain
+- Storm damage: hail, wind, fallen debris
+- Shingle replacement: missing, cracked or curling shingles
+- Flashing: around chimneys, vents, skylights and walls
+- Gutters, soffit and fascia: rot, sagging, overflow
+- Ventilation: ridge vents, turbines, attic fans
+- Emergency tarping to stop water until a permanent repair
 
-Common Repairs We Handle:
-- Leak Detection & Repair: Using thermal imaging and water testing to find and fix leaks
-- Storm Damage: Hail damage, wind damage, fallen debris
-- Shingle Replacement: Missing, cracked, or curling shingles
-- Flashing Repairs: Around chimneys, vents, skylights, and walls
-- Gutter Issues: Repairs, cleaning, and replacement
-- Soffit & Fascia: Rot repair and replacement
-- Ventilation Problems: Ridge vents, turbines, and attic fans
-- Emergency Repairs: Tarping and temporary fixes for urgent situations
-
-Repair Process:
-1. Inspection and assessment
-2. Detailed estimate with photos
-3. Scheduling at your convenience
-4. Professional repair
-5. Final inspection and cleanup
-
-Most repairs completed in 1-4 hours. Emergency repairs available 24/7.`,
+A good repair visit: inspect, photograph, give a written estimate, repair, and show the finished work.`,
   },
   {
-    title: 'Roof Inspection Services',
+    title: 'Roof Inspections: What Gets Checked',
     category: 'services',
     tags: ['inspection', 'assessment', 'evaluation'],
-    content: `Professional Roof Inspection Services
+    content: `What a roof inspection covers
 
-We offer comprehensive roof inspections for:
-- Pre-purchase home inspections
-- Annual maintenance inspections
-- Post-storm damage assessments
-- Insurance claim documentation
-- Warranty inspections
+Common reasons: buying or selling a home, annual maintenance, after a storm, insurance claim documentation, warranty checks.
 
-Our Inspection Includes:
-1. Exterior Assessment
-   - Shingle/material condition
-   - Flashing integrity
-   - Gutter condition
-   - Ventilation systems
-   - Chimney and skylight seals
-
-2. Interior Assessment (when accessible)
-   - Attic inspection
-   - Ventilation adequacy
-   - Signs of leaks or moisture
-   - Insulation condition
-
-3. Documentation
-   - Detailed written report
-   - Photo documentation
-   - Recommendations for repairs
-   - Estimated remaining lifespan
-   - Cost estimates for any needed work
-
-Inspection Duration: 30-60 minutes
-Report Delivery: Same day digital report`,
+Exterior: shingle or membrane condition, flashing, gutters, ventilation, chimney and skylight seals.
+Interior (when accessible): attic ventilation, signs of leaks or moisture, insulation.
+Documentation: written findings, photos, recommended repairs, estimated remaining life.`,
   },
-
-  // Pricing Guidelines
   {
-    title: 'Pricing Overview',
+    title: 'Roof Pricing: What Drives the Cost',
     category: 'pricing',
     tags: ['cost', 'price', 'estimate', 'quote'],
-    content: `Pricing Guidelines for Roofing Services
+    content: `What drives the price of roofing work
 
-Note: All estimates are customized based on the specific property. These are general ranges for the Charlotte area.
+Roofing is priced by the square (100 sq ft of roof surface). What moves the price:
+- Roof size, and waste from cuts on complex roofs
+- Pitch: steeper roofs need more labor and safety equipment
+- Complexity: multiple levels, dormers, valleys, penetrations
+- Access to the roof and the property
+- Material selected
+- Decking that has to be replaced once the old roof is off
+- Number of existing layers to tear off
+- Permit requirements where the job needs one
 
-Roof Replacement (per square = 100 sq ft):
-- 3-Tab Shingles: $350-$450 per square
-- Architectural Shingles: $450-$650 per square
-- Premium Architectural: $600-$800 per square
-- Metal Roofing: $800-$1,400 per square
-
-Typical Residential Project (2,000 sq ft home, ~20-25 squares):
-- Basic replacement: $8,000-$12,000
-- Mid-range: $12,000-$18,000
-- Premium: $18,000-$25,000+
-
-Roof Repairs:
-- Minor repairs (few shingles): $150-$400
-- Moderate repairs (small leak, flashing): $400-$1,000
-- Major repairs (multiple areas): $1,000-$3,000
-- Emergency tarping: $200-$500
-
-Inspections:
-- Standard inspection: $150-$250
-- Pre-purchase detailed: $250-$400
-- Insurance documentation: $200-$350
-
-Factors Affecting Price:
-- Roof pitch/steepness (steeper = more labor)
-- Roof complexity (multiple levels, dormers)
-- Accessibility
-- Material quality selected
-- Decking repair needs
-- Permit requirements
-
-We provide FREE estimates for all replacement projects. Inspection fees may be waived when scheduling repair/replacement work.`,
+Prices vary by region and company: quote this company's prices only from its own price lists or estimates, never from general internet numbers.`,
   },
-
-  // Service Area
-  {
-    title: 'Service Area - Charlotte Metro',
-    category: 'service_area',
-    tags: ['location', 'area', 'coverage', 'charlotte'],
-    content: `Best Roofing Now Service Area
-
-Primary Service Area - Charlotte, NC Metro:
-We proudly serve Charlotte and the surrounding counties within approximately 45 miles of uptown Charlotte.
-
-North Carolina Counties:
-- Mecklenburg County (Charlotte, Huntersville, Cornelius, Davidson, Matthews, Mint Hill, Pineville)
-- Union County (Monroe, Indian Trail, Waxhaw, Stallings, Wesley Chapel)
-- Cabarrus County (Concord, Kannapolis, Harrisburg)
-- Gaston County (Gastonia, Belmont, Mount Holly)
-- Lincoln County (Lincolnton, Denver)
-- Iredell County (Mooresville, Statesville - southern portions)
-- Rowan County (Salisbury - southern portions)
-- Stanly County (Albemarle - western portions)
-- Anson County (Wadesboro - northwestern portions)
-
-South Carolina (within Charlotte metro):
-- York County (Rock Hill, Fort Mill, Tega Cay, Lake Wylie)
-- Lancaster County (Lancaster, Indian Land)
-
-Popular Charlotte Neighborhoods We Serve:
-- Ballantyne, SouthPark, Myers Park
-- Dilworth, Plaza Midwood, NoDa
-- University Area, Highland Creek
-- Steele Creek, Arboretum
-- Lake Norman communities
-- South Charlotte / Providence area
-
-For locations outside our primary service area, please contact us - we may be able to accommodate your project.`,
-  },
-  {
-    title: 'Charlotte ZIP Codes Served',
-    category: 'service_area',
-    tags: ['zip', 'zipcode', 'location'],
-    content: `Charlotte Area ZIP Codes We Service
-
-Mecklenburg County:
-28031, 28036, 28078, 28105, 28134, 28202, 28203, 28204, 28205, 28206, 28207, 28208, 28209, 28210, 28211, 28212, 28213, 28214, 28215, 28216, 28217, 28226, 28227, 28262, 28269, 28270, 28273, 28274, 28277, 28278, 28280, 28282
-
-Union County:
-28079, 28103, 28104, 28110, 28112, 28173, 28174
-
-Cabarrus County:
-28025, 28027, 28075, 28081, 28083
-
-Gaston County:
-28006, 28012, 28016, 28034, 28052, 28054, 28056, 28098, 28101, 28120
-
-Lincoln County:
-28037, 28092
-
-York County (SC):
-29707, 29708, 29715, 29730, 29732, 29745
-
-Lancaster County (SC):
-29720
-
-If your ZIP code is not listed, please contact us - we may still be able to help!`,
-  },
-
-  // Industry Knowledge
   {
     title: 'Roofing Materials Guide',
     category: 'industry',
@@ -337,254 +344,94 @@ Storm Damage Indicators:
 
 If you notice any of these signs, schedule an inspection. Early detection can save significant repair costs and prevent interior damage.`,
   },
-
-  // FAQ
   {
     title: 'Common Questions - General',
     category: 'faq',
     tags: ['questions', 'faq', 'common'],
-    content: `Frequently Asked Questions
+    content: `Frequently Asked Questions (general roofing answers)
 
 Q: How long does a roof replacement take?
-A: Most residential roofs take 1-3 days. Factors include size, complexity, weather, and material type.
+A: Most residential roofs take 1-3 days. Size, complexity, weather and material all matter.
 
 Q: Do I need to be home during the work?
-A: No, but we need access to your property. We'll coordinate entry and keep you updated via text/call.
+A: Usually not, but the crew needs access to the property. The office will coordinate.
 
 Q: Will my homeowner's insurance cover a new roof?
-A: Coverage depends on your policy and the cause of damage. Storm damage is often covered. Age-related wear typically isn't. We can help document damage for claims.
+A: It depends on the policy and the cause of damage. Storm damage is often covered; age-related wear usually isn't. A contractor can document the damage for the claim.
 
-Q: Can you install a new roof over my existing one?
-A: In some cases, yes (up to 2 layers allowed by code). However, we recommend full tear-off for best results and warranty coverage.
+Q: Can a new roof go over my existing one?
+A: Sometimes: building codes generally allow at most two layers, and not over a deteriorated roof. A full tear-off lets the decking be checked and is required for most enhanced manufacturer warranties.
 
-Q: How do I know if I need repair or replacement?
-A: Generally, if damage affects less than 30% of the roof and it's under 15 years old, repair may be sufficient. We'll give an honest assessment.
+Q: How do I know if I need a repair or a replacement?
+A: It depends on the roof's age, how widespread the damage is, and whether matching shingles are still made. An inspection gives an honest answer.
 
 Q: What happens if it rains during my project?
-A: We monitor weather closely. If rain is expected, we'll either complete sections that can be sealed or cover exposed areas with tarps.
+A: Crews watch the weather, work in sections that can be sealed the same day, and tarp anything left open.
 
-Q: Do you handle permits?
-A: Yes, we pull all required permits and schedule inspections as needed.
+Q: Do I need a permit?
+A: Permit rules depend on the state, county and size of the job. Ask the office whether your job needs one.
 
-Q: What payment options do you offer?
-A: We accept cash, check, credit cards, and offer financing through approved partners.`,
+Q: What payment options are there?
+A: See the company's Financing and Maintenance Plans document, or ask the office.`,
   },
   {
     title: 'Insurance Claims Process',
     category: 'faq',
     tags: ['insurance', 'claims', 'storm', 'damage'],
-    content: `Working With Insurance for Roof Claims
+    content: `How a roof insurance claim usually works
 
-Step-by-Step Claims Process:
+1. Document the damage
+   - Photos/videos of visible damage
+   - The date of the storm
+   - Temporary repairs (a tarp) only; no permanent repairs before the adjuster sees it
 
-1. Document the Damage
-   - Take photos/videos of visible damage
-   - Note the date the damage occurred
-   - Don't make permanent repairs yet
+2. The homeowner files the claim
+   - The homeowner owns the policy and the claim
+   - Get a claim number; ask about the deductible and coverage
 
-2. Contact Your Insurance
-   - File a claim promptly
-   - Get a claim number
-   - Ask about deductible and coverage
+3. Inspection
+   - The contractor documents the damage with photos and a written scope
 
-3. Schedule Our Inspection
-   - We provide detailed damage assessment
-   - Photos and documentation for your adjuster
-   - Written scope of needed repairs
+4. Adjuster visit
+   - The contractor can meet the adjuster on site to show the damage and explain the scope
+   - Negotiating coverage on the homeowner's behalf is public adjusting, which needs a license in most states; the homeowner can use their agent, a licensed public adjuster, or an attorney for a coverage dispute
 
-4. Meet With Adjuster
-   - We can meet with your adjuster on-site
-   - We advocate for full, proper repairs
-   - Clarify any scope differences
+5. Review the settlement
+   - Compare the adjuster's scope to what the job needs
+   - Send documented supplements for real, necessary items the estimate missed
 
-5. Review Settlement
-   - Compare adjuster's scope to actual needs
-   - We help identify any missed items
-   - Supplemental claims if needed
+6. The work and the final payment
+   - On a replacement-cost policy, recoverable depreciation is usually released after the work is done and the final invoice is sent
+   - Checks are often made out to the homeowner and the mortgage company
 
-6. Proceed With Repairs
-   - Sign contract once claim is approved
-   - We work with insurance timelines
-   - Handle any depreciation recoverable
+Typically covered: hail, wind, fallen trees and debris, sudden water damage.
+Typically not covered: normal wear and tear, lack of maintenance, pre-existing damage.
 
-What's Typically Covered:
-- Hail damage
-- Wind damage
-- Fallen trees/debris
-- Sudden water damage
-
-What's Typically NOT Covered:
-- Normal wear and tear
-- Lack of maintenance
-- Pre-existing damage
-- Cosmetic-only damage
-
-We work with all major insurance companies and have experience maximizing claim approvals.`,
-  },
-
-  // Scripts
-  {
-    title: 'Lead Follow-Up Scripts',
-    category: 'scripts',
-    tags: ['sms', 'text', 'follow-up', 'scripts'],
-    content: `Lead Response Scripts
-
-Initial Contact (Immediate):
-"Hi [Name], this is Best Roofing Now! We received your request for [service]. Thanks for reaching out! A team member will call you within the hour to discuss your needs. Reply STOP to opt out."
-
-No Answer Follow-Up (Same Day):
-"Hi [Name], we tried calling about your roofing inquiry. We'd love to help! When's a good time to chat? You can also reply here with questions."
-
-Next Day Follow-Up:
-"Hi [Name], just following up on your roofing request. We have openings this week for free estimates. Would [day] work for you?"
-
-Estimate Confirmation:
-"Hi [Name], confirming your estimate appointment for [date/time]. Our estimator [name] will arrive in a company vehicle. See you then!"
-
-Post-Estimate Follow-Up (No Decision):
-"Hi [Name], thanks for meeting with us! Just checking if you have any questions about the estimate. We're here to help whenever you're ready."
-
-Review Request (After Job Completion):
-"Hi [Name], we hope you're enjoying your new roof! If you're happy with our work, we'd really appreciate a Google review. It helps us help more homeowners like you. [link]"`,
-  },
-
-  // Competitors
-  {
-    title: 'Competitive Positioning',
-    category: 'competitors',
-    tags: ['competition', 'differentiation', 'why us'],
-    content: `Why Choose Best Roofing Now
-
-Our Differentiators:
-
-1. Speed of Service
-   - Lead response in minutes, not days
-   - Estimates scheduled within 48 hours
-   - Most projects completed faster than industry average
-
-2. Transparency
-   - Detailed written estimates
-   - No hidden fees or surprise charges
-   - Clear communication throughout project
-
-3. Quality Assurance
-   - Certified installers for major manufacturers
-   - Extended workmanship warranty
-   - Post-installation inspection included
-
-4. Technology-Forward
-   - AI-assisted customer service for instant responses
-   - Drone inspections for accurate assessments
-   - Digital project tracking and updates
-
-5. Local Expertise
-   - Charlotte-based, not a national franchise
-   - Understanding of local building codes
-   - Relationships with local suppliers
-
-6. Customer Care
-   - Direct access to project manager
-   - Lifetime support for questions
-   - Referral rewards program
-
-When comparing to other contractors, ask:
-- Are they licensed, bonded, and insured?
-- Do they have manufacturer certifications?
-- What's their workmanship warranty length?
-- Will they provide local references?
-- Do they pull permits for the work?
-
-We're happy to answer all these questions upfront.`,
-  },
-
-  // Review Responses
-  {
-    title: 'Review Response Templates',
-    category: 'reviews',
-    tags: ['google', 'review', 'response', 'templates'],
-    content: `Review Response Templates
-
-5-Star Review Response:
-"Thank you so much for the wonderful review, [Name]! We're thrilled that you're happy with your new roof. It was a pleasure working with you, and we appreciate you trusting Best Roofing Now with your home. If you ever need anything in the future, we're just a call away!"
-
-4-Star Review Response:
-"Thanks for the great review, [Name]! We're glad we could help with your roofing needs. If there's anything we could have done to earn that 5th star, we'd love to hear your feedback. Thanks again for choosing Best Roofing Now!"
-
-3-Star Review Response:
-"Thank you for your feedback, [Name]. We strive for excellence on every project, and we're sorry we didn't fully meet your expectations. We'd appreciate the chance to discuss how we can make this right. Please reach out to us directly at [contact]."
-
-Negative Review Response (Professional):
-"[Name], we're sorry to hear about your experience. This isn't the level of service we aim to provide. We take all feedback seriously and would like to resolve any concerns. Please contact us directly at [contact] so we can address this personally."
-
-Response to Unverified/Suspicious Review:
-"We don't have a record of this service in our system. Please contact us directly at [contact] with your project details so we can look into this further."
-
-Best Practices:
-- Respond within 24-48 hours
-- Keep responses professional and grateful
-- Never argue publicly
-- Take negative discussions offline
-- Thank all reviewers for their time`,
-  },
-
-  // Legal/Warranty
-  {
-    title: 'Warranty Information',
-    category: 'legal',
-    tags: ['warranty', 'guarantee', 'coverage'],
-    content: `Warranty Coverage Details
-
-Best Roofing Now Workmanship Warranty:
-- Duration: 10 years from installation date
-- Covers: Installation defects, labor-related issues
-- Includes: Leaks due to improper installation, flashing failures, ventilation issues caused by installation
-- Transferable: Yes, to new homeowner (one time)
-
-Manufacturer Material Warranties:
-We are certified installers, qualifying your roof for enhanced manufacturer warranties:
-
-GAF Golden Pledge:
-- 50-year material warranty
-- 25-year workmanship coverage (through GAF)
-- Covers labor costs for repairs
-
-Owens Corning Platinum:
-- Lifetime material warranty
-- 25-year workmanship coverage
-- 50-year non-prorated coverage
-
-CertainTeed 5-Star:
-- 50-year material warranty
-- 25-year workmanship coverage
-- Wind warranty up to 130 mph
-
-What Voids Warranties:
-- Unauthorized repairs or modifications
-- Failure to address known issues
-- Improper ventilation (not caused by us)
-- Acts of God (separate from storm damage claims)
-- Lack of reasonable maintenance
-
-Warranty Claims Process:
-1. Contact us with concern
-2. We inspect at no charge
-3. Document any issues
-4. Coordinate with manufacturer if needed
-5. Complete repairs under warranty
-
-Keep your warranty certificate and inspection reports in a safe place.`,
+Never inflate damage, bill the insurer for work that won't be done, or waive or rebate a deductible: that is insurance fraud.`,
   },
 ];
 
+/** Trade knowledge by trade. Trades not listed get only the company documents. */
+const TRADE_KNOWLEDGE: Record<string, KnowledgeSeedItem[]> = {
+  roofing: ROOFING_KNOWLEDGE,
+};
+
+/** Every document to seed for a company: its own documents, then its trade's. */
+export function knowledgeSeed(profile: CompanyProfile): KnowledgeSeedItem[] {
+  return [...companyKnowledge(profile), ...(TRADE_KNOWLEDGE[profile.trade.toLowerCase()] ?? [])];
+}
+
 /**
- * Seed the knowledge base with initial data
+ * Seed the current company's knowledge base. Runs as the company (seedCompany
+ * in server/seed.ts), so the documents are its own and written from its profile.
  */
 export async function seedKnowledgeBase(): Promise<void> {
   const service = getKnowledgeService();
+  const items = knowledgeSeed(currentProfile());
 
   console.log('[RAG] Starting knowledge base seed...');
 
-  for (const item of KNOWLEDGE_SEED) {
+  for (const item of items) {
     try {
       await service.addDocument({
         title: item.title,
@@ -600,5 +447,5 @@ export async function seedKnowledgeBase(): Promise<void> {
     }
   }
 
-  console.log(`[RAG] Knowledge base seeded with ${KNOWLEDGE_SEED.length} documents`);
+  console.log(`[RAG] Knowledge base seeded with ${items.length} documents`);
 }

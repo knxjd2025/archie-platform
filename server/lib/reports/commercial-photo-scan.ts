@@ -236,7 +236,7 @@ async function post(e: Endpoint, args: { system: string; user: string; imageUrl:
     const res = await fetch(e.url, {
       method: 'POST',
       signal: ctrl.signal,
-      headers: { Authorization: e.auth, 'Content-Type': 'application/json', 'X-Title': 'Best Roofing Now Reports' },
+      headers: { Authorization: e.auth, 'Content-Type': 'application/json', 'X-Title': 'Archie Reports' },
       body: JSON.stringify({
         model: e.model,
         temperature: 0.1,

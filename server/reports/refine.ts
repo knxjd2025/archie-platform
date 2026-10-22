@@ -82,7 +82,7 @@ export function buildEditableSurface(data: any): string {
   return lines.join('\n') || '(nothing editable on this report)';
 }
 
-export const REFINE_SYSTEM = `You edit roof inspection reports for Best Roofing Now. A customer will read the result, so accuracy matters more than polish.
+export const REFINE_SYSTEM = `You edit roof inspection reports for the roofing company that wrote them. A customer will read the result, so accuracy matters more than polish.
 
 You may ONLY rewrite wording. You must NEVER change or introduce:
 - severities, damage counts, or whether damage exists

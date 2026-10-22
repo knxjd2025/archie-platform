@@ -14,8 +14,9 @@ import {
   pipelineSummaryTool, projectTool,
 } from './sales-tools';
 import { calculateCommissionTool, listCommissionsTool, lookupJobTool } from './team-agents';
-import { lookupReference, referenceIndex, BRN_COMPANY_BRIEF, NC_REFERENCE, REFERENCE_CHECKED_ON } from './advisor-knowledge';
-import { readWebsiteTool, searchWebsiteTool } from './website-tools';
+import { lookupReference, referenceIndex, referenceIsHomeState, NC_REFERENCE, REFERENCE_CHECKED_ON } from './advisor-knowledge';
+import { companyWebsite, readWebsiteTool, searchWebsiteTool } from './website-tools';
+import { currentProfile } from '../tenant/context';
 
 /**
  * Walk a Pave query and return the first write operation found, if any.
@@ -198,7 +199,7 @@ export class ArchieAgent extends BaseAgent {
       this.registerTool({
         name: 'jobtread_query',
         description:
-          "Run any READ query against JobTread's Pave API — jobs, accounts, contacts, documents, files, comments, daily logs, tasks, budgets, custom fields, anything. Pass the query as a JSON object (same shape the API takes; arguments go under \"$\"). Use jobtread_schema first to confirm field names. Our organization id is 22PCvVuPJywg. Read-only: any create/update/delete is refused.",
+          "Run any READ query against JobTread's Pave API — jobs, accounts, contacts, documents, files, comments, daily logs, tasks, budgets, custom fields, anything. Pass the query as a JSON object (same shape the API takes; arguments go under \"$\"). Use jobtread_schema first to confirm field names; get the organization id with {\"organizations\":{\"nodes\":{\"id\":{},\"name\":{}}}}. Read-only: any create/update/delete is refused.",
         parameters: {
           type: 'object',
           properties: {
@@ -330,12 +331,16 @@ export class ArchieAgent extends BaseAgent {
     return true;
   }
 
-  /** NC code/insurance reference and the company website — for everyone, no data behind them. */
+  /**
+   * The NC code/insurance reference, and the company's own website when its
+   * profile has one — for everyone, no company data behind them.
+   */
   private registerKnowledgeTools(): void {
+    const home = referenceIsHomeState(currentProfile());
     this.registerTool({
       name: 'nc_roofing_reference',
       description:
-        `Best Roofing Now's checked reference on North Carolina roofing: which building code is in force, shingle/underlayment/flashing/drip-edge rules, reroofing, ventilation, permits (G.S. 160D-1110), contractor licensing (G.S. 87-1), how NC insurance claims work (ACV/RCV, depreciation, supplements, deductibles), NC insurance law (suit deadline, appraisal, unfair claim practices, fraud, public adjusters), door-to-door rules, and local weather. Each line is tagged [verified], [general] or [check locally]. Pass a topic id (${NC_REFERENCE.map((t) => t.id).join(', ')}) or a free-text query. Use it before answering any code, permit, licensing or insurance question.`,
+        `A checked reference on NORTH CAROLINA roofing only: which NC building code is in force, shingle/underlayment/flashing/drip-edge rules, reroofing, ventilation, permits (G.S. 160D-1110), contractor licensing (G.S. 87-1), how NC insurance claims work (ACV/RCV, depreciation, supplements, deductibles), NC insurance law (suit deadline, appraisal, unfair claim practices, fraud, public adjusters), door-to-door rules, and NC weather. Each line is tagged [verified], [general] or [check locally]. Pass a topic id (${NC_REFERENCE.map((t) => t.id).join(', ')}) or a free-text query. ${home ? 'Use it before answering any code, permit, licensing or insurance question.' : 'Use it only for jobs in North Carolina; the statutes and code sections do not apply in other states.'}`,
       parameters: {
         type: 'object',
         properties: {
@@ -345,8 +350,10 @@ export class ArchieAgent extends BaseAgent {
       },
       execute: async (p) => lookupReference({ topic: p.topic, query: p.query }),
     });
-    this.registerTool(searchWebsiteTool());
-    this.registerTool(readWebsiteTool());
+    if (companyWebsite()) {
+      this.registerTool(searchWebsiteTool());
+      this.registerTool(readWebsiteTool());
+    }
   }
 
   // Role-allowed tools are registered in the constructor (role isn't known yet
@@ -362,31 +369,49 @@ export class ArchieAgent extends BaseAgent {
   }
 
   protected getSystemPrompt(): string {
+    const profile = currentProfile();
+    const company = profile.displayName;
+    const trade = profile.trade;
+    const home = referenceIsHomeState(profile);
+    const site = this.tools.has('search_company_website');
+    const stateRules = home
+      ? `2. NORTH CAROLINA ${trade.toUpperCase()}: the NC Residential Code, permits, licensing, installation practice,
+   estimating and scope, and how NC homeowner insurance claims and NC insurance law work.`
+      : `2. ${trade.toUpperCase()} KNOW-HOW: installation practice, estimating and scope, and how homeowner insurance
+   claims work. Building code, permit, licensing and insurance law differ by state and county${profile.state ? ` (the company is in ${profile.state})` : ''}:
+   give the general rule, say it varies, and tell them to confirm with the local inspector or the carrier. You also
+   have a checked North Carolina reference (nc_roofing_reference) — use it only for jobs in North Carolina, and say so.`;
+    const referenceRule = home
+      ? `- For code, permit, licensing or insurance questions, call nc_roofing_reference first and keep
+  its confidence: say "the statute says" for [verified], give the rule for [general], and tell
+  them to confirm with the county inspector, the carrier, or the homeowner's policy for
+  [check locally]. Cite the section (e.g. "G.S. 160D-1110(c)", "R905.2.8.5"). If something is
+  not in the reference, you may answer from your own knowledge but say it is unverified.
+  The reference was checked on ${REFERENCE_CHECKED_ON}.`
+      : `- For a job in North Carolina, call nc_roofing_reference first and keep its confidence tags
+  ([verified], [general], [check locally]); it was checked on ${REFERENCE_CHECKED_ON}. Never apply NC
+  statutes or NC code sections to a job in another state.`;
     return `${super.getSystemPrompt()}
 
-You are BRN Advisor — the one assistant everyone at Best Roofing Now uses, from the owner
+You are Archie — the one assistant everyone at ${company} uses, from the owner
 to the crew. You are talking with a ${ROLE_LABEL[this.teamRole] || this.teamRole}. You combine three kinds of expertise:
 1. THE BUSINESS, live: their leads, jobs, pipeline, follow-ups, schedule, KPIs, commissions,
    inbox, calendar, receivables and JobTread — through your tools, which already return only
    what this person is allowed to see.
-2. NORTH CAROLINA ROOFING: the NC Residential Code, permits, licensing, installation practice,
-   estimating and scope, and how NC homeowner insurance claims and NC insurance law work.
-3. THE COMPANY: Best Roofing Now's services, warranties, service area and how we work — from the
-   brief below and the live website (search_bestroofingnow / read_bestroofingnow_page).
+${stateRules}
+3. THE COMPANY: ${company}'s services, warranties, service area and how we work — from the
+   company brief above${site ? ' and the live website (search_company_website / read_company_website_page)' : ''}.
 
 HOW TO ANSWER
 - Lead with the answer, then the two or three details that matter. Plain text: short paragraphs
   and "- " bullets, no markdown headers, no tables, no bold.
 - Numbers, names, dates and statuses about our work come from tools — never from memory or a
   guess. If a tool errors, say so and answer with what you do have.
-- For code, permit, licensing or insurance questions, call nc_roofing_reference first and keep
-  its confidence: say "the statute says" for [verified], give the rule for [general], and tell
-  them to confirm with the county inspector, the carrier, or the homeowner's policy for
-  [check locally]. Cite the section (e.g. "G.S. 160D-1110(c)", "R905.2.8.5"). If something is
-  not in the reference, you may answer from your own knowledge but say it is unverified.
-  The reference was checked on ${REFERENCE_CHECKED_ON}.
-- For what Best Roofing Now offers or says publicly (services, warranty, financing, prices on
-  cost guides, a town or neighborhood page), check the website and give the link.
+${referenceRule}
+${site
+    ? `- For what ${company} offers or says publicly (services, warranty, financing, prices on
+  cost guides, a town or neighborhood page), check the website and give the link.`
+    : `- For what ${company} offers that is not in the company brief, say you would need to check with the office.`}
 - One job: get_project with the JobTread id from get_my_leads, or a search. When a search is
   ambiguous, list the candidates and ask which one.
 - When they agree to a next step with a date, offer to create_follow_up so it lands on their list.
@@ -409,14 +434,12 @@ WHAT YOU CAN HELP WITH (all in one place — there are no separate specialists a
 - Insurance claims: explain ACV/RCV, depreciation, deductibles and mortgage checks in plain
   words; read a carrier scope against ours. Stay on the roof: we document, meet the adjuster,
   and support our scope — we do not negotiate coverage for the homeowner (that is public
-  adjusting and needs an NCDOI license), and we never waive or rebate a deductible, inflate
-  damage, or bill for work we won't do (G.S. 58-2-161).
-- Roofing know-how: materials, failure modes, storm vs. age damage, ventilation, NC weather.
-- Not legal or tax advice: for a live legal dispute point to NCDOI or an attorney.
+  adjusting, which needs a license in most states), and we never waive or rebate a deductible,
+  inflate damage, or bill for work we won't do (that is insurance fraud).
+- ${trade[0].toUpperCase()}${trade.slice(1)} know-how: materials, failure modes, storm vs. age damage, ventilation, local weather.
+- Not legal or tax advice: for a live legal dispute point to the state insurance department or an attorney.
 
-${BRN_COMPANY_BRIEF}
-
-NC REFERENCE TOPICS (pull with nc_roofing_reference)
+NC REFERENCE TOPICS (pull with nc_roofing_reference${home ? '' : '; North Carolina jobs only'})
 ${referenceIndex()}
 
 Your chat starts fresh each day. Today's conversation is already in context; for
@@ -427,18 +450,18 @@ If they refer to something you don't see from today ("what did we decide last we
 }
 
 /**
- * Build the BRN Advisor for one person. `viewer` scopes the book tools (leads,
+ * Build Archie, the team advisor, for one person. `viewer` scopes the book tools (leads,
  * projects, follow-ups, KPIs, commissions); without it those tools are left
  * out entirely rather than run unscoped.
  */
 export function buildArchieForRole(role: TeamRole, userEmail?: string, viewer?: AgentViewer): ArchieAgent {
   const config: AgentConfig = {
     id: 0,
-    name: 'BRN Advisor',
+    name: 'Archie',
     role: 'archie',
     title: 'Team Assistant',
-    persona: 'A sharp, friendly, experienced North Carolina roofing pro who also knows every corner of the company\'s data — equally at home coaching a rep, reading an adjuster\'s scope, or citing the code to an inspector.',
-    systemPrompt: 'You help the Best Roofing Now team with anything: their live business data, North Carolina roofing, code and insurance, and the company itself.',
+    persona: 'A sharp, friendly, experienced pro in the trade who also knows every corner of the company\'s data — equally at home coaching a rep, reading an adjuster\'s scope, or citing the code to an inspector.',
+    systemPrompt: 'You help the team with anything: their live business data, the trade, code and insurance, and the company itself.',
     viewer,
   };
   return new ArchieAgent(config, role, userEmail);

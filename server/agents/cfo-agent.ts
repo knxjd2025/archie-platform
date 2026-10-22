@@ -188,7 +188,7 @@ export class CFOAgent extends BaseAgent {
     // Tool: Get real-time bank balances (Plaid)
     this.registerTool({
       name: 'get_real_time_balances',
-      description: 'Get real-time bank account balances from linked banks (US Bank, First Bank) via Plaid',
+      description: 'Get real-time bank account balances from linked bank accounts via Plaid',
       parameters: {
         type: 'object',
         properties: {},

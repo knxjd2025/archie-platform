@@ -6,7 +6,7 @@ import { findMutation } from '../archie-agent';
 describe('jobtread_query write guard', () => {
   it('allows ordinary read queries', () => {
     expect(findMutation({ job: { $: { id: '22Pd' }, name: {}, documents: { nodes: { id: {} } } } })).toBeNull();
-    expect(findMutation({ organization: { $: { id: '22PCvVuPJywg' }, jobs: { nodes: { name: {} } } } })).toBeNull();
+    expect(findMutation({ organization: { $: { id: 'org_test_1' }, jobs: { nodes: { name: {} } } } })).toBeNull();
     expect(findMutation({ schema: { $: { path: 'root' } } })).toBeNull();
   });
 

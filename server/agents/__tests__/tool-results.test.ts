@@ -37,8 +37,8 @@ describe('redactForLog', () => {
   });
 
   it('masks phone numbers anywhere, keeping the last four digits', () => {
-    expect(redactForLog({ to: '+1 (704) 555-0199' })).toEqual({ to: '***0199' });
-    expect(redactForLog({ query: 'call 704-555-0123 tomorrow' })).toEqual({ query: 'call ***0123 tomorrow' });
+    expect(redactForLog({ to: '+1 (312) 555-0199' })).toEqual({ to: '***0199' });
+    expect(redactForLog({ query: 'call 312-555-0123 tomorrow' })).toEqual({ query: 'call ***0123 tomorrow' });
   });
 
   it('leaves ids, dates and short numbers alone', () => {

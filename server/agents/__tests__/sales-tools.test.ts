@@ -16,9 +16,9 @@ describe('foldKpis', () => {
       { teamMemberId: 2, repName: null, type: 'door_knock', count: 12 },
       { teamMemberId: 2, repName: null, type: 'report_presented', count: 3 },
       { teamMemberId: null, repName: 'Old Rep', type: 'lead_contacted', count: 1 },
-    ], new Map([[2, 'Banning Rumsey']]));
+    ], new Map([[2, 'Riley Carter']]));
     expect(rows).toEqual([
-      { rep: 'Banning Rumsey', doorKnocks: 12, leadsContacted: 0, reportsCreated: 0, reportsPresented: 3, referralsReceived: 0, leadsGiven: 0 },
+      { rep: 'Riley Carter', doorKnocks: 12, leadsContacted: 0, reportsCreated: 0, reportsPresented: 3, referralsReceived: 0, leadsGiven: 0 },
       { rep: 'Old Rep', doorKnocks: 0, leadsContacted: 1, reportsCreated: 0, reportsPresented: 0, referralsReceived: 0, leadsGiven: 0 },
     ]);
   });

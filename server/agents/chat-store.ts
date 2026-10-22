@@ -1,5 +1,5 @@
 /**
- * Daily chat memory for every AI agent (BRN Advisor + the exec/team advisors).
+ * Daily chat memory for every AI agent (Archie, the team advisor, + the exec/team advisors).
  *
  * Model: one thread per (user, agent, business day). A new day therefore starts a
  * fresh conversation automatically — no manual reset — and yesterday's thread is
@@ -10,10 +10,19 @@ import { and, eq, desc, isNull, lt, sql } from 'drizzle-orm';
 import { db } from '../db';
 import { agentChats, agentChatMessages } from '../../shared/schema';
 import { assistConfigured, summarizeConversation } from '../ai/assist-service';
+import { currentProfile } from '../tenant/context';
 
-/** The business day (America/New_York) as YYYY-MM-DD — the daily reset boundary. */
+/**
+ * The business day in the company's time zone (its profile; America/New_York
+ * when none is set) as YYYY-MM-DD — the daily reset boundary.
+ */
 export function businessDay(d: Date = new Date()): string {
-  return d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  try {
+    return d.toLocaleDateString('en-CA', { timeZone: currentProfile().timeZone });
+  } catch {
+    // A time zone the runtime doesn't know: fall back rather than break chat.
+    return d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  }
 }
 
 /** Most of a day's transcript the summarizer is handed. */
