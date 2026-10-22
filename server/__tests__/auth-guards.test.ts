@@ -54,7 +54,6 @@ describe('namespace auth guards', () => {
 
 describe('standalone routes that leaked company data', () => {
   const guarded = [
-    ["app.get('/api/settings'", 'all settings values'],
     ["app.get('/api/metrics/today'", 'revenue and lead metrics'],
     ["app.get('/api/activity'", 'agent decisions and reasoning'],
     ["app.get('/api/leads/pipeline/summary'", 'company lead counts'],
@@ -68,12 +67,11 @@ describe('standalone routes that leaked company data', () => {
     });
   }
 
-  it('restricts writing settings to admins', () => {
-    // An unauthenticated PUT could previously overwrite ANY setting, which
-    // changes behaviour for every user of the app.
-    const i = SRC.indexOf("app.put('/api/settings/:key'");
-    expect(i).toBeGreaterThan(-1);
-    expect(SRC.slice(i, i + 160)).toContain("requireRole('admin')");
+  it('has no generic settings read or write', () => {
+    // A generic PUT let an admin forge security rows (native sign-in tokens),
+    // and a generic GET returned stored integration tokens.
+    expect(SRC).not.toContain("app.put('/api/settings/:key'");
+    expect(SRC).not.toContain("app.get('/api/settings'");
   });
 
   it('keeps exec agent rows (which carry systemPrompt) above sales', () => {

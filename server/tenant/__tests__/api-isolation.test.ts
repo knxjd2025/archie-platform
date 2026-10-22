@@ -23,6 +23,7 @@ describe.skipIf(!local)('company isolation through the API', async () => {
   const { registerTeamRoutes } = await import('../../auth/team-routes');
   const { registerAuthRoutes } = await import('../../auth/routes');
   const { clearSessionRevalidationCache } = await import('../../auth/middleware');
+  const { mintHandoff } = await import('../../auth/native-handoff');
 
   const tag = `api-iso-${process.pid}-${Date.now()}`;
   const emailA = `${tag}-admin-a@example.test`;
@@ -48,7 +49,12 @@ describe.skipIf(!local)('company isolation through the API', async () => {
     const app = express();
     app.use(express.json());
     app.use((req: any, _res, next) => {
-      req.session = { user: sessionUser, destroy: (cb: () => void) => { req.session.user = undefined; cb(); } };
+      req.session = {
+        user: sessionUser,
+        destroy: (cb: () => void) => { req.session.user = undefined; cb(); },
+        regenerate: (cb: (e?: unknown) => void) => cb(),
+        save: (cb: (e?: unknown) => void) => cb(),
+      };
       next();
     });
     app.use(tenantFromSession);
@@ -110,5 +116,29 @@ describe.skipIf(!local)('company isolation through the API', async () => {
     const r = await fetch(`${base}/api/team`);
     expect(r.status).toBe(401);
     await runAsSystem('test: unpause company', () => db.update(schema.companies).set({ status: 'active' }).where(eq(schema.companies.id, b)));
+  });
+
+  it('a native sign-in token only opens the company that minted it', async () => {
+    sessionUser = undefined;
+    const exchange = (token: string) => fetch(`${base}/api/auth/native/exchange`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }),
+    });
+    // Company B mints a token naming company A's admin: refused.
+    const forged = await runAsCompany(b, () => mintHandoff(emailA));
+    const bad = await exchange(forged);
+    expect(bad.status).toBe(403);
+    // Company A's own token for its admin works, and lands in company A.
+    const real = await runAsCompany(a, () => mintHandoff(emailA));
+    const good = await exchange(real);
+    expect(good.status).toBe(200);
+    expect((await good.json()).user.companyId).toBe(a);
+    // Spent.
+    expect((await exchange(real)).status).toBe(401);
+  });
+
+  it('has no generic settings route to forge security rows with', async () => {
+    as(emailB, b);
+    const put = await fetch(`${base}/api/settings/native_auth:x`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: '{"value":{}}' });
+    expect(put.status).toBe(404);
   });
 });

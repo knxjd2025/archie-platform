@@ -59,6 +59,43 @@ describe.skipIf(!local)('company isolation', async () => {
     expect(rows.length).toBe(names.length);
   });
 
+  it('protects every table in the database, not just the ones in the schema file', async () => {
+    // A table a later migration adds gets the app's grants automatically, so it
+    // must also get the policy. Walk the database itself, and check the policy
+    // says exactly what it should.
+    const { rows } = await pool.query(
+      `select c.relname, c.relrowsecurity as rls, c.relforcerowsecurity as forced,
+              exists (select 1 from information_schema.columns k
+                       where k.table_schema = 'public' and k.table_name = c.relname and k.column_name = 'company_id') as has_company,
+              (select array_agg(p.policyname || '|' || p.cmd || '|' || coalesce(p.qual, '') || '|' || coalesce(p.with_check, '') order by p.policyname)
+                 from pg_policies p where p.schemaname = 'public' and p.tablename = c.relname) as policies
+         from pg_class c join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'public' and c.relkind in ('r', 'p')`);
+    const GLOBAL = new Set(['session', '_migrations', 'companies']);
+    const expected = '((company_id = archie_current_company()) OR archie_is_system())';
+    const bad = rows
+      .filter((r: any) => !GLOBAL.has(r.relname))
+      .filter((r: any) => !r.has_company || !r.rls || !r.forced
+        || (r.policies ?? []).length !== 1
+        || r.policies[0] !== `company_isolation|ALL|${expected}|${expected}`)
+      .map((r: any) => `${r.relname}: ${JSON.stringify(r.policies)}`);
+    expect(bad).toEqual([]);
+  });
+
+  it('lets a company read its own companies row but never change it', async () => {
+    await runAsCompany(a, () => db.update(schema.companies).set({ status: 'paused' }).where(eq(schema.companies.id, a)));
+    await runAsCompany(b, () => db.update(schema.companies).set({ ghlLocationId: `${tag}-SQUAT` }).where(eq(schema.companies.id, b)));
+    const rows = await runAsSystem('test', () => db.select().from(schema.companies).where(sql`${schema.companies.id} in (${a}, ${b})`));
+    expect(rows.find((r) => r.id === a)?.status).toBe('active');
+    expect(rows.find((r) => r.id === b)?.ghlLocationId).toBeNull();
+    await expectRefused(runAsCompany(a, () => db.insert(schema.companies).values({ slug: `${tag}-sneaky`, name: 'Sneaky' })));
+  });
+
+  it('keeps the migration log away from the app', async () => {
+    const err = await pool.query('select count(*) from _migrations').then(() => null, (e) => e);
+    expect(err?.code).toBe('42501');
+  });
+
   it('shows a company only its own rows', async () => {
     await runAsCompany(a, () => db.insert(schema.settings).values({ key: `${tag}:shared-key`, value: { who: 'a' } }));
     await runAsCompany(b, () => db.insert(schema.settings).values({ key: `${tag}:shared-key`, value: { who: 'b' } }));

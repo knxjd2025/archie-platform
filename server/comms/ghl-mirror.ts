@@ -19,8 +19,7 @@ import { db } from '../db';
 import { calls, commMessages, phoneNumbers } from '../../shared/schema';
 import { ghlCallToRow, ghlMessageToRow, callOutcome, type GhlMessage } from '../../shared/comms';
 import { fetchWithTimeout } from '../lib/fetch-timeout';
-
-const BASE = 'https://services.leadconnectorhq.com';
+import { GHL_API_BASE, GhlNotConnectedError, ghlConnection, ghlHeaders } from '../integrations/ghl/connection';
 
 /**
  * Pages of 100 messages to read from one conversation. A long-running
@@ -29,16 +28,10 @@ const BASE = 'https://services.leadconnectorhq.com';
  */
 const MAX_MESSAGE_PAGES = 20;
 
-function headers() {
-  return {
-    Authorization: `Bearer ${process.env.GHL_PIT_TOKEN}`,
-    Version: '2021-04-15',
-    Accept: 'application/json',
-  };
-}
-
+/** A GET against the current company's own GHL sub-account. */
 async function ghl<T>(path: string): Promise<T> {
-  const r = await fetchWithTimeout(`${BASE}${path}`, { headers: headers() });
+  const conn = await ghlConnection();
+  const r = await fetchWithTimeout(`${GHL_API_BASE}${path}`, { headers: ghlHeaders(conn, '2021-04-15') });
   if (!r.ok) throw new Error(`GHL ${r.status} on ${path.split('?')[0]}`);
   return r.json() as Promise<T>;
 }
@@ -50,8 +43,9 @@ async function ourNumbers(): Promise<string[]> {
   // Before the numbers table is seeded, fall back to GHL's own list so the
   // first mirror run still attributes calls correctly.
   try {
+    const { locationId } = await ghlConnection();
     const j = await ghl<{ phoneNumbers?: Array<{ value?: string }> }>(
-      `/phone-system/numbers?locationId=${process.env.GHL_LOCATION_ID}`,
+      `/phone-system/numbers?locationId=${locationId}`,
     );
     return (j.phoneNumbers || []).map((n) => n.value || '').filter(Boolean);
   } catch { return []; }
@@ -76,10 +70,12 @@ export async function mirrorFromGhl(opts: {
   maxConversations?: number;
 } ): Promise<MirrorResult> {
   const out: MirrorResult = { conversations: 0, callsSeen: 0, callsWritten: 0, messagesSeen: 0, messagesWritten: 0, errors: [] };
-  const locationId = process.env.GHL_LOCATION_ID;
-  if (!process.env.GHL_PIT_TOKEN || !locationId) {
-    out.errors.push('GHL_PIT_TOKEN or GHL_LOCATION_ID is not set');
-    return out;
+  let locationId: string;
+  try {
+    ({ locationId } = await ghlConnection());
+  } catch (e) {
+    if (e instanceof GhlNotConnectedError) { out.errors.push(e.message); return out; }
+    throw e;
   }
 
   const ours = await ourNumbers();

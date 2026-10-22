@@ -30,17 +30,24 @@ BEGIN
 END $$;
 --> statement-breakpoint
 
--- The companies table itself: a company sees and edits only its own row.
--- New companies are created by system work (sign-up, admin tools).
+-- The companies table itself: a company may read its own row and nothing
+-- else, and may not change it. Status, GHL location and the rest change only
+-- through system work for one named company (admin tools, verified connects),
+-- so a paused company cannot un-pause itself and nobody can claim a location.
 ALTER TABLE companies ENABLE ROW LEVEL SECURITY;
 --> statement-breakpoint
 ALTER TABLE companies FORCE ROW LEVEL SECURITY;
 --> statement-breakpoint
 DROP POLICY IF EXISTS company_self ON companies;
 --> statement-breakpoint
-CREATE POLICY company_self ON companies
-  USING (id = archie_current_company() OR archie_is_system())
-  WITH CHECK (id = archie_current_company() OR archie_is_system());
+CREATE POLICY company_self_read ON companies FOR SELECT
+  USING (id = archie_current_company() OR archie_is_system());
+--> statement-breakpoint
+CREATE POLICY company_system_insert ON companies FOR INSERT WITH CHECK (archie_is_system());
+--> statement-breakpoint
+CREATE POLICY company_system_update ON companies FOR UPDATE USING (archie_is_system()) WITH CHECK (archie_is_system());
+--> statement-breakpoint
+CREATE POLICY company_system_delete ON companies FOR DELETE USING (archie_is_system());
 --> statement-breakpoint
 
 -- Sessions (express-session via connect-pg-simple). Global: a session is
@@ -61,6 +68,14 @@ GRANT USAGE ON SCHEMA public TO archie_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO archie_app;
 --> statement-breakpoint
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO archie_app;
+--> statement-breakpoint
+-- The migration log is the migration runner's, not the app's.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = '_migrations' AND relnamespace = 'public'::regnamespace) THEN
+    EXECUTE 'REVOKE ALL ON _migrations FROM archie_app';
+  END IF;
+END $$;
 --> statement-breakpoint
 GRANT EXECUTE ON FUNCTION archie_current_company(), archie_is_system() TO archie_app;
 --> statement-breakpoint

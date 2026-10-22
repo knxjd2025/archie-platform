@@ -56,7 +56,9 @@ export function registerTeamRoutes(app: Express) {
       // Re-adding someone already on the roster is the ordinary way to hit
       // this; say so instead of surfacing a Postgres constraint name.
       if (e?.code === DUPLICATE_KEY) {
-        return res.status(409).json({ message: `${parsed.value.email} is already on the team.` });
+        // Emails are unique across Archie: one person, one company. Say the
+        // same thing either way, so this does not reveal other companies' teams.
+        return res.status(409).json({ message: `${parsed.value.email} can't be added. It is already on this team or in use with another company.` });
       }
       throw e;
     }
@@ -85,7 +87,7 @@ export function registerTeamRoutes(app: Express) {
     try {
       updated = await updateTeamMember(id, parsed.value);
     } catch (e: any) {
-      if (e?.code === DUPLICATE_KEY) return res.status(409).json({ message: `${parsed.value.email} is already on the team.` });
+      if (e?.code === DUPLICATE_KEY) return res.status(409).json({ message: `${parsed.value.email} can't be used. It is already on this team or in use with another company.` });
       throw e;
     }
     if (!updated) return res.status(404).json({ message: 'Not found' });

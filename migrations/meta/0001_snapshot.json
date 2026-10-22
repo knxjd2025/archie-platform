@@ -1,6 +1,6 @@
 {
-  "id": "799733c9-2e61-4381-8f03-eac576e7d379",
-  "prevId": "54995eac-5108-4fa5-ad4b-c96b43d35c29",
+  "id": "4b659820-90b9-474b-8caf-db4703c9c166",
+  "prevId": "2c583a73-54a5-4fd6-b5d1-3435b70a4d4c",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -693,94 +693,6 @@
         "appointments_company_id_companies_id_fk": {
           "name": "appointments_company_id_companies_id_fk",
           "tableFrom": "appointments",
-          "tableTo": "companies",
-          "columnsFrom": [
-            "company_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.brain_runs": {
-      "name": "brain_runs",
-      "schema": "",
-      "columns": {
-        "company_id": {
-          "name": "company_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "archie_current_company()"
-        },
-        "id": {
-          "name": "id",
-          "type": "serial",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "kind": {
-          "name": "kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'sweep'"
-        },
-        "started_at": {
-          "name": "started_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "finished_at": {
-          "name": "finished_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "events_seen": {
-          "name": "events_seen",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "loops_opened": {
-          "name": "loops_opened",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "loops_closed": {
-          "name": "loops_closed",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "errors": {
-          "name": "errors",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "'[]'::jsonb"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "brain_runs_company_id_companies_id_fk": {
-          "name": "brain_runs_company_id_companies_id_fk",
-          "tableFrom": "brain_runs",
           "tableTo": "companies",
           "columnsFrom": [
             "company_id"
@@ -1900,11 +1812,9 @@
         },
         "next_action_owner": {
           "name": "next_action_owner",
-          "type": "brain_person",
-          "typeSchema": "public",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "default": "'james'"
+          "notNull": false
         },
         "next_action_due": {
           "name": "next_action_due",
@@ -2096,7 +2006,23 @@
           "notNull": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "client_reports_share_token_uq": {
+          "name": "client_reports_share_token_uq",
+          "columns": [
+            {
+              "expression": "share_token",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "client_reports_company_id_companies_id_fk": {
           "name": "client_reports_company_id_companies_id_fk",
@@ -5380,9 +5306,10 @@
         }
       },
       "compositePrimaryKeys": {
-        "jobtread_archive_entity_type_jt_id_pk": {
-          "name": "jobtread_archive_entity_type_jt_id_pk",
+        "jobtread_archive_company_id_entity_type_jt_id_pk": {
+          "name": "jobtread_archive_company_id_entity_type_jt_id_pk",
           "columns": [
+            "company_id",
             "entity_type",
             "jt_id"
           ]
@@ -5407,7 +5334,7 @@
         "step": {
           "name": "step",
           "type": "text",
-          "primaryKey": true,
+          "primaryKey": false,
           "notNull": true
         },
         "status": {
@@ -5473,7 +5400,15 @@
           "onUpdate": "no action"
         }
       },
-      "compositePrimaryKeys": {},
+      "compositePrimaryKeys": {
+        "jobtread_archive_steps_company_id_step_pk": {
+          "name": "jobtread_archive_steps_company_id_step_pk",
+          "columns": [
+            "company_id",
+            "step"
+          ]
+        }
+      },
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
@@ -6884,8 +6819,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.nudges": {
-      "name": "nudges",
+    "public.native_handoffs": {
+      "name": "native_handoffs",
       "schema": "",
       "columns": {
         "company_id": {
@@ -6895,280 +6830,30 @@
           "notNull": true,
           "default": "archie_current_company()"
         },
-        "id": {
-          "name": "id",
-          "type": "serial",
+        "token_hash": {
+          "name": "token_hash",
+          "type": "text",
           "primaryKey": true,
           "notNull": true
         },
-        "loop_id": {
-          "name": "loop_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "to_person": {
-          "name": "to_person",
-          "type": "brain_person",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "channel": {
-          "name": "channel",
-          "type": "nudge_channel",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "body": {
-          "name": "body",
+        "email": {
+          "name": "email",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "idempotency_key": {
-          "name": "idempotency_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "escalation_level": {
-          "name": "escalation_level",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "status": {
-          "name": "status",
-          "type": "nudge_status",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'sent'"
-        },
-        "provider_ref": {
-          "name": "provider_ref",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "sent_at": {
-          "name": "sent_at",
+        "expires_at": {
+          "name": "expires_at",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "ack_at": {
-          "name": "ack_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
+          "notNull": true
         }
       },
-      "indexes": {
-        "nudges_company_idempotency_key_uq": {
-          "name": "nudges_company_idempotency_key_uq",
-          "columns": [
-            {
-              "expression": "company_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "idempotency_key",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
-        "nudges_company_id_companies_id_fk": {
-          "name": "nudges_company_id_companies_id_fk",
-          "tableFrom": "nudges",
-          "tableTo": "companies",
-          "columnsFrom": [
-            "company_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.open_loops": {
-      "name": "open_loops",
-      "schema": "",
-      "columns": {
-        "company_id": {
-          "name": "company_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "archie_current_company()"
-        },
-        "id": {
-          "name": "id",
-          "type": "serial",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "kind": {
-          "name": "kind",
-          "type": "loop_kind",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "source": {
-          "name": "source",
-          "type": "loop_source",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "source_ref": {
-          "name": "source_ref",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "dedupe_key": {
-          "name": "dedupe_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "contact": {
-          "name": "contact",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "summary": {
-          "name": "summary",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "evidence": {
-          "name": "evidence",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "owner": {
-          "name": "owner",
-          "type": "brain_person",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'unassigned'"
-        },
-        "urgency": {
-          "name": "urgency",
-          "type": "loop_urgency",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'normal'"
-        },
-        "due_at": {
-          "name": "due_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "state": {
-          "name": "state",
-          "type": "loop_state",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'open'"
-        },
-        "snooze_until": {
-          "name": "snooze_until",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "claim_id": {
-          "name": "claim_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "opened_at": {
-          "name": "opened_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "last_event_at": {
-          "name": "last_event_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "closed_at": {
-          "name": "closed_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "closed_by": {
-          "name": "closed_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "open_loops_company_dedupe_key_uq": {
-          "name": "open_loops_company_dedupe_key_uq",
-          "columns": [
-            {
-              "expression": "company_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "dedupe_key",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "open_loops_company_id_companies_id_fk": {
-          "name": "open_loops_company_id_companies_id_fk",
-          "tableFrom": "open_loops",
+        "native_handoffs_company_id_companies_id_fk": {
+          "name": "native_handoffs_company_id_companies_id_fk",
+          "tableFrom": "native_handoffs",
           "tableTo": "companies",
           "columnsFrom": [
             "company_id"
@@ -8654,7 +8339,35 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "rep_daily_reminders_company_rep_day_uq": {
+          "name": "rep_daily_reminders_company_rep_day_uq",
+          "columns": [
+            {
+              "expression": "company_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "team_member_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "reminder_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "rep_daily_reminders_company_id_companies_id_fk": {
           "name": "rep_daily_reminders_company_id_companies_id_fk",
@@ -10197,72 +9910,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.watch_cursors": {
-      "name": "watch_cursors",
-      "schema": "",
-      "columns": {
-        "company_id": {
-          "name": "company_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "archie_current_company()"
-        },
-        "id": {
-          "name": "id",
-          "type": "serial",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "source": {
-          "name": "source",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "channel": {
-          "name": "channel",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "''"
-        },
-        "cursor": {
-          "name": "cursor",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "watch_cursors_company_id_companies_id_fk": {
-          "name": "watch_cursors_company_id_companies_id_fk",
-          "tableFrom": "watch_cursors",
-          "tableTo": "companies",
-          "columnsFrom": [
-            "company_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.workflow_runs": {
       "name": "workflow_runs",
       "schema": "",
@@ -10599,26 +10246,6 @@
         "disabled"
       ]
     },
-    "public.claim_stage": {
-      "name": "claim_stage",
-      "schema": "public",
-      "values": [
-        "intake",
-        "inspection_done",
-        "sa_signed",
-        "adjuster_scheduled",
-        "adjuster_met",
-        "decision_pending",
-        "approved",
-        "supplementing",
-        "build_scheduled",
-        "build_done",
-        "final_invoiced",
-        "depreciation_pending",
-        "closed",
-        "denied_dispute"
-      ]
-    },
     "public.commission_status": {
       "name": "commission_status",
       "schema": "public",
@@ -10696,57 +10323,6 @@
         "disqualified"
       ]
     },
-    "public.loop_kind": {
-      "name": "loop_kind",
-      "schema": "public",
-      "values": [
-        "unanswered_inbound",
-        "new_lead_untouched",
-        "promise_made",
-        "claim_milestone",
-        "estimate_stale",
-        "invoice_unpaid",
-        "appointment_conflict",
-        "appointment_stale_confirmed",
-        "callback_requested",
-        "integration_failure",
-        "custom"
-      ]
-    },
-    "public.loop_source": {
-      "name": "loop_source",
-      "schema": "public",
-      "values": [
-        "gmail",
-        "ghl",
-        "jobtread",
-        "calendar",
-        "sms",
-        "manual"
-      ]
-    },
-    "public.loop_state": {
-      "name": "loop_state",
-      "schema": "public",
-      "values": [
-        "open",
-        "nudged",
-        "escalated",
-        "snoozed",
-        "done",
-        "dismissed"
-      ]
-    },
-    "public.loop_urgency": {
-      "name": "loop_urgency",
-      "schema": "public",
-      "values": [
-        "emergency",
-        "urgent",
-        "normal",
-        "low"
-      ]
-    },
     "public.message_role": {
       "name": "message_role",
       "schema": "public",
@@ -10755,25 +10331,6 @@
         "assistant",
         "system",
         "tool"
-      ]
-    },
-    "public.nudge_channel": {
-      "name": "nudge_channel",
-      "schema": "public",
-      "values": [
-        "sms",
-        "email"
-      ]
-    },
-    "public.nudge_status": {
-      "name": "nudge_status",
-      "schema": "public",
-      "values": [
-        "sent",
-        "delivered",
-        "failed",
-        "queued_quiet_hours",
-        "dry_run"
       ]
     },
     "public.outreach_attempt_status": {
@@ -10817,17 +10374,6 @@
         "converted",
         "failed",
         "bounced"
-      ]
-    },
-    "public.brain_person": {
-      "name": "brain_person",
-      "schema": "public",
-      "values": [
-        "james",
-        "thomas",
-        "banning",
-        "admin",
-        "unassigned"
       ]
     },
     "public.precon_checklist_status": {

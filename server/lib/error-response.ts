@@ -13,7 +13,7 @@ import type { ErrorRequestHandler, NextFunction, Request, Response } from 'expre
 
 /** Same wording as server/lib/failure.ts, so a failure reads the same either way. */
 export const GENERIC_SERVER_ERROR =
-  "Something went wrong on our end. Try again — if it keeps happening, tell James what you were doing.";
+  "Something went wrong on our end. Try again — if it keeps happening, report it with the bug button.";
 
 /** The status an error asks for; anything missing or out of range is a 500. */
 export function errorStatus(err: unknown): number {

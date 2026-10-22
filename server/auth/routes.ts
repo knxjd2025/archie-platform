@@ -137,9 +137,10 @@ export function registerAuthRoutes(app: Express) {
    */
   app.post('/api/auth/native/exchange', async (req: Request, res: Response) => {
     try {
-      const email = await redeemHandoff(String(req.body?.token || ''));
-      if (!email) return res.status(401).json({ error: 'That sign-in link has expired. Try signing in again.' });
+      const grant = await redeemHandoff(String(req.body?.token || ''));
+      if (!grant) return res.status(401).json({ error: 'That sign-in link has expired. Try signing in again.' });
 
+      const { email } = grant;
       if (isBlockedLoginEmail(email)) {
         console.warn(`[auth] blocked native exchange: ${email}`);
         return res.status(403).json({ error: 'not authorized' });
@@ -149,6 +150,8 @@ export function registerAuthRoutes(app: Express) {
       }
       const found = await findSignInMember(email);
       if (!found || !memberCanLogin(found.member) || !isLiveCompany(found.company)) return res.status(403).json({ error: 'not authorized' });
+      // The token only ever opens the company that minted it.
+      if (found.company.id !== grant.companyId) return res.status(403).json({ error: 'not authorized' });
       const { member, company } = found;
 
       const user = { email, name: member.name, role: member.role, companyId: company.id };

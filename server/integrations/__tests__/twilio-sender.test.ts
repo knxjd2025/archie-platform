@@ -1,10 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+// These tests are about the client itself; the company gate has its own tests (server/tenant/__tests__/per-company.test.ts).
+vi.mock('../../tenant/per-company', () => ({ assertEnvCredentials: () => {} }));
 import { TwilioClient } from '../twilio';
 
 /**
  * Which sender a text goes out through decides whether the 10DLC registration
  * is true in practice. The campaign told the carriers that replying STOP or
- * HELP gets a reply naming Best Roofing Now — and those replies are configured
+ * HELP gets a reply naming the company — and those replies are configured
  * on the Messaging Service, not on the account. A message sent straight from a
  * number gets the account's unbranded defaults instead.
  */

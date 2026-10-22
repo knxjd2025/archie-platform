@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+// These tests are about the client itself; the company gate has its own tests (server/tenant/__tests__/per-company.test.ts).
+vi.mock('../../tenant/per-company', () => ({ assertEnvCredentials: () => {} }));
 import { RoofLinkClient } from '../rooflink';
 
 const page = (results: any[], next_page: number | null, count: number): any => ({

@@ -10,6 +10,8 @@
  * Envelope: { count, from_index, to_index, next, previous, next_page, results }.
  */
 
+import { assertEnvCredentials } from '../tenant/per-company';
+
 const ROOFLINK_API_URL = 'https://integrate.rooflink.com/roof_link_endpoints/api';
 const ROOFLINK_TIMEOUT_MS = 60_000;
 
@@ -94,6 +96,7 @@ export class RoofLinkClient {
   }
 
   async request<T>(path: string, params: Record<string, string | number | boolean | undefined> = {}): Promise<T> {
+    assertEnvCredentials('RoofLink');
     if (!this.apiKey) throw new Error('ROOFLINK_API_KEY is not set');
     const url = new URL(`${ROOFLINK_API_URL}${path}`);
     for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== '') url.searchParams.set(k, String(v));

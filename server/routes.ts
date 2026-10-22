@@ -68,6 +68,9 @@ import { sendUpstreamFailure } from './lib/upstream';
 import { sendFailure } from './lib/failure';
 import { registerCommsRoutes } from './comms/routes';
 import { blockDisabledJobs } from './tenant/cron';
+import { verifyGhlWebhookSecret } from './integrations/ghl/webhook-secret';
+import { registerGhlConnectionRoutes } from './integrations/ghl/routes';
+import { currentGhlLocationId, ghlAppBase } from './integrations/ghl/connection';
 import { getCompanyByGhlLocation } from './tenant/companies';
 import { runAsCompany } from './tenant/context';
 
@@ -152,6 +155,7 @@ export function registerRoutes(app: Express) {
   registerFinalWalkthroughRoutes(app);
   registerJobCommissionRoutes(app);
   registerNeighborLetterRoutes(app);
+  registerGhlConnectionRoutes(app);
   registerInsuranceLetterRoutes(app);
   registerCertificateRoutes(app);
   registerSignatureRoutes(app);
@@ -881,9 +885,9 @@ export function registerRoutes(app: Express) {
       // app installed, this universal link opens the app to that contact — one tap
       // from calling on the business number (calls placed here route through GHL,
       // not the rep's personal cell). Falls back to GHL web on desktop.
-      const ghlLocationId = process.env.GHL_LOCATION_ID || '';
+      const ghlLocationId = await currentGhlLocationId();
       const ghlContactUrl = ghl.contactId && ghlLocationId
-        ? `https://app.gohighlevel.com/v2/location/${ghlLocationId}/contacts/detail/${ghl.contactId}`
+        ? `${ghlAppBase()}/v2/location/${ghlLocationId}/contacts/detail/${ghl.contactId}`
         : null;
       res.json({ contactId: ghl.contactId, ghlContactUrl, messages });
     } catch (error: any) {
@@ -1148,7 +1152,6 @@ export function registerRoutes(app: Express) {
   // GoHighLevel webhook
   app.post('/api/webhooks/gohighlevel', webhookLimiter, async (req: Request, res: Response) => {
     try {
-      if (!checkWebhookSecret('GHL_WEBHOOK_SECRET', req, res)) return;
       const payload = JSON.parse(req.body.toString());
       console.log('GHL Webhook received:', payload.type || payload.eventType);
 
@@ -1158,6 +1161,14 @@ export function registerRoutes(app: Express) {
       const locationId = String(payload.locationId || payload.location_id || payload.data?.locationId || '');
       const company = locationId ? await getCompanyByGhlLocation(locationId) : null;
       if (!company) return res.json({ received: true, ignored: 'unknown location' });
+
+      // The secret is the company's own (Settings ▸ GHL), checked as that
+      // company, and always required: a location id alone proves nothing.
+      const verified = await runAsCompany(company.id, () => verifyGhlWebhookSecret(req.header('x-webhook-secret')));
+      if (!verified) {
+        console.warn(`[webhook] rejected GHL event for company ${company.id}: bad or missing x-webhook-secret`);
+        return res.status(403).json({ error: 'invalid webhook secret' });
+      }
 
       await runAsCompany(company.id, async () => {
       const ghl = new GoHighLevelClient();
@@ -1228,39 +1239,7 @@ export function registerRoutes(app: Express) {
   });
 
   // ==================== SETTINGS ====================
-
-  // Get settings — manager+, matching the write side (PUT below), since a
-  // setting can carry business-sensitive config a rep shouldn't read.
-  app.get('/api/settings', requireAuth, requireRole('manager'), async (_req: Request, res: Response) => {
-    try {
-      const allSettings = await db.select().from(settings);
-      const settingsMap = allSettings.reduce((acc, s) => {
-        acc[s.key] = s.value;
-        return acc;
-      }, {} as Record<string, any>);
-
-      res.json(settingsMap);
-    } catch (error: any) {
-      return sendFailure(res, error, 'GET /api/settings');
-    }
-  });
-
-  // Update setting
-  app.put('/api/settings/:key', requireAuth, requireRole('admin'), async (req: Request, res: Response) => {
-    try {
-      const { value } = req.body;
-
-      await db
-        .insert(settings)
-        .values({ key: req.params.key, value })
-        .onConflictDoUpdate({
-          target: [settings.companyId, settings.key],
-          set: { value, updatedAt: new Date() },
-        });
-
-      res.json({ success: true });
-    } catch (error: any) {
-      return sendFailure(res, error, 'PUT /api/settings/:key');
-    }
-  });
+  // There is no generic settings read or write. Each feature owns its keys
+  // behind its own route and checks (neighbor letters, playbook, comms...),
+  // because some keys are secrets or security state a generic PUT could forge.
 }

@@ -2,15 +2,16 @@
  * Reading and flipping the V1/V2 switch.
  *
  * Stored in the existing `settings` key/value table, so this needs no
- * migration — the switch has to be something James can flip and un-flip on a
- * live system, and adding a table to do it would be the wrong trade.
+ * migration — the switch has to be something an operator can flip and un-flip
+ * on a live system. Per company: it lives in that company's settings.
  *
- * Only the owner sees it or moves it. It changes how the whole app sends,
- * not just his own messages — the point is to run the real business on V2 for
- * an afternoon, not to test in a corner where nothing is at stake.
+ * Only the operator named in COMMS_VERSION_OWNER sees it or moves it; with
+ * that unset, nobody does and every company stays on V1 (texts and calls
+ * through its own GHL).
  */
 import { eq, sql } from 'drizzle-orm';
 import { db } from '../db';
+import { currentCompanyId } from '../tenant/context';
 import { settings, phoneNumbers } from '../../shared/schema';
 import {
   evaluateReadiness, isCommsVersion, type CommsVersion, type Readiness,
@@ -18,11 +19,11 @@ import {
 
 const KEY = 'comms.version';
 
-/** Whose switch this is. Env override so it is not hard-coded for ever. */
-export const COMMS_OWNER = (process.env.COMMS_VERSION_OWNER || 'james@bestroofingnow.com').toLowerCase();
+/** Whose switch this is: an Archie operator, never a default person. */
+export const COMMS_OWNER = (process.env.COMMS_VERSION_OWNER || '').trim().toLowerCase();
 
 export const isCommsOwner = (email: string | null | undefined): boolean =>
-  !!email && email.toLowerCase() === COMMS_OWNER;
+  !!COMMS_OWNER && !!email && email.toLowerCase() === COMMS_OWNER;
 
 export interface VersionState {
   version: CommsVersion;
@@ -36,13 +37,16 @@ export interface VersionState {
  * thing to ship — but the cache has to be short, because the whole value of
  * the switch is that flipping it back takes effect immediately.
  */
-let cache: { at: number; state: VersionState } | null = null;
+const cache = new Map<string, { at: number; state: VersionState }>();
 const CACHE_MS = 5000;
 
-export function clearVersionCache(): void { cache = null; }
+export function clearVersionCache(): void { cache.clear(); }
 
 export async function getCommsVersion(): Promise<VersionState> {
-  if (cache && Date.now() - cache.at < CACHE_MS) return cache.state;
+  // Per company: one company's switch must never be served to another.
+  const key = currentCompanyId() ?? '-';
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < CACHE_MS) return hit.state;
   let state: VersionState = { version: 'v1', setBy: null, setAt: null };
   try {
     const [row] = await db.select().from(settings).where(eq(settings.key, KEY));
@@ -55,7 +59,7 @@ export async function getCommsVersion(): Promise<VersionState> {
     // V1, which is what works today.
     console.error('[comms] could not read the version flag, staying on V1:', e instanceof Error ? e.message : e);
   }
-  cache = { at: Date.now(), state };
+  cache.set(key, { at: Date.now(), state });
   return state;
 }
 

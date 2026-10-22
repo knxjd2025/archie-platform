@@ -59,6 +59,19 @@ const companyId = () => uuid('company_id').notNull().references(() => companies.
  * Credentials for a company's connected apps (GHL first). Read only by server
  * code; never sent to the browser.
  */
+/**
+ * One-time tokens that carry a browser sign-in into the native app
+ * (server/auth/native-handoff.ts). Only the token's SHA-256 is stored. Its own
+ * table, not settings: nothing but the handoff code writes it, so a row here
+ * can be trusted to name the company and person it was minted for.
+ */
+export const nativeHandoffs = pgTable('native_handoffs', {
+  companyId: companyId(),
+  tokenHash: text('token_hash').primaryKey(),
+  email: text('email').notNull(),
+  expiresAt: timestamp('expires_at').notNull(),
+});
+
 export const companyIntegrations = pgTable('company_integrations', {
   id: serial('id').primaryKey(),
   companyId: companyId(),
@@ -281,7 +294,10 @@ export const clientReports = pgTable('client_reports', {
    * surface can be built next without a second migration.
    */
   engagement: jsonb('engagement'),
-});
+}, (t) => ({
+  // Public links find their company by this token, so it must name one report.
+  shareTokenUq: uniqueIndex('client_reports_share_token_uq').on(t.shareToken),
+}));
 
 export type ClientReport = typeof clientReports.$inferSelect;
 
@@ -409,7 +425,10 @@ export const repDailyReminders = pgTable('rep_daily_reminders', {
   smsStatus: text('sms_status'),
   error: text('error'),
   sentAt: timestamp('sent_at').defaultNow(),
-});
+}, (t) => ({
+  // One check-in per rep per day: the cron claims the day by inserting this row.
+  companyRepDayUq: uniqueIndex('rep_daily_reminders_company_rep_day_uq').on(t.companyId, t.teamMemberId, t.reminderDate),
+}));
 export type RepDailyReminder = typeof repDailyReminders.$inferSelect;
 
 // Bugs: what people report with the "Report a bug" button, and the errors the
@@ -2161,13 +2180,13 @@ export const jobtreadArchive = pgTable('jobtread_archive', {
   data: jsonb('data').notNull(),
   fetchedAt: timestamp('fetched_at').notNull().defaultNow(),
 }, (t) => ({
-  pk: primaryKey({ columns: [t.entityType, t.jtId] }),
+  pk: primaryKey({ columns: [t.companyId, t.entityType, t.jtId] }),
   jobIdx: index('jobtread_archive_job_idx').on(t.jobId),
 }));
 
 export const jobtreadArchiveSteps = pgTable('jobtread_archive_steps', {
   companyId: companyId(),
-  step: text('step').primaryKey(),
+  step: text('step').notNull(),
   status: text('status').notNull().default('pending'),
   cursor: text('cursor'),
   counts: jsonb('counts').$type<Record<string, number>>().notNull().default({}),
@@ -2175,6 +2194,8 @@ export const jobtreadArchiveSteps = pgTable('jobtread_archive_steps', {
   startedAt: timestamp('started_at'),
   finishedAt: timestamp('finished_at'),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
-});
+}, (t) => ({
+  pk: primaryKey({ columns: [t.companyId, t.step] }),
+}));
 
 export type JobtreadArchiveStepRow = typeof jobtreadArchiveSteps.$inferSelect;

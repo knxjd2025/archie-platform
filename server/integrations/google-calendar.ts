@@ -1,4 +1,5 @@
 import { google, Auth } from 'googleapis';
+import { perCompany } from '../tenant/per-company';
 import type { GmailTokens } from './gmail';
 
 export interface CalendarEvent {
@@ -65,8 +66,5 @@ export class GoogleCalendarClient {
   }
 }
 
-let client: GoogleCalendarClient | null = null;
-export function getGoogleCalendarClient(): GoogleCalendarClient {
-  if (!client) client = new GoogleCalendarClient();
-  return client;
-}
+/** The current company's own client: OAuth tokens never cross companies. */
+export const getGoogleCalendarClient: () => GoogleCalendarClient = perCompany('Google Calendar', () => new GoogleCalendarClient());

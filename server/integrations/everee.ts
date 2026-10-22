@@ -2,6 +2,7 @@
 // Docs: https://developer.everee.com
 
 import { fetchWithTimeout } from '../lib/fetch-timeout';
+import { assertEnvCredentials } from '../tenant/per-company';
 
 const EVEREE_BASE_URL = process.env.EVEREE_ENVIRONMENT === 'production'
   ? 'https://api.everee.com'
@@ -74,6 +75,7 @@ export class EvereeClient {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
+    assertEnvCredentials('Everee');
     if (!this.available) {
       throw new Error('Everee not configured - set EVEREE_API_KEY');
     }

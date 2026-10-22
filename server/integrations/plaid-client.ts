@@ -6,6 +6,7 @@ import {
   CountryCode,
   RemovedTransaction,
 } from 'plaid';
+import { perCompany } from '../tenant/per-company';
 import { db } from '../db';
 import { plaidItems, plaidTransactions } from '../../shared/schema';
 import { eq, and, gte, lte, desc, sql } from 'drizzle-orm';
@@ -410,10 +411,5 @@ export class PlaidClient {
 }
 
 // Singleton
-let plaidInstance: PlaidClient | null = null;
-export function getPlaidClient(): PlaidClient {
-  if (!plaidInstance) {
-    plaidInstance = new PlaidClient();
-  }
-  return plaidInstance;
-}
+/** One client per company, so nothing a client caches can cross companies. */
+export const getPlaidClient: () => PlaidClient = perCompany('Plaid', () => new PlaidClient());

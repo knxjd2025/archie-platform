@@ -5,6 +5,7 @@
  */
 
 import { fetchWithTimeout } from '../lib/fetch-timeout';
+import { assertEnvCredentials } from '../tenant/per-company';
 
 const BASE_URL = 'https://api.companycam.com/v2';
 
@@ -108,6 +109,7 @@ export class CompanyCamClient {
   }
 
   private async request<T>(method: string, path: string, body?: any, params?: Record<string, string>): Promise<T> {
+    assertEnvCredentials('CompanyCam');
     if (!this.apiToken) throw new Error('CompanyCam API token not configured');
 
     const url = new URL(`${BASE_URL}${path}`);

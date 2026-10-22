@@ -43,7 +43,7 @@ async function saveRows(rows: ArchiveRow[]): Promise<number> {
     await db.insert(jobtreadArchive)
       .values(rows.slice(i, i + 200).map((r) => ({ ...r, fetchedAt: new Date() })))
       .onConflictDoUpdate({
-        target: [jobtreadArchive.entityType, jobtreadArchive.jtId],
+        target: [jobtreadArchive.companyId, jobtreadArchive.entityType, jobtreadArchive.jtId],
         set: { data: sql`excluded.data`, jobId: sql`coalesce(excluded.job_id, ${jobtreadArchive.jobId})`, fetchedAt: sql`now()` },
       });
   }

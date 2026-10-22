@@ -19,14 +19,6 @@ export async function getCurrentCompany(): Promise<Company | null> {
   return rows[0] ?? null;
 }
 
-/** Any company by id. System lookup: for sign-in and admin tools only. */
-export function getCompanyById(id: string): Promise<Company | null> {
-  return runAsSystem('read company by id', async () => {
-    const rows = await db.select().from(companies).where(eq(companies.id, id));
-    return rows[0] ?? null;
-  });
-}
-
 /** The company that owns a GHL sub-account, for routing GHL webhooks. */
 export function getCompanyByGhlLocation(locationId: string): Promise<Company | null> {
   return runAsSystem('route GHL webhook by location', async () => {

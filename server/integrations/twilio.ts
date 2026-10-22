@@ -3,6 +3,7 @@
  * Handles incoming/outgoing SMS through Twilio
  */
 import { createHmac, timingSafeEqual } from 'crypto';
+import { assertEnvCredentials } from '../tenant/per-company';
 
 export interface TwilioMessage {
   MessageSid: string;
@@ -67,6 +68,7 @@ export class TwilioClient {
   }
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    assertEnvCredentials('Twilio');
     // Fail before the network, not after. With no account SID the URL becomes
     // `/Accounts//Messages.json`, which Twilio answers with a 404 — but it
     // took 10.5 seconds to do it in the route sweep, so an unconfigured
@@ -324,6 +326,7 @@ export class TwilioClient {
    * handed to a browser either leaks the credentials or simply 401s.
    */
   async fetchRecording(recordingUrl: string): Promise<ArrayBuffer> {
+    assertEnvCredentials('Twilio');
     if (!this.accountSid || !this.authToken) throw new Error('Twilio not configured');
     const url = /\.(mp3|wav)$/i.test(recordingUrl) ? recordingUrl : `${recordingUrl}.mp3`;
     const auth = Buffer.from(`${this.accountSid}:${this.authToken}`).toString('base64');
@@ -411,6 +414,7 @@ export class TwilioClient {
     a2p: { brands: Array<{ status?: string; brandType?: string; failureReason?: string }>; campaigns: Array<{ service: string; status?: string; useCase?: string }> };
     notes: string[];
   }> {
+    assertEnvCredentials('Twilio');
     if (!this.accountSid || !this.authToken) throw new Error('Twilio not configured');
     const auth = Buffer.from(`${this.accountSid}:${this.authToken}`).toString('base64');
     const notes: string[] = [];

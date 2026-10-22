@@ -13,6 +13,7 @@
  * rep-scoped through ownsLead() — a rep can only reach their own clients.
  */
 import type { Express, Request, Response } from 'express';
+import { currentGhlLocationId, ghlAppBase } from '../integrations/ghl/connection';
 import { eq } from 'drizzle-orm';
 import { db } from '../db';
 import { leads } from '../../shared/schema';
@@ -28,12 +29,12 @@ export type CallVia = 'ghl-web' | 'ghl-app' | 'phone';
  * Where to send the rep for this contact. `appUrl` is the LeadConnector
  * deep link, built from GHL_MOBILE_CONTACT_LINK (e.g.
  * "leadconnector://contacts/{contactId}") — null until that template is set,
- * because GHL publishes no universal-link file for app.gohighlevel.com, so
+ * because GHL publishes no universal-link file for its web app, so
  * the web URL alone never opens the app.
  */
 export function ghlContactLinks(contactId: string | null, locationId: string, template = process.env.GHL_MOBILE_CONTACT_LINK || ''): { contactId: string | null; webUrl: string | null; appUrl: string | null } {
   if (!contactId || !locationId) return { contactId, webUrl: null, appUrl: null };
-  const webUrl = `https://app.gohighlevel.com/v2/location/${locationId}/contacts/detail/${contactId}`;
+  const webUrl = `${ghlAppBase()}/v2/location/${locationId}/contacts/detail/${contactId}`;
   const appUrl = template.trim()
     ? template.trim().replace(/\{contactId\}/g, contactId).replace(/\{locationId\}/g, locationId)
     : null;
@@ -165,7 +166,7 @@ export function registerContactActionRoutes(app: Express) {
     // Degrade rather than fail: the screen still renders, the GHL-specific
     // buttons just explain why they are unavailable.
     if (!found.ok) return res.json({ contactId: null, webUrl: null, appUrl: null, unavailable: true, reason: found.error });
-    res.json(ghlContactLinks(found.contactId, process.env.GHL_LOCATION_ID || ''));
+    res.json(ghlContactLinks(found.contactId, (await currentGhlLocationId()) ?? ''));
   }));
 
   // A text or email from the business number / business mailbox, logged in GHL.

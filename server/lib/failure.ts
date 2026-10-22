@@ -25,7 +25,7 @@ type FailureObserver = (what: string, error: unknown, res: Response) => void;
 let observer: FailureObserver | null = null;
 export function onServerFailure(fn: FailureObserver | null): void { observer = fn; }
 
-const GENERIC = "Something went wrong on our end. Try again — if it keeps happening, tell James what you were doing.";
+const GENERIC = "Something went wrong on our end. Try again — if it keeps happening, report it with the bug button.";
 
 /**
  * Did a database driver or the operating system produce this, rather than us?
@@ -62,6 +62,9 @@ export function safeMessage(error: unknown): string | null {
   return looksLikePlumbing(text) ? null : text;
 }
 
+/** Errors that mean an integration is not connected for the current company. */
+const NOT_CONNECTED = new Set(['EnvCredentialsUnavailableError', 'GhlNotConnectedError', 'GoogleWorkspaceUnavailableError']);
+
 /**
  * Answer a failed request. `what` names the route for the log, so a log line
  * identifies where it came from without a stack trace.
@@ -78,6 +81,8 @@ export function sendFailure(
    */
   fallback?: string,
 ): Response {
+  // "Not connected for this company" is an answer, not a bug: 409, not 500.
+  if (status === 500 && error instanceof Error && NOT_CONNECTED.has(error.name)) status = 409;
   const detail = error instanceof Error ? (error.stack || error.message) : String(error ?? '');
   console.error(`[api] ${what} failed: ${detail}`);
   // 4xx answers here are the route saying no on purpose; only real failures are bugs.

@@ -1,4 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+vi.mock('../ghl/connection', async (orig) => ({
+  ...(await orig<typeof import('../ghl/connection')>()),
+  ghlConnection: async () => ({ locationId: 'loc-test', token: 'test-token' }),
+}));
+
 import { GoHighLevelClient, duplicateContactId, exactPhoneMatch } from '../gohighlevel';
 
 describe('exactPhoneMatch', () => {
@@ -39,7 +44,6 @@ describe('sendSms without a contactId', () => {
 
   beforeEach(() => {
     calls = [];
-    process.env.GHL_PIT_TOKEN = process.env.GHL_PIT_TOKEN || 'test-token';
   });
   afterEach(() => { globalThis.fetch = realFetch; });
 

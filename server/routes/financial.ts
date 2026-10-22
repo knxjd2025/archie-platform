@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { Router, Request, Response } from 'express';
 import { getQuickBooksClient } from '../integrations/quickbooks';
 import { getPlaidClient } from '../integrations/plaid-client';
@@ -15,7 +16,10 @@ const router = Router();
 router.get('/quickbooks/auth', (req: Request, res: Response) => {
   try {
     const qbo = getQuickBooksClient();
-    const authUrl = qbo.getAuthUrl();
+    // Bound to this admin's session, so a callback cannot be pushed into another session or company.
+    const state = crypto.randomBytes(24).toString('base64url');
+    (req.session as any).qboState = state;
+    const authUrl = qbo.getAuthUrl(state);
     res.redirect(authUrl);
   } catch (error: any) {
     return sendUpstreamFailure(res, error, 'QuickBooks', 'GET /api/financial/quickbooks/auth');
@@ -25,6 +29,9 @@ router.get('/quickbooks/auth', (req: Request, res: Response) => {
 // OAuth callback
 router.get('/quickbooks/callback', async (req: Request, res: Response) => {
   try {
+    const expected = (req.session as any).qboState;
+    delete (req.session as any).qboState;
+    if (!expected || req.query.state !== expected) return res.redirect('/settings?qbo=error&message=' + encodeURIComponent('That QuickBooks sign-in did not start here. Try connecting again.'));
     const qbo = getQuickBooksClient();
     const callbackUrl = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
     await qbo.exchangeCodeForTokens(callbackUrl);

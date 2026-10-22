@@ -1,4 +1,5 @@
 import OAuthClient from 'intuit-oauth';
+import { perCompany } from '../tenant/per-company';
 import { db } from '../db';
 import { integrationTokens } from '../../shared/schema';
 import { eq, and } from 'drizzle-orm';
@@ -110,7 +111,8 @@ export class QuickBooksClient {
   private accessTokenExpiresAt: Date | null = null;
 
   constructor() {
-    this.realmId = process.env.QUICKBOOKS_REALM_ID || '';
+    // Set from the company's stored token; never a deployment-wide realm.
+    this.realmId = '';
     const environment = process.env.QUICKBOOKS_ENVIRONMENT || 'sandbox';
     this.baseUrl = environment === 'production'
       ? 'https://quickbooks.api.intuit.com'
@@ -130,10 +132,11 @@ export class QuickBooksClient {
 
   // ===== OAuth Methods =====
 
-  getAuthUrl(): string {
+  /** `state` must be a fresh random value kept in the admin's session and checked on the callback. */
+  getAuthUrl(state: string): string {
     return this.oauthClient.authorizeUri({
       scope: [OAuthClient.scopes.Accounting, OAuthClient.scopes.OpenId],
-      state: 'bestroofing-qbo',
+      state,
     });
   }
 
@@ -390,10 +393,5 @@ export class QuickBooksClient {
 }
 
 // Singleton
-let qboInstance: QuickBooksClient | null = null;
-export function getQuickBooksClient(): QuickBooksClient {
-  if (!qboInstance) {
-    qboInstance = new QuickBooksClient();
-  }
-  return qboInstance;
-}
+/** The current company's own client: tokens and realm never cross companies. */
+export const getQuickBooksClient: () => QuickBooksClient = perCompany('QuickBooks', () => new QuickBooksClient());

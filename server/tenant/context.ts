@@ -113,10 +113,4 @@ export function bindTenant<A extends unknown[], R>(fn: (...args: A) => R): (...a
   return (...args: A) => storage.run(ctx, () => fn(...args));
 }
 
-/** Enter a context for the rest of the current async flow (used by request middleware). */
-export function enterCompany(companyId: string, profile?: CompanyProfile): void {
-  if (!UUID_RE.test(companyId)) throw new Error(`enterCompany: not a company id: ${String(companyId)}`);
-  storage.enterWith({ companyId, system: false, profile });
-}
-
 export const isCompanyId = (v: unknown): v is string => typeof v === 'string' && UUID_RE.test(v);

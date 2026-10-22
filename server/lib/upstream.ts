@@ -52,7 +52,7 @@ export function classifyUpstream(error: unknown, provider: string): Classified {
     return {
       kind: 'not-configured',
       status: 503,
-      message: `${provider} isn't connected. Ask James to add the credentials, then try again.`,
+      message: `${provider} isn't connected. An admin can connect it in Settings, then try again.`,
     };
   }
 
@@ -74,7 +74,7 @@ export function classifyUpstream(error: unknown, provider: string): Classified {
     return {
       kind: 'upstream-bad-request',
       status: 502,
-      message: `${provider} couldn't answer that request. It's been logged — tell James if you keep seeing it.`,
+      message: `${provider} couldn't answer that request. It's been logged — report it with the bug button if you keep seeing it.`,
     };
   }
 
@@ -85,7 +85,7 @@ export function classifyUpstream(error: unknown, provider: string): Classified {
   return {
     kind: 'unknown',
     status: 500,
-    message: `Something went wrong talking to ${provider}. It's been logged — tell James what you were doing if it keeps happening.`,
+    message: `Something went wrong talking to ${provider}. It's been logged — report it with the bug button if it keeps happening.`,
   };
 }
 

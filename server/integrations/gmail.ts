@@ -2,6 +2,7 @@
  * Google Workspace Integration (Gmail, Calendar, Drive) using Google OAuth2
  */
 import { google, Auth } from 'googleapis';
+import { perCompany } from '../tenant/per-company';
 
 export interface GmailTokens {
   access_token: string;
@@ -412,11 +413,5 @@ export class GmailClient {
   }
 }
 
-let gmailClient: GmailClient | null = null;
-
-export function getGmailClient(): GmailClient {
-  if (!gmailClient) {
-    gmailClient = new GmailClient();
-  }
-  return gmailClient;
-}
+/** The current company's own client: OAuth tokens never cross companies. */
+export const getGmailClient: () => GmailClient = perCompany('Gmail', () => new GmailClient());

@@ -153,7 +153,7 @@ describe('native exchange', () => {
   it('starts a new session id rather than signing in the one it was sent with', async () => {
     // A session that exists before the exchange (here: one with a pending sign-in).
     const { cookie: before } = await startSignIn(true);
-    redeem.mockResolvedValue(EMAIL);
+    redeem.mockResolvedValue({ email: EMAIL, companyId: CO });
     const res = await fetch(`${base}/api/auth/native/exchange`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', cookie: before },

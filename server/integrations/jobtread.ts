@@ -15,6 +15,7 @@
  */
 
 import { fetchWithTimeout } from '../lib/fetch-timeout';
+import { assertEnvCredentials } from '../tenant/per-company';
 
 const JOBTREAD_API_URL = 'https://api.jobtread.com/pave';
 
@@ -333,6 +334,7 @@ export class JobTreadClient {
   }
 
   private async pave<T>(query: Record<string, any>): Promise<T> {
+    assertEnvCredentials('JobTread');
     // This backs virtually the entire JobTread integration (leads, stage
     // changes, notes, documents, reports) and had no timeout — a stalled
     // call blocked that request indefinitely.
