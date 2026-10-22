@@ -2,6 +2,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const { member } = vi.hoisted(() => ({ member: vi.fn() }));
 vi.mock('../../storage/team', () => ({ getTeamMemberByEmail: (...a: unknown[]) => member(...a) }));
+vi.mock('../../tenant/companies', async () => ({
+  getCurrentCompany: async () => (await import('../../__tests__/helpers/tenant')).liveTestCompany(),
+  forEachLiveCompany: async () => [],
+}));
+const { TEST_COMPANY_ID } = await import('../../__tests__/helpers/tenant');
+const { runAsCompany } = await import('../../tenant/context');
 
 const { agentChatsCronGate } = await import('../archie-routes');
 const { clearSessionRevalidationCache } = await import('../../auth/middleware');
@@ -31,21 +37,21 @@ describe('agent-chats cron gate', () => {
   });
 
   it('refuses a session that says admin when the roster now says sales', async () => {
-    member.mockResolvedValue({ email: 'x@bestroofingnow.com', name: 'X', role: 'sales', active: true, canLogin: true });
+    member.mockResolvedValue({ email: 'x@example.com', name: 'X', role: 'sales', active: true, canLogin: true });
     const r = res();
     const next = vi.fn();
-    const session = { user: { email: 'x@bestroofingnow.com', name: 'X', role: 'admin' } };
-    agentChatsCronGate({ headers: {}, session } as any, r, next);
+    const session = { user: { email: 'x@example.com', name: 'X', role: 'admin', companyId: TEST_COMPANY_ID } };
+    runAsCompany(TEST_COMPANY_ID, () => agentChatsCronGate({ headers: {}, session } as any, r, next));
     await flush();
     expect(next).not.toHaveBeenCalled();
     expect(r.status).toHaveBeenCalledWith(403);
   });
 
   it('lets a current admin in', async () => {
-    member.mockResolvedValue({ email: 'j@bestroofingnow.com', name: 'J', role: 'admin', active: true, canLogin: true });
+    member.mockResolvedValue({ email: 'j@example.com', name: 'J', role: 'admin', active: true, canLogin: true });
     const next = vi.fn();
-    const session = { user: { email: 'j@bestroofingnow.com', name: 'J', role: 'admin' } };
-    agentChatsCronGate({ headers: {}, session } as any, res(), next);
+    const session = { user: { email: 'j@example.com', name: 'J', role: 'admin', companyId: TEST_COMPANY_ID } };
+    runAsCompany(TEST_COMPANY_ID, () => agentChatsCronGate({ headers: {}, session } as any, res(), next));
     await flush();
     expect(next).toHaveBeenCalled();
   });

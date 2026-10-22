@@ -4,6 +4,7 @@ import compression from 'compression';
 import cors from 'cors';
 import helmet from 'helmet';
 import session from 'express-session';
+import { tenantFromSession } from './tenant/middleware';
 import { registerRoutes } from './routes';
 import { recordServerError } from './bugs/routes';
 import { seedAll } from './seed';
@@ -31,6 +32,8 @@ app.use(express.urlencoded({ extended: true, limit: JSON_BODY_LIMIT }));
 
 // Session middleware — Postgres-backed store so sessions survive restarts
 app.use(session(sessionOptions()));
+// Every request from a signed-in person runs as their company (row level security).
+app.use(tenantFromSession);
 
 // Request logging
 app.use((req: Request, _res: Response, next: NextFunction) => {

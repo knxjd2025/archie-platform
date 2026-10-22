@@ -17,6 +17,7 @@ export function createSessionStore(): session.Store | undefined {
   const PgSession = connectPgSimple(session);
   return new PgSession({
     pool,
-    createTableIfMissing: true,
+    // The table comes from migrations/0002: the app role cannot create tables.
+    createTableIfMissing: false,
   });
 }

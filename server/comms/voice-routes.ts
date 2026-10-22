@@ -429,7 +429,7 @@ export function registerVoiceRoutes(app: Express): void {
       const raw = req.body.number;
       if (raw === null || raw === '') {
         await db.insert(settings).values({ key: AI_KEY, value: null as any })
-          .onConflictDoUpdate({ target: settings.key, set: { value: null as any, updatedAt: new Date() } });
+          .onConflictDoUpdate({ target: [settings.companyId, settings.key], set: { value: null as any, updatedAt: new Date() } });
         patch.number = null;
       } else {
         const e = toE164(raw);
@@ -439,7 +439,7 @@ export function registerVoiceRoutes(app: Express): void {
         const [mine] = await db.select().from(phoneNumbers).where(eq(phoneNumbers.e164, e)).limit(1);
         if (mine) return res.status(422).json({ error: `${e} is one of our own numbers — handing calls there would loop.` });
         await db.insert(settings).values({ key: AI_KEY, value: e as any })
-          .onConflictDoUpdate({ target: settings.key, set: { value: e as any, updatedAt: new Date() } });
+          .onConflictDoUpdate({ target: [settings.companyId, settings.key], set: { value: e as any, updatedAt: new Date() } });
         patch.number = e;
       }
     }
@@ -450,7 +450,7 @@ export function registerVoiceRoutes(app: Express): void {
         return res.status(400).json({ error: 'seconds must be between 5 and 60 — less and the caller barely hears a ring, more and they have usually hung up' });
       }
       await db.insert(settings).values({ key: SECONDS_KEY, value: { seconds: Math.round(n) } as any })
-        .onConflictDoUpdate({ target: settings.key, set: { value: { seconds: Math.round(n) } as any, updatedAt: new Date() } });
+        .onConflictDoUpdate({ target: [settings.companyId, settings.key], set: { value: { seconds: Math.round(n) } as any, updatedAt: new Date() } });
       patch.seconds = Math.round(n);
     }
 

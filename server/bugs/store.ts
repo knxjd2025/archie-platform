@@ -1,49 +1,21 @@
 /**
  * Where bug reports and caught errors are kept.
  *
- * Migrations in this app are run by hand, and production has gone weeks
- * without the newest ones (0038 and 0039 were still missing in October). A bug
- * catcher that needs a migration before it works would miss exactly those
- * failures, so this creates its own table on first use. 0040 has the same
- * statements, for the record.
+ * Rows belong to the company the error happened for. An error with no company
+ * (before sign-in) is written as system work with no company, so the catcher
+ * never fails just because there was no one signed in.
  */
 import { sql } from 'drizzle-orm';
 import { db } from '../db';
+import { currentTenant, runAsSystem } from '../tenant/context';
 import { fingerprintFor } from './fingerprint';
 
-const DDL = [
-  `CREATE TABLE IF NOT EXISTS bug_reports (
-    id SERIAL PRIMARY KEY,
-    kind TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'new',
-    fingerprint TEXT,
-    message TEXT NOT NULL,
-    details TEXT,
-    page TEXT,
-    url TEXT,
-    user_email TEXT,
-    user_agent TEXT,
-    context JSONB NOT NULL DEFAULT '{}'::jsonb,
-    screenshot TEXT,
-    occurrences INTEGER NOT NULL DEFAULT 1,
-    first_seen TIMESTAMP NOT NULL DEFAULT NOW(),
-    last_seen TIMESTAMP NOT NULL DEFAULT NOW(),
-    notes TEXT
-  )`,
-  `CREATE UNIQUE INDEX IF NOT EXISTS bug_reports_fingerprint_uq ON bug_reports (fingerprint) WHERE fingerprint IS NOT NULL`,
-  `CREATE INDEX IF NOT EXISTS bug_reports_last_seen_idx ON bug_reports (last_seen DESC)`,
-];
-
-let ready: Promise<void> | null = null;
-
-/** Once per process; a failure is retried on the next call rather than remembered. */
+/**
+ * The table now comes from the migrations (the app's database role cannot
+ * create tables). Kept so callers need not change.
+ */
 export function ensureBugTable(): Promise<void> {
-  if (!ready) {
-    ready = (async () => {
-      for (const statement of DDL) await db.execute(sql.raw(statement));
-    })().catch((e) => { ready = null; throw e; });
-  }
-  return ready;
+  return Promise.resolve();
 }
 
 export const clip = (s: unknown, max: number): string | null => {
@@ -102,12 +74,16 @@ export async function recordCaughtError(e: CaughtError): Promise<CaughtResult> {
   const fingerprint = fingerprintFor(e.kind, e.where, e.message, e.stack);
   const context = JSON.stringify({ ...(e.context ?? {}), where: e.where });
   // `prev` reads the row as it was before this statement, so a reopen is visible.
-  const result = await db.execute(sql`
-    WITH prev AS (SELECT status FROM bug_reports WHERE fingerprint = ${fingerprint})
+  // No company (an error before sign-in, or in system work): record it with no
+  // company, as system work, so the insert is allowed.
+  const ctx = currentTenant();
+  const run = <T,>(fn: () => Promise<T>): Promise<T> => (ctx?.companyId ? fn() : runAsSystem('record error with no company', fn));
+  const result = await run(() => db.execute(sql`
+    WITH prev AS (SELECT status FROM bug_reports WHERE fingerprint = ${fingerprint} AND company_id IS NOT DISTINCT FROM archie_current_company())
     INSERT INTO bug_reports (kind, fingerprint, message, details, page, url, user_email, user_agent, context)
     VALUES (${e.kind}, ${fingerprint}, ${clip(e.message, 2000)}, ${clip(e.stack, 8000)}, ${e.page ?? null},
             ${e.url ?? null}, ${e.userEmail ?? null}, ${e.userAgent ?? null}, ${context}::jsonb)
-    ON CONFLICT (fingerprint) WHERE fingerprint IS NOT NULL DO UPDATE SET
+    ON CONFLICT (company_id, fingerprint) WHERE fingerprint IS NOT NULL DO UPDATE SET
       occurrences = bug_reports.occurrences + 1,
       last_seen = NOW(),
       details = EXCLUDED.details,
@@ -117,7 +93,7 @@ export async function recordCaughtError(e: CaughtError): Promise<CaughtResult> {
       user_agent = COALESCE(EXCLUDED.user_agent, bug_reports.user_agent),
       context = EXCLUDED.context,
       status = CASE WHEN bug_reports.status = 'fixed' THEN 'new' ELSE bug_reports.status END
-    RETURNING id, occurrences, (SELECT status FROM prev) AS prev_status`);
+    RETURNING id, occurrences, (SELECT status FROM prev) AS prev_status`));
   const row = result.rows[0] as { id: number; occurrences: number; prev_status: string | null };
   const occurrences = Number(row.occurrences);
   return { id: Number(row.id), occurrences, firstTime: occurrences === 1, reopened: row.prev_status === 'fixed' };

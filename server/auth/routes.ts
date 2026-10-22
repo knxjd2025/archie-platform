@@ -2,7 +2,10 @@ import type { Express, Request, Response } from 'express';
 import { buildGoogleAuthUrl, exchangeCodeForProfile, newOAuthState, newPkcePair, verifyOAuthState } from './google';
 import { handoffUrl, mintHandoff, redeemHandoff, sweepExpiredHandoffs } from './native-handoff';
 import { isAllowedLoginEmail, isBlockedLoginEmail, memberCanLogin } from './allowlist';
-import { getTeamMemberByEmail, touchLogin } from '../storage/team';
+import { findSignInMember, touchLogin } from '../storage/team';
+import { getCurrentCompany } from '../tenant/companies';
+import { isLiveCompany } from '../../shared/company';
+import { runAsCompany } from '../tenant/context';
 import { requireAuth } from './middleware';
 
 // Build the Google callback URL from the incoming request's host, so login
@@ -93,23 +96,30 @@ export function registerAuthRoutes(app: Express) {
 
       // Any active member with login enabled may sign in, regardless of role;
       // role scopes what they see/do once inside (rbac.ts + requireRole).
-      const member = await getTeamMemberByEmail(email);
-      if (!member || !memberCanLogin(member)) {
+      // Found across every company (nobody knows the company yet), then
+      // everything after this runs as that person's company.
+      const found = await findSignInMember(email);
+      if (!found || !memberCanLogin(found.member)) {
         return res.redirect('/login?error=not_authorized');
       }
+      // A paused or cancelled company's team cannot sign in.
+      if (!isLiveCompany(found.company)) {
+        return res.redirect('/login?error=company_inactive');
+      }
+      const { member, company } = found;
 
-      await touchLogin(email, profile.sub);
+      await runAsCompany(company.id, () => touchLogin(email, profile.sub));
 
       // The native app cannot use the session cookie set here: this is the
       // system browser, a different cookie jar from the app's WebView. Hand it
       // a one-time token instead, which the app trades for its own session.
       if (signIn.native) {
-        const token = await mintHandoff(email);
-        void sweepExpiredHandoffs().catch(() => {});
+        const token = await runAsCompany(company.id, () => mintHandoff(email));
+        void runAsCompany(company.id, () => sweepExpiredHandoffs()).catch(() => {});
         return res.redirect(handoffUrl(token));
       }
 
-      await startSignedInSession(req, { email, name: member.name, role: member.role });
+      await startSignedInSession(req, { email, name: member.name, role: member.role, companyId: company.id });
       res.redirect('/');
     } catch (err) {
       console.error('[auth] callback error', err);
@@ -137,10 +147,11 @@ export function registerAuthRoutes(app: Express) {
       if (process.env.LOGIN_ALLOWLIST && !isAllowedLoginEmail(email)) {
         return res.status(403).json({ error: 'not authorized' });
       }
-      const member = await getTeamMemberByEmail(email);
-      if (!member || !memberCanLogin(member)) return res.status(403).json({ error: 'not authorized' });
+      const found = await findSignInMember(email);
+      if (!found || !memberCanLogin(found.member) || !isLiveCompany(found.company)) return res.status(403).json({ error: 'not authorized' });
+      const { member, company } = found;
 
-      const user = { email, name: member.name, role: member.role };
+      const user = { email, name: member.name, role: member.role, companyId: company.id };
       await startSignedInSession(req, user);
       res.json({ ok: true, user });
     } catch (err) {
@@ -153,7 +164,11 @@ export function registerAuthRoutes(app: Express) {
     req.session.destroy(() => res.json({ ok: true }));
   });
 
-  app.get('/api/auth/me', requireAuth, (req: Request, res: Response) => {
-    res.json({ user: req.session.user });
+  app.get('/api/auth/me', requireAuth, async (req: Request, res: Response) => {
+    const company = await getCurrentCompany();
+    res.json({
+      user: req.session.user,
+      company: company && { id: company.id, slug: company.slug, name: company.name, trade: company.trade, branding: company.branding },
+    });
   });
 }

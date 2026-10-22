@@ -14,6 +14,12 @@
  */
 import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vitest';
 import crypto from 'node:crypto';
+import { inCompany, makeTestCompany, TEST_COMPANY_ID } from '../../__tests__/helpers/tenant';
+
+// Every test here runs as a real test company (row level security is on).
+let __co = TEST_COMPANY_ID;
+const as = inCompany(() => __co);
+beforeAll(async () => { if (process.env.DATABASE_URL) __co = await makeTestCompany('sigpool'); });
 
 // Before the pool is built: two connections, and a short wait for one, so a
 // pool deadlock fails the test in seconds instead of hanging it.
@@ -62,32 +68,32 @@ async function signedRequest(emails: string[]) {
   return r;
 }
 
-beforeAll(async () => {
+beforeAll(as(async () => {
   if (!hasDb) return;
   routes = await import('../routes');
   dbm = await import('../../db');
   schema = await import('../../../shared/schema');
   orm = await import('drizzle-orm');
-});
+}));
 
-afterAll(async () => {
+afterAll(as(async () => {
   if (!hasDb) return;
   const { db } = dbm; const { signatureRequests, writeLog } = schema;
   await db.delete(signatureRequests).where(orm.eq(signatureRequests.jobExternalId, JOB));
   await db.delete(writeLog).where(orm.eq(writeLog.targetId, JOB));
   await dbm.pool.end();
-});
+}));
 
 describe.skipIf(!hasDb)('finishing signed documents on a small pool', () => {
-  beforeEach(() => {
+  beforeEach(as(() => {
     vi.clearAllMocks();
     vi.restoreAllMocks();
     mocks.pending.length = 0;
     mocks.upload.mockImplementation(() => slow({ ok: true, fileId: `file-${crypto.randomUUID()}` }));
     mocks.sendWith.mockImplementation(() => slow('msg'));
-  });
+  }));
 
-  it('finishes many at once with two connections, each step exactly once', async () => {
+  it('finishes many at once with two connections, each step exactly once', as(async () => {
     const requests = [];
     for (let i = 0; i < 6; i++) requests.push(await signedRequest([`a${i}@example.com`, `b${i}@example.com`]));
 
@@ -105,9 +111,9 @@ describe.skipIf(!hasDb)('finishing signed documents on a small pool', () => {
     await Promise.all(requests.map((r) => routes.finishSigned(r.id, false)));
     expect(mocks.upload).not.toHaveBeenCalled();
     expect(mocks.sendWith).not.toHaveBeenCalled();
-  }, 30_000);
+  }), 30_000);
 
-  it('opening a job resumes its signed requests one at a time, without starving the pool', async () => {
+  it('opening a job resumes its signed requests one at a time, without starving the pool', as(async () => {
     for (let i = 0; i < 5; i++) await signedRequest([`list${i}@example.com`]);
     const { default: express } = await import('express');
     const app = express();
@@ -128,9 +134,9 @@ describe.skipIf(!hasDb)('finishing signed documents on a small pool', () => {
     await Promise.all(mocks.pending.splice(0));
     expect(mocks.sendWith.mock.calls.map((c) => c[1]).filter((to) => String(to).startsWith('list')).sort())
       .toEqual(['list0@example.com', 'list1@example.com', 'list2@example.com', 'list3@example.com', 'list4@example.com']);
-  }, 30_000);
+  }), 30_000);
 
-  it('sends nothing when the step cannot be recorded first', async () => {
+  it('sends nothing when the step cannot be recorded first', as(async () => {
     const r = await signedRequest(['closed@example.com']);
     // The write log refusing the claim — a missing table, a dropped connection.
     vi.spyOn(dbm.db, 'transaction').mockRejectedValueOnce(new Error('relation "write_log" does not exist'));
@@ -143,9 +149,9 @@ describe.skipIf(!hasDb)('finishing signed documents on a small pool', () => {
     await routes.finishSigned(r.id, false);
     expect(mocks.upload).toHaveBeenCalledTimes(1);
     expect(mocks.sendWith).toHaveBeenCalledTimes(1);
-  }, 30_000);
+  }), 30_000);
 
-  it('a step another run is in the middle of is left to it', async () => {
+  it('a step another run is in the middle of is left to it', as(async () => {
     const r = await signedRequest(['busy@example.com']);
     const { db } = dbm; const { writeLog } = schema;
     // Another instance claimed the copy a moment ago and has not finished.
@@ -156,5 +162,5 @@ describe.skipIf(!hasDb)('finishing signed documents on a small pool', () => {
     await routes.finishSigned(r.id, false);
     expect(mocks.upload).toHaveBeenCalledTimes(1);
     expect(mocks.sendWith).not.toHaveBeenCalled();
-  }, 30_000);
+  }), 30_000);
 });

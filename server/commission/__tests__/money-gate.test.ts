@@ -16,7 +16,10 @@ vi.mock('../../db', () => ({
   db: new Proxy({}, { get: () => { throw new Error('the money gate let the request reach the database'); } }),
 }));
 
+vi.mock('../../tenant/companies', async () => ({ getCurrentCompany: async () => (await import('../../__tests__/helpers/tenant')).liveTestCompany() }));
+
 import { registerCommissionRoutes } from '../routes';
+import { fakeSession } from '../../__tests__/helpers/tenant';
 import { clearSessionRevalidationCache } from '../../auth/middleware';
 
 let server: Server;
@@ -25,10 +28,7 @@ let base: string;
 beforeAll(async () => {
   const app = express();
   app.use(express.json());
-  app.use((req: any, _res, next) => {
-    req.session = { user: { email: 'cs@bestroofingnow.com', name: 'Test', role }, destroy: (cb: () => void) => cb() };
-    next();
-  });
+  app.use(fakeSession(() => ({ email: 'cs@example.com', name: 'Test', role })));
   registerCommissionRoutes(app);
   server = app.listen(0);
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;

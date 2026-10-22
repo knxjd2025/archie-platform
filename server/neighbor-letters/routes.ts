@@ -103,7 +103,7 @@ export function registerNeighborLetterRoutes(app: Express) {
       if (!isHttpUrl(next.estimateUrl) || !isHttpUrl(next.bookingUrl)) return res.status(400).json({ error: 'Links must be full http(s) URLs.' });
       if (!next.officeAddress) return res.status(400).json({ error: 'The mailing address is required on the email footer.' });
       await db.insert(settings).values({ key: SETTINGS_KEY, value: next, updatedAt: new Date() })
-        .onConflictDoUpdate({ target: settings.key, set: { value: next, updatedAt: new Date() } });
+        .onConflictDoUpdate({ target: [settings.companyId, settings.key], set: { value: next, updatedAt: new Date() } });
       res.json({ ok: true, ...next });
     } catch (error: any) {
       return sendFailure(res, error, 'PUT /api/neighbor-letters/settings');

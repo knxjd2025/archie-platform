@@ -7,6 +7,12 @@
  */
 import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vitest';
 import express from 'express';
+import { inCompany, makeTestCompany, TEST_COMPANY_ID } from '../../__tests__/helpers/tenant';
+
+// Every test here runs as a real test company (row level security is on).
+let __co = TEST_COMPANY_ID;
+const as = inCompany(() => __co);
+beforeAll(async () => { if (process.env.DATABASE_URL) __co = await makeTestCompany('reports'); });
 
 const mocks = vi.hoisted(() => ({
   renderEstimate: vi.fn(),
@@ -67,7 +73,7 @@ function routeHandler(method: 'get' | 'put' | 'post', path: string) {
   };
 }
 
-beforeAll(async () => {
+beforeAll(as(async () => {
   if (!hasDb) return;
   routes = await import('../routes');
   dbm = await import('../../db');
@@ -76,40 +82,40 @@ beforeAll(async () => {
   unchanged = await import('../unchanged-since');
   // Importing the reports routes pulls in most of the server; under the full
   // suite's load that took longer than the default 10s hook limit.
-}, 60_000);
+}), 60_000);
 
-afterAll(async () => {
+afterAll(as(async () => {
   // Skip cleanup if setup never finished, rather than crash on undefined.
   if (!hasDb || !dbm) return;
   await dbm.db.delete(schema.clientReports).where(orm.eq(schema.clientReports.jobExternalId, JOB));
   await dbm.db.delete(schema.writeLog).where(orm.eq(schema.writeLog.targetId, JOB));
-});
+}));
 
-beforeEach(() => {
+beforeEach(as(() => {
   vi.clearAllMocks();
   mocks.renderEstimate.mockReturnValue('<html>new</html>');
   mocks.owns.mockResolvedValue(true);
-});
+}));
 
 describe.skipIf(!hasDb)('the unchanged-since guard', () => {
-  it('matches a row stamped by the database itself, to the microsecond', async () => {
+  it('matches a row stamped by the database itself, to the microsecond', as(async () => {
     const row = await makeReport();   // updated_at from defaultNow(): microseconds
     const [hit] = await dbm.db.update(schema.clientReports).set({ title: 'x', updatedAt: new Date() })
       .where(orm.and(orm.eq(schema.clientReports.id, row.id), unchanged.unchangedSince(row.updatedAt))).returning();
     expect(hit).toBeTruthy();
-  });
+  }));
 
-  it('refuses once somebody else has saved', async () => {
+  it('refuses once somebody else has saved', as(async () => {
     const row = await makeReport();
     await dbm.db.update(schema.clientReports).set({ updatedAt: new Date(Date.now() + 5) }).where(orm.eq(schema.clientReports.id, row.id));
     const [hit] = await dbm.db.update(schema.clientReports).set({ title: 'x' })
       .where(orm.and(orm.eq(schema.clientReports.id, row.id), unchanged.unchangedSince(row.updatedAt))).returning();
     expect(hit).toBeUndefined();
-  });
+  }));
 });
 
 describe.skipIf(!hasDb)('re-rendering a saved report', () => {
-  it('an estimate edit renders with the job\'s inspection, like the editor\'s save', async () => {
+  it('an estimate edit renders with the job\'s inspection, like the editor\'s save', as(async () => {
     const row = await makeReport();
     const put = routeHandler('put', '/api/clients/:externalId/reports/:reportId/estimate');
     const res = await put({ params: { externalId: JOB, reportId: row.reportId }, body: { lines: [] } });
@@ -118,18 +124,18 @@ describe.skipIf(!hasDb)('re-rendering a saved report', () => {
     expect(opts).toMatchObject({ customer: 'Karen Whitfield', jobType: 'insurance', damageSummary: 'Hail across the south slope' });
     expect(opts.inspection).toBeTruthy();
     expect((await reread(row.id)).html).toBe('<html>new</html>');
-  });
+  }));
 
-  it('a refine renders the same way', async () => {
+  it('a refine renders the same way', as(async () => {
     const row = await makeReport();
     mocks.refine.mockResolvedValue({ text: JSON.stringify({ reply: 'Done.', patch: { title: 'Storm damage estimate' } }) });
     const post = routeHandler('post', '/api/clients/:externalId/reports/:reportId/refine');
     const res = await post({ params: { externalId: JOB, reportId: row.reportId }, body: { instruction: 'Retitle it' } });
     expect(res.status).toBe(200);
     expect(mocks.renderEstimate.mock.calls[0][1]).toMatchObject({ jobType: 'insurance', damageSummary: 'Hail across the south slope' });
-  });
+  }));
 
-  it('a refine does not write over a save made while the AI was working', async () => {
+  it('a refine does not write over a save made while the AI was working', as(async () => {
     const row = await makeReport();
     mocks.refine.mockImplementation(async () => {
       // The rep's editor saves while the model is still answering.
@@ -141,11 +147,11 @@ describe.skipIf(!hasDb)('re-rendering a saved report', () => {
     const res = await post({ params: { externalId: JOB, reportId: row.reportId }, body: { instruction: 'Retitle it' } });
     expect(res.status).toBe(409);
     expect((await reread(row.id)).title).toBe('Saved by the editor');
-  });
+  }));
 });
 
 describe.skipIf(!hasDb)('polling one report', () => {
-  it('answers only for a job the rep can see', async () => {
+  it('answers only for a job the rep can see', as(async () => {
     const row = await makeReport();
     const get = routeHandler('get', '/api/reports/:id');
     mocks.owns.mockResolvedValue(false);
@@ -153,5 +159,5 @@ describe.skipIf(!hasDb)('polling one report', () => {
     expect(mocks.owns).toHaveBeenCalledWith(expect.anything(), JOB);
     mocks.owns.mockResolvedValue(true);
     expect((await get({ params: { id: row.reportId } })).status).toBe(200);
-  });
+  }));
 });

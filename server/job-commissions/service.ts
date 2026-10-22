@@ -109,7 +109,7 @@ export async function ensureJobCommission(job: SoldJobLike, createdBy: string): 
     jobType: job.insuranceClaim ? 'insurance' : 'retail',
     revenue: '0.00',
     createdBy,
-  }).onConflictDoNothing({ target: jobCommissions.jobExternalId }).returning();
+  }).onConflictDoNothing({ target: [jobCommissions.companyId, jobCommissions.jobExternalId] }).returning();
   if (inserted) {
     await withDefaultSplit(inserted.id, { repName, teamMemberId }, createdBy);
     return { row: inserted, created: true };

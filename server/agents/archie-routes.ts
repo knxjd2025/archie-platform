@@ -6,6 +6,8 @@ import { sendFailure } from '../lib/failure';
 import { timingSafeEqualStr } from '../security-config';
 import { buildAgentViewer, type AgentViewer } from './viewer';
 import type { SessionUser } from '../access/rep-scope';
+import { forEachLiveCompany } from '../tenant/companies';
+import { currentCompanyId } from '../tenant/context';
 
 export const ADVISOR_KEY = 'advisor';
 /** A pasted adjuster scope fits comfortably; a whole document dump does not. */
@@ -128,8 +130,13 @@ export function registerArchieRoutes(app: Express) {
   // pattern as the sync/brain crons); admins can also trigger it from a session.
   app.get('/api/agent-chats/cron', agentChatsCronGate, async (_req: Request, res: Response) => {
     try {
-      const result = await summarizePendingDays();
-      res.json({ ok: true, ...result });
+      // An admin running it by hand runs it for their own company only. The
+      // scheduled run (no session) runs once per company, as that company.
+      const own = currentCompanyId();
+      const companies = own
+        ? [{ companyId: own, ok: true, value: await summarizePendingDays() }]
+        : await forEachLiveCompany(() => summarizePendingDays());
+      res.json({ ok: companies.every((c) => c.ok), companies });
     } catch (err: any) {
       return sendFailure(res, err, 'GET /api/agent-chats/cron', 500, 'failed');
     }

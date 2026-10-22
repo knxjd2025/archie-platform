@@ -42,6 +42,7 @@ import {
   DOCUMENT_HEIGHT_SCRIPT, DOCUMENT_SANDBOX, SIGN_PAGE_CSP,
   declinePage, declinedPage, notFoundPage, signPage, signedPage, tooManyPage, voidedPage,
 } from './sign-page';
+import { signerLinkCompany } from '../tenant/public-links';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_SIGNERS = 4;
@@ -807,7 +808,7 @@ export function registerSignatureRoutes(app: Express) {
   // ---- The signer's side. No login: the token in the link is the capability. ----
 
   /** The frozen document on its own, for the frame and for a full-screen read. */
-  app.get('/r/s/:token/document', viewLimiter, asyncHandler(async (req: Request, res: Response) => {
+  app.get('/r/s/:token/document', viewLimiter, signerLinkCompany(), asyncHandler(async (req: Request, res: Response) => {
     const found = await bySignerToken(req.params.token);
     if (!found) return res.status(404).send('Not found.');
     const { request } = found;
@@ -854,7 +855,7 @@ h1,h2,h3{line-height:1.25} table{border-collapse:collapse} img{max-width:100%}</
   }));
 
   /** The signing page. Opening it is itself part of the record. */
-  app.get('/r/s/:token', viewLimiter, asyncHandler(async (req: Request, res: Response) => {
+  app.get('/r/s/:token', viewLimiter, signerLinkCompany(), asyncHandler(async (req: Request, res: Response) => {
     const found = await bySignerToken(req.params.token);
     if (!found) return res.status(404).send(notFoundPage());
     const { request, signer, signers } = found;
@@ -896,7 +897,7 @@ h1,h2,h3{line-height:1.25} table{border-collapse:collapse} img{max-width:100%}</
   }));
 
   /** The signature itself. */
-  app.post('/r/s/:token', signFloodLimiter, signLimiter, asyncHandler(async (req: Request, res: Response) => {
+  app.post('/r/s/:token', signFloodLimiter, signLimiter, signerLinkCompany(), asyncHandler(async (req: Request, res: Response) => {
     const found = await bySignerToken(req.params.token);
     if (!found) return res.status(404).send(notFoundPage());
     const { request, signer } = found;
@@ -957,7 +958,7 @@ h1,h2,h3{line-height:1.25} table{border-collapse:collapse} img{max-width:100%}</
       .send(signedPage(request.title, signerView(updated, false), !!signer.email));
   }));
 
-  app.get('/r/s/:token/decline', viewLimiter, asyncHandler(async (req: Request, res: Response) => {
+  app.get('/r/s/:token/decline', viewLimiter, signerLinkCompany(), asyncHandler(async (req: Request, res: Response) => {
     const found = await bySignerToken(req.params.token);
     if (!found) return res.status(404).send(notFoundPage());
     if (found.request.status === 'voided') return res.status(410).send(voidedPage(found.request.title, found.request.voidReason));
@@ -965,7 +966,7 @@ h1,h2,h3{line-height:1.25} table{border-collapse:collapse} img{max-width:100%}</
     res.set('Cache-Control', 'no-store').send(declinePage(req.params.token, found.request.title));
   }));
 
-  app.post('/r/s/:token/decline', signFloodLimiter, signLimiter, asyncHandler(async (req: Request, res: Response) => {
+  app.post('/r/s/:token/decline', signFloodLimiter, signLimiter, signerLinkCompany(), asyncHandler(async (req: Request, res: Response) => {
     const found = await bySignerToken(req.params.token);
     if (!found) return res.status(404).send(notFoundPage());
     const { request, signer } = found;

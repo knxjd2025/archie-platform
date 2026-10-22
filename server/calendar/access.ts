@@ -41,7 +41,7 @@ export async function setCalendarSeeAll(email: string, on: boolean): Promise<str
   const current = await calendarSeeAllEmails();
   const next = on ? Array.from(new Set([...current, e])) : current.filter((x) => x !== e);
   await db.insert(settings).values({ key: SEE_ALL_KEY, value: next, updatedAt: new Date() })
-    .onConflictDoUpdate({ target: settings.key, set: { value: next, updatedAt: new Date() } });
+    .onConflictDoUpdate({ target: [settings.companyId, settings.key], set: { value: next, updatedAt: new Date() } });
   return next;
 }
 

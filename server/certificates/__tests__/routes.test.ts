@@ -8,6 +8,12 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vitest';
 import crypto from 'node:crypto';
 import express from 'express';
+import { inCompany, makeTestCompany, TEST_COMPANY_ID } from '../../__tests__/helpers/tenant';
+
+// Every test here runs as a real test company (row level security is on).
+let __co = TEST_COMPANY_ID;
+const as = inCompany(() => __co);
+beforeAll(async () => { if (process.env.DATABASE_URL) __co = await makeTestCompany('cert'); });
 
 const mocks = vi.hoisted(() => ({
   upload: vi.fn(),
@@ -68,56 +74,56 @@ function routeHandler(method: 'get' | 'post', path: string) {
   });
 }
 
-/** The middleware registered just before a route's handler — its rate limiter. */
+/** The rate limiter: registered just before the link's company lookup and the handler. */
 function limiterFor(method: 'get' | 'post', path: string) {
   const app = express();
   const spy = vi.spyOn(app, method);
   routes.registerCertificateRoutes(app);
   const args = spy.mock.calls.find((c) => c[0] === path) as unknown[];
-  return args[args.length - 2] as (req: unknown, res: unknown, next: () => void) => void;
+  return args[args.length - 3] as (req: unknown, res: unknown, next: () => void) => void;
 }
 
-beforeAll(async () => {
+beforeAll(as(async () => {
   if (!hasDb) return;
   routes = await import('../routes');
   dbm = await import('../../db');
   schema = await import('../../../shared/schema');
   orm = await import('drizzle-orm');
-});
+}));
 
-afterAll(async () => {
+afterAll(as(async () => {
   if (!hasDb) return;
   await dbm.db.delete(schema.signatureRequests).where(orm.like(schema.signatureRequests.jobExternalId, `${JOB_PREFIX}%`));
   await dbm.db.delete(schema.jobCertificates).where(orm.like(schema.jobCertificates.jobExternalId, `${JOB_PREFIX}%`));
   await dbm.db.delete(schema.finalWalkthroughs).where(orm.like(schema.finalWalkthroughs.jobExternalId, `${JOB_PREFIX}%`));
   await dbm.db.delete(schema.writeLog).where(orm.like(schema.writeLog.targetId, `${JOB_PREFIX}%`));
-});
+}));
 
-beforeEach(() => {
+beforeEach(as(() => {
   vi.clearAllMocks();
   mocks.pending.length = 0;
   mocks.upload.mockResolvedValue({ ok: true, fileId: 'file-1' });
   mocks.send.mockResolvedValue('msg');
-});
+}));
 
 describe.skipIf(!hasDb)('pulling the walkthrough in again', () => {
   const refresh = () => routeHandler('post', '/api/clients/:externalId/certificate/refresh');
 
-  it('is refused once we have signed it', async () => {
+  it('is refused once we have signed it', as(async () => {
     const row = await makeCertificate({ companySigner: 'Dana Rep', companySignedAt: new Date() });
     const res = await refresh()({ params: { externalId: row.jobExternalId } });
     expect(res.status).toBe(409);
     expect((res.body as { error: string }).error).toMatch(/your signature/);
-  });
+  }));
 
-  it('is refused once the homeowner has the link', async () => {
+  it('is refused once the homeowner has the link', as(async () => {
     const row = await makeCertificate({ sentAt: new Date(), status: 'sent' });
     const res = await refresh()({ params: { externalId: row.jobExternalId } });
     expect(res.status).toBe(409);
     expect((res.body as { error: string }).error).toMatch(/homeowner/);
-  });
+  }));
 
-  it('is refused while it is out through Send for signature', async () => {
+  it('is refused while it is out through Send for signature', as(async () => {
     const row = await makeCertificate();
     await dbm.db.insert(schema.signatureRequests).values({
       jobExternalId: row.jobExternalId, sourceKind: 'certificate', title: 'Certificate of Completion',
@@ -126,9 +132,9 @@ describe.skipIf(!hasDb)('pulling the walkthrough in again', () => {
     const res = await refresh()({ params: { externalId: row.jobExternalId } });
     expect(res.status).toBe(409);
     expect((res.body as { error: string }).error).toMatch(/out for signature/);
-  });
+  }));
 
-  it('can be started over once sent, and the link the homeowner holds stops working', async () => {
+  it('can be started over once sent, and the link the homeowner holds stops working', as(async () => {
     const row = await makeCertificate({ companySigner: 'Dana Rep', companySignedAt: new Date(), sentAt: new Date(), sentBy: 'rep@bestroofingnow.com', status: 'sent' });
     await dbm.db.insert(schema.finalWalkthroughs).values({
       jobExternalId: row.jobExternalId, answers: {}, status: 'submitted', submittedAt: new Date(), createdBy: 'rep@bestroofingnow.com',
@@ -147,9 +153,9 @@ describe.skipIf(!hasDb)('pulling the walkthrough in again', () => {
 
     const page = routeHandler('get', '/r/sign/:token');
     expect((await page({ params: { token: row.signToken } })).status).toBe(404);
-  });
+  }));
 
-  it('is never started over once the homeowner has signed', async () => {
+  it('is never started over once the homeowner has signed', as(async () => {
     const row = await makeCertificate({
       companySigner: 'Dana Rep', companySignedAt: new Date(), sentAt: new Date(), status: 'signed',
       homeownerSigner: 'Karen Whitfield', homeownerSignedAt: new Date(),
@@ -159,11 +165,11 @@ describe.skipIf(!hasDb)('pulling the walkthrough in again', () => {
     const [after] = await dbm.db.select().from(schema.jobCertificates).where(orm.eq(schema.jobCertificates.id, row.id));
     expect(after.signToken).toBe(row.signToken);
     expect(after.homeownerSigner).toBe('Karen Whitfield');
-  });
+  }));
 });
 
 describe.skipIf(!hasDb)('the homeowner signing through the certificate link', () => {
-  it('records the first signature only, and files one copy', async () => {
+  it('records the first signature only, and files one copy', as(async () => {
     const row = await makeCertificate({ companySigner: 'Dana Rep', companySignedAt: new Date(), sentAt: new Date(), status: 'sent' });
     const sign = routeHandler('post', '/r/sign/:token');
     await Promise.all([
@@ -183,11 +189,11 @@ describe.skipIf(!hasDb)('the homeowner signing through the certificate link', ()
     expect(again.homeownerSigner).toBe(after.homeownerSigner);
     expect(again.homeownerSignedAt?.getTime()).toBe(after.homeownerSignedAt?.getTime());
     expect(mocks.upload).toHaveBeenCalledTimes(1);
-  });
+  }));
 });
 
 describe.skipIf(!hasDb)('the signing email', () => {
-  it('escapes the names and addresses it carries', async () => {
+  it('escapes the names and addresses it carries', as(async () => {
     const row = await makeCertificate({ companySigner: 'Dana Rep', companySignedAt: new Date() });
     const send = routeHandler('post', '/api/clients/:externalId/certificate/send');
     const res = await send({ params: { externalId: row.jobExternalId }, body: { email: 'karen@example.com' } });
@@ -197,14 +203,14 @@ describe.skipIf(!hasDb)('the signing email', () => {
     expect(html).not.toContain('<b>Sardis</b>');
     expect(html).not.toContain('<Boss>');
     expect(html).toContain('&lt;b&gt;Sardis&lt;/b&gt;');
-  });
+  }));
 });
 
 describe.skipIf(!hasDb)('the certificate link before it is ready', () => {
   const page = () => routeHandler('get', '/r/sign/:token');
   const sign = () => routeHandler('post', '/r/sign/:token');
 
-  it('will not take a signature on a draft nobody has signed or sent', async () => {
+  it('will not take a signature on a draft nobody has signed or sent', as(async () => {
     const row = await makeCertificate();
     const shown = await page()({ params: { token: row.signToken } });
     expect(shown.status).toBe(409);
@@ -217,32 +223,32 @@ describe.skipIf(!hasDb)('the certificate link before it is ready', () => {
     const [after] = await dbm.db.select().from(schema.jobCertificates).where(orm.eq(schema.jobCertificates.id, row.id));
     expect([after.homeownerSigner, after.homeownerSignedAt, after.status]).toEqual([null, null, 'draft']);
     expect(mocks.upload).not.toHaveBeenCalled();
-  });
+  }));
 
-  it('will not take one we have signed but not yet sent', async () => {
+  it('will not take one we have signed but not yet sent', as(async () => {
     const row = await makeCertificate({ companySigner: 'Dana Rep', companySignedAt: new Date() });
     expect((await page()({ params: { token: row.signToken } })).status).toBe(409);
     expect((await sign()({ params: { token: row.signToken }, body: { name: 'Karen Whitfield', affirm: 'yes' } })).status).toBe(409);
-  });
+  }));
 
-  it('opens the form once it is countersigned and sent, with no script allowed on the page', async () => {
+  it('opens the form once it is countersigned and sent, with no script allowed on the page', as(async () => {
     const row = await makeCertificate({ companySigner: 'Dana Rep', companySignedAt: new Date(), sentAt: new Date(), status: 'sent' });
     const res = await page()({ params: { token: row.signToken } });
     expect(res.status).toBe(200);
     expect(String(res.body)).toContain(`<form method="post" action="/r/sign/${row.signToken}"`);
     expect(res.headers['content-security-policy']).toMatch(/script-src 'none'/);
     expect(res.headers['content-security-policy']).toMatch(/frame-ancestors 'self'/);
-  });
+  }));
 
-  it('still shows the thank-you once signed, however it was signed', async () => {
+  it('still shows the thank-you once signed, however it was signed', as(async () => {
     // Signed through "Send for signature", which writes back without the certificate's own send.
     const row = await makeCertificate({ status: 'signed', homeownerSigner: 'Karen Whitfield', homeownerSignedAt: new Date() });
     const res = await page()({ params: { token: row.signToken } });
     expect(res.status).toBe(200);
     expect(String(res.body)).toMatch(/this is signed/);
-  });
+  }));
 
-  it('turns away a malformed token without looking it up', async () => {
+  it('turns away a malformed token without looking it up', as(async () => {
     const selectSpy = vi.spyOn(dbm.db, 'select');
     for (const token of ['nope', `${'a'.repeat(32)}' or 1=1`, 'A'.repeat(32), 'a'.repeat(33)]) {
       expect((await page()({ params: { token } })).status).toBe(404);
@@ -250,11 +256,11 @@ describe.skipIf(!hasDb)('the certificate link before it is ready', () => {
     }
     expect(selectSpy).not.toHaveBeenCalled();
     selectSpy.mockRestore();
-  });
+  }));
 });
 
 describe.skipIf(!hasDb)('the certificate link under load', () => {
-  it('answers a limited homeowner with a page, not JSON, on both reading and signing', async () => {
+  it('answers a limited homeowner with a page, not JSON, on both reading and signing', as(async () => {
     const { __resetRateLimits } = await import('../../lib/rate-limit');
     for (const method of ['get', 'post'] as const) {
       __resetRateLimits();
@@ -278,5 +284,5 @@ describe.skipIf(!hasDb)('the certificate link under load', () => {
       expect(refused!.body).toMatch(/Please wait/);
     }
     __resetRateLimits();
-  });
+  }));
 });

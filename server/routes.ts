@@ -67,6 +67,9 @@ import { getTwilioClient } from './integrations/twilio';
 import { sendUpstreamFailure } from './lib/upstream';
 import { sendFailure } from './lib/failure';
 import { registerCommsRoutes } from './comms/routes';
+import { blockDisabledJobs } from './tenant/cron';
+import { getCompanyByGhlLocation } from './tenant/companies';
+import { runAsCompany } from './tenant/context';
 
 // A few of these `?limit=` query params were forwarded straight to the
 // JobTread/GHL client with only an `|| default` fallback and no upper bound
@@ -109,6 +112,9 @@ export function registerRoutes(app: Express) {
   // stub and the company's live bank transactions).
   app.use('/api/financial', requireAuth, requireRole('admin'));
   app.use('/api/knowledge', requireAuth);
+
+  // Jobs from the Best Roofing AI app that Archie does not run (server/tenant/cron.ts).
+  blockDisabledJobs(app);
 
   // First, so every route registered after it reports its failures to the bug log.
   registerBugRoutes(app);
@@ -1146,6 +1152,14 @@ export function registerRoutes(app: Express) {
       const payload = JSON.parse(req.body.toString());
       console.log('GHL Webhook received:', payload.type || payload.eventType);
 
+      // Which company: the GHL sub-account (location) the event came from.
+      // An event for a location no company has connected is acknowledged and
+      // dropped, so GHL does not keep retrying it.
+      const locationId = String(payload.locationId || payload.location_id || payload.data?.locationId || '');
+      const company = locationId ? await getCompanyByGhlLocation(locationId) : null;
+      if (!company) return res.json({ received: true, ignored: 'unknown location' });
+
+      await runAsCompany(company.id, async () => {
       const ghl = new GoHighLevelClient();
       const { eventType, data } = ghl.parseWebhookPayload(payload);
 
@@ -1171,6 +1185,7 @@ export function registerRoutes(app: Express) {
           console.log('Lead processed:', result);
         }
       }
+      });
 
       res.json({ received: true });
     } catch (error: any) {
@@ -1239,7 +1254,7 @@ export function registerRoutes(app: Express) {
         .insert(settings)
         .values({ key: req.params.key, value })
         .onConflictDoUpdate({
-          target: settings.key,
+          target: [settings.companyId, settings.key],
           set: { value, updatedAt: new Date() },
         });
 

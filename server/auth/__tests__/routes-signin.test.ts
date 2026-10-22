@@ -23,9 +23,17 @@ vi.mock('../google', async (orig) => ({
   ...(await orig<typeof import('../google')>()),
   exchangeCodeForProfile: (...a: unknown[]) => exchange(...a),
 }));
+const CO = '11111111-1111-4111-8111-111111111111';
 vi.mock('../../storage/team', () => ({
   getTeamMemberByEmail: (...a: unknown[]) => member(...a),
+  findSignInMember: async (...a: unknown[]) => {
+    const row = await member(...a);
+    return row && { member: row, company: { id: '11111111-1111-4111-8111-111111111111', status: 'active', name: 'Test Co' } };
+  },
   touchLogin: vi.fn(async () => {}),
+}));
+vi.mock('../../tenant/companies', () => ({
+  getCurrentCompany: async () => ({ id: '11111111-1111-4111-8111-111111111111', status: 'active', name: 'Test Co', slug: 'test', trade: 'roofing', branding: {} }),
 }));
 vi.mock('../native-handoff', () => ({
   mintHandoff: (...a: unknown[]) => mint(...a),
@@ -35,6 +43,7 @@ vi.mock('../native-handoff', () => ({
 }));
 
 const { registerAuthRoutes } = await import('../routes');
+const { tenantFromSession } = await import('../../tenant/middleware');
 const { clearSessionRevalidationCache } = await import('../middleware');
 
 const EMAIL = 'thomas@bestroofingnow.com';
@@ -50,6 +59,7 @@ beforeAll(async () => {
   const app = express();
   app.use(express.json());
   app.use(session({ secret: 'test-secret', resave: false, saveUninitialized: false }));
+  app.use(tenantFromSession);
   registerAuthRoutes(app);
   server = app.listen(0);
   await new Promise((r) => server.once('listening', r));

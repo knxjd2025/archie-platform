@@ -71,7 +71,7 @@ export async function upsertLoop(input: LoopInput): Promise<{ id: number; create
       claimId: input.claimId,
     })
     .onConflictDoUpdate({
-      target: openLoops.dedupeKey,
+      target: [openLoops.companyId, openLoops.dedupeKey],
       set: {
         summary: input.summary,
         urgency: input.urgency ?? 'normal',

@@ -3,6 +3,7 @@ import { agents, knowledgeDocuments } from '../shared/schema';
 import { eq, sql } from 'drizzle-orm';
 import { seedKnowledgeBase } from './rag/seed-knowledge';
 import { syncTeamAdvisors, pruneUnavailableToolNotes } from './agents/team-advisors';
+import { forEachLiveCompany } from './tenant/companies';
 
 const defaultAgents = [
   {
@@ -237,9 +238,21 @@ export async function seedKnowledge() {
 }
 
 // Combined seed function
-export async function seedAll() {
+/** Seed one company's advisors and knowledge base. Runs as the current company. */
+export async function seedCompany() {
   await seedAgents();
   await seedKnowledge();
+}
+
+/**
+ * Seed every live company. Each company has its own advisors and knowledge
+ * base, so this runs once per company, as that company. Idempotent: it only
+ * fills in what is missing.
+ */
+export async function seedAll() {
+  const results = await forEachLiveCompany(() => seedCompany());
+  const failed = results.filter((r) => !r.ok);
+  if (failed.length) throw new Error(`seed failed for ${failed.length} of ${results.length} companies: ${failed.map((f) => f.error).join('; ')}`);
 }
 
 /**

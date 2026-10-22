@@ -14,6 +14,7 @@ import { dataScope } from '../../shared/rbac';
 import { sendFailure } from '../lib/failure';
 import { logWrite } from '../writes/log';
 import { easternNow, isSendWindow, runRepReminders } from './daily-reminder';
+import { forEachLiveCompany } from '../tenant/companies';
 
 /** Constant-time, so the secret can't be guessed a character at a time from response timing. */
 function cronAuthorized(req: Request): boolean {
@@ -36,13 +37,17 @@ export function registerRepReminderRoutes(app: Express) {
       if (req.query.force !== '1' && !isSendWindow(now)) {
         return res.json({ ok: true, skipped: 'outside the 8 AM Eastern window', eastern: easternNow(now) });
       }
-      const result = await runRepReminders(now, appUrl());
-      await logWrite({
-        actor: 'system:cron', system: 'app', action: 'rep_daily_reminder', targetId: result.date,
-        summary: `${result.sent} sent, ${result.nothingToDo} with nothing to do, ${result.failed} failed (${result.reps} reps)`,
-        ok: result.failed === 0, error: null,
+      // Once per company, as that company (server/tenant/cron.ts).
+      const companies = await forEachLiveCompany(async () => {
+        const result = await runRepReminders(now, appUrl());
+        await logWrite({
+          actor: 'system:cron', system: 'app', action: 'rep_daily_reminder', targetId: result.date,
+          summary: `${result.sent} sent, ${result.nothingToDo} with nothing to do, ${result.failed} failed (${result.reps} reps)`,
+          ok: result.failed === 0, error: null,
+        });
+        return result;
       });
-      res.json({ ok: true, ...result });
+      res.json({ ok: companies.every((c) => c.ok), companies });
     } catch (error: any) {
       return sendFailure(res, error, 'GET /api/cron/rep-daily-reminder');
     }

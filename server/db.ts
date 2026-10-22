@@ -1,7 +1,8 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
-import { Pool } from 'pg';
+import { Pool, type PoolClient } from 'pg';
 import * as schema from '../shared/schema';
 import { registerUtcTimestampParser } from './lib/pg-timestamps';
+import { currentTenant } from './tenant/context';
 
 // Before any pool is created: naive timestamps must read back as the instant
 // they were written, not as local time. See lib/pg-timestamps.ts.
@@ -20,7 +21,55 @@ function envInt(name: string, fallback: number): number {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
-export const pool = new Pool({
+// Supabase's transaction pooler (port 6543) hands each statement to whichever
+// server connection is free, so the per-connection company setting below would
+// not stick. Archie needs the session pooler (5432) or a direct connection.
+if (/pooler\.supabase\.com:6543/.test(databaseUrl) && process.env.ARCHIE_ALLOW_TXN_POOLER !== '1') {
+  throw new Error('DATABASE_URL points at the Supabase transaction pooler (6543). Use the session pooler (5432): company isolation depends on per-connection settings.');
+}
+
+/** The settings last applied to a pooled client, so an unchanged checkout skips the round trip. */
+const APPLIED = Symbol('archieTenantApplied');
+type TaggedClient = PoolClient & { [APPLIED]?: string };
+
+/**
+ * A pg Pool that tells every connection it hands out which company the current
+ * work is for (server/tenant/context.ts). Row level security in the database
+ * reads these settings; a connection with none set sees no company's rows.
+ *
+ * Both are set on every checkout (or confirmed unchanged), so a setting can
+ * never carry over from one request to the next on a reused connection.
+ * pool.query() goes through connect() too, as do drizzle's transactions.
+ */
+class TenantPool extends Pool {
+  connect(): Promise<PoolClient>;
+  connect(cb: (err: Error | undefined, client: PoolClient | undefined, done: (release?: any) => void) => void): void;
+  connect(cb?: (err: Error | undefined, client: PoolClient | undefined, done: (release?: any) => void) => void): Promise<PoolClient> | void {
+    const ctx = currentTenant();
+    const company = ctx?.companyId ?? '';
+    const system = ctx?.system ? 'on' : '';
+    const key = `${company}|${system}`;
+    const ready = (super.connect() as Promise<PoolClient>).then(async (raw) => {
+      const client = raw as TaggedClient;
+      if (client[APPLIED] !== key) {
+        try {
+          await client.query('select set_config($1, $2, false), set_config($3, $4, false)', ['app.company_id', company, 'app.system', system]);
+          client[APPLIED] = key;
+        } catch (err) {
+          // Unknown state: throw this connection away rather than reuse it.
+          client[APPLIED] = undefined;
+          client.release(err as Error);
+          throw err;
+        }
+      }
+      return client;
+    });
+    if (!cb) return ready;
+    ready.then((client) => cb(undefined, client, client.release.bind(client)), (err) => cb(err, undefined, () => {}));
+  }
+}
+
+export const pool = new TenantPool({
   connectionString: databaseUrl,
   // Every Vercel instance holds its own pool, so the old default of 20 per
   // instance multiplied across concurrent instances and ran the Supabase

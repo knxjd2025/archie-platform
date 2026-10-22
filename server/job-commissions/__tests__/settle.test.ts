@@ -1,4 +1,10 @@
-import { afterAll, describe, it, expect } from 'vitest';
+import { afterAll, describe, it, expect, beforeAll } from 'vitest';
+import { inCompany, makeTestCompany, TEST_COMPANY_ID } from '../../__tests__/helpers/tenant';
+
+// Every test here runs as a real test company (row level security is on).
+let __co = TEST_COMPANY_ID;
+const as = inCompany(() => __co);
+beforeAll(async () => { if (process.env.DATABASE_URL) __co = await makeTestCompany('settle'); });
 
 /**
  * Paying reps, against a real database — the double payment this guards
@@ -50,11 +56,11 @@ describe.skipIf(!local)('settling a job', async () => {
     .where(eq(jobCommissionSplits.jobCommissionId, jobId));
   const jobRow = async (id: number) => (await db.select().from(jobCommissions).where(eq(jobCommissions.id, id)))[0];
 
-  afterAll(async () => {
+  afterAll(as(async () => {
     await db.delete(jobCommissions).where(like(jobCommissions.jobExternalId, `${PREFIX}%`));
-  });
+  }));
 
-  it('pays once when two settle-ups land at the same moment', async () => {
+  it('pays once when two settle-ups land at the same moment', as(async () => {
     const { job } = await approvedJob([{ rep: 'Ann', pct: 50 }, { rep: 'Bo', pct: 50 }]);
     // Open the connections first, so the runs below really do overlap rather
     // than queueing behind a connection that is still being set up.
@@ -68,9 +74,9 @@ describe.skipIf(!local)('settling a job', async () => {
     expect(runs.map((r) => r.payouts.length).sort()).toEqual([0, 0, 0, 0, 2]);
     expect(runs.filter((r) => r.refused?.message === 'already paid')).toHaveLength(4);
     expect((await jobRow(job.id)).status).toBe('paid');
-  });
+  }));
 
-  it('pays only the rep it was asked to, and says what actually went out', async () => {
+  it('pays only the rep it was asked to, and says what actually went out', as(async () => {
     const { job, splits } = await approvedJob([{ rep: 'Ann', pct: 60 }, { rep: 'Bo', pct: 40 }]);
     const r = await settleApprovedSplits(job.id, 'boss@brn.com', '', [splits[1].id]);
     expect(r.refused).toBeNull();
@@ -83,9 +89,9 @@ describe.skipIf(!local)('settling a job', async () => {
     expect(after.find((s) => s.id === splits[1].id)?.status).toBe('paid');
     // Ann is still owed, so the job is still on the board as approved.
     expect((await jobRow(job.id)).status).toBe('approved');
-  });
+  }));
 
-  it('refuses to pay when the shares no longer come to the whole pool', async () => {
+  it('refuses to pay when the shares no longer come to the whole pool', as(async () => {
     const { job, splits } = await approvedJob([{ rep: 'Ann', pct: 50 }, { rep: 'Bo', pct: 50 }]);
     // Edited after approval, the way the old split PATCH allowed.
     await db.update(jobCommissionSplits).set({ sharePct: '70.00' }).where(eq(jobCommissionSplits.id, splits[0].id));
@@ -93,25 +99,25 @@ describe.skipIf(!local)('settling a job', async () => {
     expect(r.refused?.reason).toBe('shares');
     expect(r.refused?.message).toMatch(/120%/);
     expect(await payoutsOf(job.id)).toHaveLength(0);
-  });
+  }));
 
-  it('will not pay a job somebody reopened since the screen was drawn', async () => {
+  it('will not pay a job somebody reopened since the screen was drawn', as(async () => {
     const { job } = await approvedJob([{ rep: 'Ann', pct: 100, status: 'open' }]);
     const r = await settleApprovedSplits(job.id, 'boss@brn.com', '');
     expect(r.refused).toEqual({ reason: 'status', message: 'already open' });
     expect(await payoutsOf(job.id)).toHaveLength(0);
-  });
+  }));
 
-  it('settles an approved commission of nothing without waiting for a payment', async () => {
+  it('settles an approved commission of nothing without waiting for a payment', as(async () => {
     const { job } = await approvedJob([{ rep: 'Ann', pct: 100 }], { manualCommission: '0.00' });
     const row = await jobRow(job.id);
     expect(row.status).toBe('paid');
     // Paid by whoever approved it, when they approved it — there was no payment.
     expect(row.paidBy).toBe('boss@brn.com');
     expect(row.paidAt).not.toBeNull();
-  });
+  }));
 
-  it('stamps the job approved and paid from its reps, and clears the stamps on reopen', async () => {
+  it('stamps the job approved and paid from its reps, and clears the stamps on reopen', as(async () => {
     const { job } = await approvedJob([{ rep: 'Ann', pct: 100 }]);
     let row = await jobRow(job.id);
     expect(row.approvedBy).toBe('boss@brn.com');
@@ -131,9 +137,9 @@ describe.skipIf(!local)('settling a job', async () => {
     row = await jobRow(job.id);
     expect(row.status).toBe('open');
     expect([row.approvedAt, row.approvedBy, row.paidAt, row.paidBy]).toEqual([null, null, null, null]);
-  });
+  }));
 
-  it('leaves a paid rep on their share when another is added, and evens out only the rest', async () => {
+  it('leaves a paid rep on their share when another is added, and evens out only the rest', as(async () => {
     const { job, splits } = await approvedJob([{ rep: 'Ann', pct: 50 }, { rep: 'Bo', pct: 50 }]);
     await settleApprovedSplits(job.id, 'boss@brn.com', '', [splits[0].id]); // Ann paid in full
     await db.insert(jobCommissionSplits).values({ jobCommissionId: job.id, repName: 'Cy', sharePct: '0.00', createdBy: 'vitest' });
@@ -148,5 +154,5 @@ describe.skipIf(!local)('settling a job', async () => {
       ['Bo', '25.00', 'open'],
       ['Cy', '25.00', 'open'],
     ]);
-  });
+  }));
 });

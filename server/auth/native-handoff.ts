@@ -28,6 +28,7 @@ import crypto from 'node:crypto';
 import { eq, like } from 'drizzle-orm';
 import { db } from '../db';
 import { settings } from '../../shared/schema';
+import { runAsSystem } from '../tenant/context';
 
 /** The scheme the native shells register. Kept here so both sides agree. */
 export const NATIVE_SCHEME = process.env.NATIVE_APP_SCHEME || 'brnapp';
@@ -45,7 +46,7 @@ export async function mintHandoff(email: string): Promise<string> {
   const payload: HandoffPayload = { email: email.toLowerCase(), exp: Date.now() + TTL_MS };
   await db.insert(settings)
     .values({ key: `${PREFIX}${hash(token)}`, value: payload })
-    .onConflictDoUpdate({ target: settings.key, set: { value: payload, updatedAt: new Date() } });
+    .onConflictDoUpdate({ target: [settings.companyId, settings.key], set: { value: payload, updatedAt: new Date() } });
   return token;
 }
 
@@ -60,7 +61,10 @@ export async function redeemHandoff(token: string): Promise<string | null> {
   // This was a select then a delete, so two requests racing with the same
   // token (a double-fired deep link, or someone who intercepted it) could both
   // read the row before either deleted it, and both get a session.
-  const [row] = await db.delete(settings).where(eq(settings.key, key)).returning();
+  // Before sign-in there is no company yet: the token's row is found by its
+  // hash alone. The key carries 256 bits of randomness, so it is one row.
+  const [row] = await runAsSystem('redeem native sign-in token', () =>
+    db.delete(settings).where(eq(settings.key, key)).returning());
   if (!row) return null;
   const payload = row.value as HandoffPayload | null;
   if (!payload?.email || typeof payload.exp !== 'number' || Date.now() > payload.exp) return null;

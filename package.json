@@ -73,7 +73,7 @@
     "@types/ws": "^8.5.10",
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.17",
-    "drizzle-kit": "^0.20.14",
+    "drizzle-kit": "^0.31.11",
     "esbuild": "^0.20.0",
     "postcss": "^8.4.35",
     "puppeteer-core": "^23.11.1",

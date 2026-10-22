@@ -1,10 +1,11 @@
-import type { Config } from 'drizzle-kit';
+import { defineConfig } from 'drizzle-kit';
 
-export default {
+// Generates the baseline SQL from shared/schema.ts. Hand-written SQL that
+// drizzle-kit cannot express (row level security, roles, helper functions)
+// lives in migrations/ next to the generated files.
+export default defineConfig({
+  dialect: 'postgresql',
   schema: './shared/schema.ts',
   out: './migrations',
-  driver: 'pg',
-  dbCredentials: {
-    connectionString: process.env.DATABASE_URL!,
-  },
-} satisfies Config;
+  dbCredentials: { url: process.env.DATABASE_URL || '' },
+});

@@ -88,7 +88,7 @@ export function registerPlaybookRoutes(app: Express) {
       };
       if (next.reviewLink && !isHttpUrl(next.reviewLink)) return res.status(400).json({ error: 'The review link must be a full http(s) URL.' });
       await db.insert(settings).values({ key: SETTINGS_KEY, value: next, updatedAt: new Date() })
-        .onConflictDoUpdate({ target: settings.key, set: { value: next, updatedAt: new Date() } });
+        .onConflictDoUpdate({ target: [settings.companyId, settings.key], set: { value: next, updatedAt: new Date() } });
       res.json({ ok: true, ...next });
     } catch (error: any) {
       return sendFailure(res, error, 'PUT /api/playbook/settings');
@@ -231,7 +231,7 @@ export async function tickChecklistItem(
     const [row] = await tx.insert(jobChecklists)
       .values({ jobExternalId: lead.externalId, checklistKey: checklistKey, items: { [item.key]: entry }, updatedBy: user.email })
       .onConflictDoUpdate({
-        target: [jobChecklists.jobExternalId, jobChecklists.checklistKey],
+        target: [jobChecklists.companyId, jobChecklists.jobExternalId, jobChecklists.checklistKey],
         set: { items: sql`${jobChecklists.items} || ${patch}`, updatedBy: user.email, updatedAt: new Date() },
       })
       .returning({ items: jobChecklists.items });

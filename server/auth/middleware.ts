@@ -2,6 +2,9 @@ import type { Request, Response, NextFunction } from 'express';
 import { atLeast, type TeamRole } from '../../shared/rbac';
 import { isAllowedLoginEmail, isBlockedLoginEmail, memberCanLogin, type LoginGateMember } from './allowlist';
 import { getTeamMemberByEmail } from '../storage/team';
+import { getCurrentCompany } from '../tenant/companies';
+import { isLiveCompany } from '../../shared/company';
+import { currentCompanyId, isCompanyId } from '../tenant/context';
 
 /** A session that belongs to a blocked address is ended on the spot, even one that predates the block. */
 function endBlockedSession(req: Request, res: Response): boolean {
@@ -33,20 +36,32 @@ const rosterCache = new Map<string, { row: RosterRow; at: number }>();
  */
 const rosterInflight = new Map<string, Promise<RosterRow>>();
 
+/** Cache key: the same email in another company's context is a different lookup. */
+const rosterKey = (email: string): string => `${currentCompanyId() ?? '-'}|${email.trim().toLowerCase()}`;
+
 /** Drop cached roster rows — after a roster edit, or between tests. */
 export function clearSessionRevalidationCache(email?: string): void {
   if (email) {
-    const key = email.trim().toLowerCase();
-    rosterCache.delete(key);
-    rosterInflight.delete(key);
+    const lower = email.trim().toLowerCase();
+    for (const key of [...rosterCache.keys(), ...rosterInflight.keys()]) {
+      if (key.endsWith(`|${lower}`)) { rosterCache.delete(key); rosterInflight.delete(key); }
+    }
   } else {
     rosterCache.clear();
     rosterInflight.clear();
   }
 }
 
-async function fetchRosterRow(key: string): Promise<RosterRow> {
-  const member = await getTeamMemberByEmail(key);
+async function fetchRosterRow(key: string, email: string): Promise<RosterRow> {
+  // Runs as the session's company (server/tenant/middleware.ts), so a member
+  // of any other company is simply not found, and a paused or cancelled
+  // company's members all read as gone.
+  const company = await getCurrentCompany();
+  if (!isLiveCompany(company)) {
+    rosterCache.set(key, { row: null, at: Date.now() });
+    return null;
+  }
+  const member = await getTeamMemberByEmail(email);
   const row: RosterRow = member
     ? { active: member.active, canLogin: member.canLogin, role: member.role as TeamRole, name: member.name }
     : null;
@@ -55,12 +70,12 @@ async function fetchRosterRow(key: string): Promise<RosterRow> {
 }
 
 async function loadRosterRow(email: string): Promise<RosterRow> {
-  const key = email.trim().toLowerCase();
+  const key = rosterKey(email);
   const hit = rosterCache.get(key);
   if (hit && Date.now() - hit.at < REVALIDATE_TTL_MS) return hit.row;
   const pending = rosterInflight.get(key);
   if (pending) return pending;
-  const lookup = fetchRosterRow(key);
+  const lookup = fetchRosterRow(key, email.trim().toLowerCase());
   rosterInflight.set(key, lookup);
   try {
     return await lookup;
@@ -95,6 +110,12 @@ async function revalidateSession(req: Request, res: Response): Promise<boolean> 
     return false;
   }
   if (endBlockedSession(req, res)) return false;
+  // A session from before companies existed, or one whose company is not the
+  // one this request runs as, is not trusted.
+  if (!isCompanyId(user.companyId) || currentCompanyId() !== user.companyId) {
+    req.session.destroy(() => res.status(401).json({ message: 'Not authenticated' }));
+    return false;
+  }
   let member: RosterRow;
   try {
     member = await currentMember(user.email);

@@ -36,7 +36,7 @@ async function bridgeFor(email: string): Promise<BridgeRecord | null> {
 }
 async function saveBridge(email: string, rec: BridgeRecord) {
   await db.insert(settings).values({ key: TOKEN_KEY(email), value: rec, updatedAt: new Date() })
-    .onConflictDoUpdate({ target: settings.key, set: { value: rec, updatedAt: new Date() } });
+    .onConflictDoUpdate({ target: [settings.companyId, settings.key], set: { value: rec, updatedAt: new Date() } });
 }
 
 /** The account a bridge token belongs to, or null. Tokens look like brn_im.<email-b64url>.<secret>; the dot cannot occur in base64url, so the split is unambiguous. */

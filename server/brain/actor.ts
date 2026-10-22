@@ -116,7 +116,7 @@ async function recordNudge(
   const res = await db
     .insert(nudges)
     .values({ loopId, toPerson, channel, body, idempotencyKey, escalationLevel: level, status: status as any, providerRef })
-    .onConflictDoNothing({ target: nudges.idempotencyKey })
+    .onConflictDoNothing({ target: [nudges.companyId, nudges.idempotencyKey] })
     .returning();
   return res.length > 0 ? res[0].id : null; // null = already sent this level(+key) for this loop
 }

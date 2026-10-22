@@ -33,6 +33,7 @@ import { memberByEmail } from '../access/team-scope';
 import { COMPANY_DOMAIN, OFFICE_CALENDAR } from '../calendar/access';
 import { JobTreadClient } from '../integrations/jobtread';
 import { rateLimit } from '../lib/rate-limit';
+import { certificateLinkCompany } from '../tenant/public-links';
 
 const COMPANY_NAME = 'Best Roofing Now';
 const NEIGHBOR_SETTINGS_KEY = 'neighbor_letters';
@@ -144,7 +145,7 @@ async function createCertificate(externalId: string, createdBy: string) {
   const [row] = await db.insert(jobCertificates).values({
     jobExternalId: externalId, walkthroughId: built.walkthroughId, data: built.data,
     signToken: crypto.randomBytes(16).toString('hex'), createdBy,
-  }).onConflictDoNothing({ target: jobCertificates.jobExternalId }).returning();
+  }).onConflictDoNothing({ target: [jobCertificates.companyId, jobCertificates.jobExternalId] }).returning();
   if (row) return row;
   const [raced] = await db.select().from(jobCertificates).where(eq(jobCertificates.jobExternalId, externalId));
   return raced ?? null;
@@ -387,7 +388,7 @@ export function registerCertificateRoutes(app: Express) {
 
   // ---- The homeowner's side. No login: the token in the link is the capability. ----
 
-  app.get('/r/sign/:token', viewLimiter, asyncHandler(async (req: Request, res: Response) => {
+  app.get('/r/sign/:token', viewLimiter, certificateLinkCompany(), asyncHandler(async (req: Request, res: Response) => {
     const row = await certificateBySignToken(req.params.token);
     if (!row) return res.status(404).set('Content-Security-Policy', SIGN_PAGE_CSP).send(publicPage('Not found', '<h1>That link has expired</h1><p>Ask your roofer to send it again.</p>'));
 
@@ -412,7 +413,7 @@ export function registerCertificateRoutes(app: Express) {
       .send(publicPage('Certificate of Completion', `${certificateHtml(data, sigs)}<hr style="border:0;border-top:1px solid #eee;margin:22px 0">${form}`));
   }));
 
-  app.post('/r/sign/:token', signLimiter, asyncHandler(async (req: Request, res: Response) => {
+  app.post('/r/sign/:token', signLimiter, certificateLinkCompany(), asyncHandler(async (req: Request, res: Response) => {
     const row = await certificateBySignToken(req.params.token);
     if (!row) return res.status(404).send(publicPage('Not found', '<h1>That link has expired</h1>'));
     // Refused here too, not only on the page: the form is a plain POST, and

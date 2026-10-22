@@ -4,8 +4,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // test decides who is on the team and in what state.
 const getTeamMemberByEmail = vi.fn();
 vi.mock('../../storage/team', () => ({ getTeamMemberByEmail: (email: string) => getTeamMemberByEmail(email) }));
+// The session's company, read on each request; live unless a test says otherwise.
+const getCurrentCompany = vi.fn();
+vi.mock('../../tenant/companies', () => ({ getCurrentCompany: () => getCurrentCompany() }));
 
 import { requireAuth, requireRole, clearSessionRevalidationCache } from '../middleware';
+import { runAsCompany } from '../../tenant/context';
+
+const CO = '11111111-1111-4111-8111-111111111111';
+const OTHER_CO = '22222222-2222-4222-8222-222222222222';
 
 function mockRes() {
   return {
@@ -16,8 +23,8 @@ function mockRes() {
   };
 }
 
-function mockReq(user?: { email: string; name: string; role: string }) {
-  const req: any = { session: { user } };
+function mockReq(user?: { email: string; name: string; role: string; companyId?: string }) {
+  const req: any = { session: { user: user && { companyId: CO, ...user } } };
   req.session.destroy = vi.fn((cb: () => void) => { req.session.user = undefined; cb(); });
   return req;
 }
@@ -26,11 +33,15 @@ const member = (over: Record<string, unknown> = {}) => ({
   email: 'a@b.com', name: 'A', role: 'admin', active: true, canLogin: true, ...over,
 });
 
-/** The middleware finishes asynchronously; wait for it to call next or respond. */
-async function run(mw: (req: any, res: any, next: any) => unknown, req: any) {
+/**
+ * The middleware finishes asynchronously; wait for it to call next or respond.
+ * Runs as the session's company, the way server/tenant/middleware.ts does.
+ */
+async function run(mw: (req: any, res: any, next: any) => unknown, req: any, asCompany: string | null = req.session?.user?.companyId ?? null) {
   const res: any = mockRes();
   const next = vi.fn();
-  mw(req, res, next);
+  if (asCompany) runAsCompany(asCompany, () => mw(req, res, next));
+  else mw(req, res, next);
   await vi.waitFor(() => { if (!next.mock.calls.length && !res.statusCode) throw new Error('pending'); });
   return { res, next };
 }
@@ -38,6 +49,45 @@ async function run(mw: (req: any, res: any, next: any) => unknown, req: any) {
 beforeEach(() => {
   clearSessionRevalidationCache();
   getTeamMemberByEmail.mockReset();
+  getCurrentCompany.mockReset();
+  getCurrentCompany.mockResolvedValue({ id: CO, status: 'active' });
+});
+
+describe('the session company', () => {
+  it('ends a session that has no company (from before companies existed)', async () => {
+    getTeamMemberByEmail.mockResolvedValue(member());
+    const req = mockReq({ email: 'a@b.com', name: 'A', role: 'admin', companyId: undefined as any });
+    req.session.user.companyId = undefined;
+    const { res, next } = await run(requireAuth, req, null);
+    expect(res.statusCode).toBe(401);
+    expect(req.session.destroy).toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('ends a session when the request is not running as its company', async () => {
+    getTeamMemberByEmail.mockResolvedValue(member());
+    const req = mockReq({ email: 'a@b.com', name: 'A', role: 'admin' });
+    const { res, next } = await run(requireAuth, req, OTHER_CO);
+    expect(res.statusCode).toBe(401);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('ends every session of a paused company', async () => {
+    getTeamMemberByEmail.mockResolvedValue(member());
+    getCurrentCompany.mockResolvedValue({ id: CO, status: 'paused' });
+    const req = mockReq({ email: 'a@b.com', name: 'A', role: 'admin' });
+    const { res, next } = await run(requireAuth, req);
+    expect(res.statusCode).toBe(401);
+    expect(req.session.destroy).toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('lets a member of a trial company in', async () => {
+    getTeamMemberByEmail.mockResolvedValue(member());
+    getCurrentCompany.mockResolvedValue({ id: CO, status: 'trial' });
+    const { next } = await run(requireAuth, mockReq({ email: 'a@b.com', name: 'A', role: 'admin' }));
+    expect(next).toHaveBeenCalledOnce();
+  });
 });
 afterEach(() => { delete process.env.LOGIN_ALLOWLIST; });
 
@@ -103,7 +153,7 @@ describe('requireAuth', () => {
     getTeamMemberByEmail.mockResolvedValue(member({ role: 'sales', name: 'A New' }));
     const req = mockReq({ email: 'a@b.com', name: 'A', role: 'admin' });
     await run(requireAuth, req);
-    expect(req.session.user).toEqual({ email: 'a@b.com', name: 'A New', role: 'sales' });
+    expect(req.session.user).toEqual({ email: 'a@b.com', name: 'A New', role: 'sales', companyId: CO });
   });
 
   it('reads the roster at most once per cache window', async () => {

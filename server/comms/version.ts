@@ -67,7 +67,7 @@ export async function setCommsVersion(version: CommsVersion, byEmail: string): P
   await db
     .insert(settings)
     .values({ key: KEY, value: state as any })
-    .onConflictDoUpdate({ target: settings.key, set: { value: state as any, updatedAt: new Date() } });
+    .onConflictDoUpdate({ target: [settings.companyId, settings.key], set: { value: state as any, updatedAt: new Date() } });
   clearVersionCache();
   console.warn(`[comms] switched to ${version.toUpperCase()} by ${byEmail}`);
   return state;

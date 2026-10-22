@@ -48,7 +48,7 @@ async function pushedIds(key: string): Promise<Set<string>> {
 async function rememberPushed(key: string, ids: Set<string>): Promise<void> {
   const value = [...ids].slice(-MAX_REMEMBERED);
   await db.insert(settings).values({ key, value })
-    .onConflictDoUpdate({ target: settings.key, set: { value, updatedAt: new Date() } });
+    .onConflictDoUpdate({ target: [settings.companyId, settings.key], set: { value, updatedAt: new Date() } });
 }
 
 /** The lead's own city/zip, which beat whatever is parsed from the address string. */

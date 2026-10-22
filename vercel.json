@@ -24,52 +24,8 @@
   ],
   "crons": [
     {
-      "path": "/api/cron/outreach-campaigns",
-      "schedule": "*/30 * * * *"
-    },
-    {
-      "path": "/api/cron/outreach-send",
-      "schedule": "*/15 * * * *"
-    },
-    {
-      "path": "/api/cron/brain-sweep",
-      "schedule": "0 * * * *"
-    },
-    {
-      "path": "/api/cron/brain-digest",
-      "schedule": "0 12 * * *"
-    },
-    {
-      "path": "/api/jobtread-archive/cron",
-      "schedule": "*/10 * * * *"
-    },
-    {
-      "path": "/api/sync/cron",
-      "schedule": "0 * * * *"
-    },
-    {
-      "path": "/api/cron/inbox-watch",
-      "schedule": "*/30 * * * *"
-    },
-    {
       "path": "/api/agent-chats/cron",
       "schedule": "30 6 * * *"
-    },
-    {
-      "path": "/api/sync/rooflink/cron",
-      "schedule": "30 * * * *"
-    },
-    {
-      "path": "/api/cron/meeting-prep",
-      "schedule": "0 1 * * 1"
-    },
-    {
-      "path": "/api/cron/meeting-refresh",
-      "schedule": "15 * * * *"
-    },
-    {
-      "path": "/api/cron/bug-digest",
-      "schedule": "0 12 * * *"
     },
     {
       "path": "/api/cron/rep-daily-reminder",

@@ -50,7 +50,7 @@ export async function upsertBySourceId(table: any, rows: Record<string, any>[]):
     updateCols[key] = sql.raw(`excluded.${camelToSnake(key)}`);
   }
   updateCols['syncedAt'] = sql`now()`;
-  await db.insert(table).values(rows).onConflictDoUpdate({ target: table.sourceId, set: updateCols });
+  await db.insert(table).values(rows).onConflictDoUpdate({ target: [table.companyId, table.sourceId], set: updateCols });
   return rows.length;
 }
 

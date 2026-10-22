@@ -11,6 +11,12 @@ import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import crypto from 'node:crypto';
 import express from 'express';
 import { DOCUMENT_SANDBOX, SIGN_PAGE_CSP, signPage } from '../sign-page';
+import { inCompany, makeTestCompany, TEST_COMPANY_ID } from '../../__tests__/helpers/tenant';
+
+// Every test here runs as a real test company (row level security is on).
+let __co = TEST_COMPANY_ID;
+const as = inCompany(() => __co);
+beforeAll(async () => { if (process.env.DATABASE_URL) __co = await makeTestCompany('sigdoc'); });
 
 vi.mock('@vercel/functions', () => ({ waitUntil: () => {} }));
 vi.mock('../../brain/gmail-delegated', () => ({ sendAsMailbox: vi.fn(), sendAsMailboxWithAttachments: vi.fn() }));
@@ -25,32 +31,32 @@ const page = (o: Partial<Parameters<typeof signPage>[0]> = {}) => signPage({
 });
 
 describe('the signing page', () => {
-  it('frames the document in a sandbox that never shares the app origin', () => {
+  it('frames the document in a sandbox that never shares the app origin', as(() => {
     const html = page();
     const attr = /<iframe[^>]*\ssandbox="([^"]*)"/.exec(html);
     expect(attr?.[1]).toBe(DOCUMENT_SANDBOX);
     expect(DOCUMENT_SANDBOX.split(/\s+/)).not.toContain('allow-same-origin');
     // Scripts in reports still run; Print still opens; new-tab links still open.
     expect(DOCUMENT_SANDBOX.split(/\s+/)).toEqual(expect.arrayContaining(['allow-scripts', 'allow-modals', 'allow-popups']));
-  });
+  }));
 
-  it('keeps the full-screen link outside the frame', () => {
+  it('keeps the full-screen link outside the frame', as(() => {
     expect(page()).toMatch(/<a href="\/r\/s\/a{32}\/document" target="_blank"/);
-  });
+  }));
 
-  it('allows exactly its own script, so the hash cannot drift from the page', () => {
+  it('allows exactly its own script, so the hash cannot drift from the page', as(() => {
     const scripts = [...page().matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
     expect(scripts).toHaveLength(1);
     const hash = crypto.createHash('sha256').update(scripts[0], 'utf8').digest('base64');
     expect(SIGN_PAGE_CSP).toContain(`script-src 'sha256-${hash}'`);
     expect(SIGN_PAGE_CSP).toContain("frame-ancestors 'self'");
-  });
+  }));
 
-  it('takes the frame height only from the frame, as a number', () => {
+  it('takes the frame height only from the frame, as a number', as(() => {
     const html = page();
     expect(html).toContain('e.source !== frame.contentWindow');
     expect(html).toContain("typeof e.data.brnDocHeight !== 'number'");
-  });
+  }));
 });
 
 const hasDb = !!process.env.DATABASE_URL;
@@ -92,21 +98,21 @@ async function makeRequest(html: string) {
   return token;
 }
 
-beforeAll(async () => {
+beforeAll(as(async () => {
   if (!hasDb) return;
   routes = await import('../routes');
   dbm = await import('../../db');
   schema = await import('../../../shared/schema');
   orm = await import('drizzle-orm');
-});
+}));
 
-afterAll(async () => {
+afterAll(as(async () => {
   if (!hasDb) return;
   await dbm.db.delete(schema.signatureRequests).where(orm.eq(schema.signatureRequests.jobExternalId, JOB));
-});
+}));
 
 describe.skipIf(!hasDb)('the frozen document', () => {
-  it('is served in a CSP sandbox, framed only by the app, sized for the frame', async () => {
+  it('is served in a CSP sandbox, framed only by the app, sized for the frame', as(async () => {
     const report = '<!doctype html><html><head></head><body><h1>Report</h1><script>var s = "</body>";</script></body></html>';
     const token = await makeRequest(report);
     const res = await routeHandler('get', '/r/s/:token/document')({ params: { token } });
@@ -118,18 +124,18 @@ describe.skipIf(!hasDb)('the frozen document', () => {
     // The report itself is untouched; the height script lands before the real end of the body.
     expect(res.body).toContain('<script>var s = "</body>";</script>');
     expect(res.body).toMatch(/brnDocHeight[\s\S]*<\/script><\/body><\/html>$/);
-  });
+  }));
 
-  it('wraps a fragment and still sizes it', async () => {
+  it('wraps a fragment and still sizes it', as(async () => {
     const token = await makeRequest('<p>The certificate</p>');
     const res = await routeHandler('get', '/r/s/:token/document')({ params: { token } });
     expect(res.body).toMatch(/<p>The certificate<\/p>[\s\S]*brnDocHeight[\s\S]*<\/body><\/html>$/);
-  });
+  }));
 
-  it('serves the signing page under its own script-only CSP', async () => {
+  it('serves the signing page under its own script-only CSP', as(async () => {
     const token = await makeRequest('<p>The certificate</p>');
     const res = await routeHandler('get', '/r/s/:token')({ params: { token } });
     expect(res.status).toBe(200);
     expect(res.headers['content-security-policy']).toBe(SIGN_PAGE_CSP);
-  });
+  }));
 });

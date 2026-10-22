@@ -1,26 +1,33 @@
 {
-  "version": "5",
-  "dialect": "pg",
+  "version": "7",
+  "dialect": "postgresql",
   "entries": [
     {
       "idx": 0,
-      "version": "5",
-      "when": 1784388184534,
-      "tag": "0000_high_gambit",
+      "version": "7",
+      "when": 1792709028395,
+      "tag": "0000_archie_functions",
       "breakpoints": true
     },
     {
       "idx": 1,
-      "version": "5",
-      "when": 1787278805506,
-      "tag": "0001_closed_frank_castle",
+      "version": "7",
+      "when": 1792709028991,
+      "tag": "0001_archie_baseline",
       "breakpoints": true
     },
     {
       "idx": 2,
-      "version": "5",
-      "when": 1787357427830,
-      "tag": "0002_nervous_doctor_faustus",
+      "version": "7",
+      "when": 1792709029564,
+      "tag": "0002_archie_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792709051527,
+      "tag": "0003_archie_sql_only",
       "breakpoints": true
     }
   ]

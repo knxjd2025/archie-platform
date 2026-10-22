@@ -9,6 +9,12 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vitest';
 import crypto from 'node:crypto';
 import express from 'express';
+import { inCompany, makeTestCompany, TEST_COMPANY_ID } from '../../__tests__/helpers/tenant';
+
+// Every test here runs as a real test company (row level security is on).
+let __co = TEST_COMPANY_ID;
+const as = inCompany(() => __co);
+beforeAll(async () => { if (process.env.DATABASE_URL) __co = await makeTestCompany('sigdone'); });
 
 const mocks = vi.hoisted(() => ({
   upload: vi.fn(),
@@ -81,32 +87,32 @@ function routeHandler(method: 'get' | 'post', path: string, register: (app: expr
   });
 }
 
-beforeAll(async () => {
+beforeAll(as(async () => {
   if (!hasDb) return;
   routes = await import('../routes');
   dbm = await import('../../db');
   schema = await import('../../../shared/schema');
   orm = await import('drizzle-orm');
-});
+}));
 
-afterAll(async () => {
+afterAll(as(async () => {
   if (!hasDb) return;
   const { db } = dbm; const { signatureRequests, jobCertificates, writeLog } = schema;
   await db.delete(signatureRequests).where(orm.eq(signatureRequests.jobExternalId, JOB));
   await db.delete(jobCertificates).where(orm.eq(jobCertificates.jobExternalId, JOB));
   await db.delete(writeLog).where(orm.eq(writeLog.targetId, JOB));
-});
+}));
 
 describe.skipIf(!hasDb)('finishing a signed document', () => {
-  beforeEach(() => {
+  beforeEach(as(() => {
     vi.clearAllMocks();
     mocks.pending.length = 0;
     mocks.upload.mockResolvedValue({ ok: true, fileId: `file-${Date.now()}` });
     mocks.sendWith.mockResolvedValue('msg');
     mocks.send.mockResolvedValue('msg');
-  });
+  }));
 
-  it('files once and sends each signer one copy, however often it is run again', async () => {
+  it('files once and sends each signer one copy, however often it is run again', as(async () => {
     const { request } = await makeRequest();
     await routes.completeIfDone(request.id);
     await routes.completeIfDone(request.id);
@@ -117,9 +123,9 @@ describe.skipIf(!hasDb)('finishing a signed document', () => {
     expect(after.jobtreadFileId).toMatch(/^file-/);
     expect(mocks.upload).toHaveBeenCalledTimes(1);
     expect(mocks.sendWith.mock.calls.map((c) => c[1]).sort()).toEqual(['signer0@example.com', 'signer1@example.com']);
-  });
+  }));
 
-  it('picks up a completion that stopped part-way, doing only what was left', async () => {
+  it('picks up a completion that stopped part-way, doing only what was left', as(async () => {
     const { request } = await makeRequest();
     mocks.sendWith.mockImplementation(async (_m: string, to: string) => {
       if (to === 'signer1@example.com') throw new Error('Gmail is down');
@@ -132,41 +138,41 @@ describe.skipIf(!hasDb)('finishing a signed document', () => {
     await routes.completeIfDone(request.id);
     expect(mocks.upload).toHaveBeenCalledTimes(1);   // not filed a second time
     expect(mocks.sendWith.mock.calls.map((c) => c[1])).toEqual(['signer1@example.com']);
-  });
+  }));
 
-  it('two runs at once still send each copy once', async () => {
+  it('two runs at once still send each copy once', as(async () => {
     const { request } = await makeRequest();
     await Promise.all([routes.completeIfDone(request.id), routes.completeIfDone(request.id), routes.finishSigned(request.id, false)]);
     await Promise.all([routes.finishSigned(request.id, false), routes.finishSigned(request.id, false)]);
     expect(mocks.upload).toHaveBeenCalledTimes(1);
     expect(mocks.sendWith).toHaveBeenCalledTimes(2);
-  });
+  }));
 
-  it('stops retrying a step that keeps failing', async () => {
+  it('stops retrying a step that keeps failing', as(async () => {
     const { request } = await makeRequest({ emails: ['signer0@example.com', null] });
     mocks.upload.mockResolvedValue({ ok: false, error: 'JobTread job not found' });
     for (let i = 0; i < 8; i++) await routes.completeIfDone(request.id);
     expect(mocks.upload).toHaveBeenCalledTimes(5);
     expect(mocks.sendWith).toHaveBeenCalledTimes(1);
-  });
+  }));
 
-  it('leaves alone a request completed before the steps were recorded', async () => {
+  it('leaves alone a request completed before the steps were recorded', as(async () => {
     // Signed under the old code: its copies went out then, and nothing records
     // which — re-running it would email the customer a second time.
     const { request } = await makeRequest({ status: 'signed' });
     await routes.completeIfDone(request.id);
     expect(mocks.upload).not.toHaveBeenCalled();
     expect(mocks.sendWith).not.toHaveBeenCalled();
-  });
+  }));
 
-  it('does not complete until everyone has signed', async () => {
+  it('does not complete until everyone has signed', as(async () => {
     const { request } = await makeRequest({ signed: [true, false], status: 'draft' });
     await routes.completeIfDone(request.id);
     expect((await statusOf(request.id)).status).toBe('sent');
     expect(mocks.upload).not.toHaveBeenCalled();
-  });
+  }));
 
-  it('writes a certificate signed here back onto the certificate on the job', async () => {
+  it('writes a certificate signed here back onto the certificate on the job', as(async () => {
     const { db } = dbm; const { jobCertificates } = schema;
     await db.insert(jobCertificates).values({ jobExternalId: JOB, data: {}, signToken: token(), createdBy: 'rep@bestroofingnow.com' });
     const { request } = await makeRequest({ kind: 'certificate', roles: ['customer', 'company'] });
@@ -184,9 +190,9 @@ describe.skipIf(!hasDb)('finishing a signed document', () => {
     const { buildSignable, listSignable } = await import('../providers');
     expect((await buildSignable(JOB, 'certificate', null)).ok).toBe(false);
     expect((await listSignable(JOB)).some((o) => o.kind === 'certificate')).toBe(false);
-  });
+  }));
 
-  it('does not stamp an old request onto a certificate created after it went out', async () => {
+  it('does not stamp an old request onto a certificate created after it went out', as(async () => {
     // What the end-to-end run caught: a completion retried in the background
     // signed the certificate the rep had just re-created.
     const { db } = dbm; const { jobCertificates } = schema;
@@ -203,9 +209,9 @@ describe.skipIf(!hasDb)('finishing a signed document', () => {
     expect(cert.homeownerSignedAt).toBeNull();
     expect(cert.companySignedAt).toBeNull();
     expect(cert.status).not.toBe('signed');
-  });
+  }));
 
-  it('runs the completion through waitUntil after the signature is posted', async () => {
+  it('runs the completion through waitUntil after the signature is posted', as(async () => {
     const { request, signers } = await makeRequest({ signed: [true, false] });
     const sign = routeHandler('post', '/r/s/:token', routes.registerSignatureRoutes);
     const res = await sign({ params: { token: signers[1].token }, body: { affirm: 'yes', name: 'Signer One' } });
@@ -214,17 +220,17 @@ describe.skipIf(!hasDb)('finishing a signed document', () => {
     await flush();
     expect((await statusOf(request.id)).status).toBe('signed');
     expect(mocks.sendWith).toHaveBeenCalledTimes(2);
-  });
+  }));
 });
 
 describe.skipIf(!hasDb)('a cancelled request', () => {
-  beforeEach(() => {
+  beforeEach(as(() => {
     vi.clearAllMocks();
     mocks.pending.length = 0;
     mocks.send.mockResolvedValue('msg');
-  });
+  }));
 
-  it('cannot be declined, and nobody is emailed about it', async () => {
+  it('cannot be declined, and nobody is emailed about it', as(async () => {
     const { request, signers } = await makeRequest({ status: 'voided', signed: [false] });
     const post = routeHandler('post', '/r/s/:token/decline', routes.registerSignatureRoutes);
     const get = routeHandler('get', '/r/s/:token/decline', routes.registerSignatureRoutes);
@@ -233,17 +239,17 @@ describe.skipIf(!hasDb)('a cancelled request', () => {
     await flush();
     expect((await statusOf(request.id)).status).toBe('voided');
     expect(mocks.send).not.toHaveBeenCalled();
-  });
+  }));
 
-  it('no longer serves its document', async () => {
+  it('no longer serves its document', as(async () => {
     const { signers } = await makeRequest({ status: 'voided', signed: [false] });
     const doc = routeHandler('get', '/r/s/:token/document', routes.registerSignatureRoutes);
     const res = await doc({ params: { token: signers[0].token } });
     expect(res.status).toBe(410);
     expect(String(res.body)).not.toContain('The report');
-  });
+  }));
 
-  it('an open one declines once, and the rep hears about it once', async () => {
+  it('an open one declines once, and the rep hears about it once', as(async () => {
     const { request, signers } = await makeRequest({ status: 'sent', signed: [false] });
     const post = routeHandler('post', '/r/s/:token/decline', routes.registerSignatureRoutes);
     await post({ params: { token: signers[0].token }, body: { reason: 'Price' } });
@@ -251,5 +257,5 @@ describe.skipIf(!hasDb)('a cancelled request', () => {
     await flush();
     expect((await statusOf(request.id)).status).toBe('declined');
     expect(mocks.send).toHaveBeenCalledTimes(1);
-  });
+  }));
 });

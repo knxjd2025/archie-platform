@@ -17,8 +17,59 @@ import {
   primaryKey,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 import type { CommissionSources } from './job-commission';
+
+
+// ============================================================
+// Companies (tenancy) — see docs/archie/01-multi-company.md
+// ============================================================
+
+/**
+ * One row per home service company using Archie. Every other table carries a
+ * company_id pointing here, and row level security in the database keeps each
+ * company's rows invisible to every other company.
+ */
+export const companies = pgTable('companies', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  slug: text('slug').notNull().unique(),
+  name: text('name').notNull(),
+  // Picks the trade pack (inspections, report sections, wording).
+  trade: text('trade').notNull().default('roofing'),
+  status: text('status', { enum: ['trial', 'active', 'paused', 'cancelled'] }).notNull().default('trial'),
+  // The company's GHL sub-account, which holds its contacts, messages,
+  // calendars and pipelines.
+  ghlLocationId: text('ghl_location_id').unique(),
+  branding: jsonb('branding').$type<import('./company').CompanyBranding>().notNull().default({}),
+  settings: jsonb('settings').$type<import('./company').CompanySettings>().notNull().default({}),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+export type Company = typeof companies.$inferSelect;
+
+/**
+ * The company a row belongs to. The default stamps the company of the current
+ * request (set per connection by server/db.ts), so insert code does not have to
+ * pass it, and with no company set the insert fails instead of landing nowhere.
+ */
+const companyId = () => uuid('company_id').notNull().references(() => companies.id).default(sql`archie_current_company()`);
+
+/**
+ * Credentials for a company's connected apps (GHL first). Read only by server
+ * code; never sent to the browser.
+ */
+export const companyIntegrations = pgTable('company_integrations', {
+  id: serial('id').primaryKey(),
+  companyId: companyId(),
+  provider: text('provider').notNull(),
+  // Encrypted with ARCHIE_SECRETS_KEY (server/tenant/secrets.ts).
+  credentials: text('credentials').notNull(),
+  meta: jsonb('meta').$type<Record<string, unknown>>().notNull().default({}),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (t) => ({
+  oneProviderPerCompany: uniqueIndex('company_integrations_company_provider_uq').on(t.companyId, t.provider),
+}));
 
 // Enums
 export const agentRoleEnum = pgEnum('agent_role', [
@@ -62,16 +113,20 @@ export const kpiEventTypeEnum = pgEnum('kpi_event_type', ['door_knock', 'lead_co
 
 // Users table
 export const users = pgTable('users', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
-  email: text('email').notNull().unique(),
+  email: text('email').notNull(),
   password: text('password').notNull(),
   name: text('name').notNull(),
   role: text('role').default('user'),
   createdAt: timestamp('created_at').defaultNow(),
-});
+}, (t) => ({
+  companyKeyUq: uniqueIndex('users_company_email_uq').on(t.companyId, t.email),
+}));
 
 // Team members — authoritative roster for role, login gate, and contact info
 export const teamMembers = pgTable('team_members', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   name: text('name').notNull(),
   email: text('email').notNull().unique(),
@@ -104,6 +159,7 @@ export type NewTeamMember = typeof teamMembers.$inferInsert;
 // rebuilds the leads rows) never wipes them. An override wins over the
 // JobTread "Sales Rep" field in the resolver.
 export const repAssignments = pgTable('rep_assignments', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   // NOT unique: a job can be shared. Uniqueness is on (job, member), with a
   // partial unique index keeping at most one 'primary' per job.
@@ -128,6 +184,7 @@ export type NewRepAssignment = typeof repAssignments.$inferInsert;
 // (reliable, powers the dashboard "due today"); optionally mirrored to JobTread
 // as a comment. Rep-scoped via assignedTo / the linked job.
 export const followUps = pgTable('follow_ups', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   jobExternalId: text('job_external_id'),      // JobTread job id (the client), nullable
   clientName: text('client_name'),
@@ -147,6 +204,7 @@ export type NewFollowUp = typeof followUps.$inferInsert;
 // (user, agent, day) — so a new day always starts a fresh conversation — with a
 // day-end AI summary stored on the row, letting the agents recall past days.
 export const agentChats = pgTable('agent_chats', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   userEmail: text('user_email').notNull(),
   agentKey: text('agent_key').notNull(),        // 'advisor' | exec/team agent role
@@ -162,6 +220,7 @@ export const agentChats = pgTable('agent_chats', {
 }));
 
 export const agentChatMessages = pgTable('agent_chat_messages', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   chatId: integer('chat_id').notNull().references((): AnyPgColumn => agentChats.id),
   role: text('role').notNull(),                 // 'user' | 'assistant'
@@ -176,6 +235,7 @@ export type AgentChatMessage = typeof agentChatMessages.$inferSelect;
 // API has no list endpoint, so this is how a client's reports are found again;
 // status/urls are refreshed by polling the job while it's still running.
 export const clientReports = pgTable('client_reports', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   jobExternalId: text('job_external_id').notNull(),
   reportId: text('report_id').notNull().unique(),
@@ -228,6 +288,7 @@ export type ClientReport = typeof clientReports.$inferSelect;
 // Door-to-door canvassing: houses a rep pins in the field, with the storm
 // history and rough roof measurements pulled for that address.
 export const canvassProperties = pgTable('canvass_properties', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   address: text('address').notNull(),
   city: text('city'),
@@ -258,6 +319,7 @@ export type CanvassProperty = typeof canvassProperties.$inferSelect;
 // a radius, so `geography` is the covering circle and `shape` the real drawing;
 // each delivered home is tested against the drawing (canvass_enrichment.in_area).
 export const canvassAreas = pgTable('canvass_areas', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   name: text('name').notNull(),
   shape: jsonb('shape').notNull(),
@@ -283,6 +345,7 @@ export type CanvassArea = typeof canvassAreas.$inferSelect;
 // home; kept apart from canvass_properties (owned by another role) and from
 // the rep's own contact fields, which stay hand-edited.
 export const canvassEnrichment = pgTable('canvass_enrichment', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   canvassPropertyId: integer('canvass_property_id').notNull().unique(),
   areaId: integer('area_id'),
@@ -323,6 +386,7 @@ export type CanvassEnrichment = typeof canvassEnrichment.$inferSelect;
 // for it (migration 0038). Kept apart from canvass_properties, which is owned
 // by another role. No row → the house belongs to canvass_properties.created_by.
 export const canvassPropertyMeta = pgTable('canvass_property_meta', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   canvassPropertyId: integer('canvass_property_id').notNull().unique(),
   ownerEmail: text('owner_email'),
@@ -336,6 +400,7 @@ export type CanvassPropertyMeta = typeof canvassPropertyMeta.$inferSelect;
 
 // One row per rep per day the morning "update your leads" reminder went out.
 export const repDailyReminders = pgTable('rep_daily_reminders', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   teamMemberId: integer('team_member_id').notNull().references((): AnyPgColumn => teamMembers.id),
   reminderDate: date('reminder_date').notNull(),
@@ -353,6 +418,8 @@ export type RepDailyReminder = typeof repDailyReminders.$inferSelect;
 // hundred times is one row with `occurrences` = 100, not a hundred rows. A
 // person's report has no fingerprint and is always its own row.
 export const bugReports = pgTable('bug_reports', {
+  // Null for errors raised before anyone is signed in (no company yet).
+  companyId: uuid('company_id').references(() => companies.id).default(sql`archie_current_company()`),
   id: serial('id').primaryKey(),
   kind: text('kind').notNull(), // 'report' | 'client_error' | 'server_error'
   status: text('status').notNull().default('new'), // 'new' | 'fixing' | 'fixed' | 'ignored'
@@ -375,6 +442,7 @@ export type BugReport = typeof bugReports.$inferSelect;
 // Inbox watch: each scan of a mailbox (its window, so the next one starts
 // where it stopped) and the emails worth a rep's attention that it found.
 export const inboxScans = pgTable('inbox_scans', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   mailbox: text('mailbox').notNull(),
   fromAt: timestamp('from_at').notNull(),
@@ -387,6 +455,7 @@ export const inboxScans = pgTable('inbox_scans', {
 });
 
 export const inboxItems = pgTable('inbox_items', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   mailbox: text('mailbox').notNull(),
   messageId: text('message_id').notNull(),
@@ -415,6 +484,7 @@ export type InboxItem = typeof inboxItems.$inferSelect;
 // iMessage: threads a team member's Mac bridge pushed in (their own only),
 // and replies the app queued for that bridge to send through Messages.app.
 export const imessages = pgTable('imessages', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   owner: text('owner').notNull(),                 // team member email whose Mac this came from
   guid: text('guid').notNull().unique(),          // Messages' message guid
@@ -436,6 +506,7 @@ export const imessages = pgTable('imessages', {
 export type Imessage = typeof imessages.$inferSelect;
 
 export const imessageOutbox = pgTable('imessage_outbox', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   owner: text('owner').notNull(),
   toHandle: text('to_handle').notNull(),
@@ -453,6 +524,7 @@ export const imessageOutbox = pgTable('imessage_outbox', {
 // and presented. One row per discrete event, attributed to a team member —
 // powers the admin (all reps) and sales-rep (own only) KPI dashboards.
 export const kpiEvents = pgTable('kpi_events', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   teamMemberId: integer('team_member_id').references(() => teamMembers.id),
   repName: text('rep_name'), // fallback label when attribution can't resolve a teamMemberId
@@ -474,6 +546,7 @@ export const commissionStatusEnum = pgEnum('commission_status', ['draft', 'appro
 // tool into the app so a manager's approval is a durable record (not lost on
 // refresh) and the AI advisors can read/write the same numbers.
 export const commissions = pgTable('commissions', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   jobExternalId: text('job_external_id'), // optional free-text JobTread id/number link
   jobName: text('job_name').notNull(),
@@ -509,8 +582,9 @@ export const jobCommissionStatusEnum = pgEnum('job_commission_status', ['open', 
 // above) is untouched; this is the admin's per-client record. Checklist keys
 // and the readiness rules live in shared/job-commission.ts.
 export const jobCommissions = pgTable('job_commissions', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
-  jobExternalId: text('job_external_id').notNull().unique(),
+  jobExternalId: text('job_external_id').notNull(),
   jobName: text('job_name'),
   teamMemberId: integer('team_member_id').references(() => teamMembers.id),
   repName: text('rep_name'),
@@ -560,7 +634,9 @@ export const jobCommissions = pgTable('job_commissions', {
   paidAt: timestamp('paid_at'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
-});
+}, (t) => ({
+  companyKeyUq: uniqueIndex('job_commissions_company_job_external_id_uq').on(t.companyId, t.jobExternalId),
+}));
 
 export type JobCommission = typeof jobCommissions.$inferSelect;
 export type NewJobCommission = typeof jobCommissions.$inferInsert;
@@ -578,6 +654,7 @@ export type NewJobCommission = typeof jobCommissions.$inferInsert;
  * predicate all keep reading the one column they always read.
  */
 export const jobCommissionSplits = pgTable('job_commission_splits', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   jobCommissionId: integer('job_commission_id').notNull().references(() => jobCommissions.id, { onDelete: 'cascade' }),
   teamMemberId: integer('team_member_id').references(() => teamMembers.id),
@@ -614,6 +691,7 @@ export type NewJobCommissionSplit = typeof jobCommissionSplits.$inferInsert;
  * for two of them to disagree. `reference` is the check the money came out of.
  */
 export const jobCommissionPayouts = pgTable('job_commission_payouts', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   splitId: integer('split_id').notNull().references(() => jobCommissionSplits.id, { onDelete: 'cascade' }),
   amount: decimal('amount', { precision: 12, scale: 2 }).notNull(),
@@ -632,6 +710,7 @@ export type NewJobCommissionPayout = typeof jobCommissionPayouts.$inferInsert;
 // Audit trail for every write-back action to JobTread/GHL. Since writes are
 // direct (no approval queue), this gives accountability: who did what, where.
 export const writeLog = pgTable('write_log', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   actor: text('actor').notNull(),        // session user email
   system: text('system').notNull(),      // 'jobtread' | 'ghl'
@@ -653,6 +732,7 @@ export type NewWriteLog = typeof writeLog.$inferInsert;
 
 // Agents table - AI executive team definitions
 export const agents = pgTable('agents', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   name: text('name').notNull(),
   role: agentRoleEnum('role').notNull(),
@@ -668,11 +748,12 @@ export const agents = pgTable('agents', {
 }, (t) => ({
   // Advisors are looked up by role. Two cold starts seeding at once used to
   // insert the same role twice (migration 0041 merges and enforces this).
-  roleUq: uniqueIndex('agents_role_uq').on(t.role),
+  roleUq: uniqueIndex('agents_company_role_uq').on(t.companyId, t.role),
 }));
 
 // Conversations - threads with agents
 export const conversations = pgTable('conversations', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   userId: integer('user_id').references(() => users.id),
   agentId: integer('agent_id').references(() => agents.id),
@@ -683,6 +764,7 @@ export const conversations = pgTable('conversations', {
 
 // Messages within conversations
 export const messages = pgTable('messages', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   conversationId: integer('conversation_id').references(() => conversations.id).notNull(),
   role: messageRoleEnum('role').notNull(),
@@ -706,6 +788,7 @@ export const messages = pgTable('messages', {
  * agent chat (role, tool calls), and a text message is not one.
  */
 export const calls = pgTable('calls', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   provider: text('provider').notNull(),
   providerSid: text('provider_sid').unique(),
@@ -741,6 +824,7 @@ export const calls = pgTable('calls', {
 
 /** Texts and emails to customers through our own numbers and mailboxes. */
 export const commMessages = pgTable('comm_messages', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   provider: text('provider').notNull(),
   providerSid: text('provider_sid').unique(),
@@ -765,6 +849,7 @@ export const commMessages = pgTable('comm_messages', {
 
 /** The numbers we own and what each one is for. */
 export const phoneNumbers = pgTable('phone_numbers', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   e164: text('e164').notNull().unique(),
   label: text('label').notNull(),
@@ -783,6 +868,7 @@ export const phoneNumbers = pgTable('phone_numbers', {
 
 // Leads - from JobTread and GoHighLevel
 export const leads = pgTable('leads', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   externalId: text('external_id'), // ID from source system
   source: text('source').notNull(), // 'jobtread' | 'gohighlevel' | 'manual'
@@ -836,6 +922,7 @@ export const leads = pgTable('leads', {
 
 // Agent Tasks - work items for agents
 export const agentTasks = pgTable('agent_tasks', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   agentId: integer('agent_id').references(() => agents.id).notNull(),
   type: text('type').notNull(), // 'qualify_lead', 'send_sms', 'generate_report', etc.
@@ -850,6 +937,7 @@ export const agentTasks = pgTable('agent_tasks', {
 
 // Agent Decisions - audit trail of AI decisions
 export const agentDecisions = pgTable('agent_decisions', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   agentId: integer('agent_id').references(() => agents.id).notNull(),
   taskId: integer('task_id').references(() => agentTasks.id),
@@ -865,6 +953,7 @@ export const agentDecisions = pgTable('agent_decisions', {
 
 // Daily Metrics - aggregated business data
 export const dailyMetrics = pgTable('daily_metrics', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   date: timestamp('date').notNull(),
 
@@ -893,6 +982,7 @@ export const dailyMetrics = pgTable('daily_metrics', {
 
 // Integration cache - synced data from external systems
 export const integrationCache = pgTable('integration_cache', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   source: text('source').notNull(), // 'jobtread' | 'gohighlevel'
   entityType: text('entity_type').notNull(), // 'contact', 'job', 'invoice', etc.
@@ -903,6 +993,7 @@ export const integrationCache = pgTable('integration_cache', {
 
 // Automated workflows
 export const workflows = pgTable('workflows', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   name: text('name').notNull(),
   description: text('description'),
@@ -930,6 +1021,7 @@ export interface WorkflowStep {
 
 // Workflow execution runs
 export const workflowRuns = pgTable('workflow_runs', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   workflowId: integer('workflow_id').references(() => workflows.id).notNull(),
   triggerData: jsonb('trigger_data'),
@@ -943,6 +1035,7 @@ export const workflowRuns = pgTable('workflow_runs', {
 
 // Communication log - all outbound messages
 export const communicationLog = pgTable('communication_log', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   leadId: integer('lead_id').references(() => leads.id),
   agentId: integer('agent_id').references(() => agents.id),
@@ -956,11 +1049,14 @@ export const communicationLog = pgTable('communication_log', {
 
 // Settings - app configuration
 export const settings = pgTable('settings', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
-  key: text('key').notNull().unique(),
+  key: text('key').notNull(),
   value: jsonb('value'),
   updatedAt: timestamp('updated_at').defaultNow(),
-});
+}, (t) => ({
+  companyKeyUq: uniqueIndex('settings_company_key_uq').on(t.companyId, t.key),
+}));
 
 // ===================
 // RAG Knowledge Base
@@ -982,6 +1078,7 @@ export const knowledgeCategoryEnum = pgEnum('knowledge_category', [
 
 // Knowledge documents for RAG
 export const knowledgeDocuments = pgTable('knowledge_documents', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   title: text('title').notNull(),
   content: text('content').notNull(),
@@ -998,6 +1095,7 @@ export const knowledgeDocuments = pgTable('knowledge_documents', {
 
 // Knowledge chunks for embedding-based retrieval
 export const knowledgeChunks = pgTable('knowledge_chunks', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   documentId: integer('document_id').references(() => knowledgeDocuments.id).notNull(),
   chunkIndex: integer('chunk_index').notNull(),
@@ -1009,6 +1107,7 @@ export const knowledgeChunks = pgTable('knowledge_chunks', {
 
 // Knowledge access log - track what agents retrieve
 export const knowledgeAccessLog = pgTable('knowledge_access_log', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   agentId: integer('agent_id').references(() => agents.id),
   documentId: integer('document_id').references(() => knowledgeDocuments.id),
@@ -1137,6 +1236,7 @@ export const scrapeJobStatusEnum = pgEnum('scrape_job_status', [
 
 // Email templates for outreach
 export const emailTemplates = pgTable('email_templates', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   userId: integer('user_id').references(() => users.id),
   name: text('name').notNull(),
@@ -1161,6 +1261,7 @@ export const emailTemplates = pgTable('email_templates', {
 
 // Outreach campaigns
 export const outreachCampaigns = pgTable('outreach_campaigns', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   userId: integer('user_id').references(() => users.id).notNull(),
   name: text('name').notNull(),
@@ -1202,6 +1303,7 @@ export const outreachCampaigns = pgTable('outreach_campaigns', {
 
 // Outreach leads (scraped companies)
 export const outreachLeads = pgTable('outreach_leads', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   campaignId: integer('campaign_id').references(() => outreachCampaigns.id).notNull(),
   userId: integer('user_id').references(() => users.id).notNull(),
@@ -1260,6 +1362,7 @@ export const outreachLeads = pgTable('outreach_leads', {
 
 // Outreach attempts (email send tracking)
 export const outreachAttempts = pgTable('outreach_attempts', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   leadId: integer('lead_id').references(() => outreachLeads.id).notNull(),
   campaignId: integer('campaign_id').references(() => outreachCampaigns.id).notNull(),
@@ -1294,6 +1397,7 @@ export const outreachAttempts = pgTable('outreach_attempts', {
 
 // Scrape jobs (BrightData job tracking)
 export const scrapeJobs = pgTable('scrape_jobs', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   campaignId: integer('campaign_id').references(() => outreachCampaigns.id).notNull(),
   userId: integer('user_id').references(() => users.id).notNull(),
@@ -1419,6 +1523,7 @@ export type InsertScrapeJob = typeof scrapeJobs.$inferInsert;
 
 // OAuth/API tokens for financial integrations (QBO, Plaid, Everee)
 export const integrationTokens = pgTable('integration_tokens', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   provider: text('provider').notNull(),      // 'quickbooks', 'everee', 'gmail'
   accessToken: text('access_token'),
@@ -1435,6 +1540,7 @@ export const integrationTokens = pgTable('integration_tokens', {
 
 // Plaid linked bank items
 export const plaidItems = pgTable('plaid_items', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   itemId: text('item_id').notNull().unique(),
   accessToken: text('access_token').notNull(),
@@ -1451,6 +1557,7 @@ export const plaidItems = pgTable('plaid_items', {
 
 // Plaid transactions (local cache)
 export const plaidTransactions = pgTable('plaid_transactions', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   plaidItemId: integer('plaid_item_id').references(() => plaidItems.id).notNull(),
   transactionId: text('transaction_id').notNull().unique(),
@@ -1522,11 +1629,12 @@ export const nudgeChannelEnum = pgEnum('nudge_channel', ['sms', 'email']);
 export const nudgeStatusEnum = pgEnum('nudge_status', ['sent', 'delivered', 'failed', 'queued_quiet_hours', 'dry_run']);
 
 export const openLoops = pgTable('open_loops', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   kind: loopKindEnum('kind').notNull(),
   source: loopSourceEnum('source').notNull(),
   sourceRef: text('source_ref').notNull(),
-  dedupeKey: text('dedupe_key').notNull().unique(),
+  dedupeKey: text('dedupe_key').notNull(),
   contact: jsonb('contact').$type<{ name?: string; phone?: string; email?: string }>(),
   summary: text('summary').notNull(),
   evidence: jsonb('evidence').$type<{ quotes: string[]; links?: string[] }>(),
@@ -1540,9 +1648,12 @@ export const openLoops = pgTable('open_loops', {
   lastEventAt: timestamp('last_event_at').defaultNow().notNull(),
   closedAt: timestamp('closed_at'),
   closedBy: text('closed_by'),
-});
+}, (t) => ({
+  companyKeyUq: uniqueIndex('open_loops_company_dedupe_key_uq').on(t.companyId, t.dedupeKey),
+}));
 
 export const claims = pgTable('claims', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   customerName: text('customer_name').notNull(),
   contact: jsonb('contact').$type<{ phone?: string; email?: string }>(),
@@ -1568,20 +1679,24 @@ export const claims = pgTable('claims', {
 });
 
 export const nudges = pgTable('nudges', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   loopId: integer('loop_id').notNull(),
   toPerson: personEnum('to_person').notNull(),
   channel: nudgeChannelEnum('channel').notNull(),
   body: text('body').notNull(),
-  idempotencyKey: text('idempotency_key').notNull().unique(),
+  idempotencyKey: text('idempotency_key').notNull(),
   escalationLevel: integer('escalation_level').notNull().default(0),
   status: nudgeStatusEnum('status').notNull().default('sent'),
   providerRef: text('provider_ref'),
   sentAt: timestamp('sent_at').defaultNow().notNull(),
   ackAt: timestamp('ack_at'),
-});
+}, (t) => ({
+  companyKeyUq: uniqueIndex('nudges_company_idempotency_key_uq').on(t.companyId, t.idempotencyKey),
+}));
 
 export const brainRuns = pgTable('brain_runs', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   kind: text('kind').notNull().default('sweep'),
   startedAt: timestamp('started_at').defaultNow().notNull(),
@@ -1593,6 +1708,7 @@ export const brainRuns = pgTable('brain_runs', {
 });
 
 export const watchCursors = pgTable('watch_cursors', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   source: text('source').notNull(),
   channel: text('channel').notNull().default(''),
@@ -1609,8 +1725,9 @@ export const syncStatusEnum = pgEnum('sync_status', ['ok', 'partial', 'error']);
 
 // Sent proposals/estimates (JobTread customerOrder)
 export const deals = pgTable('deals', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
-  sourceId: text('source_id').notNull().unique(),   // JobTread document id
+  sourceId: text('source_id').notNull(),   // JobTread document id
   customer: text('customer'),
   amount: decimal('amount', { precision: 12, scale: 2 }),
   type: text('type'),                                // e.g. "Retail Roofing Proposal"
@@ -1620,12 +1737,15 @@ export const deals = pgTable('deals', {
   jobRef: text('job_ref'),
   ownerId: integer('owner_id').references((): AnyPgColumn => teamMembers.id),
   syncedAt: timestamp('synced_at').notNull().defaultNow(),
-});
+}, (t) => ({
+  companyKeyUq: uniqueIndex('deals_company_source_id_uq').on(t.companyId, t.sourceId),
+}));
 
 // AR (customerInvoice) + AP (vendorBill)
 export const invoices = pgTable('invoices', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
-  sourceId: text('source_id').notNull().unique(),
+  sourceId: text('source_id').notNull(),
   kind: invoiceKindEnum('kind').notNull(),
   party: text('party'),                              // customer (AR) or vendor (AP)
   amount: decimal('amount', { precision: 12, scale: 2 }),
@@ -1635,12 +1755,15 @@ export const invoices = pgTable('invoices', {
   status: text('status'),
   jobRef: text('job_ref'),
   syncedAt: timestamp('synced_at').notNull().defaultNow(),
-});
+}, (t) => ({
+  companyKeyUq: uniqueIndex('invoices_company_source_id_uq').on(t.companyId, t.sourceId),
+}));
 
 // Calendar events (inspections/appointments)
 export const appointments = pgTable('appointments', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
-  sourceId: text('source_id').notNull().unique(),    // `${calendarSource}:${eventId}`
+  sourceId: text('source_id').notNull(),    // `${calendarSource}:${eventId}`
   title: text('title'),
   start: timestamp('start'),
   end: timestamp('end'),
@@ -1649,9 +1772,12 @@ export const appointments = pgTable('appointments', {
   kind: text('kind'),                                 // inspection|adjuster|internal|other
   attendees: jsonb('attendees').$type<string[]>().default([]),
   syncedAt: timestamp('synced_at').notNull().defaultNow(),
-});
+}, (t) => ({
+  companyKeyUq: uniqueIndex('appointments_company_source_id_uq').on(t.companyId, t.sourceId),
+}));
 
 export const syncRuns = pgTable('sync_runs', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   source: text('source').notNull(),                  // jobtread|calendar|...
   status: syncStatusEnum('status').notNull(),
@@ -1675,6 +1801,7 @@ export const syncRuns = pgTable('sync_runs', {
 export const inspectionSubmissionStatusEnum = pgEnum('inspection_submission_status', ['draft', 'submitted', 'reviewed']);
 
 export const inspectionSubmissions = pgTable('inspection_submissions', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   jobExternalId: text('job_external_id').notNull(),
   teamMemberId: integer('team_member_id').references(() => teamMembers.id),
@@ -1713,6 +1840,7 @@ export type NewInspectionSubmission = typeof inspectionSubmissions.$inferInsert;
 export const preconChecklistStatusEnum = pgEnum('precon_checklist_status', ['draft', 'submitted']);
 
 export const preConstructionChecklists = pgTable('precon_checklists', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   jobExternalId: text('job_external_id').notNull(),
   teamMemberId: integer('team_member_id').references(() => teamMembers.id),
@@ -1739,6 +1867,7 @@ export type NewPreConstructionChecklist = typeof preConstructionChecklists.$infe
 // `issueCount` is denormalized so the production board can show it without
 // unpacking the answers blob.
 export const finalWalkthroughs = pgTable('final_walkthroughs', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   jobExternalId: text('job_external_id').notNull(),
   teamMemberId: integer('team_member_id').references(() => teamMembers.id),
@@ -1759,8 +1888,9 @@ export const finalWalkthroughs = pgTable('final_walkthroughs', {
  * attached to the depreciation request once both names are on it.
  */
 export const jobCertificates = pgTable('job_certificates', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
-  jobExternalId: text('job_external_id').notNull().unique(),
+  jobExternalId: text('job_external_id').notNull(),
   walkthroughId: integer('walkthrough_id'),
   /** Snapshot of the walkthrough as it read when the certificate was built, so
    *  a signed certificate never changes under the signatures. */
@@ -1780,7 +1910,9 @@ export const jobCertificates = pgTable('job_certificates', {
   createdBy: text('created_by').notNull(),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
-});
+}, (t) => ({
+  companyKeyUq: uniqueIndex('job_certificates_company_job_external_id_uq').on(t.companyId, t.jobExternalId),
+}));
 
 export type JobCertificate = typeof jobCertificates.$inferSelect;
 
@@ -1794,8 +1926,9 @@ export type JobCertificate = typeof jobCertificates.$inferSelect;
 // coarser "Status" is written on every move (jobtreadStatusFor) but this row
 // is the authority for where the job sits.
 export const productionPipeline = pgTable('production_pipeline', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
-  jobExternalId: text('job_external_id').notNull().unique(),
+  jobExternalId: text('job_external_id').notNull(),
   stage: text('stage').notNull(),
   trades: jsonb('trades').$type<Array<{ key: string; done: boolean }>>().notNull().default([{ key: 'roofing', done: false }]),
   checks: jsonb('checks').$type<Record<string, boolean>>().notNull().default({}),
@@ -1805,15 +1938,18 @@ export const productionPipeline = pgTable('production_pipeline', {
   updatedBy: text('updated_by'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
-});
+}, (t) => ({
+  companyKeyUq: uniqueIndex('production_pipeline_company_job_external_id_uq').on(t.companyId, t.jobExternalId),
+}));
 
 export type ProductionPipelineRow = typeof productionPipeline.$inferSelect;
 
 // One row per job once it's moved on the sales board (shared/sales-pipeline.ts).
 // Approved / DP Received hand the job to the production pipeline.
 export const salesPipeline = pgTable('sales_pipeline', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
-  jobExternalId: text('job_external_id').notNull().unique(),
+  jobExternalId: text('job_external_id').notNull(),
   stage: text('stage').notNull(),
   /** Why the deal died — a key from SALES_LOST_REASONS. Cleared when it's reopened. */
   lostReason: text('lost_reason'),
@@ -1826,7 +1962,9 @@ export const salesPipeline = pgTable('sales_pipeline', {
   updatedBy: text('updated_by'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
-});
+}, (t) => ({
+  companyKeyUq: uniqueIndex('sales_pipeline_company_job_external_id_uq').on(t.companyId, t.jobExternalId),
+}));
 export type SalesPipelineRow = typeof salesPipeline.$inferSelect;
 
 export type FinalWalkthrough = typeof finalWalkthroughs.$inferSelect;
@@ -1843,6 +1981,7 @@ export type SyncRun = typeof syncRuns.$inferSelect;
 
 /** One stage checklist for one job. `items` maps item key → who ticked it and when (plus any follow-ups it created). */
 export const jobChecklists = pgTable('job_checklists', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   jobExternalId: text('job_external_id').notNull(),
   checklistKey: text('checklist_key').notNull(),
@@ -1851,13 +1990,14 @@ export const jobChecklists = pgTable('job_checklists', {
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (t) => ({
-  jobKeyIdx: uniqueIndex('job_checklists_job_key_idx').on(t.jobExternalId, t.checklistKey),
+  jobKeyIdx: uniqueIndex('job_checklists_company_job_key_idx').on(t.companyId, t.jobExternalId, t.checklistKey),
 }));
 
 export type JobChecklist = typeof jobChecklists.$inferSelect;
 
 /** The Income Goal Plan inputs a rep sets for themselves (the math lives in shared/playbook.ts). */
 export const repGoals = pgTable('rep_goals', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   teamMemberId: integer('team_member_id').references(() => teamMembers.id).notNull().unique(),
   incomeGoal: integer('income_goal').notNull().default(100000),
@@ -1881,6 +2021,7 @@ export type RepGoal = typeof repGoals.$inferSelect;
  * how far the signer was from the roof without a lookup on their critical path.
  */
 export const signatureRequests = pgTable('signature_requests', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   jobExternalId: text('job_external_id').notNull(),
   sourceKind: text('source_kind').notNull(),      // report | certificate | letter
@@ -1917,6 +2058,7 @@ export type SignatureRequest = typeof signatureRequests.$inferSelect;
  * they signed; `viewGeo` where they were when they opened it.
  */
 export const signatureSigners = pgTable('signature_signers', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   requestId: integer('request_id').references(() => signatureRequests.id, { onDelete: 'cascade' }).notNull(),
   ordinal: integer('ordinal').notNull().default(0),
@@ -1961,10 +2103,11 @@ export type SignatureSigner = typeof signatureSigners.$inferSelect;
  * silently rewrote itself would be no record at all.
  */
 export const meetingWeeks = pgTable('meeting_weeks', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   // A calendar day, not an instant: the pack belongs to a Monday in
   // Charlotte, and `date` keeps it that way through every timezone.
-  monday: date('monday').notNull().unique(),
+  monday: date('monday').notNull(),
   agendas: jsonb('agendas').$type<Record<string, any>[]>().notNull().default([]),
   weekFrom: date('week_from'),
   weekTo: date('week_to'),
@@ -1972,12 +2115,15 @@ export const meetingWeeks = pgTable('meeting_weeks', {
   generatedBy: text('generated_by'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
-});
+}, (t) => ({
+  companyKeyUq: uniqueIndex('meeting_weeks_company_monday_uq').on(t.companyId, t.monday),
+}));
 
 export type MeetingWeek = typeof meetingWeeks.$inferSelect;
 
 /** What was said in one room, in one week. */
 export const meetingNotes = pgTable('meeting_notes', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   weekId: integer('week_id').references(() => meetingWeeks.id, { onDelete: 'cascade' }).notNull(),
   meeting: text('meeting').notNull(),                 // leadership | claims | sales | payroll
@@ -1996,6 +2142,7 @@ export type MeetingNote = typeof meetingNotes.$inferSelect;
  * appears at the top of the next week's pack.
  */
 export const meetingActions = pgTable('meeting_actions', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   weekId: integer('week_id').references(() => meetingWeeks.id, { onDelete: 'cascade' }).notNull(),
   meeting: text('meeting').notNull(),
@@ -2017,6 +2164,7 @@ export type MeetingAction = typeof meetingActions.$inferSelect;
 // See shared/monday-meetings.ts for the reasoning behind each one.
 
 export const scorecardMetrics = pgTable('scorecard_metrics', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   // Stable identifier the pack computes against, so relabelling a metric keeps
   // its goal and its history.
@@ -2040,10 +2188,11 @@ export const scorecardMetrics = pgTable('scorecard_metrics', {
   // The key names the measure the pack computes; the room is the other half of
   // the identity, so leadership and sales can each carry "new leads" with
   // their own owner and goal (migration 0033).
-  keyPerMeeting: uniqueIndex('scorecard_metrics_key_meeting_scope_idx').on(t.key, t.meeting, t.scope),
+  keyPerMeeting: uniqueIndex('scorecard_metrics_company_key_meeting_scope_idx').on(t.companyId, t.key, t.meeting, t.scope),
 }));
 
 export const rocks = pgTable('rocks', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   meeting: text('meeting').notNull().default('leadership'),
   title: text('title').notNull(),
@@ -2060,6 +2209,7 @@ export const rocks = pgTable('rocks', {
 }));
 
 export const meetingIssues = pgTable('meeting_issues', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   meeting: text('meeting').notNull(),
   title: text('title').notNull(),
@@ -2085,6 +2235,7 @@ export const meetingIssues = pgTable('meeting_issues', {
 }));
 
 export const meetingRatings = pgTable('meeting_ratings', {
+  companyId: companyId(),
   id: serial('id').primaryKey(),
   meeting: text('meeting').notNull(),
   monday: date('monday').notNull(),
@@ -2107,6 +2258,7 @@ export type MeetingRatingRow = typeof meetingRatings.$inferSelect;
 // ============================================================
 
 export const jobtreadArchive = pgTable('jobtread_archive', {
+  companyId: companyId(),
   entityType: text('entity_type').notNull(),
   jtId: text('jt_id').notNull(),
   jobId: text('job_id'),
@@ -2118,6 +2270,7 @@ export const jobtreadArchive = pgTable('jobtread_archive', {
 }));
 
 export const jobtreadArchiveSteps = pgTable('jobtread_archive_steps', {
+  companyId: companyId(),
   step: text('step').primaryKey(),
   status: text('status').notNull().default('pending'),
   cursor: text('cursor'),

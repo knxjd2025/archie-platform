@@ -78,6 +78,7 @@ import { renderCommercialPresentationHtml, commercialPresentationSectionList } f
 import { isCommercialReport, commercialContextOf, commercialSummary } from '../lib/reports/commercial-context.js';
 import { commercialScanEnabled, sameScanSelection } from '../lib/reports/commercial-photo-scan.js';
 import { COMMERCIAL_MIN_CHAPTERS, DEFAULT_BEFORE_START_TERMS } from '../lib/reports/sections/commercial-chapters.js';
+import { reportLinkCompany } from '../tenant/public-links';
 import { assemblyForEditing } from '../lib/reports/sections/assembly-diagram.js';
 import { COMMERCIAL_PRODUCTS, commercialProductByKey, type CommercialProductKey, type IsoTier } from '../lib/reports/commercial-products.js';
 import { sendUpstreamFailure } from '../lib/upstream';
@@ -342,7 +343,7 @@ export function registerRoofReportRoutes(app: Express) {
 
   // Public share link — the rendered report. No auth: the random token is the
   // capability, which is what makes it sendable to a customer.
-  app.get('/r/:token', reportViewLimiter, async (req: Request, res: Response) => {
+  app.get('/r/:token', reportViewLimiter, reportLinkCompany(), async (req: Request, res: Response) => {
     if (!isShareToken(req.params.token)) return res.status(404).send('Report not found.');
     try {
       const [row] = await db.select().from(clientReports).where(eq(clientReports.shareToken, req.params.token));
@@ -367,7 +368,7 @@ export function registerRoofReportRoutes(app: Express) {
   // tapped — the thing a plain PDF can never tell a rep. No auth (same
   // capability-token model as the GET above); rate-limited since it's a
   // public, unauthenticated write path a client-side script calls repeatedly.
-  app.post('/r/:token/track', trackLimiter, asyncHandler(async (req: Request, res: Response) => {
+  app.post('/r/:token/track', trackLimiter, reportLinkCompany(), asyncHandler(async (req: Request, res: Response) => {
     const [row] = await db.select().from(clientReports).where(eq(clientReports.shareToken, req.params.token));
     if (!row) return res.status(404).json({ error: 'not found' });
 
