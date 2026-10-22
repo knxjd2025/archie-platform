@@ -11,7 +11,7 @@
  * photo's place — never a photo of a different product standing in.
  */
 import { esc } from '../report-theme.js';
-import { assetUrl, type RoofSystem, type RoofSystemComponent } from '../roof-systems.js';
+import { assetUrl, COMPANY_SUPPLIED, isCompanySupplied, makerName, type RoofSystem, type RoofSystemComponent } from '../roof-systems.js';
 import type { SectionStyle } from './style.js';
 
 export interface WalkthroughOptions {
@@ -25,7 +25,7 @@ function media(c: RoofSystemComponent): string {
   if (c.image) {
     return `<figure class="rsw-media"><img src="${esc(assetUrl(c.image))}" alt="${esc(stripEntities(c.name))}" loading="lazy"></figure>`;
   }
-  return `<div class="rsw-media rsw-media--none" aria-hidden="true"><span>${c.maker === 'Best Roofing Now' ? 'Supplied by' : 'Made by'}</span><b>${esc(c.maker)}</b></div>`;
+  return `<div class="rsw-media rsw-media--none" aria-hidden="true"><span>${isCompanySupplied(c) ? 'Supplied by' : 'Made by'}</span><b>${esc(makerName(c))}</b></div>`;
 }
 
 /** alt text can't carry &reg; entities as literal markup. */
@@ -42,7 +42,7 @@ export function roofSystemWalkthrough(system: RoofSystem, style: SectionStyle, o
           ${numbered ? `<span class="rsw-n">Step ${i + 1}</span>` : ''}
           <span class="rsw-step-name">${esc(c.step)}</span>
           <b class="rsw-name">${c.name}</b>
-          ${c.image ? `<span class="rsw-maker">${c.maker === 'Best Roofing Now' ? 'Supplied by' : 'Made by'} ${esc(c.maker)}</span>` : ''}
+          ${c.image ? `<span class="rsw-maker">${isCompanySupplied(c) ? 'Supplied by' : 'Made by'} ${esc(makerName(c))}</span>` : ''}
           <p class="rsw-plain">${c.plain}</p>
           ${c.spec ? `<p class="rsw-spec">${c.spec}</p>` : ''}
         </div>
@@ -52,7 +52,7 @@ export function roofSystemWalkthrough(system: RoofSystem, style: SectionStyle, o
     ? `<figure class="rsw-cutaway"><img src="${esc(assetUrl(system.cutaway))}" alt="${esc(stripEntities(system.systemName))} illustrated" loading="lazy"><figcaption class="${style.note}">${system.systemName} &mdash; manufacturer's illustration.</figcaption></figure>`
     : '';
 
-  const makers = [...new Set(system.components.map((c) => c.maker).filter((m) => m !== 'Best Roofing Now'))];
+  const makers = [...new Set(system.components.map((c) => c.maker).filter((m) => m !== COMPANY_SUPPLIED))];
 
   return `<div class="rsw">
     <p class="${style.body}">${system.lede}</p>

@@ -12,11 +12,13 @@ import { describe, it, expect } from 'vitest';
 import { renderProposalScrollcraftHtml } from '../render-proposal-scrollcraft';
 import { applyReplacementPricing } from '../estimate-replacement';
 import type { TierSelection } from '../roofing-products';
+import { withProfile } from '../../../tenant/context';
+import { TEST_PROFILE, BARE_PROFILE, FORMER_COMPANY } from './profiles';
 
 const baseReport: any = {
   id: 'r8',
   generatedAt: '2026-09-11T12:00:00.000Z',
-  property: { address: '2 Test Ave', city: 'Charlotte', state: 'NC' },
+  property: { address: '2 Test Ave', city: 'Springfield', state: 'IL' },
   damageAnalysis: { totalPhotosAnalyzed: 0, photos: [] },
   repairEstimate: { lineItems: [], total: 0, notes: [] },
 };
@@ -46,7 +48,7 @@ function chapterWords(html: string): string[] {
 }
 
 describe('the Proposal', () => {
-  const html = renderProposalScrollcraftHtml(priced(SHINGLE_TIERS), { customer: 'Test Customer' });
+  const html = withProfile(TEST_PROFILE, () => renderProposalScrollcraftHtml(priced(SHINGLE_TIERS), { customer: 'Test Customer' }));
 
   it('gained the four new chapters', () => {
     expect(html).toContain('id="ch-product"');
@@ -98,11 +100,12 @@ describe('the Proposal', () => {
   });
 
   it('renumbers the chapters with no duplicates and no gaps', () => {
-    // The cover (#ch-welcome) is deliberately unlabelled, so twelve numbers
-    // cover thirteen sections (the System walkthrough joined after Product).
+    // The cover (#ch-welcome) is deliberately unlabelled, so eleven numbers
+    // cover twelve sections (the System walkthrough joined after Product;
+    // Our Work waits for a per-company project feed).
     const words = chapterWords(html);
-    expect(words).toEqual(NUMBER_WORDS.slice(0, 12));
-    expect(html).not.toContain('Chapter Thirteen');
+    expect(words).toEqual(NUMBER_WORDS.slice(0, 11));
+    expect(html).not.toContain('Chapter Twelve');
     expect(section(html, 'ch-welcome')).not.toContain('Chapter ');
     expect(html).not.toContain('{{CH}}');
   });
@@ -110,7 +113,7 @@ describe('the Proposal', () => {
   it('puts the new chapters in the order the document reads', () => {
     const order = ['ch-welcome', 'ch-found', 'ch-who', 'ch-options', 'ch-investment',
       'ch-product', 'ch-system', 'ch-colors', 'ch-process', 'ch-financing', 'ch-warranty',
-      'ch-our-work', 'ch-next'];
+      'ch-next'];
     const at = order.map((id) => html.indexOf(`id="${id}"`));
     expect(at).toEqual([...at].sort((a, b) => a - b));
   });
@@ -128,24 +131,35 @@ describe('the Proposal', () => {
     expect(at).toEqual([...at].sort((a, b) => a - b));
   });
 
-  it('shows the trust stats somewhere — they appear on no other document', () => {
-    // The Estimate only gets whyBRN's compact (credentials-only) mode, so if
-    // this chapter drops them, James's stats reach no customer at all.
-    expect(html).toContain('$100,000');
-    expect(html).toContain('Angi');
-    expect(html).toContain('500+');
-    expect(html).toContain('5.0★');
+  it("shows the company's trust stats somewhere — they appear on no other document", () => {
+    // The Estimate only gets whyUs's compact (credentials-only) mode, so if
+    // this chapter drops them, the company's stats reach no customer at all.
+    expect(html).toContain('4.9★ on Google · 50 reviews');
     expect(section(html, 'ch-who')).toContain('award-strip');
+    expect(html).not.toMatch(FORMER_COMPANY);
+  });
+
+  it('a company with no financing and no claims loses those parts and keeps its numbering', () => {
+    const bare = withProfile(BARE_PROFILE, () => renderProposalScrollcraftHtml(priced(SHINGLE_TIERS), { customer: 'Test' }));
+    expect(bare).not.toContain('id="ch-financing"');
+    expect(bare).not.toContain('href="#ch-financing"');
+    expect(bare).not.toContain('award-strip">');
+    expect(bare).not.toContain('By the numbers');
+    // Who We Are has nothing to say without a story, values or claims, so it goes too.
+    expect(bare).not.toContain('id="ch-who"');
+    expect(chapterWords(bare)).toEqual(NUMBER_WORDS.slice(0, 9));
+    expect(bare).not.toContain('{{CH}}');
+    expect(bare).not.toMatch(FORMER_COMPANY);
   });
 
   it('closes the gap when a product has no colour list', () => {
-    const metal = renderProposalScrollcraftHtml(priced(METAL_TIERS), { customer: 'Test' });
+    const metal = withProfile(TEST_PROFILE, () => renderProposalScrollcraftHtml(priced(METAL_TIERS), { customer: 'Test' }));
     expect(metal).not.toContain('Your Color Options');
     expect(metal).not.toContain('id="ch-colors"');
     expect(metal).not.toContain('href="#ch-colors"');
-    // Eleven numbers, not twelve — and no skipped word.
-    expect(chapterWords(metal)).toEqual(NUMBER_WORDS.slice(0, 11));
-    expect(metal).not.toContain('Chapter Twelve');
+    // Ten numbers, not eleven — and no skipped word.
+    expect(chapterWords(metal)).toEqual(NUMBER_WORDS.slice(0, 10));
+    expect(metal).not.toContain('Chapter Eleven');
     expect(metal).not.toContain('{{CH}}');
   });
 });

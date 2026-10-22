@@ -17,9 +17,11 @@
 import { describe, it, expect } from 'vitest';
 import { renderPresentationScrollcraftHtml } from '../render-presentation-scrollcraft';
 import { applyReplacementPricing } from '../estimate-replacement';
+import { withProfile } from '../../../tenant/context';
+import { CREDENTIALED_PROFILE } from './profiles';
 
 const base: any = {
-  property: { address: '1 Test St', city: 'Charlotte', state: 'NC' },
+  property: { address: '1 Test St', city: 'Springfield', state: 'IL' },
   roofDetails: { squares: 33 },
   damageAnalysis: { photos: [] },
   generatedAt: '2026-09-11T12:00:00.000Z',
@@ -33,7 +35,7 @@ const report = applyReplacementPricing(base, {
 });
 
 describe('the Presentation after extraction', () => {
-  const html = renderPresentationScrollcraftHtml(report, { customer: 'Test Customer' });
+  const html = withProfile(CREDENTIALED_PROFILE, () => renderPresentationScrollcraftHtml(report, { customer: 'Test Customer' }));
 
   it('still renders every chapter it did before', () => {
     for (const h of [
@@ -61,14 +63,14 @@ describe('the Presentation after extraction', () => {
     }
   });
 
-  it('shows the corrected credential', () => {
+  it("shows the company's own credential", () => {
     expect(html).toContain('ShingleMaster');
     expect(html).not.toContain('CertainTeed Certified');
   });
 
   // The chapters repointed at the shared builders keep the copy customers
   // already read: the install sequence, the color-sample promise, and the
-  // HFS Financial link with no invented APR or monthly payment.
+  // company's own lender link with no invented APR or monthly payment.
   it('keeps the install sequence and its promises verbatim', () => {
     expect(html).toContain('Most roofs are a single day, start to finish');
     expect(html).toContain('1 &middot; Protect');
@@ -83,7 +85,7 @@ describe('the Presentation after extraction', () => {
   });
 
   it('keeps financing free of invented numbers', () => {
-    expect(html).toContain('https://www.hfsfinancial.net/promo/6a9220ac271898d8cd349096');
+    expect(html).toContain('https://lender.test/apply');
     expect(html).not.toMatch(/\d+(\.\d+)?%\s*APR/i);
     expect(html).not.toMatch(/\$\d+\s*\/\s*mo/i);
   });

@@ -1,5 +1,5 @@
 /**
- * Everything Best Roofing Now writes to a carrier, in one place.
+ * Everything the company writes to a carrier, in one place.
  *
  * The set follows the company's own Master Insurance Claims Process, so each
  * letter matches a point in the claim where somebody actually sends something:

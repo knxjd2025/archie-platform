@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { estimateCoversSection } from '../render-estimate-html';
+import { withProfile } from '../../../tenant/context';
+import { CREDENTIALED_PROFILE, BARE_PROFILE } from './profiles';
 
 /**
  * "What This Covers" answers "what am I buying". For a replacement that's the
@@ -38,7 +40,9 @@ describe('a replacement quote', () => {
   it('says what the crew actually does', () => {
     expect(html).toContain('Complete tear-off');
     expect(html).toContain('Synthetic underlayment');
-    expect(html).toContain('15-Year Workmanship Warranty');
+    expect(withProfile(CREDENTIALED_PROFILE, () => estimateCoversSection(replacement))).toContain('15-Year Workmanship Warranty');
+    // A company that has not entered its workmanship years makes no workmanship claim.
+    expect(withProfile(BARE_PROFILE, () => estimateCoversSection(replacement))).not.toMatch(/Workmanship Warranty/);
   });
 
   it('shows the sizing behind the price', () => {
@@ -134,21 +138,21 @@ describe('the estimate document title', () => {
 describe('the estimate gains product depth', () => {
   it('shows the manufacturer facts for a replacement', async () => {
     const { renderEstimateHtml } = await import('../render-estimate-html');
-    const html = renderEstimateHtml(replacement, { customer: 'Greg Baker' });
+    const html = withProfile(CREDENTIALED_PROFILE, () => renderEstimateHtml(replacement, { customer: 'Greg Baker' }));
     expect(html).toContain('UL Class A');
     expect(html).toContain('Your Color Options');
-    expect(html).toContain('ShingleMaster');
-    expect(html).toContain('HFS Financial');
+    expect(html).toContain('ShingleMaster'); // the company's own credential
+    expect(html).toContain('Test Lender'); // the company's own lender
   });
 
   it('gives a repair quote no product or colour section', async () => {
     const { renderEstimateHtml } = await import('../render-estimate-html');
-    const html = renderEstimateHtml(repairOnly, { customer: 'Test' });
+    const html = withProfile(CREDENTIALED_PROFILE, () => renderEstimateHtml(repairOnly, { customer: 'Test' }));
     expect(html).not.toContain('Your Color Options');
     expect(html).toContain('ShingleMaster');   // credentials still appear
     expect(html).not.toContain('class="product-panel"');
     expect(html).not.toContain('UL Class A');
-    expect(html).toContain('HFS Financial');   // financing is offered on repairs too
+    expect(html).toContain('Test Lender');   // financing is offered on repairs too
   });
 
   it('renders document classes, not scrollcraft ones', async () => {

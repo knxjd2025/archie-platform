@@ -49,7 +49,7 @@ export const PRODUCT_TIERS: ProductTier[] = [
     body: "The trusted classic. Landmark's dual-layer (two-piece laminated fiberglass) construction gives your roof real depth and dependable, long-lasting protection. It carries StreakFighter&reg; algae resistance with copper granules, the NailTrak&reg; line for an accurate install, and the widest color palette in the industry.",
   },
   {
-    key: 'better', label: 'Better', shingle: 'CertainTeed Landmark PRO', accent: '#C8102E',
+    key: 'better', label: 'Better', shingle: 'CertainTeed Landmark PRO', accent: 'var(--red)',
     ratePerSquare: DEFAULT_RATES.better,
     tagline: "The expert's choice — heavier, richer, tougher",
     body: "Landmark PRO is built to the professional's spec. More weathering asphalt on the industry's toughest fiberglass mat means more protection, and Max Def color blends give the roof a brighter, more vibrant, more dramatic look. It outweighs standard laminates and steps the algae warranty up to 15 years.",
@@ -62,8 +62,15 @@ export const PRODUCT_TIERS: ProductTier[] = [
   },
 ];
 
-/** Scope comparison. Value is true (included), false (not), or a string label. */
-export const SCOPE_ROWS: Array<[string, boolean | string, boolean | string, boolean | string]> = [
+type ScopeRow = [string, boolean | string, boolean | string, boolean | string];
+
+/**
+ * Scope comparison. Value is true (included), false (not), or a string label.
+ * The two warranty rows are the current company's: the 50-year figure only
+ * for a CertainTeed-credentialed company, the workmanship row only when it
+ * has entered its years (scopeRows).
+ */
+const BASE_SCOPE_ROWS: ScopeRow[] = [
   ['Complete tear-off of existing roof & haul-away', true, true, true],
   ['Synthetic underlayment over the entire deck', true, true, true],
   ['Ice & Water shield in all valleys', true, true, true],
@@ -71,8 +78,8 @@ export const SCOPE_ROWS: Array<[string, boolean | string, boolean | string, bool
   ['CertainTeed hip & ridge cap shingles', true, true, true],
   ['Ridge / attic ventilation as needed', true, true, true],
   ['Full cleanup + magnetic nail sweep', true, true, true],
-  ['50-Year Manufacturer Warranty', true, true, true],
-  ['15-Year Workmanship Warranty', true, true, true],
+  ['@manufacturer-warranty', true, true, true],
+  ['@workmanship-warranty', true, true, true],
   ['Shingle', 'Landmark', 'Landmark PRO', 'Landmark Solaris'],
   ['Max Def color palette', false, true, true],
   ['Algae-resistance coverage', '10-year', '15-year', '15-year'],
@@ -81,6 +88,16 @@ export const SCOPE_ROWS: Array<[string, boolean | string, boolean | string, bool
   ['Ice & Water shield on rakes (added to valleys)', false, false, true],
   ['Extra nailing for high-wind security', false, false, true],
 ];
+
+/** The scope comparison for the current company, with only the warranty rows it can stand behind. */
+export function scopeRows(): ScopeRow[] {
+  const years = companyBrand().workmanshipYears;
+  return BASE_SCOPE_ROWS.flatMap(([label, ...cells]): ScopeRow[] => {
+    if (label === '@manufacturer-warranty') return isCertainTeedCredentialed() ? [[`${MANUFACTURER_WARRANTY_YEARS}-Year Manufacturer Warranty`, ...cells]] : [];
+    if (label === '@workmanship-warranty') return years ? [[`${years}-Year Workmanship Warranty`, ...cells]] : [];
+    return [[label, ...cells]];
+  });
+}
 
 /** CertainTeed Integrity Roof System components (educational). */
 export const INTEGRITY_SYSTEM: Array<[string, string]> = [

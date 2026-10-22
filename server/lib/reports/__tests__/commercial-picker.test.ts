@@ -10,7 +10,7 @@ import { productImage } from '../sections/product-spec-panel';
 
 const report = (): any => ({
   id: 'r-com', generatedAt: '2026-09-14T12:00:00.000Z', version: '2.0',
-  property: { address: '400 Warehouse Way', city: 'Charlotte', state: 'NC', latitude: 35.2, longitude: -80.8 },
+  property: { address: '400 Warehouse Way', city: 'Springfield', state: 'IL', latitude: 35.2, longitude: -80.8 },
   stormHistory: { yearsAnalyzed: 3, searchRadiusMiles: 5, totalEvents: 0, hailEvents: 0, windEvents: 0, tornadoEvents: 0, largestHailInches: 0, highestWindMph: 0, riskLevel: 'low', riskScore: 5, claimPotential: 'low', eventsByYear: {}, recommendedDateOfLoss: null },
   damageAnalysis: { totalPhotosAnalyzed: 0, photosWithDamage: 0, overallSeverity: 'none', roofAge: null, damageTypes: [], aiSummary: '', photos: [] },
   repairEstimate: { lineItems: [], subtotal: 0, multiplierApplied: 1, total: 0, notes: [] },

@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { roofSystemFor, commercialRoofSystemFor, allRoofSystems, assetUrl } from '../roof-systems';
+import { roofSystemFor, commercialRoofSystemFor, allRoofSystems, assetUrl, COMPANY_SUPPLIED, makerName } from '../roof-systems';
+import { withProfile } from '../../../tenant/context';
+import { TEST_PROFILE } from '../../../__tests__/helpers/tenant';
 import { roofSystemWalkthrough } from '../sections/roof-system-walkthrough';
 import { SCROLL_STYLE, DOCUMENT_STYLE } from '../sections/style';
 import { ROOFING_PRODUCTS } from '../roofing-products';
@@ -18,7 +20,7 @@ const PUBLIC = resolve(__dirname, '../../../../client/public/roof-systems');
 
 const report = (): any => ({
   id: 'r-sys', generatedAt: '2026-09-14T12:00:00.000Z', version: '2.0',
-  property: { address: '9 System Ct', city: 'Charlotte', state: 'NC', latitude: 35.2, longitude: -80.8 },
+  property: { address: '9 System Ct', city: 'Springfield', state: 'IL', latitude: 39.8, longitude: -89.6 },
   stormHistory: { yearsAnalyzed: 3, searchRadiusMiles: 5, totalEvents: 0, hailEvents: 0, windEvents: 0, tornadoEvents: 0, largestHailInches: 0, highestWindMph: 0, riskLevel: 'low', riskScore: 5, claimPotential: 'low', eventsByYear: {}, recommendedDateOfLoss: null },
   damageAnalysis: { totalPhotosAnalyzed: 0, photosWithDamage: 0, overallSeverity: 'none', roofAge: null, damageTypes: [], aiSummary: '', photos: [] },
   repairEstimate: { lineItems: [], subtotal: 0, multiplierApplied: 1, total: 0, notes: [] },
@@ -51,13 +53,17 @@ describe('every package has a layer-by-layer system', () => {
       }
     }
     expect(shipped).toBeGreaterThan(40);
-    expect(assetUrl('certainteed/landmark.jpg')).toBe('https://app.bestroofingnow.com/roof-systems/certainteed/landmark.jpg');
+    // Served from this app (REPORT_ASSET_BASE / APP_BASE_URL), never another company's host.
+    expect(assetUrl('certainteed/landmark.jpg')).toMatch(/^(https?:\/\/[^/]+)?\/roof-systems\/certainteed\/landmark\.jpg$/);
   });
 
   it('keeps one manufacturer per package, and says so where none makes the part', () => {
     const ct = roofSystemFor('landmark_pro')!;
-    expect(ct.components.every((c) => c.maker === 'CertainTeed' || c.maker === 'Best Roofing Now')).toBe(true);
-    expect(ct.components.find((c) => c.role === 'drip-edge')!.maker).toBe('Best Roofing Now');
+    expect(ct.components.every((c) => c.maker === 'CertainTeed' || c.maker === COMPANY_SUPPLIED)).toBe(true);
+    const drip = ct.components.find((c) => c.role === 'drip-edge')!;
+    expect(drip.maker).toBe(COMPANY_SUPPLIED);
+    // A part no manufacturer makes is supplied by whichever company does the work.
+    expect(withProfile(TEST_PROFILE, () => makerName(drip))).toBe('Acme Roofing');
     expect(ct.components.find((c) => c.role === 'drip-edge')!.image).toBeNull();
 
     // CertainTeed's own pairing table, not one cap for everything.
@@ -67,7 +73,7 @@ describe('every package has a layer-by-layer system', () => {
     expect(gm.name).toContain('Shangle Ridge');
     expect(gm.image).toBeNull(); // no manufacturer photo found — no stand-in
 
-    // The makers that sell only the top layer sit on CertainTeed underlayment (James, 2026-09-14).
+    // The makers that sell only the top layer sit on CertainTeed underlayment (decided 2026-09-14).
     for (const key of ['standing_seam_metal', 'stone_coated_steel', 'cedur_shake', 'davinci_shake'] as const) {
       const s = roofSystemFor(key)!;
       expect(s.components.find((c) => c.role === 'underlayment')!.maker, key).toBe('CertainTeed');
@@ -87,7 +93,7 @@ describe('every package has a layer-by-layer system', () => {
     }
     // TAMKO sells no ridge vent and no intake — the step says so instead of inventing one.
     const tamko = roofSystemFor('tamko_titan_basic')!;
-    expect(tamko.components.find((c) => c.role === 'exhaust')!.maker).toBe('Best Roofing Now');
+    expect(tamko.components.find((c) => c.role === 'exhaust')!.maker).toBe(COMPANY_SUPPLIED);
     expect(tamko.components.find((c) => c.role === 'intake')).toBeUndefined();
   });
 
@@ -109,15 +115,17 @@ describe('every package has a layer-by-layer system', () => {
 
 describe('the walkthrough section', () => {
   it('numbers every step, hosts every photo on the app, and labels a photo-less step instead of faking one', () => {
-    const html = roofSystemWalkthrough(roofSystemFor('landmark')!, SCROLL_STYLE);
+    const html = withProfile(TEST_PROFILE, () => roofSystemWalkthrough(roofSystemFor('landmark')!, SCROLL_STYLE));
     expect(html).toContain('Step 1');
     expect(html).toContain('Step 9'); // drip edge … intake vent
-    expect(html).toContain('src="https://app.bestroofingnow.com/roof-systems/certainteed/winterguard.jpg"');
-    expect(html).toContain('src="https://app.bestroofingnow.com/roof-systems/certainteed/integrity-cutaway.jpg"');
+    expect(html).toContain(`src="${assetUrl('certainteed/winterguard.jpg')}"`);
+    expect(html).toContain(`src="${assetUrl('certainteed/integrity-cutaway.jpg')}"`);
     expect(html).toContain('rsw-media--none'); // drip edge, step flashing
-    expect(html).toContain('<span>Supplied by</span><b>Best Roofing Now</b>'); // the labelled card
+    expect(html).toContain('<span>Supplied by</span><b>Acme Roofing</b>'); // the labelled card, in the company's name
     expect(html).toContain('Made by CertainTeed'); // the byline under a photographed step
-    expect(html).not.toContain('Supplied by Best Roofing Now'); // no byline repeating the card
+    expect(html).not.toContain('Supplied by Acme Roofing'); // no byline repeating the card
+    expect(html).not.toContain(COMPANY_SUPPLIED); // the marker never reaches the page
+    expect(html).not.toMatch(/Courtesy of[^.]*Acme/i); // the company is not credited as a photographer
     expect(html).not.toMatch(/alt="[^"]*&(reg|trade|amp);/); // entities stripped from alt text
     expect(html).toContain('Product photography courtesy of CertainTeed');
     const doc = roofSystemWalkthrough(roofSystemFor('landmark')!, DOCUMENT_STYLE, { cutaway: false });
@@ -144,7 +152,7 @@ describe('where the walkthrough appears', () => {
   });
 
   it('Presentation: the system chapter is the walkthrough plus the warranty seal', () => {
-    const html = renderPresentationScrollcraftHtml(priced('cedur_shake'), { customer: 'T' });
+    const html = withProfile(TEST_PROFILE, () => renderPresentationScrollcraftHtml(priced('cedur_shake'), { customer: 'T' }));
     expect(html).toContain('id="ch-system"');
     expect(html).toContain('CEDUR Shakes');
     expect(html).toContain('CEDUR Starter Material');

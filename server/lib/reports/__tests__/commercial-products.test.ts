@@ -5,7 +5,7 @@ import {
 } from '../commercial-products';
 
 describe('COMMERCIAL_PRODUCTS', () => {
-  it('applies the 40% markup to James\'s stated cost for every product', () => {
+  it('applies the 40% markup to the stated cost for every product', () => {
     expect(COMMERCIAL_MARKUP).toBe(1.4);
     const rates: Record<string, number> = {
       dura_last_tpo: 770,

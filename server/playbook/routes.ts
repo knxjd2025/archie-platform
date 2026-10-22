@@ -16,7 +16,8 @@ import { visibleIdsFor } from '../access/team-scope';
 import { logWrite } from '../writes/log';
 import { ROLE_LABEL } from '../../shared/rbac';
 import { streetOnly } from '../../shared/neighbor-letters';
-import { GOAL_DEFAULTS, STAGE_CHECKLISTS, incomePlan, playbookDoc, pointsFor, stageForColumn, type FillContext, type GoalInputs } from '../../shared/playbook';
+import { GOAL_DEFAULTS, STAGE_CHECKLISTS, companyFillFrom, incomePlan, playbookDoc, pointsFor, stageForColumn, type FillContext, type GoalInputs } from '../../shared/playbook';
+import { currentProfile } from '../tenant/context';
 import { sendFailure } from '../lib/failure';
 import { etDayStart, etPlusDays, etWeekStart, etWeekStartDate } from '../../shared/et-periods';
 
@@ -31,7 +32,7 @@ async function loadSettings(): Promise<PlaybookSettings> {
 
 const isHttpUrl = (v: unknown) => { try { const u = new URL(String(v)); return u.protocol === 'https:' || u.protocol === 'http:'; } catch { return false; } };
 
-/** JobTread addresses usually arrive complete ("14509 Farmleigh Ave, Charlotte, NC 28273, USA"); only a bare street gets the city added. */
+/** JobTread addresses usually arrive complete ("14509 Farmleigh Ave, Springfield, IL 62704, USA"); only a bare street gets the city added. */
 export function fullAddress(address: string | null, city: string | null, state: string | null, zip: string | null): string | null {
   const a = (address || '').replace(/,\s*(USA|United States)\s*$/i, '').trim();
   if (!a) return null;
@@ -49,13 +50,15 @@ export function registerPlaybookRoutes(app: Express) {
       const user = req.session.user! as SessionUser;
       const [me] = await db.select({ name: teamMembers.name, phone: teamMembers.phone, role: teamMembers.role, email: teamMembers.email }).from(teamMembers).where(eq(teamMembers.email, user.email));
       const office = await loadSettings();
+      const company = companyFillFrom(currentProfile());
       const ctx: FillContext & { customerExternalId?: string | null; customerLabel?: string | null; insuranceJob?: boolean; stage?: string | null } = {
+        ...company,
         repName: me?.name || user.name,
         repCell: me?.phone || null,
         repEmail: me?.email || user.email,
         repTitle: roleLabel(me?.role || user.role),
         referralGift: office.referralGift || null,
-        reviewLink: office.reviewLink || null,
+        reviewLink: office.reviewLink || company.reviewLink || null,
       };
       const externalId = String(req.query.externalId || '').trim();
       if (externalId) {
@@ -218,7 +221,7 @@ export async function tickChecklistItem(
     if (item.followUps?.length && !prior?.followUpIds?.length) {
       const myId = await teamMemberIdByEmail(user.email);
       const clientName = [lead.firstName, lead.lastName].filter(Boolean).join(' ') || lead.jobName || null;
-      // Due dates count Charlotte days: on Vercel (UTC) "today" flipped to
+      // Due dates count Eastern days (shared/et-periods): on Vercel (UTC) "today" flipped to
       // tomorrow at 8pm, so an evening tick came due a day late.
       const rows = await tx.insert(followUps).values(item.followUps.map((f) => ({
         jobExternalId: lead.externalId, clientName, note: f.note, dueDate: etPlusDays(f.days), assignedTo: myId, createdBy: user.email,
@@ -241,7 +244,7 @@ export async function tickChecklistItem(
 
 /** This week's and today's activity for the points game and the weekly tracker, from the KPI events already recorded. */
 async function progressFor(user: SessionUser, myId: number | null) {
-  // Charlotte's day and Monday-to-Sunday week, not the server's: on Vercel
+  // The Eastern day and Monday-to-Sunday week, not the server's: on Vercel
   // (UTC) the new day started at 8pm Eastern, so an evening's doors were
   // credited to tomorrow, and the week rolled over on Sunday evening.
   const now = new Date();

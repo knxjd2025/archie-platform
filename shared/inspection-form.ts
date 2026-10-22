@@ -1,10 +1,10 @@
 /**
- * The BRN field inspection checklist — one source of truth for the form
+ * The field inspection checklist — one source of truth for the form
  * schema, shared by the client (renders it) and the server (validates
  * required fields, decides when a submission is complete).
  *
- * Ported field-for-field from "Roof Inspection Checklist - The BRN Way",
- * James's real field process (originally a JobTread form export). Field
+ * Ported field-for-field from a roofing company's real field process (a
+ * "Roof Inspection Checklist", originally a JobTread form export). Field
  * names are stored as-is and used as the answers object's keys, so this
  * array is the schema for InspectionSubmission.answers.
  */

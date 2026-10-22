@@ -641,7 +641,7 @@ export const PAGE_CSS = `
 :root {
   --sc-canvas: #F7F4EE; --sc-surface: #FFFFFF;
   --sc-ink: #17130F; --sc-ink-soft: #6B6259;
-  --sc-accent: #C8102E; --sc-accent-ink: #FFFFFF;
+  --sc-accent: #1F3A5F; --sc-accent-ink: #FFFFFF;
   --sc-font-display: 'Fraunces', Georgia, serif;
   --sc-font-text: 'Archivo', system-ui, sans-serif;
 }
@@ -873,7 +873,7 @@ export const PAGE_JS = `
   tabs.forEach(function (t) { t.addEventListener('click', function () { select(t.dataset.tier, true); }); });
   // A tier picked elsewhere on the page (the layer diagram) changes the tier
   // without scrolling the reader away from where they tapped.
-  document.addEventListener('brn:select-tier', function (e) { var tier = e.detail && e.detail.tier; if (tier) select(tier, false); });
+  document.addEventListener('report:select-tier', function (e) { var tier = e.detail && e.detail.tier; if (tier) select(tier, false); });
 
   // The count-up runs once, when the number first comes on screen, to the
   // tier selected at that moment; after that every tap re-tweens it directly.

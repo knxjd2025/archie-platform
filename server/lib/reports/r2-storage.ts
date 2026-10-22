@@ -1,5 +1,5 @@
 /**
- * Cloudflare R2 storage for finished BRN reports.
+ * Cloudflare R2 storage for finished reports.
  *
  * NOT WIRED UP. Every function here has zero callers, and the R2_REPORTS_*
  * keys are deliberately unset — the roof colour renders that were to use it

@@ -17,7 +17,7 @@
  */
 import { esc } from '../report-theme.js';
 import { existingAssemblyLayers, reroofDetermination, type RoofLayer, type ReroofPath, type ReroofDetermination } from '../../../../shared/commercial-inspection-form.js';
-import { roofSystemFor, type RoofSystemComponent } from '../roof-systems.js';
+import { isCompanySupplied, makerName, roofSystemFor, type RoofSystemComponent } from '../roof-systems.js';
 import type { TierPricing } from '../roofing-products.js';
 
 export type LayerAction = 'removed' | 'stays' | 'repaired' | 'new';
@@ -152,7 +152,7 @@ function newLayerFrom(c: RoofSystemComponent, kind: SystemKind, t: TierPricing):
     id: `n-${kind}-${c.role}`,
     role: c.role,
     label,
-    detail: optional ? 'Where the building needs it' : `${c.maker === 'Best Roofing Now' ? 'Installed by' : 'Made by'} ${c.maker}`,
+    detail: optional ? 'Where the building needs it' : `${isCompanySupplied(c) ? 'Installed by' : 'Made by'} ${makerName(c)}`,
     explain: `${decodeEntities(c.plain)}${c.spec ? ` ${decodeEntities(c.spec)}` : ''}`,
     action: 'new',
     tag: optional ? 'If needed' : TAG.new,
@@ -572,7 +572,7 @@ html:not([data-tier]) .asm[data-asm-default] { display: block; }
  */
 export const ASSEMBLY_CSS_DOCUMENT = `
 .asm-doc {
-  --sc-surface: #fff; --sc-ink: #17130F; --sc-ink-soft: #6b7280; --sc-accent: #C8102E; --sc-hairline-strong: #d1d5db;
+  --sc-surface: #fff; --sc-ink: #17130F; --sc-ink-soft: #6b7280; --sc-accent: var(--brand, #1F3A5F); --sc-hairline-strong: #d1d5db;
   --sc-t-xs: 12px; --sc-t-sm: 13.5px; --sc-t-base: 15px; --sc-t-lg: 18px; --sc-t-xl: 22px;
   --sc-1: 4px; --sc-2: 8px; --sc-3: 12px; --sc-4: 16px; --sc-5: 24px; --sc-6: 32px;
   --sc-r-sm: 6px; --sc-r-md: 12px; --sc-r-pill: 999px; --sc-font-display: inherit; --sc-track-wide: .06em;
@@ -610,7 +610,7 @@ export const ASSEMBLY_JS = `
     c.addEventListener('click', function () {
       var tier = c.getAttribute('data-asm-pick');
       root.setAttribute('data-tier', tier);
-      document.dispatchEvent(new CustomEvent('brn:select-tier', { detail: { tier: tier } }));
+      document.dispatchEvent(new CustomEvent('report:select-tier', { detail: { tier: tier } }));
       syncChips();
     });
   });

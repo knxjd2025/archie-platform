@@ -22,7 +22,8 @@ import { requireAuth } from '../auth/middleware';
 import { ownsLead, type SessionUser } from '../access/rep-scope';
 import { asyncHandler } from '../lib/async-handler';
 import { logWrite } from '../writes/log';
-import { OFFICE_ADDRESS_DEFAULT, OFFICE_PHONE } from '../../shared/neighbor-letters';
+import { officeAddressOf } from '../../shared/neighbor-letters';
+import { currentProfile, currentTenant } from '../tenant/context';
 import {
   certificateFromWalkthrough, certificateHtml, certificateStatement, certDate,
   type CertificateData, type CertificateSignatures, type CertificateStatus,
@@ -35,7 +36,6 @@ import { JobTreadClient } from '../integrations/jobtread';
 import { rateLimit } from '../lib/rate-limit';
 import { certificateLinkCompany } from '../tenant/public-links';
 
-const COMPANY_NAME = 'Best Roofing Now';
 const NEIGHBOR_SETTINGS_KEY = 'neighbor_letters';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -76,7 +76,8 @@ const iso = (d: Date | null | undefined): string | null => (d ? d.toISOString() 
 async function company() {
   const [row] = await db.select({ value: settings.value }).from(settings).where(eq(settings.key, NEIGHBOR_SETTINGS_KEY));
   const v = (row?.value ?? {}) as { officeAddress?: string };
-  return { companyName: COMPANY_NAME, officeAddress: v.officeAddress || OFFICE_ADDRESS_DEFAULT, companyPhone: OFFICE_PHONE };
+  const p = currentProfile();
+  return { companyName: p.legalName, officeAddress: v.officeAddress || officeAddressOf(p), companyPhone: p.phone };
 }
 
 /** The mailbox the signing link goes out from — the sender's own where they have one. */
@@ -159,7 +160,7 @@ const publicPage = (title: string, body: string) => `<!doctype html><html lang="
   label { display: block; font-weight: 600; font-size: 13px; margin: 14px 0 4px }
   input[type=text] { width: 100%; box-sizing: border-box; font: 17px Georgia, serif; padding: 10px 12px; border: 1px solid #cfcfcf; border-radius: 9px }
   .affirm { display: flex; gap: 9px; align-items: flex-start; font-weight: 400; font-size: 13px; color: #444; margin-top: 12px }
-  button { margin-top: 16px; width: 100%; padding: 14px; font-size: 16px; font-weight: 600; color: #fff; background: #b8322b; border: 0; border-radius: 10px }
+  button { margin-top: 16px; width: 100%; padding: 14px; font-size: 16px; font-weight: 600; color: #fff; background: ${currentTenant()?.profile?.colors.primary ?? '#1F3A5F'}; border: 0; border-radius: 10px }
   button:disabled { opacity: .5 }
   .done { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; border-radius: 10px; padding: 12px 14px; margin-bottom: 16px }
   .err { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; border-radius: 10px; padding: 12px 14px; margin-bottom: 16px }
@@ -350,9 +351,9 @@ export function registerCertificateRoutes(app: Express) {
       `<p>Hi${data.customerName ? ` ${escapeHtml(data.customerName.split(/\s+/)[0])}` : ''},</p>`,
       `<p>Your roof at ${escapeHtml(data.propertyAddress || 'your property')} was completed on ${escapeHtml(certDate(data.completedOn))}, and we've put together the Certificate of Completion.</p>`,
       `<p>Please take a look and add your signature here:</p>`,
-      `<p><a href="${link}" style="display:inline-block;background:#b8322b;color:#fff;padding:12px 20px;border-radius:9px;text-decoration:none;font-weight:600">Review and sign</a></p>`,
+      `<p><a href="${link}" style="display:inline-block;background:${currentProfile().colors.primary};color:#fff;padding:12px 20px;border-radius:9px;text-decoration:none;font-weight:600">Review and sign</a></p>`,
       `<p style="color:#666;font-size:13px">Or paste this into your browser: ${link}</p>`,
-      `<p>Thank you,<br>${escapeHtml(str(user.name, 120))}<br>${escapeHtml(data.companyName)} · ${escapeHtml(data.companyPhone)}</p>`,
+      `<p>Thank you,<br>${escapeHtml(str(user.name, 120))}<br>${escapeHtml([data.companyName, data.companyPhone].filter(Boolean).join(' · '))}</p>`,
     ].join('\n');
 
     try {

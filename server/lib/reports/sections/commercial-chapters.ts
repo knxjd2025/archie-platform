@@ -27,7 +27,7 @@ import { assemblyDiagramHtml, type AssemblyEdits, type TierKey } from './assembl
 import {
   SCAN_COMPONENTS, SCAN_COMPONENT_LABEL, SCAN_COMPONENT_RATING_FIELD, type ScanComponent,
 } from '../commercial-photo-scan.js';
-import { COMMERCIAL_INCLUDES } from '../commercial-products.js';
+import { commercialIncludes } from '../commercial-products.js';
 import { companyBrand } from '../company-brand.js';
 import { warrantyFor } from '../product-warranty.js';
 import type { TierPricing } from '../roofing-products.js';
@@ -147,7 +147,8 @@ function evidenceGroups(report: any, insp: InspectionFactsContext | null): Evide
   };
 }
 
-const SCAN_DISCLOSURE = 'Photo descriptions were drafted with AI assistance from the photos themselves and reviewed by Best Roofing Now. The ratings, the measurements and the recommendation in this document come from the on-roof inspection, not from the photos.';
+/** Said wherever AI-drafted photo descriptions appear. Escaped HTML. */
+const scanDisclosure = (): string => `Photo descriptions were drafted with AI assistance from the photos themselves and reviewed by ${esc(companyBrand().displayName)}. The ratings, the measurements and the recommendation in this document come from the on-roof inspection, not from the photos.`;
 
 /** What We Found, for the Proposal and Presentation. */
 export function chapterEvidence(report: any, insp: InspectionFactsContext | null, jobType?: 'retail' | 'insurance'): string {
@@ -179,7 +180,7 @@ export function chapterEvidence(report: any, insp: InspectionFactsContext | null
       ${g.described}
       ${toEnd}
       ${none ? '<p class="sc-body ev-lede">No photos are on file for this inspection yet. The findings in this document come from the on-roof inspection.</p>' : ''}
-      ${g.scanned ? `<p class="sc-body tiny ev-note">${SCAN_DISCLOSURE}</p>` : ''}
+      ${g.scanned ? `<p class="sc-body tiny ev-note">${scanDisclosure()}</p>` : ''}
     </div>
   </section>`;
 }
@@ -210,7 +211,7 @@ export function evidenceBlockDocument(report: any, insp: InspectionFactsContext 
     note: `${g.photos} photo${g.photos === 1 ? '' : 's'}, ${g.scanned} read and described`,
     html: `<p>We looked closely at these photos from your roof. They are grouped by the part of the roof they show. Each one says what we see, next to the grade the inspector gave that part.${g.rest ? ' Every other photo is in the Photo Record at the end of this report.' : ''}</p>
     <div class="ev-doc">${g.described}</div>
-    <p class="muted tiny" style="margin-top:14px">${SCAN_DISCLOSURE}</p>`,
+    <p class="muted tiny" style="margin-top:14px">${scanDisclosure()}</p>`,
   };
 }
 
@@ -257,7 +258,7 @@ export function chapterCompany(): string {
 /** What the price covers for the option the document opens on. */
 export function chapterScope(t: TierPricing): string {
   const system = t.product?.system;
-  const items = system ? COMMERCIAL_INCLUDES[system] : null;
+  const items = system ? commercialIncludes(system) : null;
   if (!items?.length) return '';
   const w = warrantyFor(t.product);
   return `<section class="sc-section ch ch--paper" id="ch-scope">
@@ -327,7 +328,7 @@ export function chapterRecord(insp: InspectionFactsContext | null, inspectorNote
       <p class="sc-label">Chapter {{CH}}</p>
       <h2 class="sc-display sc-display--lg">The Inspection Record</h2>
       <p class="sc-body sc-prose">Here is everything your inspector wrote down on the roof, in order. The rest of this report comes from these notes.</p>
-      ${notes ? `<p class="sc-body"><b>Notes from your Best Roofing Now team.</b> <span style="white-space:pre-wrap">${esc(notes)}</span></p>` : ''}
+      ${notes ? `<p class="sc-body"><b>Notes from your ${esc(companyBrand().displayName)} team.</b> <span style="white-space:pre-wrap">${esc(notes)}</span></p>` : ''}
       <div class="rec-list">${list}</div>
     </div>
   </section>`;
@@ -380,7 +381,7 @@ export function withSectionNotes(sections: ReportSection[], notes: Record<string
     if (!note || !s.html || s.html.includes('data-sc-act')) return s;
     const end = s.html.lastIndexOf('</div>');
     if (end < 0) return s;
-    const aside = `<aside class="rep-note"><b>A note from your Best Roofing Now team</b><p>${noToken(esc(note)).replace(/\n/g, '<br>')}</p></aside>`;
+    const aside = `<aside class="rep-note"><b>A note from your ${esc(companyBrand().displayName)} team</b><p>${noToken(esc(note)).replace(/\n/g, '<br>')}</p></aside>`;
     return { ...s, html: `${s.html.slice(0, end)}${aside}${s.html.slice(end)}` };
   });
 }

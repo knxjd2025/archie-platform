@@ -43,6 +43,7 @@ import {
   declinePage, declinedPage, notFoundPage, signPage, signedPage, tooManyPage, voidedPage,
 } from './sign-page';
 import { signerLinkCompany } from '../tenant/public-links';
+import { currentProfile } from '../tenant/context';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_SIGNERS = 4;
@@ -76,7 +77,7 @@ const sendLimiter = rateLimit(40, 60 * 60 * 1000);
 const str = (v: unknown, max = 200): string => String(v ?? '').replace(/[\r\n]+/g, ' ').trim().slice(0, max);
 const iso = (d: Date | null | undefined): string | null => (d ? d.toISOString() : null);
 const digits = (v: unknown): string => String(v ?? '').replace(/\D/g, '');
-const appBase = (): string => (process.env.APP_BASE_URL || 'https://app.bestroofingnow.com').replace(/\/+$/, '');
+const appBase = (): string => (process.env.APP_BASE_URL || '').replace(/\/+$/, '');
 const signUrl = (token: string): string => `${appBase()}/r/s/${token}`;
 
 /**
@@ -171,15 +172,15 @@ function emailBody(o: { title: string; signerName: string; message: string | nul
     `<p>Hi ${escapeHtml(o.signerName.split(/\s+/)[0] || 'there')},</p>`,
     o.message ? `<p>${escapeHtml(o.message)}</p>` : '',
     `<p><b>${escapeHtml(o.title)}</b>${o.property ? ` for ${escapeHtml(o.property)}` : ''} is ready for your signature.</p>`,
-    `<p><a href="${o.link}" style="display:inline-block;background:#b8322b;color:#fff;padding:13px 22px;border-radius:9px;text-decoration:none;font-weight:700">Review and sign</a></p>`,
+    `<p><a href="${o.link}" style="display:inline-block;background:${currentProfile().colors.primary};color:#fff;padding:13px 22px;border-radius:9px;text-decoration:none;font-weight:700">Review and sign</a></p>`,
     `<p style="color:#666;font-size:13px">Or paste this into your browser: ${o.link}</p>`,
     `<p style="color:#666;font-size:13px">It opens on a phone — you can sign with your finger. Ask us any time for a paper copy.</p>`,
-    `<p>Thank you,<br>${escapeHtml(o.senderName)}<br>Best Roofing Now</p>`,
+    `<p>Thank you,<br>${escapeHtml(o.senderName)}<br>${escapeHtml(currentProfile().displayName)}</p>`,
   ].filter(Boolean).join('\n');
 }
 
 const smsBody = (title: string, link: string, reminder: boolean): string =>
-  `Best Roofing Now: ${reminder ? 'a reminder that ' : ''}${title} is ready for your signature. Sign here: ${link}`;
+  `${currentProfile().displayName}: ${reminder ? 'a reminder that ' : ''}${title} is ready for your signature. Sign here: ${link}`;
 
 /**
  * Send one signer their link on both channels. Each is recorded on its own,
@@ -477,7 +478,7 @@ async function finishSigned(requestId: number, fresh: boolean): Promise<void> {
         mailbox, copy.to!, `Signed — ${request.title}`,
         `<p>Thank you — everyone has now signed <b>${escapeHtml(request.title)}</b>.</p>`
         + '<p>The signed copy is attached for your records, with the signature record on the last page.</p>'
-        + '<p>Best Roofing Now</p>',
+        + `<p>${escapeHtml(currentProfile().displayName)}</p>`,
         [attachment],
         request.sentBy && EMAIL_RE.test(request.sentBy) ? request.sentBy : undefined,
       );
@@ -824,7 +825,7 @@ export function registerSignatureRoutes(app: Express) {
     // says which it is.
     // Once it is signed the document carries its signatures, so the copy
     // linked from the PDF and re-opened from an email is the signed one.
-    const block = request.status === 'signed' ? signatureBlockHtml(found.signers.map((s) => signerView(s, false))) : '';
+    const block = request.status === 'signed' ? signatureBlockHtml(found.signers.map((s) => signerView(s, false)), currentProfile().legalName) : '';
     const html = block
       ? (/<\/body>/i.test(request.html)
         ? request.html.replace(/<\/body>/i, `${block}</body>`)

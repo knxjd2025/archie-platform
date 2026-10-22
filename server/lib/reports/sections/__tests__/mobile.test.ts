@@ -9,7 +9,7 @@ import { applyReplacementPricing } from '../../estimate-replacement';
 
 const report: any = {
   id: 'r1', generatedAt: '2026-09-06T00:00:00Z',
-  property: { address: '550 Manning Dr', city: 'Charlotte', state: 'NC', zip: '28202' },
+  property: { address: '550 Manning Dr', city: 'Springfield', state: 'IL', zip: '28202' },
   damageAnalysis: { totalPhotosAnalyzed: 1, photos: [{ id: 'p1', url: 'https://cdn.example/1.jpg', damages: [{ type: 'hail_damage', severity: 'high', location: 'north slope' }] }] },
   stormHistory: { totalEvents: 0, hailEvents: 0, windEvents: 0, yearsAnalyzed: 3, searchRadiusMiles: 5 },
   repairEstimate: { lineItems: [], total: 0, notes: [] },

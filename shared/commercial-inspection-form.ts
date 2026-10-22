@@ -1,5 +1,5 @@
 /**
- * The BRN commercial (low-slope) roof inspection checklist — one source of
+ * The commercial (low-slope) roof inspection checklist — one source of
  * truth for the form schema, shared by the client (renders it) and the
  * server (validates required fields, feeds the commercial reports).
  *

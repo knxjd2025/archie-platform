@@ -34,18 +34,18 @@ let dbm: typeof import('../../db');
 let schema: typeof import('../../../shared/schema');
 let orm: typeof import('drizzle-orm');
 
-const admin = { email: 'boss@bestroofingnow.com', name: '<Boss>', role: 'admin' };
+const admin = { email: 'boss@acme.test', name: '<Boss>', role: 'admin' };
 const flush = async () => { while (mocks.pending.length) await Promise.all(mocks.pending.splice(0)); };
 
 async function makeCertificate(extra: Partial<typeof import('../../../shared/schema').jobCertificates.$inferInsert> = {}) {
   const jobExternalId = `${JOB_PREFIX}-${++seq}`;
   const [row] = await dbm.db.insert(schema.jobCertificates).values({
-    jobExternalId, createdBy: 'rep@bestroofingnow.com', signToken: crypto.randomBytes(16).toString('hex'),
+    jobExternalId, createdBy: 'rep@acme.test', signToken: crypto.randomBytes(16).toString('hex'),
     data: {
       customerName: '<img src=x onerror=alert(1)> Whitfield', propertyAddress: '1420 <b>Sardis</b> Rd',
       jobName: 'Whitfield', claimNumber: '', completedOn: '2026-09-12', walkedBy: 'Dana Rep', walkedByRole: 'Project manager',
       sections: [], openItems: [], warrantyExplained: true, homeownerPresent: true, balance: '', homeownerConcerns: '',
-      companyName: 'Best Roofing Now', officeAddress: '1 Main St', companyPhone: '(704) 555-0100',
+      companyName: 'Acme Test Roofing LLC', officeAddress: '1 Main St', companyPhone: '(555) 010-0100',
     },
     ...extra,
   }).returning();
@@ -127,7 +127,7 @@ describe.skipIf(!hasDb)('pulling the walkthrough in again', () => {
     const row = await makeCertificate();
     await dbm.db.insert(schema.signatureRequests).values({
       jobExternalId: row.jobExternalId, sourceKind: 'certificate', title: 'Certificate of Completion',
-      html: '<p>x</p>', docHash: 'x', status: 'sent', createdBy: 'rep@bestroofingnow.com',
+      html: '<p>x</p>', docHash: 'x', status: 'sent', createdBy: 'rep@acme.test',
     });
     const res = await refresh()({ params: { externalId: row.jobExternalId } });
     expect(res.status).toBe(409);
@@ -135,9 +135,9 @@ describe.skipIf(!hasDb)('pulling the walkthrough in again', () => {
   }));
 
   it('can be started over once sent, and the link the homeowner holds stops working', as(async () => {
-    const row = await makeCertificate({ companySigner: 'Dana Rep', companySignedAt: new Date(), sentAt: new Date(), sentBy: 'rep@bestroofingnow.com', status: 'sent' });
+    const row = await makeCertificate({ companySigner: 'Dana Rep', companySignedAt: new Date(), sentAt: new Date(), sentBy: 'rep@acme.test', status: 'sent' });
     await dbm.db.insert(schema.finalWalkthroughs).values({
-      jobExternalId: row.jobExternalId, answers: {}, status: 'submitted', submittedAt: new Date(), createdBy: 'rep@bestroofingnow.com',
+      jobExternalId: row.jobExternalId, answers: {}, status: 'submitted', submittedAt: new Date(), createdBy: 'rep@acme.test',
     });
     // Refused without saying so: the 409 offers the way forward rather than a dead end.
     const refused = await refresh()({ params: { externalId: row.jobExternalId } });

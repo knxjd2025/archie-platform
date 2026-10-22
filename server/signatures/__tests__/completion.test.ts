@@ -46,7 +46,7 @@ async function makeRequest(o: {
   const { db } = dbm; const { signatureRequests, signatureSigners } = schema;
   const [r] = await db.insert(signatureRequests).values({
     jobExternalId: JOB, sourceKind: o.kind ?? 'report', title: 'Roof report', html: '<p>The report</p>',
-    docHash: 'x', status: o.status ?? 'sent', createdBy: 'rep@bestroofingnow.com', sentBy: 'rep@bestroofingnow.com',
+    docHash: 'x', status: o.status ?? 'sent', createdBy: 'rep@acme.test', sentBy: 'rep@acme.test',
   }).returning();
   const signed = o.signed ?? [true, true];
   const signers = await db.insert(signatureSigners).values(signed.map((isSigned, i) => ({
@@ -174,7 +174,7 @@ describe.skipIf(!hasDb)('finishing a signed document', () => {
 
   it('writes a certificate signed here back onto the certificate on the job', as(async () => {
     const { db } = dbm; const { jobCertificates } = schema;
-    await db.insert(jobCertificates).values({ jobExternalId: JOB, data: {}, signToken: token(), createdBy: 'rep@bestroofingnow.com' });
+    await db.insert(jobCertificates).values({ jobExternalId: JOB, data: {}, signToken: token(), createdBy: 'rep@acme.test' });
     const { request } = await makeRequest({ kind: 'certificate', roles: ['customer', 'company'] });
     await routes.completeIfDone(request.id);
 
@@ -200,7 +200,7 @@ describe.skipIf(!hasDb)('finishing a signed document', () => {
     await db.delete(jobCertificates).where(orm.eq(jobCertificates.jobExternalId, JOB));
     const { request } = await makeRequest({ kind: 'certificate', roles: ['customer', 'company'] });
     await db.insert(jobCertificates).values({
-      jobExternalId: JOB, data: {}, signToken: token(), createdBy: 'rep@bestroofingnow.com',
+      jobExternalId: JOB, data: {}, signToken: token(), createdBy: 'rep@acme.test',
       createdAt: new Date(Date.now() + 60_000),
     });
     await routes.completeIfDone(request.id);

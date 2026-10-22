@@ -40,7 +40,7 @@ describe.skipIf(!LOCAL)('stage checklist ticks (database)', async () => {
     expect(Object.keys(await stored(l.externalId, 'paid_in_full'))).toEqual(['warranty']);
   });
 
-  it('a double tap creates the follow-ups once, due on Charlotte dates', async () => {
+  it('a double tap creates the follow-ups once, due on Eastern dates', async () => {
     const l = lead();
     const results = await Promise.all([
       tickChecklistItem(l, 'paid_in_full', 'referral_emails', true, user),
@@ -51,7 +51,7 @@ describe.skipIf(!LOCAL)('stage checklist ticks (database)', async () => {
     expect(made.length).toBeGreaterThan(0);
     const items = await stored(l.externalId, 'paid_in_full');
     expect(items.referral_emails.followUpIds?.sort()).toEqual(made.map((m) => m.id).sort());
-    // Every due date is a Charlotte "today + n" date.
+    // Every due date is an Eastern "today + n" date.
     for (const m of made) expect(String(m.dueDate) >= etPlusDays(0)).toBe(true);
   });
 });

@@ -6,7 +6,7 @@
  * in sun and shade, and a customer choosing from a screen is a callback.
  *
  * Customer-facing copy uses US spelling ("color"), verbatim from the live
- * Presentation this was lifted from — these documents go to Charlotte, NC
+ * Presentation this was lifted from — these documents go to US
  * homeowners.
  */
 import { esc } from '../report-theme.js';

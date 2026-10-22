@@ -19,9 +19,20 @@
  */
 import { createHash } from 'node:crypto';
 import { CONSENT_TEXT, PAPER_NOTICE, escapeHtml, stamp, type SignerView } from '../../shared/signatures';
-import { OFFICE_PHONE } from '../../shared/neighbor-letters';
+import { currentTenant } from '../tenant/context';
 
-const BRAND = '#b8322b';
+/**
+ * The company the link belongs to, when the page is served for one (public
+ * links run as their company: server/tenant/public-links.ts). A page served
+ * before the company is known (an unknown token) shows no company at all.
+ */
+const linkCompany = () => currentTenant()?.profile ?? null;
+
+/** The company's name above each card, or nothing when no company is known. */
+const brandLine = (): string => {
+  const p = linkCompany();
+  return p ? `<p class="brand">${escapeHtml(p.displayName)}</p>` : '';
+};
 
 /**
  * What the frozen document may do, as an iframe sandbox and as the CSP
@@ -46,13 +57,15 @@ export const DOCUMENT_SANDBOX = 'allow-scripts allow-popups allow-popups-to-esca
 export const DOCUMENT_HEIGHT_SCRIPT = `<script>(function () {
   if (window.parent === window) return;
   function post() {
-    try { parent.postMessage({ brnDocHeight: document.body ? document.body.scrollHeight : 0 }, '*'); } catch (e) {}
+    try { parent.postMessage({ signDocHeight: document.body ? document.body.scrollHeight : 0 }, '*'); } catch (e) {}
   }
   window.addEventListener('load', function () { post(); setTimeout(post, 400); setTimeout(post, 1600); });
   window.addEventListener('resize', post);
 })();</script>`;
 
-const shell = (title: string, body: string, extraHead = ''): string => `<!doctype html><html lang="en"><head>
+const shell = (title: string, body: string, extraHead = ''): string => {
+  const BRAND = linkCompany()?.colors.primary ?? '#1F3A5F';
+  return `<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>${escapeHtml(title)}</title>
@@ -97,21 +110,22 @@ const shell = (title: string, body: string, extraHead = ''): string => `<!doctyp
   .foot { text-align: center; color: #999; font-size: 12px; margin-top: 18px }
   @media (max-width: 420px) { .card { padding: 16px 14px } h1 { font-size: 18px } }
 </style>${extraHead}</head><body><div class="wrap">${body}</div></body></html>`;
+};
 
 export const notFoundPage = (): string => shell('Link expired', `<div class="card">
-  <p class="brand">Best Roofing Now</p>
+  ${brandLine()}
   <h1>That link isn't valid any more</h1>
   <p class="sub">It may have been replaced by a newer copy of the document, or cancelled. Give us a call and we'll send a fresh one.</p>
 </div>`);
 
 export const voidedPage = (title: string, reason: string | null): string => shell('Cancelled', `<div class="card">
-  <p class="brand">Best Roofing Now</p>
+  ${brandLine()}
   <h1>This document was cancelled</h1>
   <p class="sub">${escapeHtml(title)} is no longer out for signature${reason ? ` — ${escapeHtml(reason)}` : ''}. Nothing further is needed from you.</p>
 </div>`);
 
 export const signedPage = (title: string, signer: SignerView, emailed: boolean): string => shell('Signed', `<div class="card">
-  <p class="brand">Best Roofing Now</p>
+  ${brandLine()}
   <div class="done">
     <b>Thank you — this is signed.</b><br>
     ${escapeHtml(title)}, signed by ${escapeHtml(signer.signedName || signer.name)}${signer.signedAt ? ` on ${escapeHtml(stamp(signer.signedAt))}` : ''}.
@@ -122,14 +136,14 @@ export const signedPage = (title: string, signer: SignerView, emailed: boolean):
 
 /** Shown to a signer the limiter has turned away — a page, not a JSON error. */
 export const tooManyPage = (): string => shell('One moment', `<div class="card">
-  <p class="brand">Best Roofing Now</p>
+  ${brandLine()}
   <h1>Give it a moment</h1>
   <p class="sub">That came through more times than we expected, so we've paused this link for a little while.
-  Wait a minute and open it again — nothing you did has been lost. If it keeps happening, call the office on ${escapeHtml(OFFICE_PHONE)} and we'll sort it out.</p>
+  Wait a minute and open it again — nothing you did has been lost. If it keeps happening, ${linkCompany()?.phone ? `call the office on ${escapeHtml(linkCompany()!.phone)}` : 'give the office a call'} and we'll sort it out.</p>
 </div>`);
 
 export const declinedPage = (title: string): string => shell('Declined', `<div class="card">
-  <p class="brand">Best Roofing Now</p>
+  ${brandLine()}
   <h1>Thanks — we've let your rep know</h1>
   <p class="sub">${escapeHtml(title)} has not been signed, and someone from our office will follow up with you.</p>
 </div>`);
@@ -166,7 +180,7 @@ export function signPage(o: SignPageOptions): string {
 
   return shell(o.title, `
   <div class="card">
-    <p class="brand">Best Roofing Now</p>
+    ${brandLine()}
     <h1>${escapeHtml(o.title)}</h1>
     <p class="sub">${o.propertyAddress ? escapeHtml(o.propertyAddress) : ''}</p>
     ${o.message ? `<div class="note">${escapeHtml(o.message)}</div>` : ''}
@@ -222,14 +236,14 @@ export function signPage(o: SignPageOptions): string {
 
     <p class="decline"><a href="${action}/decline">I can't sign this</a></p>
   </div>
-  <p class="foot">Best Roofing Now · This link is personal to ${escapeHtml(o.signer.name)}. Please don't forward it.</p>
+  <p class="foot">${linkCompany() ? `${escapeHtml(linkCompany()!.displayName)} · ` : ''}This link is personal to ${escapeHtml(o.signer.name)}. Please don't forward it.</p>
   ${SIGN_SCRIPT}`);
 }
 
 export function declinePage(token: string, title: string): string {
   const action = `/r/s/${encodeURIComponent(token)}/decline`;
   return shell('Not signing', `<div class="card">
-    <p class="brand">Best Roofing Now</p>
+    ${brandLine()}
     <h1>Not signing ${escapeHtml(title)}</h1>
     <p class="sub">Tell us what's wrong and we'll sort it out — nothing is sent until you're happy with it.</p>
     <form method="post" action="${action}">
@@ -266,8 +280,8 @@ const SIGN_SCRIPT = `<script>
   var frame = document.getElementById('docframe');
   if (frame) {
     window.addEventListener('message', function (e) {
-      if (e.source !== frame.contentWindow || !e.data || typeof e.data.brnDocHeight !== 'number' || !isFinite(e.data.brnDocHeight)) return;
-      frame.style.height = Math.min(9000, Math.max(420, e.data.brnDocHeight + 32)) + 'px';
+      if (e.source !== frame.contentWindow || !e.data || typeof e.data.signDocHeight !== 'number' || !isFinite(e.data.signDocHeight)) return;
+      frame.style.height = Math.min(9000, Math.max(420, e.data.signDocHeight + 32)) + 'px';
     });
   }
 

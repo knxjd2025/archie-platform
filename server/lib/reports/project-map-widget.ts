@@ -1,42 +1,33 @@
 /**
- * The interactive project map, embedded directly in every report type
+ * The interactive "Our Work" map, embedded directly in every report type
  * (Presentation, Proposal, Estimate, Inspection) rather than linked out to.
  *
- * Runs on the Google Maps JavaScript API with the same browser key the
- * Canvass page already ships (VITE_GOOGLE_MAPS_API_KEY — a public, referrer-
- * restricted key, so embedding it in a public report page exposes nothing
- * new). It used to be Leaflet + OpenStreetMap tiles; OSM's tile servers are
- * donated volunteer capacity with a usage policy that blocks commercial
- * sites without warning, and in Sept 2026 they blocked ours — every report
- * map turned into "you have violated the tile usage policy" squares. Google
- * is the provider we pay for, so this can't happen again.
+ * Runs on the Google Maps JavaScript API with the public browser key the
+ * Canvass page already ships (VITE_GOOGLE_MAPS_API_KEY — referrer-restricted,
+ * so embedding it in a public report page exposes nothing new). Not
+ * OpenStreetMap tiles: OSM's tile servers are donated capacity whose usage
+ * policy blocks commercial sites without warning.
  *
- * Marker data comes from this app's own GET /api/projects-map, which proxies
- * bestroofingnow.com's real, live project data server-to-server
- * (project-map-proxy.ts) — so this map always reflects whatever James's team
- * has published through that site's own admin backend, never a second copy
- * that can go stale.
- *
- * Clicking a pin opens the real project page on bestroofingnow.com in a new
- * tab — that site's own project pages aren't reachable via API (the map
- * endpoint returns only a thumbnail + photo count, not a full gallery), so
- * linking out is how a homeowner sees the rest of that job's photos.
+ * Marker data comes from this app's own GET /api/projects-map
+ * (project-map-proxy.ts). Each marker may carry a `url` to that project's own
+ * page; a pin links out only when it has one. The map centers on the middle
+ * of the company's own pins, so it opens on its service area, wherever that is.
  *
  * A search box filters pins by city/product/color client-side (no re-fetch —
- * the full marker set is already in the browser). Color search is real (the
- * upstream API added productColor for this), but sparse: most existing
- * projects don't have a color on file yet, so it'll surface fewer results
- * than city or product until that gets backfilled on their side.
+ * the full marker set is already in the browser).
  */
 
 /**
- * Archie: the "Our Work" map showed one company's completed projects from its
- * own website. Archie has no per-company project feed yet, so every report
- * leaves the map out until one is built (it will come from each company's
- * own finished jobs).
+ * Archie has no per-company project feed yet, so every report leaves the map
+ * out until one is built (it will come from each company's own finished jobs).
  */
+export function projectMapFeedUrl(): string | null {
+  return null;
+}
+
+/** True when the current company has a project feed for the map. */
 export function ourWorkMapAvailable(): boolean {
-  return false;
+  return !!projectMapFeedUrl();
 }
 
 export const PROJECT_MAP_HEAD = `<link rel="preconnect" href="https://maps.googleapis.com"><link rel="preconnect" href="https://maps.gstatic.com" crossorigin>`;
@@ -52,81 +43,81 @@ export function projectMapBrowserKey(): string {
 }
 
 export const PROJECT_MAP_CSS = `
-.brn-map-wrap { position: relative; border-radius: var(--sc-r-lg, 12px); overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
-.brn-map { width: 100%; height: min(60vh, 480px); background: #e5e3dd; }
-.brn-map-stats { position: absolute; top: 12px; left: 12px; z-index: 500; background: rgba(255,255,255,0.92); backdrop-filter: blur(4px); border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); padding: 8px 14px; font-size: 13px; font-family: system-ui, sans-serif; color: #111; display: flex; gap: 14px; white-space: nowrap; }
-.brn-map-search-wrap { position: absolute; top: 12px; right: 12px; z-index: 500; }
-.brn-map-search { width: 200px; max-width: 40vw; background: rgba(255,255,255,0.95); backdrop-filter: blur(4px); border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); padding: 8px 12px; font-size: 13px; font-family: system-ui, sans-serif; color: #111; }
-.brn-map-search:focus { outline: 2px solid #C8102E; outline-offset: 1px; }
-.brn-map-search::placeholder { color: #888; }
-@media (max-width: 480px) { .brn-map-stats { top: auto; bottom: 12px; left: 12px; } .brn-map-search { width: 140px; } }
-.brn-map-status { display: flex; align-items: center; justify-content: center; height: min(60vh, 480px); background: #e5e3dd; color: #555; font-family: system-ui, sans-serif; font-size: 14px; }
-.brn-map-popup { max-width: 260px; font-family: system-ui, sans-serif; }
-.brn-map-popup img { width: 100%; height: 110px; object-fit: cover; border-radius: 6px; margin-bottom: 8px; }
-.brn-map-popup b { display: block; font-size: 14px; color: #111; margin-bottom: 2px; }
-.brn-map-popup span.meta { display: block; font-size: 12px; color: #666; margin-bottom: 6px; }
-.brn-map-popup a.brn-map-link { display: inline-block; margin-top: 4px; padding: 10px 14px; background: #C8102E; color: #fff; font-size: 12px; font-weight: 600; text-decoration: none; border-radius: 6px; } /* padding (not just font-size) sized for a real thumb tap, not just a mouse click */
+.work-map-wrap { position: relative; border-radius: var(--sc-r-lg, 12px); overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
+.work-map { width: 100%; height: min(60vh, 480px); background: #e5e3dd; }
+.work-map-stats { position: absolute; top: 12px; left: 12px; z-index: 500; background: rgba(255,255,255,0.92); backdrop-filter: blur(4px); border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); padding: 8px 14px; font-size: 13px; font-family: system-ui, sans-serif; color: #111; display: flex; gap: 14px; white-space: nowrap; }
+.work-map-search-wrap { position: absolute; top: 12px; right: 12px; z-index: 500; }
+.work-map-search { width: 200px; max-width: 40vw; background: rgba(255,255,255,0.95); backdrop-filter: blur(4px); border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); padding: 8px 12px; font-size: 13px; font-family: system-ui, sans-serif; color: #111; }
+.work-map-search:focus { outline: 2px solid var(--brand, #1F3A5F); outline-offset: 1px; }
+.work-map-search::placeholder { color: #888; }
+@media (max-width: 480px) { .work-map-stats { top: auto; bottom: 12px; left: 12px; } .work-map-search { width: 140px; } }
+.work-map-status { display: flex; align-items: center; justify-content: center; height: min(60vh, 480px); background: #e5e3dd; color: #555; font-family: system-ui, sans-serif; font-size: 14px; }
+.work-map-popup { max-width: 260px; font-family: system-ui, sans-serif; }
+.work-map-popup img { width: 100%; height: 110px; object-fit: cover; border-radius: 6px; margin-bottom: 8px; }
+.work-map-popup b { display: block; font-size: 14px; color: #111; margin-bottom: 2px; }
+.work-map-popup span.meta { display: block; font-size: 12px; color: #666; margin-bottom: 6px; }
+.work-map-popup a.work-map-link { display: inline-block; margin-top: 4px; padding: 10px 14px; background: var(--brand, #1F3A5F); color: #fff; font-size: 12px; font-weight: 600; text-decoration: none; border-radius: 6px; } /* padding (not just font-size) sized for a real thumb tap, not just a mouse click */
 `;
 
 /** The container markup — each renderer wraps this in its own chapter/section styling. */
 export function projectMapContainerHtml(idSuffix = ''): string {
-  const id = `brn-map${idSuffix ? `-${idSuffix}` : ''}`;
+  const id = `work-map${idSuffix ? `-${idSuffix}` : ''}`;
   const key = projectMapBrowserKey().replace(/[^A-Za-z0-9_-]/g, '');
-  return `<div class="brn-map-wrap" data-brn-map-container data-maps-key="${key}" id="${id}">
-    <div class="brn-map-status">Loading project map&hellip;</div>
+  return `<div class="work-map-wrap" data-work-map-container data-maps-key="${key}" id="${id}">
+    <div class="work-map-status">Loading project map&hellip;</div>
   </div>`;
 }
 
 /**
- * Mounts every [data-brn-map-container] on the page as a real Leaflet map.
- * Loads Leaflet from the same CDN the live site uses, once, even if a page
- * somehow has more than one map container (it doesn't, currently).
+ * Mounts every [data-work-map-container] on the page as a Google map.
  */
 export const PROJECT_MAP_JS = `
 (function () {
-  var containers = document.querySelectorAll('[data-brn-map-container]');
+  var containers = document.querySelectorAll('[data-work-map-container]');
   if (!containers.length) return;
   var mapsKey = containers[0].getAttribute('data-maps-key') || '';
 
   // Loads the Maps JavaScript API once, even if a page somehow has more than
   // one map container (it doesn't, currently). Google's loader calls back by
-  // global name, so the promise resolves through window.__brnGmapsReady.
+  // global name, so the promise resolves through window.__workMapGmapsReady.
   function loadGoogleMaps() {
-    if (window.__brnGmapsLoading) return window.__brnGmapsLoading;
-    window.__brnGmapsLoading = new Promise(function (resolve, reject) {
+    if (window.__workMapGmapsLoading) return window.__workMapGmapsLoading;
+    window.__workMapGmapsLoading = new Promise(function (resolve, reject) {
       if (window.google && window.google.maps && window.google.maps.Map) return resolve(window.google.maps);
       if (!mapsKey) return reject(new Error('no maps key'));
-      window.__brnGmapsReady = function () { resolve(window.google.maps); };
+      window.__workMapGmapsReady = function () { resolve(window.google.maps); };
       var script = document.createElement('script');
-      script.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(mapsKey) + '&loading=async&callback=__brnGmapsReady';
+      script.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(mapsKey) + '&loading=async&callback=__workMapGmapsReady';
       script.async = true;
       script.onerror = reject;
       document.head.appendChild(script);
     });
-    return window.__brnGmapsLoading;
+    return window.__workMapGmapsLoading;
   }
 
   function mountMap(container, markers) {
     var gm = window.google.maps;
-    // Always Charlotte, never a bounding-box midpoint of every pin: the real
-    // project set has a few bad-geocode outliers hundreds of miles away (see
-    // the fitBounds note below), and centering on their bounding-box
-    // midpoint pulled the initial view off Charlotte and toward them.
-    var center = { lat: 35.2271, lng: -80.8431 };
+    // The median pin, never a bounding-box midpoint: a project set can have a
+    // few bad-geocode outliers hundreds of miles away (see the fitBounds note
+    // below), and a midpoint would pull the view toward them.
+    function median(list) { var a = list.slice().sort(function (x, y) { return x - y; }); return a.length ? a[Math.floor(a.length / 2)] : 0; }
+    var center = markers.length
+      ? { lat: median(markers.map(function (m) { return m.lat; })), lng: median(markers.map(function (m) { return m.lng; })) }
+      : { lat: 39.8283, lng: -98.5795 };
     container.innerHTML = '';
     var mapEl = document.createElement('div');
-    mapEl.className = 'brn-map';
+    mapEl.className = 'work-map';
     container.appendChild(mapEl);
 
     var statsEl = document.createElement('div');
-    statsEl.className = 'brn-map-stats';
+    statsEl.className = 'work-map-stats';
     container.appendChild(statsEl);
 
     var searchWrap = document.createElement('div');
-    searchWrap.className = 'brn-map-search-wrap';
+    searchWrap.className = 'work-map-search-wrap';
     var searchInput = document.createElement('input');
     searchInput.type = 'search';
-    searchInput.className = 'brn-map-search';
+    searchInput.className = 'work-map-search';
     searchInput.placeholder = 'Search city, shingle, or color';
     searchInput.setAttribute('aria-label', 'Search projects by city, shingle, or color');
     searchWrap.appendChild(searchInput);
@@ -144,7 +135,7 @@ export const PROJECT_MAP_JS = `
 
     var map = new gm.Map(mapEl, {
       center: center,
-      zoom: 11,
+      zoom: markers.length ? 11 : 4,
       minZoom: 6,
       maxZoom: 18,
       mapTypeControl: false,
@@ -156,10 +147,12 @@ export const PROJECT_MAP_JS = `
       gestureHandling: 'greedy',
     });
 
+    // The company's color (brandStyleTag sets --brand on the page).
+    var brandColor = (getComputedStyle(document.documentElement).getPropertyValue('--brand') || '').trim() || '#1F3A5F';
     var pinIcon = {
       path: gm.SymbolPath.CIRCLE,
       scale: 11,
-      fillColor: '#C8102E',
+      fillColor: brandColor,
       fillOpacity: 1,
       strokeColor: '#ffffff',
       strokeWeight: 2,
@@ -177,8 +170,8 @@ export const PROJECT_MAP_JS = `
         var thumb = m.thumbnail ? '<img src="' + m.thumbnail + '" alt="' + m.city + ' roofing project">' : '';
         var productLine = [m.product, m.productColor].filter(Boolean).join(' — ');
         var product = productLine ? '<span class="meta">' + productLine + '</span>' : '';
-        var link = m.slug ? '<a class="brn-map-link" href="https://www.bestroofingnow.com/projects/' + m.slug + '" target="_blank" rel="noopener">See Photos &rarr;</a>' : '';
-        var popup = '<div class="brn-map-popup">' + thumb + '<b>' + m.city + ', ' + m.state + '</b>' + product + '<span class="meta">' + (m.hasPhotos ? m.photoCount + ' photos' : 'No photos') + (dateStr ? ' &middot; ' + dateStr : '') + '</span>' + link + '</div>';
+        var link = /^https:\/\//.test(m.url || '') ? '<a class="work-map-link" href="' + encodeURI(m.url) + '" target="_blank" rel="noopener">See Photos &rarr;</a>' : '';
+        var popup = '<div class="work-map-popup">' + thumb + '<b>' + m.city + ', ' + m.state + '</b>' + product + '<span class="meta">' + (m.hasPhotos ? m.photoCount + ' photos' : 'No photos') + (dateStr ? ' &middot; ' + dateStr : '') + '</span>' + link + '</div>';
         marker.addListener('click', function () {
           info.setContent(popup);
           info.open({ map: map, anchor: marker });
@@ -210,14 +203,11 @@ export const PROJECT_MAP_JS = `
       }, 150);
     });
 
-    // Deliberately NOT fitBounds() over every marker: the real project
-    // data has a handful of far outliers (confirmed live: one 400 miles away
-    // in Louisville KY, several 240+ miles away in Jacksonville NC — bad
-    // geocoding on bestroofingnow.com's own project data, not something this
-    // widget can or should try to clean up), and fitBounds zoomed out to fit
-    // them, showing a multi-state view instead of Charlotte. The fixed
-    // center+zoom above is the real default; every pin is still reachable by
-    // panning and zooming out (minZoom 6 goes wide enough to find them).
+    // Deliberately NOT fitBounds() over every marker: real project data has
+    // a handful of far outliers (bad geocodes hundreds of miles away), and
+    // fitBounds zoomed out to fit them, showing a multi-state view instead of
+    // the service area. The median center + fixed zoom above is the default;
+    // every pin is still reachable by panning and zooming out.
   }
 
   Promise.all([
@@ -227,26 +217,7 @@ export const PROJECT_MAP_JS = `
     var data = results[1];
     containers.forEach(function (c) { mountMap(c, data.markers || []); });
   }).catch(function () {
-    containers.forEach(function (c) { c.innerHTML = '<div class="brn-map-status">Map unavailable right now &mdash; call us and we\\'ll walk you through recent projects.</div>'; });
+    containers.forEach(function (c) { c.innerHTML = '<div class="work-map-status">Map unavailable right now &mdash; call us and we\\'ll walk you through recent projects.</div>'; });
   });
 })();
 `;
-
-/**
- * Reports are rendered once and the HTML is stored (client_reports.html), so
- * every report shared before the Google Maps switch still carries the Leaflet
- * + OpenStreetMap widget that OSM now blocks. Rewrite it on the way out:
- * swap the stylesheet link, the script, and stamp the browser key on the
- * container. Idempotent — a report that already runs on Google is untouched.
- */
-const LEGACY_HEAD = /<link rel="preconnect" href="https:\/\/unpkg\.com"><link rel="stylesheet" href="https:\/\/unpkg\.com\/leaflet@[\d.]+\/dist\/leaflet\.css">/g;
-const LEGACY_SCRIPT = /<script>\s*\(function \(\) \{\s*function loadLeaflet\(\)[\s\S]*?\}\)\(\);\s*<\/script>/g;
-
-export function upgradeLegacyProjectMap(html: string): string {
-  if (!html.includes('tile.openstreetmap.org')) return html;
-  const key = projectMapBrowserKey().replace(/[^A-Za-z0-9_-]/g, '');
-  return html
-    .replace(LEGACY_HEAD, PROJECT_MAP_HEAD)
-    .replace(LEGACY_SCRIPT, `<script>${PROJECT_MAP_JS}</script>`)
-    .replace(/data-brn-map-container(?![^>]*data-maps-key) /g, `data-brn-map-container data-maps-key="${key}" `);
-}

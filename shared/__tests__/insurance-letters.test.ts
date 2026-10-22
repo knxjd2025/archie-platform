@@ -12,15 +12,15 @@ const fields = (over: Partial<ClaimLetterFields> = {}): ClaimLetterFields => ({
   claimNumber: '55-ABCD-123',
   policyNumber: 'HO-9911',
   insuredName: 'Karen Whitfield',
-  propertyAddress: '1420 Sardis Rd, Charlotte, NC 28270',
+  propertyAddress: '1420 Sardis Rd, Springfield, IL 62770',
   dateOfLoss: '2026-05-04',
   eventDate: '2026-09-11', amount: 7300, items: [], note: '',
   manualTotal: false, invoiceTotal: 0,
   rcv: 24500, supplements: 0, acv: 17200, deductible: 2500, deductibleCollected: true,
   payableTo: 'Karen Whitfield',
   enclosures: [...letterDef('depreciation').enclosures],
-  senderName: 'James Turner', senderTitle: 'Owner', senderPhone: '(704) 605-6047', senderEmail: 'james@bestroofingnow.com',
-  companyName: 'Best Roofing Now', officeAddress: '10130 Mallard Creek Road, Suite 300, Charlotte, NC 28262', companyPhone: '(704) 605-6047',
+  senderName: 'Casey Owner', senderTitle: 'Owner', senderPhone: '(555) 010-2030', senderEmail: 'casey@acme.test',
+  companyName: 'Acme Test Roofing LLC', officeAddress: '1 Test Way, Springfield, IL 62701', companyPhone: '(555) 010-2030',
   ...over,
 });
 

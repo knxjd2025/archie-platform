@@ -21,7 +21,7 @@
  * 2015 IRC with North Carolina amendments. North Carolina has since adopted a
  * newer edition; section numbers in Chapter 9 are stable across 2015/2018/2021
  * for the sections cited here, but the reviewer must confirm the edition in
- * force in Mecklenburg County on the date they verify. NC amended the ice
+ * force in the job's county on the date they verify. NC amended the ice
  * barrier rule (R905.1.2) — the IRC's "history of ice forming along the
  * eaves" trigger — and that entry is flagged.
  */
@@ -57,7 +57,7 @@ const IRC = {
   drainage: draft('R903.4', 'Roof drainage — water must be carried off the roof, not held or redirected onto the structure'),
   application: draft('R905.1', 'Roof coverings installed per the manufacturer\'s installation instructions'),
   underlayment: draft('R905.1.1', 'Underlayment required beneath asphalt shingles, per Table R905.1.1'),
-  iceBarrier: draft('R905.1.2', 'Ice barrier at the eaves', 'NC AMENDMENT: NC limits the IRC ice-barrier trigger. Confirm the exact NC wording before verifying; may be manufacturer-required rather than code-required in Charlotte.'),
+  iceBarrier: draft('R905.1.2', 'Ice barrier at the eaves', 'NC AMENDMENT: NC limits the IRC ice-barrier trigger. Confirm the exact NC wording before verifying; may be manufacturer-required rather than code-required locally.'),
   slope: draft('R905.2.2', 'Asphalt shingles only on slopes of 2:12 or steeper; double underlayment from 2:12 up to 4:12'),
   fasteners: draft('R905.2.5', 'Shingle fasteners — corrosion-resistant, 12-gauge, 3/8-inch head, penetrating the deck'),
   attachment: draft('R905.2.6', 'Minimum fastener count per shingle, per the manufacturer and never fewer than four'),

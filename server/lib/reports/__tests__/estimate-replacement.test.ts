@@ -4,7 +4,7 @@ import { applyReplacementPricing, ReplacementInputError } from '../estimate-repl
 const baseReport: any = {
   id: 'r1',
   generatedAt: '2026-09-06T00:00:00Z',
-  property: { address: '550 Manning Dr', city: 'Charlotte', state: 'NC', zip: '28202' },
+  property: { address: '550 Manning Dr', city: 'Springfield', state: 'IL', zip: '28202' },
   damageAnalysis: { totalPhotosAnalyzed: 1, photos: [] },
   repairEstimate: { lineItems: [{ repairName: 'old repair line', quantity: 1, unit: 'each', finalCostPerUnit: 10, totalFinalCost: 10 }], total: 10, notes: [] },
 };

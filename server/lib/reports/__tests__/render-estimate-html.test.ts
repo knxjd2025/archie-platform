@@ -7,7 +7,7 @@ const summary = generateEstimateFromDamageAnalysis([{ type: 'missing_shingles', 
 const report: any = {
   id: 'r1',
   generatedAt: '2026-09-06T00:00:00Z',
-  property: { address: '550 Manning Dr', city: 'Charlotte', state: 'NC', zip: '28202' },
+  property: { address: '550 Manning Dr', city: 'Springfield', state: 'IL', zip: '62701' },
   damageAnalysis: { totalPhotosAnalyzed: 1, photos: [] },
   repairEstimate: { lineItems: summary.lineItems, total: summary.subtotalFinal, notes: [] },
 };
@@ -40,12 +40,10 @@ describe('renderEstimateHtml — inspection-form wiring', () => {
     expect(html).not.toContain('Proposal or Presentation');
   });
 
-  it('embeds the real interactive project map via this app\'s own proxy', () => {
+  it('leaves out the "Our Work" map until the company has a project feed', () => {
     const html = renderEstimateHtml(report, {});
-    expect(html).toContain('See Our Work Near You');
-    expect(html).toContain('data-brn-map-container');
-    expect(html).toContain("fetch('/api/projects-map')");
-    expect(html).toContain('https://www.bestroofingnow.com/projects/');
+    expect(html).not.toContain('See Our Work Near You');
+    expect(html).not.toMatch(/<div class="work-map-wrap"/);
   });
 
   // Caught on the real production link at a real 390px viewport: the Scope

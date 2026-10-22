@@ -9,7 +9,7 @@ import { generateReport, configStatus, newShareToken, VALID_TYPES, isDerived, co
 import { visionAttempts, analyzeRoofImageViaFal } from '../lib/reports/groq-vision.js';
 import { assertSafeExternalUrl } from '../lib/reports/safe-fetch-url.js';
 import { getProjectMapMarkers } from '../lib/reports/project-map-proxy.js';
-import { upgradeLegacyProjectMap } from '../lib/reports/project-map-widget';
+import { projectMapFeedUrl } from '../lib/reports/project-map-widget';
 import { repairCoverName } from '../lib/reports/cover-name.js';
 import { rateLimit } from '../lib/rate-limit.js';
 import { isShareToken } from './share-token';
@@ -242,8 +242,8 @@ function commercialEditorState(reportType: string | null, data: any, opts: Rende
 const PREVIEW_BRIDGE = `<style>[data-section].rpt-flash{outline:3px solid #d8a852;outline-offset:6px;transition:outline-color .8s}</style>
 <script>(function(){
   function go(k){var el=document.querySelector('[data-section="'+k+'"]');if(!el)return;el.scrollIntoView({behavior:'smooth',block:'start'});el.classList.add('rpt-flash');setTimeout(function(){el.classList.remove('rpt-flash')},1800);}
-  window.addEventListener('message',function(e){var d=e.data||{};if(d.type==='brn:scrollTo'&&d.key)go(String(d.key));});
-  document.addEventListener('click',function(e){var t=e.target;var s=t&&t.closest?t.closest('[data-section]'):null;if(s)window.parent.postMessage({type:'brn:section',key:s.getAttribute('data-section')},'*');},true);
+  window.addEventListener('message',function(e){var d=e.data||{};if(d.type==='report:scrollTo'&&d.key)go(String(d.key));});
+  document.addEventListener('click',function(e){var t=e.target;var s=t&&t.closest?t.closest('[data-section]'):null;if(s)window.parent.postMessage({type:'report:section',key:s.getAttribute('data-section')},'*');},true);
 })();</script>`;
 const withPreviewBridge = (html: string) => (html.includes('</body>') ? html.replace('</body>', `${PREVIEW_BRIDGE}</body>`) : html + PREVIEW_BRIDGE);
 
@@ -293,7 +293,7 @@ export function registerRoofReportRoutes(app: Express) {
   // account directly instead.
   app.get('/api/reports/vision-models', requireAuth, async (_req: Request, res: Response) => {
     const key = process.env.GROQ_API_KEY;
-    if (!key) return res.status(503).json({ error: "Groq isn't connected. Ask James to add the key, then try again." });
+    if (!key) return res.status(503).json({ error: "Groq isn't connected. Ask an admin to add the key, then try again." });
     try {
       const r = await fetch('https://api.groq.com/openai/v1/models', { headers: { Authorization: `Bearer ${key}` } });
       const body: any = await r.json();
@@ -325,7 +325,7 @@ export function registerRoofReportRoutes(app: Express) {
       return sendFailure(res, e, 'GET /api/reports/vision-test', 400, 'Not a valid photo URL.');
     }
     const attempts = visionAttempts();
-    if (!attempts.length) return res.status(503).json({ error: "No vision provider is connected. Ask James to set one up." });
+    if (!attempts.length) return res.status(503).json({ error: "No vision provider is connected. Ask an admin to set one up." });
 
     const results = [];
     for (const a of attempts) {
@@ -351,13 +351,12 @@ export function registerRoofReportRoutes(app: Express) {
       // Reports are editable after they're shared (see /refine), and a customer
       // opening a stale copy of a document that has since been corrected is the
       // failure that matters here. Revalidate every time.
-      // Stored HTML from before the Google Maps switch still embeds the
-      // OpenStreetMap widget OSM now blocks; it's rewritten on the way out.
-      // So is a cover whose customer name was never shown (cover-name.ts).
+      // A cover whose customer name was never shown is repaired on the way
+      // out (cover-name.ts).
       res
         .set('Content-Type', 'text/html; charset=utf-8')
         .set('Cache-Control', 'no-cache, must-revalidate')
-        .send(repairCoverName(upgradeLegacyProjectMap(row.html)));
+        .send(repairCoverName(row.html));
     } catch {
       res.status(500).send('Could not load that report.');
     }
@@ -392,13 +391,14 @@ export function registerRoofReportRoutes(app: Express) {
   }));
 
   // Real project-map pins for the "Our Work" chapter every report type
-  // embeds — proxied server-to-server from bestroofingnow.com's own public
-  // API (see project-map-proxy.ts for why this can't be a direct browser
-  // fetch or an iframe). No auth: it's the same public data that site
-  // already serves to anyone; rate-limited since it's a public GET a
-  // client-side script calls on every report view.
+  // embeds — proxied server-to-server from the company's own project feed
+  // (see project-map-proxy.ts for why this can't be a direct browser fetch
+  // or an iframe). No auth: it's public data the company's site already
+  // serves; rate-limited since it's a public GET a client-side script calls
+  // on every report view. (Archie answers 410 here until per-company feeds
+  // exist: server/tenant/cron.ts.)
   app.get('/api/projects-map', mapLimiter, asyncHandler(async (_req: Request, res: Response) => {
-    const { markers, stale } = await getProjectMapMarkers();
+    const { markers, stale } = await getProjectMapMarkers(projectMapFeedUrl());
     // A document being signed runs in a sandbox with an opaque ("null")
     // origin, so its map fetch is cross-origin and the app-wide CORS answer
     // (our own origin only) blocked it: the map showed with no pins. Public

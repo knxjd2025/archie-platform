@@ -9,7 +9,7 @@ import type { TierSelection } from '../roofing-products';
 
 const report = (extra: any = {}): any => ({
   id: 'r-insp', generatedAt: '2026-09-14T12:00:00.000Z', version: '2.0',
-  property: { address: '7 Depth Ct', city: 'Charlotte', state: 'NC', latitude: 35.2, longitude: -80.8 },
+  property: { address: '7 Depth Ct', city: 'Springfield', state: 'IL', latitude: 35.2, longitude: -80.8 },
   stormHistory: { yearsAnalyzed: 3, searchRadiusMiles: 5, totalEvents: 4, hailEvents: 3, windEvents: 1, tornadoEvents: 0, largestHailInches: 1.5, highestWindMph: 62, riskLevel: 'high', riskScore: 70, claimPotential: 'high', eventsByYear: { 2025: { hail: 2, wind: 1, total: 3 } }, recommendedDateOfLoss: { date: '2025-05-20', eventType: 'Hail', magnitude: '1.5" hail', reason: 'largest' } },
   damageAnalysis: {
     totalPhotosAnalyzed: 1, photosWithDamage: 1, overallSeverity: 'high',

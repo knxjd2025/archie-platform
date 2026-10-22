@@ -2,11 +2,15 @@ import { describe, it, expect } from 'vitest';
 import { renderProposalScrollcraftHtml } from '../render-proposal-scrollcraft';
 import { applyReplacementPricing } from '../estimate-replacement';
 import { usd } from '../report-theme';
+import { withProfile } from '../../../tenant/context';
+import { resolveCompanyProfile } from '../../../../shared/company';
+import { TEST_PROFILE } from '../../../__tests__/helpers/tenant';
+import { FORMER_COMPANY } from './profiles';
 
 const baseReport: any = {
   id: 'r1',
   generatedAt: '2026-09-06T00:00:00Z',
-  property: { address: '550 Manning Dr', city: 'Charlotte', state: 'NC', zip: '28202' },
+  property: { address: '550 Manning Dr', city: 'Springfield', state: 'IL', zip: '62701' },
   damageAnalysis: {
     totalPhotosAnalyzed: 2,
     photos: [
@@ -50,9 +54,24 @@ describe('renderProposalScrollcraftHtml', () => {
     expect(bestButton).toContain(`data-price="${1359.99 * 30}"`);
   });
 
-  it('never renders a fake/generated founders photo — only the real one', () => {
-    const html = renderProposalScrollcraftHtml(priced(), {});
-    expect(html).toContain('cms.bestroofingnow.com');
+  it("never renders a fake/generated founders photo — only the company's own, when it has one", () => {
+    const withPhoto = resolveCompanyProfile({
+      id: TEST_PROFILE.id, name: 'Photo Co',
+      settings: { story: { heading: 'Our story', paragraphs: ['We started small.'], photoUrl: 'https://photo.test/owners.jpg', photoCaption: 'The owners' } },
+    });
+    const html = withProfile(withPhoto, () => renderProposalScrollcraftHtml(priced(), {}));
+    expect(html).toContain('https://photo.test/owners.jpg');
+    expect(html).toContain('We started small.');
+    const none = withProfile(TEST_PROFILE, () => renderProposalScrollcraftHtml(priced(), {}));
+    expect(none).toContain('Acme started in a garage.');
+    expect(none).not.toContain('alt="The team at Acme Roofing"');
+  });
+
+  it('is the current company\'s document, with no other company in it', () => {
+    const html = withProfile(TEST_PROFILE, () => renderProposalScrollcraftHtml(priced(), {}));
+    expect(html).toContain('Acme Roofing');
+    expect(html).not.toMatch(FORMER_COMPANY);
+    expect(renderProposalScrollcraftHtml(priced(), {})).not.toMatch(FORMER_COMPANY);
   });
 
   it('escapes customer-controlled text', () => {
@@ -66,12 +85,10 @@ describe('renderProposalScrollcraftHtml', () => {
     expect(html.length).toBeGreaterThan(50000); // engine + page CSS/JS are substantial
   });
 
-  it('embeds the real interactive project map via this app\'s own proxy', () => {
-    const html = renderProposalScrollcraftHtml(priced(), {});
-    expect(html).toContain('id="ch-our-work"');
-    expect(html).toContain('data-brn-map-container');
-    expect(html).toContain("fetch('/api/projects-map')");
-    expect(html).toContain('https://www.bestroofingnow.com/projects/');
+  it('leaves out the "Our Work" map until the company has a project feed', () => {
+    const html = withProfile(TEST_PROFILE, () => renderProposalScrollcraftHtml(priced(), {}));
+    expect(html).not.toContain('id="ch-our-work"');
+    expect(html).not.toMatch(/<div class="work-map-wrap"/);
   });
 
   it('shows no storm timeline node when the rep never confirmed a storm date/type', () => {

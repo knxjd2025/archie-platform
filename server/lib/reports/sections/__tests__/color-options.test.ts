@@ -3,6 +3,7 @@ import { colorOptions } from '../color-options';
 import { SCROLL_STYLE } from '../style';
 import { productByKey } from '../../roofing-products';
 import { specFor } from '../../product-specs';
+import { COLOR_ASSETS } from '../../certainteed-data';
 
 describe('colour options', () => {
   it('lists the product colours as chips', () => {
@@ -22,7 +23,8 @@ describe('colour options', () => {
   it('shows real roof photos so colour is seen in context', () => {
     const html = colorOptions({ product: productByKey('landmark')! }, SCROLL_STYLE);
     expect(html).toContain('roofstrip');
-    expect(html).toContain('reports.bestroofersnow.com');
+    // Served from this app's report assets (REPORT_ASSET_BASE), not another company's host.
+    expect(html).toContain(COLOR_ASSETS.roofs[0]);
   });
 
   it('says nothing for a product with no published colour list', () => {

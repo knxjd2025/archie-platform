@@ -9,10 +9,10 @@
  * estimate and the inspection it came from can't disagree.
  */
 import { premiumShell, esc, usd, usd2 } from './report-theme.js';
-import { COMMERCIAL_INCLUDES } from './commercial-products.js';
+import { commercialIncludes } from './commercial-products.js';
 import { arrangeSections, joinSections, type ReportSection } from './layout.js';
 import { reportFooter } from './render-proposal-html.js';
-import { SCOPE_ROWS } from './certainteed-data.js';
+import { scopeRows } from './certainteed-data.js';
 import { toEstimateLines, estimateTotal } from './estimate-lines.js';
 import type { ComprehensiveRoofReport } from './comprehensive-roof-report.js';
 import { PROJECT_MAP_HEAD, PROJECT_MAP_CSS, PROJECT_MAP_JS, projectMapContainerHtml, ourWorkMapAvailable } from './project-map-widget.js';
@@ -151,7 +151,7 @@ function selectedReplacement(report: ComprehensiveRoofReport): any | null {
  * The tier-specific rows belong to the Good/Better/Best comparison, not here:
  * this section describes the job being quoted, not the ones that weren't.
  */
-const REPLACEMENT_INCLUDES = SCOPE_ROWS
+const replacementIncludes = (): string[] => scopeRows()
   .filter(([, good, better, best]) => good === true && better === true && best === true)
   .map(([label]) => label);
 
@@ -199,10 +199,10 @@ function replacementCovers(report: ComprehensiveRoofReport, option: any, inspect
   // A commercial low-slope system gets its own list entirely: nothing about
   // starter strips or attic ventilation applies to a membrane roof.
   const includes = p.system
-    ? COMMERCIAL_INCLUDES[p.system as keyof typeof COMMERCIAL_INCLUDES] ?? REPLACEMENT_INCLUDES
+    ? commercialIncludes(p.system) ?? replacementIncludes()
     : w && !w.certainteed
-      ? REPLACEMENT_INCLUDES.filter((r) => !/certainteed|manufacturer warranty/i.test(r))
-      : REPLACEMENT_INCLUDES;
+      ? replacementIncludes().filter((r) => !/certainteed|manufacturer warranty/i.test(r))
+      : replacementIncludes();
   const isoLine = option.iso
     ? `<p class="muted tiny" style="margin:-8px 0 14px">Includes <b>${esc(option.iso.label)}</b> at ${usd2(option.iso.ratePerSquare)} per square, folded into the rate above.</p>`
     : '';

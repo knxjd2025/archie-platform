@@ -248,7 +248,7 @@ export async function geocodeAddress(
         headers: {
           // Nominatim's usage policy requires an identifiable app with a way
           // to reach us, or it blocks the whole IP range.
-          'User-Agent': 'BestRoofingNow-Reports/1.0 (https://bestroofingnow.com)',
+          'User-Agent': `Archie-Reports/1.0 (${process.env.APP_BASE_URL || 'self-hosted'})`,
         },
       }
     );

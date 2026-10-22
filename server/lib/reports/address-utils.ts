@@ -3,12 +3,12 @@
  * are trivially unit-testable.
  */
 
-/** A usable street address has a number — "Charlotte, NC" alone is not one. */
+/** A usable street address has a number — "Springfield, IL" alone is not one. */
 export function hasRealStreet(address?: string): boolean {
   return /\d/.test((address || '').trim());
 }
 
-/** Tolerant US address split: "123 Main St, Charlotte, NC 28202[, USA]". */
+/** Tolerant US address split: "123 Main St, Springfield, IL 62701[, USA]". */
 export function parseUsAddress(full: string): { address: string; city?: string; state?: string; zip?: string } {
   const parts = full.split(',').map(s => s.trim()).filter(Boolean);
   // Drop a trailing country token (JobTread appends ", USA") so it isn't mistaken

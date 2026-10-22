@@ -3,14 +3,15 @@
  * and silicone/TPO restoration coating), plus the ISO insulation add-on
  * that goes with a tear-off system.
  *
- * Priced from James's own material+labor cost (baseCost) with the standard
+ * Priced from a material+labor cost (baseCost) with the standard
  * COMMERCIAL_MARKUP applied to get ratePerSquare — the number a customer is
  * billed. Do not show baseCost to a customer; it's cost, not price.
  *
  * ISO thickness-to-R-value: ISO board runs roughly R-6/inch (LTTR), so
- * R25 ≈ 4.2" and R30 ≈ 5.2" — the same thicknesses referenced in James's own
+ * R25 ≈ 4.2" and R30 ≈ 5.2" — the same thicknesses referenced in the
  * TPO market-pricing research for a 25/30-year NDL warranty roof.
  */
+import { companyBrand } from './company-brand.js';
 
 /** 40% markup on cost, applied uniformly across every commercial line item. */
 export const COMMERCIAL_MARKUP = 1.4;
@@ -60,7 +61,7 @@ export const COMMERCIAL_PRODUCTS: CommercialProduct[] = [
     body: 'A full tear-off commercial TPO system from GAF. Pair with ISO insulation sized to the R-value the roof needs.',
   },
   {
-    key: 'restoration_coating', manufacturer: 'BRN', name: 'Silicone / TPO Restoration Coating',
+    key: 'restoration_coating', manufacturer: '', name: 'Silicone / TPO Restoration Coating',
     system: 'coating', baseCost: 600, ratePerSquare: priced(600),
     tagline: 'Recoats and extends the life of an existing roof — no tear-off',
     body: 'A silicone or TPO restoration coating applied directly over an existing roof in serviceable condition, sealing seams and extending its service life without the cost of a full tear-off or layover.',
@@ -74,17 +75,19 @@ export function commercialProductByKey(key: CommercialProductKey): CommercialPro
 /**
  * "Every job includes" for a commercial quote — the residential list
  * (starter strip, hip & ridge, attic ventilation…) describes a shingle roof
- * and would be wrong on every line here. Workmanship years come from BRN's
- * own warranty; nothing manufacturer-specific is promised by number.
+ * and would be wrong on every line here. Workmanship years come from the
+ * company's own warranty (its profile); nothing manufacturer-specific is promised by number.
  */
-export const COMMERCIAL_INCLUDES: Record<CommercialProduct['system'], string[]> = {
+const WORKMANSHIP_ROW = '@workmanship-warranty';
+
+const COMMERCIAL_INCLUDES_BASE: Record<CommercialProduct['system'], string[]> = {
   tear_off: [
     'Complete tear-off of the existing roof to the deck & haul-away',
     'Deck inspected; damaged decking reported and priced before we proceed',
     'Insulation and cover board as quoted, mechanically fastened or adhered to the manufacturer\'s specification',
     'New membrane, factory-made flashings and perimeter edge metal to the manufacturer\'s specification',
     'Manufacturer system warranty registration',
-    '15-Year Workmanship Warranty',
+    WORKMANSHIP_ROW,
     'Full cleanup + magnetic sweep',
   ],
   layover: [
@@ -92,21 +95,29 @@ export const COMMERCIAL_INCLUDES: Record<CommercialProduct['system'], string[]> 
     'Separation sheet over the existing roof',
     'New membrane, factory-made flashings and perimeter edge metal to the manufacturer\'s specification',
     'Manufacturer system warranty registration',
-    '15-Year Workmanship Warranty',
+    WORKMANSHIP_ROW,
     'Full cleanup',
   ],
   coating: [
     'Roof cleaned and prepared; seams, penetrations and flashings reinforced',
     'Restoration coating applied at the manufacturer\'s coverage rate',
     'Manufacturer coating warranty registration where offered',
-    '15-Year Workmanship Warranty',
+    WORKMANSHIP_ROW,
     'Full cleanup',
   ],
 };
 
+/** "Every job includes" for a commercial system, with the current company's workmanship years (left off when it has none). */
+export function commercialIncludes(system: CommercialProduct['system']): string[] | null {
+  const base = COMMERCIAL_INCLUDES_BASE[system];
+  if (!base) return null;
+  const years = companyBrand().workmanshipYears;
+  return base.flatMap((row) => (row === WORKMANSHIP_ROW ? (years ? [`${years}-Year Workmanship Warranty`] : []) : [row]));
+}
+
 export type IsoTier = 'r25' | 'r30';
 
-/** James's material + install cost per inch of ISO, per square — before markup. */
+/** Material + install cost per inch of ISO, per square — before markup. */
 export const ISO_COST_PER_INCH = 85;
 
 export const ISO_THICKNESS_INCHES: Record<IsoTier, number> = {

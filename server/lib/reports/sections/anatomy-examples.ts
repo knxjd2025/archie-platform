@@ -2,7 +2,7 @@
  * Manufacturer photos that show what a roof part looks like, for the
  * Inspection's roof drawings (roof-anatomy-shingle.ts, roof-anatomy-flat.ts).
  *
- * James asked for these on 2026-10-05. They are examples, never evidence:
+ * Added 2026-10-05. They are examples, never evidence:
  * every one prints labelled "Example" with its maker, beside — and kept
  * apart from — the job's own photos, so nobody reads a catalogue shot as a
  * picture of their roof. A part with no fitting photo on file gets none;

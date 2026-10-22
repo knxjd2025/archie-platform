@@ -13,7 +13,7 @@ const manager = { canOverride: true };
 
 const baseReport: any = {
   id: 'r-scope', generatedAt: '2026-09-14T00:00:00Z',
-  property: { address: '9 Scope Ln', city: 'Charlotte', state: 'NC' },
+  property: { address: '9 Scope Ln', city: 'Springfield', state: 'IL' },
   damageAnalysis: { totalPhotosAnalyzed: 0, photos: [] },
   repairEstimate: { lineItems: [], total: 0, notes: [] },
 };

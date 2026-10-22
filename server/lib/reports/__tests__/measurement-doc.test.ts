@@ -6,9 +6,9 @@ import {
 // Verbatim from the GAF/Nearmap report on 550 Manning Dr — labels and values
 // run together exactly like this once the PDF text is extracted.
 const GAF_TEXT = `
-550 Manning Dr, Charlotte, NC 28209
+550 Manning Dr, Springfield, IL 62709
 September 7, 2026
-Prepared For: Best Roofing Now LLC
+Prepared For: Acme Test Roofing LLC
 Powered by Nearmap Roof & Exterior Measurements
 Measurements
 Roof Area4,715 sq ft
