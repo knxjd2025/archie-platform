@@ -1,0 +1,57 @@
+# Dependencies
+node_modules/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+.env.bak*
+.env.vercel
+.vercel/.env*
+.env.neonbak
+
+# Build outputs
+dist/
+.vercel/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test coverage
+coverage/
+
+# Sensitive financial documents
+Financials/
+
+# Temporary files
+*.tmp
+*.temp
+.env*.local
+.vercel
+api/handler.js
+
+# scroll-craft verification screenshots (regenerable via the skill's shoot.mjs)
+scrollcraft/builds/*/lab/
+
+# Capacitor native build output (the platform projects themselves are committed)
+ios/App/Pods/
+ios/App/build/
+ios/App/App/public/
+android/app/build/
+android/build/
+android/.gradle/
+android/app/src/main/assets/public/
+
+# build output
+api/bundled.js

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1a43aa"/>
+      <stop offset="1" stop-color="#0e1f57"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <!-- roof (brand red) -->
+  <path d="M256 112 L420 248 L372 248 L256 152 L140 248 L92 248 Z" fill="#b8322b"/>
+  <!-- house body (cream) -->
+  <path d="M256 168 L360 254 L360 386 A16 16 0 0 1 344 402 L168 402 A16 16 0 0 1 152 386 L152 254 Z" fill="#f5f1ea"/>
+  <!-- door (navy) -->
+  <rect x="232" y="316" width="48" height="86" rx="6" fill="#0e1f57"/>
+  <!-- windows (navy) -->
+  <rect x="196" y="290" width="36" height="36" rx="6" fill="#0e1f57"/>
+  <rect x="280" y="290" width="36" height="36" rx="6" fill="#0e1f57"/>
+</svg>

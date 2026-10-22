@@ -1,0 +1,471 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>BRN Commercial Roof Training</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: field manual. Sticky module rail on the left (top strip on phones), long-form modules on the right. */
+:root{
+  --bg:#eef1f0; --surface:#ffffff; --surface-2:#e3e8e7; --ink:#15212b; --muted:#56646c; --line:#cdd5d4;
+  --accent:#d98c0b; --accent-ink:#1a1206; --head:#15212b; --head-ink:#eef3f3;
+  --high:#b42318; --high-bg:#fde8e6; --med:#9a5b00; --med-bg:#fdf0d9; --low:#1f6f4a; --low-bg:#e2f3ea;
+  --ok:#1f6f4a; --bad:#b42318;
+  --f-display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --f-body:"Source Sans 3","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f161b; --surface:#172129; --surface-2:#1f2b34; --ink:#e3eaec; --muted:#9aa9b0; --line:#2c3a44;
+  --accent:#f2a93b; --accent-ink:#1a1206; --head:#0a1014; --head-ink:#eef3f3;
+  --high:#ff8a7e; --high-bg:#3a1915; --med:#f2b660; --med-bg:#3a2a10; --low:#6fd3a0; --low-bg:#13321f;
+  --ok:#6fd3a0; --bad:#ff8a7e; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f161b; --surface:#172129; --surface-2:#1f2b34; --ink:#e3eaec; --muted:#9aa9b0; --line:#2c3a44;
+  --accent:#f2a93b; --accent-ink:#1a1206; --head:#0a1014; --head-ink:#eef3f3;
+  --high:#ff8a7e; --high-bg:#3a1915; --med:#f2b660; --med-bg:#3a2a10; --low:#6fd3a0; --low-bg:#13321f;
+  --ok:#6fd3a0; --bad:#ff8a7e; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:17px;line-height:1.55}
+a{color:inherit}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+h1,h2,h3,h4{font-family:var(--f-display);line-height:1.1;text-wrap:balance;margin:0}
+h2{font-size:clamp(2rem,4vw,2.6rem);letter-spacing:.01em}
+h3{font-size:1.55rem;margin-top:2rem}
+h4{font-size:1.25rem}
+p{margin:0}
+
+.top{background:var(--head);color:var(--head-ink);padding-block:40px 32px}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:20px}
+.top .eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+.top h1{font-size:clamp(2.6rem,7vw,4.4rem);text-transform:uppercase;letter-spacing:.01em;margin-top:8px}
+.top p.sub{max-width:62ch;margin-top:12px;color:color-mix(in srgb,var(--head-ink) 82%,transparent);font-size:1.08rem}
+.stats{display:flex;flex-wrap:wrap;gap:12px 32px;margin-top:24px;font-family:var(--f-mono);font-size:.85rem}
+.stats b{display:block;font-family:var(--f-display);font-size:2rem;color:var(--head-ink);font-variant-numeric:tabular-nums}
+.progress{margin-top:24px;max-width:520px}
+.progress-bar{height:8px;background:color-mix(in srgb,var(--head-ink) 18%,transparent);border-radius:4px;overflow:hidden}
+.progress-bar span{display:block;height:100%;width:0;background:var(--accent);transition:width .3s}
+.progress small{display:block;margin-top:6px;font-family:var(--f-mono);font-size:.78rem;opacity:.8}
+
+.layout{display:grid;grid-template-columns:240px minmax(0,1fr);gap:40px;padding-block:32px 64px}
+.rail{position:sticky;top:calc(env(safe-area-inset-top,0px) + 16px);align-self:start;display:flex;flex-direction:column;gap:2px}
+.rail a{display:flex;gap:10px;align-items:baseline;padding:8px 10px;border-radius:6px;text-decoration:none;color:var(--muted);font-weight:600;font-size:.95rem}
+.rail a:hover{background:var(--surface-2);color:var(--ink)}
+.rail a.done .nav-n{background:var(--ok);color:var(--surface);border-color:var(--ok)}
+.nav-n{flex:none;width:24px;height:24px;display:grid;place-items:center;border:1.5px solid var(--line);border-radius:50%;font-family:var(--f-mono);font-size:.75rem}
+main{min-width:0;display:flex;flex-direction:column;gap:56px}
+
+.module{scroll-margin-top:16px;display:flex;flex-direction:column;gap:20px}
+.mod-head{display:flex;flex-direction:column;gap:8px;padding-bottom:16px;border-bottom:2px solid var(--ink)}
+.mod-num{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.12rem;color:var(--muted);max-width:62ch}
+.done-toggle{display:inline-flex;gap:8px;align-items:center;font-size:.92rem;font-weight:600;cursor:pointer;align-self:flex-start;margin-top:4px}
+.done-toggle input{width:18px;height:18px;accent-color:var(--ok)}
+.module > p{max-width:68ch}
+.fine{font-size:.88rem;color:var(--muted)}
+
+.callout{padding:14px 18px;border-radius:8px;background:var(--surface);border:1px solid var(--line);max-width:72ch}
+.callout.danger{background:var(--high-bg);border-color:transparent;color:var(--ink)}
+.callout.danger strong{color:var(--high)}
+.callout.tip strong{color:var(--accent)}
+
+ul.rules{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:8px;max-width:72ch}
+
+.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+table.types{border-collapse:collapse;width:100%;min-width:820px;font-size:.95rem}
+.types th,.types td{padding:12px 14px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}
+.types thead th{font-family:var(--f-mono);font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+.types tbody tr:last-child th,.types tbody tr:last-child td{border-bottom:0}
+.types th[scope=row]{white-space:nowrap}
+.types th small{display:block;font-weight:400;color:var(--muted);font-size:.8rem;margin-top:4px}
+.tchip{font-family:var(--f-display);font-size:1.3rem}
+.mono{font-family:var(--f-mono);font-size:.85rem;white-space:nowrap;font-variant-numeric:tabular-nums}
+.type-vids{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+.type-vids h4{font-size:1.1rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+
+.vids{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.vid{display:flex;gap:14px;padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);text-decoration:none;transition:border-color .15s,transform .15s}
+.vid:hover{border-color:var(--accent);transform:translateY(-1px)}
+.vid-play{flex:none;width:84px;height:64px;border-radius:6px;background:var(--head);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+.vid-play svg{width:24px;height:24px;fill:var(--accent)}
+.vid-len{font-family:var(--f-mono);font-size:.72rem;color:var(--head-ink);font-variant-numeric:tabular-nums}
+.vid-body{min-width:0;display:flex;flex-direction:column;gap:2px}
+.vid-title{font-weight:700;line-height:1.3}
+.vid-src{font-size:.8rem;color:var(--muted)}
+.vid-watch{font-size:.88rem;margin-top:4px;color:var(--ink)}
+.vid-watch b{color:var(--muted);font-weight:600}
+
+ol.steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:0;counter-reset:s;max-width:76ch}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:44px minmax(0,1fr);gap:4px 14px;padding:14px 0;border-bottom:1px solid var(--line)}
+ol.steps li::before{content:counter(s);grid-row:span 2;width:36px;height:36px;display:grid;place-items:center;border-radius:50%;background:var(--ink);color:var(--bg);font-family:var(--f-display);font-size:1.2rem}
+ol.steps p{color:var(--ink)}
+
+.spec-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+.spec{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:6px}
+.spec-val{font-family:var(--f-mono);font-weight:700;font-size:1.35rem;color:var(--accent)}
+.spec p{font-size:.95rem}
+
+.filters{display:flex;flex-wrap:wrap;gap:8px}
+.chip{font:inherit;font-size:.9rem;font-weight:600;padding:6px 14px;border-radius:999px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.chip.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.issues{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px}
+.issue{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.issue header{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.issue h4{font-size:1.35rem}
+.sev{flex:none;font-family:var(--f-mono);font-size:.7rem;letter-spacing:.06em;text-transform:uppercase;padding:4px 8px;border-radius:4px;font-weight:700}
+.sev-high{background:var(--high-bg);color:var(--high)}
+.sev-med{background:var(--med-bg);color:var(--med)}
+.sev-low{background:var(--low-bg);color:var(--low)}
+.issue dl{margin:0;display:grid;grid-template-columns:110px minmax(0,1fr);gap:6px 12px;font-size:.95rem}
+.issue dt{font-weight:700;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+.issue dd{margin:0}
+.issue .vids{grid-template-columns:1fr}
+
+.two-col{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px}
+.two-col h3{margin-top:0;margin-bottom:10px}
+
+.decide{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
+.opt{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px;display:flex;flex-direction:column;gap:8px}
+.opt-tag{font-family:var(--f-mono);font-size:.75rem;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);font-weight:700}
+.opt ul{margin:0;padding-left:1.1em;display:flex;flex-direction:column;gap:6px;font-size:.95rem}
+
+.checklist{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:8px}
+.checklist label{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;background:var(--surface);border:1px solid var(--line);border-radius:6px;cursor:pointer}
+.checklist input{width:18px;height:18px;margin-top:3px;accent-color:var(--ok);flex:none}
+.checklist input:checked + span{text-decoration:line-through;color:var(--muted)}
+
+.quiz{display:flex;flex-direction:column;gap:14px;max-width:760px}
+.q{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.qtext{font-weight:600}
+.qn{font-family:var(--f-mono);font-size:.8rem;color:var(--accent);margin-right:6px}
+.qopts{display:flex;flex-direction:column;gap:6px}
+.qopt{font:inherit;text-align:left;padding:9px 12px;border-radius:6px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer}
+.qopt:hover:not(:disabled){border-color:var(--ink)}
+.qopt:disabled{cursor:default}
+.qopt.right{border-color:var(--ok);color:var(--ok);font-weight:700}
+.qopt.wrong{border-color:var(--bad);color:var(--bad);text-decoration:line-through}
+.qfb{font-size:.92rem;font-weight:600;min-height:1em}
+.qfb.ok{color:var(--ok)} .qfb.no{color:var(--bad)}
+.score{font-family:var(--f-mono);font-weight:700;font-size:1rem}
+
+.foot{border-top:1px solid var(--line);padding-block:24px;color:var(--muted);font-size:.85rem}
+
+@media (max-width:860px){
+  .layout{grid-template-columns:minmax(0,1fr);gap:24px}
+  .rail{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;flex-direction:row;overflow-x:auto;background:var(--bg);margin-inline:-20px;padding:8px 20px;border-bottom:1px solid var(--line)}
+  .rail a{flex:none;white-space:nowrap}
+  .module{scroll-margin-top:64px}
+  .issues{grid-template-columns:minmax(0,1fr)}
+  .vids{grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width:440px){
+  body{font-size:16px}
+  .issue dl{grid-template-columns:minmax(0,1fr)}
+  .issue dt{padding-top:6px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<header class="top"><div class="wrap">
+  <div class="eyebrow">Best Roofing Now &middot; Team Training</div>
+  <h1>Commercial Roof Training</h1>
+  <p class="sub">How to walk a commercial roof, what a correct roof looks like, the problems you will find, and how to document them. Read each module, watch the videos, then take the ready check at the end.</p>
+  <div class="stats"><div><b>8</b>modules</div><div><b>36</b>videos</div><div><b>~178</b>minutes of video</div></div>
+  <div class="progress"><div class="progress-bar"><span id="pbar"></span></div><small id="ptext">0 of 8 modules complete</small></div>
+</div></header>
+
+<div class="wrap layout">
+  <nav class="rail" aria-label="Modules"><a href="#safety" data-nav="safety"><span class="nav-n">1</span><span>Safety on the roof</span></a><a href="#types" data-nav="types"><span class="nav-n">2</span><span>Know the roof types</span></a><a href="#walk" data-nav="walk"><span class="nav-n">3</span><span>How to walk a commercial roof</span></a><a href="#standards" data-nav="standards"><span class="nav-n">4</span><span>What good looks like</span></a><a href="#issues" data-nav="issues"><span class="nav-n">5</span><span>Problem library</span></a><a href="#storm" data-nav="storm"><span class="nav-n">6</span><span>Storm damage and insurance</span></a><a href="#decide" data-nav="decide"><span class="nav-n">7</span><span>Repair, restore, or replace</span></a><a href="#check" data-nav="check"><span class="nav-n">8</span><span>Field checklist and ready check</span></a></nav>
+  <main><section class="module" id="safety" data-mod="safety">
+<header class="mod-head"><span class="mod-num">Module 1</span><h2>Safety on the roof</h2><p class="lede">Flat roofs feel safe. They are not. Read this before you go up on any commercial job.</p>
+<label class="done-toggle"><input type="checkbox" id="done-safety" data-done="safety"> <span>Mark module complete</span></label></header>
+
+<div class="callout danger"><strong>Rule one:</strong> no inspection, photo, or sale is worth a fall. If something feels wrong on a roof, stop and get down.</div>
+<ul class="rules">
+<li><b>Never go up alone.</b> Text the office the address and when you go up and come down.</li>
+<li><b>Check in first.</b> Meet the building manager. Ask about roof access, alarms on the hatch, and anything dangerous up top.</li>
+<li><b>Ladders:</b> tie it off, keep 3 points of contact, and the ladder should stick up 3 feet past the roof edge.</li>
+<li><b>Stay back from edges.</b> Keep at least 15 feet from any edge with no parapet or rail. Closer than that, you need fall protection. Follow BRN's fall protection rule every time.</li>
+<li><b>Skylights are holes.</b> Never step on, sit on, or lean on a skylight or plastic panel. People die falling through them.</li>
+<li><b>Slick surfaces.</b> Dew, frost, or rain on TPO or PVC is like ice. Wait for it to dry.</li>
+<li><b>Watch your feet.</b> Soft spots, ridges, wires, gas lines, and conduit are trip and fall points.</li>
+<li><b>Stay off equipment.</b> Don't open HVAC panels or touch electrical. Hot exhaust and grease vents can burn you.</li>
+<li><b>Heat.</b> Membrane can get well over 150&deg;F in summer. Bring water and go up early.</li>
+</ul>
+<div class="vids"><a class="vid" href="https://www.youtube.com/watch?v=YbqieVmqdcY" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">1:31</span></span>
+  <span class="vid-body"><span class="vid-title">Designated Areas as Fall Protection on Flat Roofs</span><span class="vid-src">J. J. Keller &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> How a marked safe zone on a flat roof works and when you need more protection.</span></span>
+</a><a class="vid" href="https://www.youtube.com/watch?v=Qjy_hW8eKdI" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">2:19</span></span>
+  <span class="vid-body"><span class="vid-title">Warning Lines: Fall Protection Training</span><span class="vid-src">Univ. of Oklahoma Construction Science &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> Warning lines: how far back they go and what they mean.</span></span>
+</a></div>
+
+</section><section class="module" id="types" data-mod="types">
+<header class="mod-head"><span class="mod-num">Module 2</span><h2>Know the roof types</h2><p class="lede">Every commercial roof falls into a few families. Learn to spot each one in under a minute.</p>
+<label class="done-toggle"><input type="checkbox" id="done-types" data-done="types"> <span>Mark module complete</span></label></header>
+
+<p>The first thing you do on any commercial roof is figure out <b>what it is</b>. Everything else (what to look for, what it costs, what we can offer) depends on this.</p>
+<div class="table-wrap"><table class="types">
+<thead><tr><th>Roof</th><th>How to spot it</th><th>What good looks like</th><th>Top problems</th><th>Typical life</th></tr></thead>
+<tbody><tr><th scope='row'><span class='tchip'>TPO</span><small>Single-ply</small></th><td>White, gray, or tan sheet. Seams are heat welded, so you see a smooth melted edge, not glue.</td><td>Welds are flat and tight. The probe will not go into the seam. Clean flashings with welded corners.</td><td>Cold or skipped welds, open edges, punctures, cracks on older or thin sheets.</td><td class='mono'>20 to 30 yrs</td></tr><tr><th scope='row'><span class='tchip'>PVC</span><small>Single-ply</small></th><td>Looks a lot like TPO but feels softer. You often see a little melted bead at the seams. Common on restaurants because it stands up to grease.</td><td>Welded seams, soft and flexible sheet, no shrink cracks.</td><td>Old PVC gets stiff and cracks. Breaks down when it touches asphalt, tar, or some sealants.</td><td class='mono'>20 to 30 yrs</td></tr><tr><th scope='row'><span class='tchip'>EPDM</span><small>Rubber</small></th><td>Black rubber sheet (sometimes white). Seams are glued or taped with lap sealant on the edge. Some are held down with river rock (ballast).</td><td>Seams fully stuck with sealant along the edge. Flashings lay flat against walls and curbs.</td><td>Seams letting go, shrinkage pulling the sheet off walls, punctures, dried out sealant.</td><td class='mono'>20 to 30 yrs</td></tr><tr><th scope='row'><span class='tchip'>Mod Bit</span><small>Asphalt</small></th><td>Rolls with granules on top (like a big shingle roll). Laps are 3 to 4 inches wide. Torched, mopped, or peel and stick.</td><td>Laps sealed with a small bleed of asphalt. Granules in place. No soft or bubbled areas.</td><td>Blisters, open laps, granule loss, alligator cracks, slipping on slopes.</td><td class='mono'>15 to 20 yrs</td></tr><tr><th scope='row'><span class='tchip'>BUR</span><small>Asphalt</small></th><td>Tar and gravel. Many layers of felt and hot asphalt with gravel on top.</td><td>Gravel spread evenly, no bare spots, pitch pans full, gravel stop tight.</td><td>Bare spots, blisters, cracks, empty pitch pans, rotted gravel stop.</td><td class='mono'>20 to 30 yrs</td></tr><tr><th scope='row'><span class='tchip'>Metal</span><small>Metal</small></th><td>Through-fastened panels (screws you can see, like R-panel) or standing seam (raised ribs, hidden clips).</td><td>Screws tight with good rubber washers. Laps sealed. No rust holes.</td><td>Screws backing out, cracked washers, rust, open laps, bad curb flashings.</td><td class='mono'>30 to 50 yrs</td></tr><tr><th scope='row'><span class='tchip'>Coatings</span><small>Coating</small></th><td>Silicone, acrylic, or similar liquid sprayed or rolled over an old roof. Looks like a seamless painted surface.</td><td>Even thickness, stuck down well, no peeling, seams and details reinforced.</td><td>Peeling, bare or thin spots, dirt build up, acrylic breaking down where water ponds.</td><td class='mono'>10 to 20 yrs</td></tr></tbody></table></div>
+<p class="fine">Life spans are rough ranges. Install quality, sheet thickness, weather, and upkeep change them a lot.</p>
+<div class="callout tip"><strong>Quick ID trick:</strong> Find a seam. Melted and welded together = TPO or PVC. Glued or taped with sealant on the edge = EPDM. Granules with a 3 to 4 inch lap = mod bit. Gravel = BUR.</div>
+<h3>Videos by roof type</h3>
+<div class='type-vids'><h4>TPO</h4><div class="vids"><a class="vid" href="https://www.youtube.com/watch?v=Qb1RY8cG74g" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">3:35</span></span>
+  <span class="vid-body"><span class="vid-title">Single Ply TPO Roof Installation Process Explained</span><span class="vid-src">Ascent Roofing &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> How TPO goes down: insulation, sheet, fasteners, welded seams.</span></span>
+</a><a class="vid" href="https://www.youtube.com/watch?v=8WY93QzIct0" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">6:23</span></span>
+  <span class="vid-body"><span class="vid-title">How to Install Low-Slope Roofing and TPO Best Practices</span><span class="vid-src">GAF Roofing &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> What a correct TPO install looks like so you can spot a bad one.</span></span>
+</a></div></div><div class='type-vids'><h4>PVC</h4><div class="vids"><a class="vid" href="https://www.youtube.com/watch?v=ya17MWYxexw" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">2:40</span></span>
+  <span class="vid-body"><span class="vid-title">Understanding PVC Material Compatibility Issues</span><span class="vid-src">GAF Roofing &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> Which materials can't touch PVC and what happens when they do.</span></span>
+</a></div></div><div class='type-vids'><h4>EPDM</h4><div class="vids"><a class="vid" href="https://www.youtube.com/watch?v=TtFEoSwM4xc" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">2:41</span></span>
+  <span class="vid-body"><span class="vid-title">EPDM Rubber Roof Problems</span><span class="vid-src">Flat Roof Doctor &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> Seam failure and shrinkage on real EPDM roofs.</span></span>
+</a></div></div><div class='type-vids'><h4>Mod Bit</h4><div class="vids"><a class="vid" href="https://www.youtube.com/watch?v=DXD0wMYCFnk" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">3:17</span></span>
+  <span class="vid-body"><span class="vid-title">How to Inspect a Modified Bitumen Roof</span><span class="vid-src">A&amp;A Roofing &amp; Exteriors &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> A quick mod bit walk: laps, granules, flashings.</span></span>
+</a><a class="vid" href="https://www.youtube.com/watch?v=gl77AxCRMic" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">10:09</span></span>
+  <span class="vid-body"><span class="vid-title">Things to Look Out For When Inspecting a Modified Bitumen Roof</span><span class="vid-src">RoofingFacts &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> Longer list of mod bit problems and what each one means.</span></span>
+</a></div></div><div class='type-vids'><h4>BUR</h4><div class="vids"><a class="vid" href="https://www.youtube.com/watch?v=0_AGC5g0yT8" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">4:18</span></span>
+  <span class="vid-body"><span class="vid-title">How to Inspect Flat Built-Up Roofs</span><span class="vid-src">Allstate Roofing and Consultants &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> How to walk a built-up roof and what bad spots look like.</span></span>
+</a></div></div><div class='type-vids'><h4>Metal</h4><div class="vids"><a class="vid" href="https://www.youtube.com/watch?v=U9MrdR-N73c" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">7:36</span></span>
+  <span class="vid-body"><span class="vid-title">5 Common Mistakes to Avoid When Repairing Metal Roof Leaks</span><span class="vid-src">Flat Roof Doctor &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> Common metal roof leak spots and the wrong ways to fix them.</span></span>
+</a></div></div><div class='type-vids'><h4>Coatings</h4><div class="vids"><a class="vid" href="https://www.youtube.com/watch?v=BeTdOXAduTU" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">2:43</span></span>
+  <span class="vid-body"><span class="vid-title">How to Install a Silicone Roof Coating, Step by Step</span><span class="vid-src">Aastro Roofing &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> The steps of a silicone restoration so you know what the crew should be doing.</span></span>
+</a></div></div>
+
+</section><section class="module" id="walk" data-mod="walk">
+<header class="mod-head"><span class="mod-num">Module 3</span><h2>How to walk a commercial roof</h2><p class="lede">Same order every time, so nothing gets missed.</p>
+<label class="done-toggle"><input type="checkbox" id="done-walk" data-done="walk"> <span>Mark module complete</span></label></header>
+<ol class="steps"><li><h4>Before you go</h4><p>Ask the owner or manager: How old is the roof? Any repairs? Where are the leaks? Any warranty? Pack your seam probe, tape measure, chalk or marker, phone with a full battery, and the drone if you have it.</p></li><li><h4>Start inside</h4><p>Walk the inside first. Look for ceiling stains, wet tiles, buckets, rust on the metal deck, and mold. Mark each leak on a quick sketch so you can find that spot from above.</p></li><li><h4>Overview photos</h4><p>Once you are up, take wide photos from each corner. Get drone shots if you can. These show the whole roof before you zoom in.</p></li><li><h4>Walk the edges</h4><p>Go all the way around the perimeter. Check edge metal, coping on top of walls, parapet flashing, gutters, and scuppers. Wind damage starts here.</p></li><li><h4>Walk the field in rows</h4><p>Walk back and forth like mowing a lawn. Look for dirt rings (old ponding), blisters, soft spots, punctures, wrinkles, and patches.</p></li><li><h4>Check the seams</h4><p>On TPO and PVC, run the probe along seams, especially at T-joints and corners. On EPDM and mod bit, look for laps lifting or sealant missing.</p></li><li><h4>Check every penetration</h4><p>Pipes, vents, pitch pans, HVAC curbs, skylights, and the roof hatch. Most leaks come from these spots, not the open field.</p></li><li><h4>Check the drains</h4><p>Is the drain clear? Is the strainer (dome) on? Is the clamping ring tight? Look for water lines and debris around it.</p></li><li><h4>Check rooftop equipment</h4><p>Look for missing HVAC panels, leaking condensate lines, grease from kitchen fans, and worn paths where techs walk.</p></li><li><h4>Measure and core</h4><p>Measure the roof. With the owner's OK, cut a core to see how many roofs are on it, how thick the insulation is, the deck type, and if it is wet. Patch it right away.</p></li><li><h4>Write it up the same day</h4><p>Put photos in order: wide shot, then close up, for every problem. Notes get fuzzy fast. Do it today.</p></li></ol><div class="vids"><a class="vid" href="https://www.youtube.com/watch?v=H9gCm-UpIPk" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">5:30</span></span>
+  <span class="vid-body"><span class="vid-title">What to Look for When Inspecting a Commercial Roof</span><span class="vid-src">GAF Roofing &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> GAF's list of what to check on every commercial roof. Start here.</span></span>
+</a><a class="vid" href="https://www.youtube.com/watch?v=-tOA3edyJXg" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">13:11</span></span>
+  <span class="vid-body"><span class="vid-title">Commercial Roof Inspection Process</span><span class="vid-src">Sentry Roofing &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> A full real-world inspection from start to finish.</span></span>
+</a><a class="vid" href="https://www.youtube.com/watch?v=Ur8uj3wuG84" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">10:36</span></span>
+  <span class="vid-body"><span class="vid-title">How to Inspect Commercial Roofs</span><span class="vid-src">Cody Kline &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> Another inspector's process. Notice how he moves area by area.</span></span>
+</a><a class="vid" href="https://www.youtube.com/watch?v=nXx41J2FQ1U" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">4:53</span></span>
+  <span class="vid-body"><span class="vid-title">How to Perform Core Cuts to Assess an Existing Roof</span><span class="vid-src">GAF Roofing &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> How to cut a core and read the layers.</span></span>
+</a></div>
+</section><section class="module" id="standards" data-mod="standards">
+<header class="mod-head"><span class="mod-num">Module 4</span><h2>What good looks like</h2><p class="lede">These are the details a correct roof should have. If it doesn't match, it goes in your report.</p>
+<label class="done-toggle"><input type="checkbox" id="done-standards" data-done="standards"> <span>Mark module complete</span></label></header>
+<div class="spec-grid"><div class='spec'><span class='spec-val'>1.5 in</span><h4>TPO weld width</h4><p>Welded seams need at least 1.5 inches of true weld (Versico spec). Less than that should be overlaid, even if it probes OK.</p></div><div class='spec'><span class='spec-val'>Probe</span><h4>Seam probe test</h4><p>Drag a dull probe along the seam edge. On a good weld it will not go in. If it slides into the lap, that is a void. Mark the start and end and re-weld. Wait about 30 minutes after welding before probing new seams.</p></div><div class='spec'><span class='spec-val'>8 in</span><h4>Base flashing height</h4><p>Flashing at walls and curbs should go at least 8 inches above the finished roof (NRCA guideline). Short flashing lets water run over the top.</p></div><div class='spec'><span class='spec-val'>48 hr</span><h4>Ponding rule</h4><p>Water still sitting 48 hours after rain is ponding. Look for dirt rings and stains on a dry day.</p></div><div class='spec'><span class='spec-val'>ES-1</span><h4>Edge metal</h4><p>Edge metal should be tight, fastened, with joints covered and membrane stripped in. The building code calls for edge systems tested to ANSI/SPRI ES-1 on most low-slope roofs.</p></div><div class='spec'><span class='spec-val'>Boots</span><h4>Pipes and penetrations</h4><p>Best case is a pre-made boot or flashing with a clamp. Pitch pans should be full and crowned so water sheds off the top.</p></div><div class='spec'><span class='spec-val'>Term bar</span><h4>Wall terminations</h4><p>Membrane at the top of the flashing is held with a fastened termination bar, sealant on top, and counterflashing or a cap over it.</p></div><div class='spec'><span class='spec-val'>Low point</span><h4>Drains</h4><p>Drains sit at the low spots. Strainer on, clamping ring tight, membrane sealed under the ring. Tapered insulation should move water to them.</p></div></div><div class="vids"><a class="vid" href="https://www.youtube.com/watch?v=kXzIijccTAQ" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">3:20</span></span>
+  <span class="vid-body"><span class="vid-title">Failing to Probe and Pre-Inspect TPO Seams and Details</span><span class="vid-src">GAF Roofing &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> Why every seam gets probed and who should double check them.</span></span>
+</a><a class="vid" href="https://www.youtube.com/watch?v=jRpOkUfgz9g" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">6:41</span></span>
+  <span class="vid-body"><span class="vid-title">Basic TPO Hand Welding Techniques</span><span class="vid-src">GAF Roofing &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> What a good hand weld looks like versus a bad one.</span></span>
+</a><a class="vid" href="https://www.youtube.com/watch?v=oyrjaTHVg2o" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">1:45</span></span>
+  <span class="vid-body"><span class="vid-title">Parapet Wall Flashing with Counterflashing Detail</span><span class="vid-src">GAF Roofing &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> The right way to flash a parapet wall with counterflashing.</span></span>
+</a><a class="vid" href="https://www.youtube.com/watch?v=Ses3OF9nD7A" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">2:02</span></span>
+  <span class="vid-body"><span class="vid-title">Flashing Vents and Other Curbs</span><span class="vid-src">GAF Roofing &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> Curbs and vents done right.</span></span>
+</a><a class="vid" href="https://www.youtube.com/watch?v=AtrMGSOTnnY" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">6:57</span></span>
+  <span class="vid-body"><span class="vid-title">TPO Curb Flashing</span><span class="vid-src">Johns Manville &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> Step by step TPO curb flashing. Look at the corners.</span></span>
+</a><a class="vid" href="https://www.youtube.com/watch?v=KApKjDHWfLs" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">4:05</span></span>
+  <span class="vid-body"><span class="vid-title">Edge Detail Options: TPO Coated Metal</span><span class="vid-src">GAF Roofing &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> Edge metal options and how the membrane ties in.</span></span>
+</a><a class="vid" href="https://www.youtube.com/watch?v=UiJp2fIWgvk" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">4:36</span></span>
+  <span class="vid-body"><span class="vid-title">How to Correctly Install Tapered Roof Insulation</span><span class="vid-src">GAF Roofing &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> How tapered insulation makes water run to drains and stops ponding.</span></span>
+</a></div>
+</section><section class="module" id="issues" data-mod="issues">
+<header class="mod-head"><span class="mod-num">Module 5</span><h2>Problem library</h2><p class="lede">The issues you will find most. What they look like, why they happen, and what to do.</p>
+<label class="done-toggle"><input type="checkbox" id="done-issues" data-done="issues"> <span>Mark module complete</span></label></header>
+<div class="filters" role="group" aria-label="Filter by roof type">
+<button type="button" class="chip on" data-filter="all-show">All roofs</button>
+<button type="button" class="chip" data-filter="single">TPO / PVC</button>
+<button type="button" class="chip" data-filter="epdm">EPDM</button>
+<button type="button" class="chip" data-filter="asphalt">Mod Bit / BUR</button>
+<button type="button" class="chip" data-filter="metal">Metal</button>
+</div>
+<p class="fine">"All roofs" issues show under every filter.</p>
+<div class="issues"><article class="issue" data-tag="single" id="issue-seams">
+<header><h4>Open seams and fishmouths</h4><span class="sev sev-high">High risk</span></header>
+<dl><dt>What you see</dt><dd>Seam edges lifting, gaps your probe slides into, little open tunnels (fishmouths) at the edge.</dd><dt>Why it happens</dt><dd>Cold welds, dirty seams, glue failing with age, the sheet moving.</dd><dt>What to do</dt><dd>Probe and mark it. Photo close and wide. On TPO/PVC re-weld or strip over. On EPDM clean, prime, and tape.</dd></dl><div class="vids"><a class="vid" href="https://www.youtube.com/watch?v=UJ1ThrVa04U" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">1:53</span></span>
+  <span class="vid-body"><span class="vid-title">TPO and PVC Roof System Deficiencies</span><span class="vid-src">Alpine Intel &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> This issue on a real roof.</span></span>
+</a><a class="vid" href="https://www.youtube.com/watch?v=E1RLOaDwRFA" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">6:34</span></span>
+  <span class="vid-body"><span class="vid-title">4 Common Causes of TPO Flat Roof Leaks</span><span class="vid-src">HHH Roofing &amp; Construction &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> This issue on a real roof.</span></span>
+</a></div></article><article class="issue" data-tag="all" id="issue-ponding">
+<header><h4>Ponding water</h4><span class="sev sev-high">High risk</span></header>
+<dl><dt>What you see</dt><dd>Standing water, or on a dry day: dirt rings, algae, stains, sagging areas.</dd><dt>Why it happens</dt><dd>Low spots, clogged drains, deck sagging, crushed or wet insulation, poor slope.</dd><dt>What to do</dt><dd>Note size and depth. Check drains first. Fix may be crickets, tapered insulation, or a new drain. Most warranties don't cover ponding damage.</dd></dl><div class="vids"><a class="vid" href="https://www.youtube.com/watch?v=m1jmtLxazGY" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">3:49</span></span>
+  <span class="vid-body"><span class="vid-title">How to Prevent Water Pooling on a Flat Roof</span><span class="vid-src">Precision Roofing &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> This issue on a real roof.</span></span>
+</a></div></article><article class="issue" data-tag="asphalt" id="issue-blisters">
+<header><h4>Blisters</h4><span class="sev sev-med">Medium risk</span></header>
+<dl><dt>What you see</dt><dd>Bubbles or soft raised spots, mostly on mod bit and BUR. Can be fist size or bigger.</dd><dt>Why it happens</dt><dd>Air or moisture trapped between layers. Heat makes it grow.</dd><dt>What to do</dt><dd>Don't step on them. Small and intact can be watched. Broken or in a lap gets cut out and patched. Lots of them means moisture, so check for wet insulation.</dd></dl><div class="vids"><a class="vid" href="https://www.youtube.com/watch?v=-deMh_3JQYg" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">7:23</span></span>
+  <span class="vid-body"><span class="vid-title">Flat Roof Blistering: Causes, Prevention &amp; Repair</span><span class="vid-src">Peter &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> This issue on a real roof.</span></span>
+</a></div></article><article class="issue" data-tag="asphalt" id="issue-cracks">
+<header><h4>Cracks, splits, and alligatoring</h4><span class="sev sev-high">High risk</span></header>
+<dl><dt>What you see</dt><dd>Cracked surface like alligator skin, splits across the sheet, crazing on old single-ply.</dd><dt>Why it happens</dt><dd>Sun and age dry the material out. Movement in the deck or insulation.</dd><dt>What to do</dt><dd>Surface crazing can be coated if the roof is dry. Splits through the sheet leak now and need patching. Wide-spread cracking means end of life.</dd></dl></article><article class="issue" data-tag="epdm" id="issue-shrink">
+<header><h4>EPDM shrinkage and bridging</h4><span class="sev sev-high">High risk</span></header>
+<dl><dt>What you see</dt><dd>Sheet pulling away from walls and curbs, flashing stretched tight in a gap at the corner (bridging), seams being pulled apart.</dd><dt>Why it happens</dt><dd>EPDM loses oils and shrinks as it ages, more on ballasted or loose roofs.</dd><dt>What to do</dt><dd>Photo the gap. Small areas can be re-flashed. Bad shrinkage across the roof usually means replacement.</dd></dl><div class="vids"><a class="vid" href="https://www.youtube.com/watch?v=TtFEoSwM4xc" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">2:41</span></span>
+  <span class="vid-body"><span class="vid-title">EPDM Rubber Roof Problems</span><span class="vid-src">Flat Roof Doctor &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> This issue on a real roof.</span></span>
+</a></div></article><article class="issue" data-tag="single" id="issue-punct">
+<header><h4>Punctures and foot traffic damage</h4><span class="sev sev-high">High risk</span></header>
+<dl><dt>What you see</dt><dd>Holes, cuts, dents, screws or debris in the sheet, worn paths near HVAC units.</dd><dt>Why it happens</dt><dd>Dropped tools, HVAC techs, other trades, hail, debris.</dd><dt>What to do</dt><dd>Mark every one with chalk and photo it. Patch. Suggest walk pads on paths to equipment.</dd></dl><div class="vids"><a class="vid" href="https://www.youtube.com/watch?v=Q0-TQ8hBrNA" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">1:51</span></span>
+  <span class="vid-body"><span class="vid-title">Roofing It Wrong: HVAC Mishap</span><span class="vid-src">GAF Roofing &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> This issue on a real roof.</span></span>
+</a></div></article><article class="issue" data-tag="all" id="issue-flash">
+<header><h4>Flashing pulled away</h4><span class="sev sev-high">High risk</span></header>
+<dl><dt>What you see</dt><dd>Flashing peeling off walls or curbs, missing term bar, open corners, sealant cracked or gone.</dd><dt>Why it happens</dt><dd>Bad install, shrinkage, wall movement, old sealant.</dd><dt>What to do</dt><dd>Most leaks live here. Photo the top edge and corners. Re-secure, re-flash, add counterflashing.</dd></dl></article><article class="issue" data-tag="all" id="issue-pitch">
+<header><h4>Failed pitch pans</h4><span class="sev sev-med">Medium risk</span></header>
+<dl><dt>What you see</dt><dd>Pitch pan filler shrunk, cracked, or pulled from the pipe. Water can sit in the pan.</dd><dt>Why it happens</dt><dd>Filler dries and shrinks over time. Often no one maintains them.</dd><dt>What to do</dt><dd>Top off and crown the filler. Better: swap for a pre-made boot or sealed curb when possible.</dd></dl><div class="vids"><a class="vid" href="https://www.youtube.com/watch?v=cgrMcbcUrsE" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">12:55</span></span>
+  <span class="vid-body"><span class="vid-title">How to Fix Leaking Pitch Pockets</span><span class="vid-src">GAF Roofing &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> This issue on a real roof.</span></span>
+</a></div></article><article class="issue" data-tag="all" id="issue-drains">
+<header><h4>Clogged drains and scuppers</h4><span class="sev sev-high">High risk</span></header>
+<dl><dt>What you see</dt><dd>Leaves and trash on the strainer, missing strainer, water lines around drains, rusted or split scupper boxes.</dd><dt>Why it happens</dt><dd>No maintenance, trees nearby, bad scupper flashing.</dd><dt>What to do</dt><dd>Clear it while you are there if safe. A blocked drain can let water build up and add a lot of weight on the roof. Recommend a maintenance plan.</dd></dl><div class="vids"><a class="vid" href="https://www.youtube.com/watch?v=lJ3GSE7hzBA" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">1:04</span></span>
+  <span class="vid-body"><span class="vid-title">Flat Roof Drains Explained</span><span class="vid-src">Flat Roof Doctor &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> This issue on a real roof.</span></span>
+</a><a class="vid" href="https://www.youtube.com/watch?v=QHizSZN5NG4" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">1:27</span></span>
+  <span class="vid-body"><span class="vid-title">Roof Leak Scupper Problems</span><span class="vid-src">Shark Commercial Roofing &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> This issue on a real roof.</span></span>
+</a></div></article><article class="issue" data-tag="all" id="issue-wet">
+<header><h4>Wet insulation</h4><span class="sev sev-high">High risk</span></header>
+<dl><dt>What you see</dt><dd>Soft or spongy areas when you walk, membrane that crunches or squishes, stains inside with no clear hole above.</dd><dt>Why it happens</dt><dd>Old leaks that have been soaking in for months or years.</dd><dt>What to do</dt><dd>Mark soft areas. Core with permission. Recommend an infrared or moisture survey. Wet insulation must be cut out; it can't be coated over.</dd></dl><div class="vids"><a class="vid" href="https://www.youtube.com/watch?v=qdgP3CLCEn0" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">4:47</span></span>
+  <span class="vid-body"><span class="vid-title">Infrared Roof Moisture Surveys: How They Work</span><span class="vid-src">Rolf Snobeck &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> This issue on a real roof.</span></span>
+</a></div></article><article class="issue" data-tag="all" id="issue-edge">
+<header><h4>Edge metal and coping failure</h4><span class="sev sev-high">High risk</span></header>
+<dl><dt>What you see</dt><dd>Loose or lifted edge metal, open joints, missing cleats, coping caps sliding or missing, rust.</dd><dt>Why it happens</dt><dd>Wind, poor fastening, old sealant, metal moving with heat.</dd><dt>What to do</dt><dd>Treat this as urgent. Wind gets under a loose edge and can peel back the roof. Re-fasten, strip in, or replace edge metal.</dd></dl><div class="vids"><a class="vid" href="https://www.youtube.com/watch?v=bD0EmEb2o14" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">2:17</span></span>
+  <span class="vid-body"><span class="vid-title">Almost Every Flat Roof Has This Problem</span><span class="vid-src">Flat Roof Doctor &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> This issue on a real roof.</span></span>
+</a></div></article><article class="issue" data-tag="single" id="issue-wind">
+<header><h4>Wind uplift and loose membrane</h4><span class="sev sev-high">High risk</span></header>
+<dl><dt>What you see</dt><dd>Membrane puffing or billowing, popped fasteners pushing up, lifted corners, moved ballast rock.</dd><dt>Why it happens</dt><dd>Weak edge or fastening, high wind events.</dd><dt>What to do</dt><dd>Document for a possible claim. Check fastener rows and edges. Loose areas need re-securing before the next storm.</dd></dl><div class="vids"><a class="vid" href="https://www.youtube.com/watch?v=jm3FqHjM6mw" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">0:41</span></span>
+  <span class="vid-body"><span class="vid-title">Looking for Signs of Wind Damage on a Commercial Roof</span><span class="vid-src">Mid-South Roof Systems &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> This issue on a real roof.</span></span>
+</a></div></article><article class="issue" data-tag="all" id="issue-hail">
+<header><h4>Hail damage</h4><span class="sev sev-med">Medium risk</span></header>
+<dl><dt>What you see</dt><dd>Dents in vents, caps, HVAC fins, and edge metal. Cracks or star breaks in the membrane. Soft or crushed spots in insulation.</dd><dt>Why it happens</dt><dd>Storm. Older and colder membranes break easier.</dd><dt>What to do</dt><dd>Follow the storm steps in Module 6. Measure dents on soft metals to show hail size. Core to check crushed insulation.</dd></dl><div class="vids"><a class="vid" href="https://www.youtube.com/watch?v=8e2kcUvrnp4" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">1:12</span></span>
+  <span class="vid-body"><span class="vid-title">Hail Damage Roof Inspection on a Commercial Flat Roof</span><span class="vid-src">The World&#x27;s Greatest Roofer &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> This issue on a real roof.</span></span>
+</a></div></article><article class="issue" data-tag="metal" id="issue-metal">
+<header><h4>Metal roof fasteners and rust</h4><span class="sev sev-med">Medium risk</span></header>
+<dl><dt>What you see</dt><dd>Screws backed out, cracked or missing washers, rust around screws and laps, holes.</dd><dt>Why it happens</dt><dd>Metal moves with heat every day, which works screws loose. Washers break down in the sun.</dd><dt>What to do</dt><dd>Photo screws close up. Fix may be new oversized screws, sealing laps, or a coating system.</dd></dl><div class="vids"><a class="vid" href="https://www.youtube.com/watch?v=U9MrdR-N73c" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">7:36</span></span>
+  <span class="vid-body"><span class="vid-title">5 Common Mistakes to Avoid When Repairing Metal Roof Leaks</span><span class="vid-src">Flat Roof Doctor &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> This issue on a real roof.</span></span>
+</a></div></article><article class="issue" data-tag="all" id="issue-hvac">
+<header><h4>HVAC and rooftop equipment</h4><span class="sev sev-med">Medium risk</span></header>
+<dl><dt>What you see</dt><dd>Panels left on the roof, condensate dripping on the membrane, grease around kitchen fans, units sitting on low curbs.</dd><dt>Why it happens</dt><dd>Other trades, no walk pads, grease breaks down many membranes.</dd><dt>What to do</dt><dd>Note equipment type and data plate. Grease areas may need a grease-resistant sheet like PVC. Raise low curbs during replacement.</dd></dl></article><article class="issue" data-tag="single" id="issue-wrinkle">
+<header><h4>Wrinkles and ridges</h4><span class="sev sev-low">Low risk</span></header>
+<dl><dt>What you see</dt><dd>Long humps or wrinkles in the membrane, ridges over insulation board joints.</dd><dt>Why it happens</dt><dd>Board movement, sheet not relaxed before install, wet insulation.</dd><dt>What to do</dt><dd>Usually not urgent by itself. A wrinkle crossing a seam can open it up later. Ridges plus soft spots means check for moisture.</dd></dl></article><article class="issue" data-tag="single" id="issue-mix">
+<header><h4>Material mix-ups</h4><span class="sev sev-med">Medium risk</span></header>
+<dl><dt>What you see</dt><dd>PVC touching asphalt or old tar, wrong sealant on a sheet, sticky or discolored membrane at contact points.</dd><dt>Why it happens</dt><dd>Repairs done with the wrong products.</dd><dt>What to do</dt><dd>Note it in the report. Repairs must use products made for that membrane.</dd></dl><div class="vids"><a class="vid" href="https://www.youtube.com/watch?v=ya17MWYxexw" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">2:40</span></span>
+  <span class="vid-body"><span class="vid-title">Understanding PVC Material Compatibility Issues</span><span class="vid-src">GAF Roofing &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> This issue on a real roof.</span></span>
+</a></div></article></div>
+</section><section class="module" id="storm" data-mod="storm">
+<header class="mod-head"><span class="mod-num">Module 6</span><h2>Storm damage and insurance</h2><p class="lede">How to find and document hail and wind damage so the claim holds up.</p>
+<label class="done-toggle"><input type="checkbox" id="done-storm" data-done="storm"> <span>Mark module complete</span></label></header>
+
+<div class="two-col">
+<div><h3>Hail</h3><ul class="rules">
+<li><b>Start with soft metals.</b> Vent caps, HVAC fins, pipe caps, edge metal. Dents prove hail hit and show the size. Measure and photo with a tape in the shot.</li>
+<li><b>Then the membrane.</b> Look for cracks, star breaks, and bruises. Old or cold single-ply cracks easier. Mark each hit with chalk.</li>
+<li><b>Then under the membrane.</b> Press on hit spots. Soft or crushed feeling means the insulation or cover board may be fractured. Core with the owner's OK to show it.</li>
+<li><b>Check the date.</b> Pull the storm date and hail size for that address so photos match the event.</li>
+</ul></div>
+<div><h3>Wind</h3><ul class="rules">
+<li><b>Edges and corners first.</b> Lifted edge metal, missing coping, and peeled corners are the most common wind damage.</li>
+<li><b>Field of the roof.</b> Loose or billowing membrane, fasteners pushing up through the sheet, moved ballast.</li>
+<li><b>Debris.</b> Branches, other building parts, or equipment that blew across the roof and caused punctures.</li>
+<li><b>Interior.</b> New leaks right after the storm help tie damage to the date.</li>
+</ul></div></div>
+<div class="callout tip"><strong>Photo order for every claim item:</strong> 1) wide shot that shows where it is on the roof, 2) medium shot, 3) close up with a tape measure or chalk circle for scale. Same order every time so the adjuster can follow it.</div>
+<div class="vids"><a class="vid" href="https://www.youtube.com/watch?v=oVgf2PQey5s" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">19:47</span></span>
+  <span class="vid-body"><span class="vid-title">Roof Inspections After a Massive Hail Storm for Insurance</span><span class="vid-src">Homestead Roofing &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> A full after-storm inspection done for insurance. Long, but worth it.</span></span>
+</a><a class="vid" href="https://www.youtube.com/watch?v=8e2kcUvrnp4" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">1:12</span></span>
+  <span class="vid-body"><span class="vid-title">Hail Damage Roof Inspection on a Commercial Flat Roof</span><span class="vid-src">The World&#x27;s Greatest Roofer &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> Spotting hail hits on a commercial flat roof.</span></span>
+</a><a class="vid" href="https://www.youtube.com/watch?v=jm3FqHjM6mw" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">0:41</span></span>
+  <span class="vid-body"><span class="vid-title">Looking for Signs of Wind Damage on a Commercial Roof</span><span class="vid-src">Mid-South Roof Systems &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> Quick look at wind damage signs.</span></span>
+</a></div>
+
+</section><section class="module" id="decide" data-mod="decide">
+<header class="mod-head"><span class="mod-num">Module 7</span><h2>Repair, restore, or replace</h2><p class="lede">Use what you found to give the owner the right option.</p>
+<label class="done-toggle"><input type="checkbox" id="done-decide" data-done="decide"> <span>Mark module complete</span></label></header>
+
+<div class="decide">
+<div class="opt"><span class="opt-tag">Repair</span><h4>Fix the problem spots</h4><ul>
+<li>Problems are in a few spots, like a seam, a curb, or a drain.</li><li>The rest of the membrane is in good shape.</li><li>Insulation is dry.</li><li>Roof has good life left.</li></ul></div>
+<div class="opt"><span class="opt-tag">Restore</span><h4>Coat or recover over it</h4><ul>
+<li>Membrane is aging but still holding.</li><li>Insulation is mostly dry. Confirm with a moisture survey and cores; wet spots get cut out first.</li><li>Owner wants to push replacement off for years at a lower cost.</li><li>A recover is only allowed if there is just one roof on it now.</li></ul></div>
+<div class="opt"><span class="opt-tag">Replace</span><h4>Tear off and start new</h4><ul>
+<li>Wet insulation in large areas.</li><li>Membrane is at end of life: cracking, shrinking, seams failing all over.</li><li>Already two roofs on it. The building code does not allow a third; it must be torn off.</li><li>Deck damage or rust found in cores.</li></ul></div>
+</div>
+<div class="vids"><a class="vid" href="https://www.youtube.com/watch?v=qdgP3CLCEn0" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">4:47</span></span>
+  <span class="vid-body"><span class="vid-title">Infrared Roof Moisture Surveys: How They Work</span><span class="vid-src">Rolf Snobeck &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> How a moisture survey finds wet insulation you can't see.</span></span>
+</a><a class="vid" href="https://www.youtube.com/watch?v=sQastV8QmF8" target="_blank" rel="noopener">
+  <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg><span class="vid-len">2:00</span></span>
+  <span class="vid-body"><span class="vid-title">Assessing the Roof After Tear-Off</span><span class="vid-src">GAF Roofing &middot; YouTube</span><span class="vid-watch"><b>Watch for:</b> What to check on the deck once the old roof is off.</span></span>
+</a></div>
+
+</section><section class="module" id="check" data-mod="check">
+<header class="mod-head"><span class="mod-num">Module 8</span><h2>Field checklist and ready check</h2><p class="lede">Take this up the ladder with you.</p>
+<label class="done-toggle"><input type="checkbox" id="done-check" data-done="check"> <span>Mark module complete</span></label></header>
+<h3>Photo checklist</h3><p>Use this on every roof. Checks reset when you reload.</p><ul class="checklist"><li><label><input type='checkbox' id='ph0'> <span>Wide shots from all 4 corners (and drone overhead if you have it)</span></label></li><li><label><input type='checkbox' id='ph1'> <span>Every penetration: pipes, vents, curbs, skylights, hatch</span></label></li><li><label><input type='checkbox' id='ph2'> <span>Every drain and scupper</span></label></li><li><label><input type='checkbox' id='ph3'> <span>All edge metal and coping, especially corners</span></label></li><li><label><input type='checkbox' id='ph4'> <span>Every problem: wide, medium, and close up with a tape for scale</span></label></li><li><label><input type='checkbox' id='ph5'> <span>HVAC units, including the data plate</span></label></li><li><label><input type='checkbox' id='ph6'> <span>Core cuts showing each layer</span></label></li><li><label><input type='checkbox' id='ph7'> <span>Inside: every stain, wet tile, or rusty deck spot</span></label></li><li><label><input type='checkbox' id='ph8'> <span>Roof dimensions and a quick sketch with problem spots marked</span></label></li></ul>
+<h3>Ready check</h3><p>Answer these before your first solo commercial inspection.</p><div class="quiz"><div class='q' id='q0'><p class='qtext'><span class='qn'>Q1</span> Your seam probe slides into a TPO seam. What does that mean?</p><div class='qopts'><button type='button' class='qopt' data-q='0' data-i='0' data-ans='1'>The seam is fine, probes always go in a little</button><button type='button' class='qopt' data-q='0' data-i='1' data-ans='1'>There is a void in the weld. Mark the start and end and re-weld it</button><button type='button' class='qopt' data-q='0' data-i='2' data-ans='1'>The membrane is too thin</button></div><p class='qfb' aria-live='polite'></p></div><div class='q' id='q1'><p class='qtext'><span class='qn'>Q2</span> Water is still sitting on the roof 2 days after it rained. What is it called?</p><div class='qopts'><button type='button' class='qopt' data-q='1' data-i='0' data-ans='0'>Ponding</button><button type='button' class='qopt' data-q='1' data-i='1' data-ans='0'>Bridging</button><button type='button' class='qopt' data-q='1' data-i='2' data-ans='0'>Alligatoring</button></div><p class='qfb' aria-live='polite'></p></div><div class='q' id='q2'><p class='qtext'><span class='qn'>Q3</span> How high should base flashing go above the finished roof?</p><div class='qopts'><button type='button' class='qopt' data-q='2' data-i='0' data-ans='2'>2 inches</button><button type='button' class='qopt' data-q='2' data-i='1' data-ans='2'>4 inches</button><button type='button' class='qopt' data-q='2' data-i='2' data-ans='2'>8 inches</button></div><p class='qfb' aria-live='polite'></p></div><div class='q' id='q3'><p class='qtext'><span class='qn'>Q4</span> Where does wind damage usually start on a commercial roof?</p><div class='qopts'><button type='button' class='qopt' data-q='3' data-i='0' data-ans='1'>In the middle of the field</button><button type='button' class='qopt' data-q='3' data-i='1' data-ans='1'>At the edges and corners</button><button type='button' class='qopt' data-q='3' data-i='2' data-ans='1'>Around the drains</button></div><p class='qfb' aria-live='polite'></p></div><div class='q' id='q4'><p class='qtext'><span class='qn'>Q5</span> The building has two roofs on it already. Can we coat or recover over it?</p><div class='qopts'><button type='button' class='qopt' data-q='4' data-i='0' data-ans='1'>Yes, if the top one is in good shape</button><button type='button' class='qopt' data-q='4' data-i='1' data-ans='1'>No, the code requires a tear-off</button><button type='button' class='qopt' data-q='4' data-i='2' data-ans='1'>Only with silicone</button></div><p class='qfb' aria-live='polite'></p></div><div class='q' id='q5'><p class='qtext'><span class='qn'>Q6</span> There is a ceiling stain inside but no hole right above it. What next?</p><div class='qopts'><button type='button' class='qopt' data-q='5' data-i='0' data-ans='1'>Tell them it is a plumbing leak</button><button type='button' class='qopt' data-q='5' data-i='1' data-ans='1'>Check penetrations and seams up-slope and test for wet insulation</button><button type='button' class='qopt' data-q='5' data-i='2' data-ans='1'>Patch the spot right above the stain</button></div><p class='qfb' aria-live='polite'></p></div><div class='q' id='q6'><p class='qtext'><span class='qn'>Q7</span> What is the best photo order for a damage item?</p><div class='qopts'><button type='button' class='qopt' data-q='6' data-i='0' data-ans='1'>Close up only</button><button type='button' class='qopt' data-q='6' data-i='1' data-ans='1'>Wide, then medium, then close up with scale</button><button type='button' class='qopt' data-q='6' data-i='2' data-ans='1'>Close up, then wide</button></div><p class='qfb' aria-live='polite'></p></div></div><p class="score" id="score">0 of 7 correct</p>
+</section></main>
+</div>
+<footer class="foot"><div class="wrap">Videos are from outside channels on YouTube and open in a new tab. Specs listed are common industry guidelines. Always follow the manufacturer's spec and local code on each job.</div></footer>
+
+<script>
+(function(){
+  var KEY='brn-comm-training-v1';
+  var state={};
+  try{state=JSON.parse(localStorage.getItem(KEY)||'{}')||{}}catch(e){state={}}
+  var boxes=[].slice.call(document.querySelectorAll('[data-done]'));
+  function save(){try{localStorage.setItem(KEY,JSON.stringify(state))}catch(e){}}
+  function paint(){
+    var n=0;
+    boxes.forEach(function(b){var id=b.getAttribute('data-done');b.checked=!!state[id];if(state[id])n++;
+      var a=document.querySelector('[data-nav="'+id+'"]');if(a)a.classList.toggle('done',!!state[id]);});
+    document.getElementById('pbar').style.width=(n/boxes.length*100)+'%';
+    document.getElementById('ptext').textContent=n+' of '+boxes.length+' modules complete';
+  }
+  boxes.forEach(function(b){b.addEventListener('change',function(){state[b.getAttribute('data-done')]=b.checked;save();paint();});});
+  paint();
+
+  var chips=[].slice.call(document.querySelectorAll('.chip'));
+  var cards=[].slice.call(document.querySelectorAll('.issue'));
+  chips.forEach(function(c){c.addEventListener('click',function(){
+    chips.forEach(function(x){x.classList.toggle('on',x===c)});
+    var f=c.getAttribute('data-filter');
+    cards.forEach(function(card){var t=card.getAttribute('data-tag');card.hidden=!(f==='all-show'||t===f||t==='all');});
+  });});
+
+  var right=0;
+  [].slice.call(document.querySelectorAll('.qopt')).forEach(function(btn){btn.addEventListener('click',function(){
+    var q=btn.getAttribute('data-q'),ans=btn.getAttribute('data-ans'),i=btn.getAttribute('data-i');
+    var wrap=document.getElementById('q'+q),fb=wrap.querySelector('.qfb');
+    var all=[].slice.call(wrap.querySelectorAll('.qopt'));
+    all.forEach(function(o){o.disabled=true;if(o.getAttribute('data-i')===ans)o.classList.add('right');});
+    if(i===ans){right++;fb.textContent='Correct.';fb.className='qfb ok';}
+    else{btn.classList.add('wrong');fb.textContent='Not quite. The right answer is marked.';fb.className='qfb no';}
+    document.getElementById('score').textContent=right+' of '+document.querySelectorAll('.q').length+' correct';
+  });});
+})();
+</script>
+
+</body></html>
