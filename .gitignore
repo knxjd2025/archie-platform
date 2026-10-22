@@ -55,3 +55,4 @@ android/app/src/main/assets/public/
 
 # build output
 api/bundled.js
+node_modules
