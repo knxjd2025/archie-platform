@@ -14,6 +14,8 @@ import { arrangeSections, describeSections, enforceMinimumSections, type ReportS
 import { applyDraft, isEmptyDraft } from '../../../reports/draft';
 import { digestStoredAnalysis } from '../report-narrative';
 import { COMMERCIAL_INSPECTION_FIELDS } from '../../../../shared/commercial-inspection-form';
+import { withProfile } from '../../../tenant/context';
+import { TEST_PROFILE, FORMER_COMPANY } from './profiles';
 
 const answers = (over: Record<string, any> = {}): Record<string, any> => ({
   'Inspection Date': '2026-09-14', 'Inspector Name': 'Sam Rep', 'Inspection Type': 'Condition Assessment', 'How was the roof accessed?': 'Walked the roof',
@@ -45,7 +47,7 @@ const photo = (i: number, caption?: string) => ({ id: `photo-${i}`, url: `https:
 
 const baseReport = (photos: any[] = []): any => ({
   id: 'r-com', generatedAt: '2026-09-14T12:00:00.000Z', version: '2.0',
-  property: { address: '400 Warehouse Way', city: 'Charlotte', state: 'NC', latitude: 35.2, longitude: -80.8 },
+  property: { address: '400 Warehouse Way', city: 'Springfield', state: 'IL', latitude: 35.2, longitude: -80.8 },
   stormHistory: { yearsAnalyzed: 3, searchRadiusMiles: 5, totalEvents: 0, hailEvents: 0, windEvents: 0, tornadoEvents: 0, largestHailInches: 0, highestWindMph: 0, riskLevel: 'low', riskScore: 5, claimPotential: 'low', eventsByYear: {}, recommendedDateOfLoss: null },
   damageAnalysis: { totalPhotosAnalyzed: 0, photosWithDamage: 0, overallSeverity: 'none', roofAge: null, damageTypes: [], aiSummary: '', analysisSkipped: true, photos },
   repairEstimate: { lineItems: [], subtotal: 0, multiplierApplied: 1, total: 0, notes: [] },
@@ -346,13 +348,14 @@ const chapterCount = (html: string) => (html.slice(html.indexOf('<main')).match(
 describe.each(['proposal', 'presentation'] as const)('the commercial %s', (kind) => {
   it('carries the COI and W-9 and the permit commitments, word for word', () => {
     const { report, ctx: c } = scannedReport();
-    const html = render[kind](report, c);
+    const html = withProfile(TEST_PROFILE, () => render[kind](report, c));
     for (const [, line] of BEFORE_START_COMMITMENTS) expect(html).toContain(line);
     expect(html).toContain('Our Certificate of Insurance (COI) and our W-9 are provided to you before any work starts.');
     expect(html).toContain('every permit is pulled before the start of work');
     expect(html).toContain('Company Information');
-    expect(html).toContain('Best Roofing Now LLC');
-    expect(html).not.toMatch(/general contractor/i); // brand-facts.ts: never claimed
+    expect(html).toContain('Acme Test Roofing LLC'); // the company's own legal name
+    expect(html).not.toMatch(FORMER_COMPANY);
+    expect(html).not.toMatch(/general contractor/i); // never claimed
   });
 
   it('is never shorter than ten chapters, however sparse the job', () => {
@@ -399,7 +402,7 @@ describe.each(['proposal', 'presentation'] as const)('the commercial %s', (kind)
     expect(html).toContain('What Comes Off, What Stays, What Goes On');
     expect(html.match(/data-asm-tier="/g)).toHaveLength(3 + 3); // three diagrams + three CSS selectors
     expect(html).toContain("document.documentElement.setAttribute('data-tier', tier)");
-    expect(html).toContain("brn:select-tier");
+    expect(html).toContain("report:select-tier");
   });
 
   it('sorts the scanned photos by the part of the roof and sets each beside the inspector rating', () => {

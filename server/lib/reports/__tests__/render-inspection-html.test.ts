@@ -2,6 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { renderInspectionHtml, inspectionDamageSection } from '../render-inspection-html';
 import { buildDamageAnalysisSection } from '../comprehensive-roof-report';
 import { generateEstimateFromDamageAnalysis } from '../roof-repair-pricing';
+import { withProfile } from '../../../tenant/context';
+import { TEST_PROFILE } from '../../../__tests__/helpers/tenant';
+import { FORMER_COMPANY } from './profiles';
 
 const summary = generateEstimateFromDamageAnalysis([{ type: 'missing_shingles', count: 1 }]);
 
@@ -9,7 +12,7 @@ const report = (over: any = {}): any => ({
   id: 'r1',
   generatedAt: '2026-09-06T00:00:00Z',
   dataQuality: 'high',
-  property: { address: '550 Manning Dr', city: 'Charlotte', state: 'NC', zip: '28202' },
+  property: { address: '550 Manning Dr', city: 'Springfield', state: 'IL', zip: '62701' },
   damageAnalysis: {
     totalPhotosAnalyzed: 2,
     overallSeverity: 'high',
@@ -58,27 +61,34 @@ describe('renderInspectionHtml', () => {
     expect(html).not.toContain('Data quality');
   });
 
-  it('includes the About Us / filing-a-claim section, built from verified facts only', () => {
-    expect(html).toContain('About Best Roofing Now');
-    expect(html).toContain('Filing a Claim');
+  it("includes the About Us / filing-a-claim section, built from the company's own profile only", () => {
+    const acme = withProfile(TEST_PROFILE, () => renderInspectionHtml(report()));
+    expect(acme).toContain('About Acme Roofing');
+    expect(acme).toContain('Filing a Claim');
+    expect(acme).toContain('They send an adjuster');
+    expect(acme).toContain('Acme started in a garage.');
+    expect(acme).toContain('Acme Credential One');
+    expect(acme).toContain('(555) 010-2030');
+    expect(acme).not.toMatch(FORMER_COMPANY);
+  });
+
+  it('a company that entered nothing gets the claim steps but no story, stats or credentials', () => {
     expect(html).toContain('They send an adjuster');
-    expect(html).toContain('Fred Turner');
-    expect(html).toContain('CertainTeed ShingleMaster since 2022');
-    expect(html).toContain('(704) 605-6047');
-    expect(html).not.toContain('started in 2019'); // an unverified template line, now gone
+    expect(html).not.toContain('By the numbers');
+    expect(html).not.toContain('class="cred"');
+    expect(html).not.toContain('Reach out anytime');
+    expect(html).not.toMatch(FORMER_COMPANY);
   });
 
   it('escapes customer/photo-controlled text', () => {
-    const evil = report({ property: { address: '<script>alert(1)</script>', city: 'Charlotte', state: 'NC' } });
+    const evil = report({ property: { address: '<script>alert(1)</script>', city: 'Springfield', state: 'IL' } });
     const out = renderInspectionHtml(evil);
     expect(out).not.toContain('<script>alert(1)</script>');
   });
 
-  it('embeds the real interactive project map via this app\'s own proxy', () => {
-    expect(html).toContain('See Our Work Near You');
-    expect(html).toContain('data-brn-map-container');
-    expect(html).toContain("fetch('/api/projects-map')");
-    expect(html).toContain('https://www.bestroofingnow.com/projects/');
+  it('leaves out the "Our Work" map until the company has a project feed', () => {
+    expect(html).not.toContain('See Our Work Near You');
+    expect(html).not.toMatch(/<div class="work-map-wrap"/);
   });
 });
 

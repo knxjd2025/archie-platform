@@ -54,7 +54,7 @@ async function signedRequest(emails: string[]) {
   const { db } = dbm; const { signatureRequests, signatureSigners, writeLog } = schema;
   const [r] = await db.insert(signatureRequests).values({
     jobExternalId: JOB, sourceKind: 'report', title: 'Roof report', html: '<p>The report</p>',
-    docHash: 'x', status: 'signed', completedAt: new Date(), createdBy: 'rep@bestroofingnow.com', sentBy: 'rep@bestroofingnow.com',
+    docHash: 'x', status: 'signed', completedAt: new Date(), createdBy: 'rep@acme.test', sentBy: 'rep@acme.test',
   }).returning();
   await db.insert(signatureSigners).values(emails.map((email, i) => ({
     requestId: r.id, ordinal: i, name: `Signer ${i}`, role: 'customer', email,
@@ -126,7 +126,7 @@ describe.skipIf(!hasDb)('finishing signed documents on a small pool', () => {
       let status = 200;
       const res: Record<string, unknown> = {};
       Object.assign(res, { status: (s: number) => { status = s; return res; }, json: () => { resolve(status); return res; } });
-      handler({ session: { user: { email: 'admin@bestroofingnow.com', role: 'admin' } }, params: { externalId: JOB } }, res, (e?: unknown) => (e ? reject(e) : resolve(status)));
+      handler({ session: { user: { email: 'admin@acme.test', role: 'admin' } }, params: { externalId: JOB } }, res, (e?: unknown) => (e ? reject(e) : resolve(status)));
     });
     // Three views of the job in a row, each answering while the last one's
     // resumes are still running in the background.

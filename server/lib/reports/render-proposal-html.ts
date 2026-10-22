@@ -6,7 +6,7 @@
  */
 import { premiumShell, esc, usd, usd2, checkCell } from './report-theme.js';
 import {
-  COLOR_ASSETS, PRODUCT_TIERS, SCOPE_ROWS,
+  COLOR_ASSETS, PRODUCT_TIERS, scopeRows, isCertainTeedCredentialed,
   INTEGRITY_SYSTEM, warranty, DEFAULT_RATES, type TierKey,
 } from './certainteed-data.js';
 import { companyBrand, companyTel, companyValues, credentialMarkers, ownersStory } from './company-brand.js';
@@ -234,7 +234,7 @@ export function productsSection(input: ProposalInput): string {
     </article>`;
   return `<section>
     <div class="sec-head"><h2>The Shingles We Install</h2><span class="n">Good &middot; Better &middot; Best</span></div>
-    <p class="lead">Every package below is a complete, code-compliant roof replacement installed by our own crews. The difference is the shingle and the level of weather protection &mdash; never the quality of the work.</p>
+    <p class="lead">Every package below is a complete, code-compliant roof replacement installed start to finish. The difference is the shingle and the level of weather protection &mdash; never the quality of the work.</p>
     ${PRODUCT_TIERS.map(block).join('')}
   </section>`;
 }
@@ -263,16 +263,17 @@ export function integritySection(): string {
 export function warrantySection(): string {
   const w = warranty();
   const workmanship = w.workmanshipYears ? `a ${w.workmanshipYears}-year workmanship warranty` : 'our workmanship warranty';
+  const credentialed = isCertainTeedCredentialed();
   const markers = credentialMarkers().map((m) => `<span>${esc(m)}</span>`).join('');
   return `<section>
     <div class="sec-head"><h2>Your Warranty</h2></div>
     <p class="lead">${w.certificationCopy}</p>
     <div class="warr">
       <div class="warr__badges">
-        <div class="badge"><div class="num">${w.manufacturerYears}</div><div class="lbl">YEAR<br/>Manufacturer Warranty</div></div>
+        ${credentialed ? `<div class="badge"><div class="num">${w.manufacturerYears}</div><div class="lbl">YEAR<br/>Manufacturer Warranty</div></div>` : ''}
         ${w.workmanshipYears ? `<div class="badge"><div class="num">${w.workmanshipYears}</div><div class="lbl">YEAR<br/>Workmanship Warranty</div></div>` : ''}
       </div>
-      <div><h2>Covered coming and going.</h2><p>Your roof carries a ${w.manufacturerYears}-year manufacturer warranty on the materials and ${workmanship} from us on the installation. If it's ever the product, CertainTeed stands behind it. If it's ever the work, we do. You're covered either way &mdash; in writing.</p></div>
+      <div><h2>Covered coming and going.</h2><p>Your roof carries ${credentialed ? `a ${w.manufacturerYears}-year manufacturer warranty` : "CertainTeed's manufacturer warranty"} on the materials and ${workmanship} from us on the installation. If it's ever the product, CertainTeed stands behind it. If it's ever the work, we do. You're covered either way &mdash; in writing.</p></div>
     </div>
     ${markers ? `<div class="cred">${markers}</div>` : ''}
   </section>`;
@@ -421,7 +422,7 @@ export function investmentSection(input: ProposalInput): string {
     ${woodAddOnBlock(input)}
     <table>
       <thead><tr><th scope="col">What's included</th><th scope="col">Good</th><th scope="col">Better</th><th scope="col">Best</th></tr></thead>
-      <tbody>${SCOPE_ROWS.map(r => `<tr><td>${esc(r[0])}</td>${checkCell(r[1])}${checkCell(r[2])}${checkCell(r[3])}</tr>`).join('')}</tbody>
+      <tbody>${scopeRows().map(r => `<tr><td>${esc(r[0])}</td>${checkCell(r[1])}${checkCell(r[2])}${checkCell(r[3])}</tr>`).join('')}</tbody>
     </table>
     ${repairsBlock}
     <p class="muted tiny" style="margin-top:12px">Pricing valid for 30 days${input.validUntil ? ` (through ${esc(input.validUntil)})` : ''}. Decking replacement, if any rotten wood is found during tear-off, is reviewed and approved with you before we proceed &mdash; no surprises.</p>

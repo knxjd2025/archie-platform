@@ -3,10 +3,12 @@ import { renderEstimateHtml } from '../render-estimate-html';
 import { applyReplacementPricing } from '../estimate-replacement';
 import { withCustomLines } from '../estimate-editing';
 import type { TierSelection } from '../roofing-products';
+import { withProfile } from '../../../tenant/context';
+import { CREDENTIALED_PROFILE } from './profiles';
 
 const report = (extra: any = {}): any => ({
   id: 'r-est', generatedAt: '2026-09-14T12:00:00.000Z', version: '2.0',
-  property: { address: '5 Estimate Dr', city: 'Charlotte', state: 'NC', latitude: 35.2, longitude: -80.8 },
+  property: { address: '5 Estimate Dr', city: 'Springfield', state: 'IL', latitude: 35.2, longitude: -80.8 },
   stormHistory: { yearsAnalyzed: 3, searchRadiusMiles: 5, totalEvents: 3, hailEvents: 2, windEvents: 1, tornadoEvents: 0, largestHailInches: 1.25, highestWindMph: 58, riskLevel: 'medium', riskScore: 50, claimPotential: 'medium', eventsByYear: { 2025: { hail: 2, wind: 1, total: 3 } }, recommendedDateOfLoss: { date: '2025-05-20', eventType: 'Hail', magnitude: '1.25" hail', reason: 'largest' } },
   measurements: { documentName: 'EagleView-42.pdf', squares: 28, facets: 9, predominantPitch: '5/12', eavesFt: 120 },
   damageAnalysis: {
@@ -59,8 +61,12 @@ describe('the Estimate carries the same depth', () => {
     expect(html).toContain('Corrected as part of this roof &mdash; 2 items');
     expect(html).toContain('Roof Replacement Estimate');
 
-    const shingle = renderEstimateHtml(applyReplacementPricing(report(), { tierSelection: tiers, squares: 28, selectedTier: 'good' }), { customer: 'T', inspection });
-    expect(shingle).toContain('50-year manufacturer warranty');
+    const shingle = withProfile(CREDENTIALED_PROFILE, () => renderEstimateHtml(applyReplacementPricing(report(), { tierSelection: tiers, squares: 28, selectedTier: 'good' }), { customer: 'T', inspection }));
+    expect(shingle).toContain('50-year manufacturer warranty'); // a CertainTeed-credentialed company
+    expect(shingle).toContain('15-Year Workmanship Warranty'); // its own years
+    const uncredentialed = renderEstimateHtml(applyReplacementPricing(report(), { tierSelection: tiers, squares: 28, selectedTier: 'good' }), { customer: 'T', inspection });
+    expect(uncredentialed).not.toContain('50-year manufacturer warranty');
+    expect(uncredentialed).not.toMatch(/\d+-Year Workmanship Warranty/);
   });
 
   it('shows the NOAA record on an insurance estimate', () => {

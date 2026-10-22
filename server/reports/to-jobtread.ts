@@ -8,6 +8,7 @@
  * someone explicitly activates signing or sends it.
  */
 import { JobTreadClient, JT_DOC_TEMPLATES, type JobTreadDocLine } from '../integrations/jobtread';
+import { currentProfile } from '../tenant/context';
 
 /** A line as the Reports API returns it (lib/roof-repair-pricing RepairEstimate). */
 interface ReportLine {
@@ -93,7 +94,7 @@ export async function pushReportToJobTread(params: {
   const out: PushResult = { lineCount: lines.length };
   if (!lines.length) return out;
 
-  const company = params.companyName || 'Best Roofing Now';
+  const company = params.companyName || currentProfile().legalName;
   // JobTread rejects a free-text document name — it must be one of its
   // templates, and the template is what tells the office whether this is a
   // claim or a retail sale.

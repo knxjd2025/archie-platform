@@ -9,7 +9,7 @@ const summary = generateEstimateFromDamageAnalysis([
 
 const report = (over: any = {}): any => ({
   generatedAt: '2026-09-06T00:00:00Z',
-  property: { address: '550 Manning Dr', city: 'Charlotte', state: 'NC' },
+  property: { address: '550 Manning Dr', city: 'Springfield', state: 'IL' },
   damageAnalysis: {
     totalPhotosAnalyzed: 8,
     aiSummary: 'We reviewed 8 photos.',

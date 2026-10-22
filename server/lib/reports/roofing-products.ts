@@ -7,9 +7,9 @@
  * products to fill Good/Better/Best on a given job — the comparison is built
  * from whichever three they choose, not a fixed set.
  *
- * Company/brand content unrelated to per-product pricing (COMPANY_VALUES,
- * OWNERS_STORY, INTEGRITY_SYSTEM, WARRANTY, CRED_MARKERS, COLOR_ASSETS) still
- * lives in certainteed-data.ts — it wasn't part of this pricing change.
+ * Product content unrelated to per-product pricing (INTEGRITY_SYSTEM,
+ * COLOR_ASSETS) lives in certainteed-data.ts; everything about the company
+ * itself comes from its profile (company-brand.ts).
  */
 
 import {
@@ -19,6 +19,7 @@ import {
 import {
   SERVICE_TIER_LABELS, isServiceTierKey, serviceTierRateOk, type ServiceTierKey,
 } from '../../../shared/addon-pricing.js';
+import { companyBrand } from './company-brand.js';
 
 export type ProductKey =
   | 'tamko_titan_basic'
@@ -46,13 +47,13 @@ export interface RoofingProduct {
   category: 'shingle' | 'metal' | 'commercial' | 'service';
   /** Commercial only: what the crew does to the existing roof (commercial-products.ts). */
   system?: 'tear_off' | 'layover' | 'coating';
-  ratePerSquare: number;   // BRN standard retail rate, per square
+  ratePerSquare: number;   // standard retail rate, per square
   tagline: string;
   body: string;            // educational paragraph, may contain HTML entities
 }
 
 /**
- * The 8 products James originally specified, plus Landmark Solaris (the
+ * The 8 products originally specified, plus Landmark Solaris (the
  * existing cool-roof option) kept as a 9th choice rather than dropped, and
  * three specialty additions: Stone-Coated Steel, CeDur synthetic shake, and
  * DaVinci synthetic slate/shake. Those three are priced from public
@@ -109,7 +110,7 @@ export const ROOFING_PRODUCTS: RoofingProduct[] = [
     body: 'Grand Manor is styled after luxury slate roofing, with a deep shadow line and heavyweight construction, at a fraction of real slate&rsquo;s cost and structural demands.',
   },
   {
-    key: 'stone_coated_steel', manufacturer: 'BRN', name: 'Stone-Coated Steel Shingles', category: 'metal',
+    key: 'stone_coated_steel', manufacturer: '', name: 'Stone-Coated Steel Shingles', category: 'metal',
     ratePerSquare: 1099.99,
     tagline: 'A steel roof styled like a shingle',
     body: 'Stone-coated steel combines the impact and wind resistance of a steel roofing system with a stone-granule finish styled after a traditional shingle or shake — a lifetime metal roof that reads as a shingle roof from the street.',
@@ -127,7 +128,7 @@ export const ROOFING_PRODUCTS: RoofingProduct[] = [
     body: "CeDur's synthetic shake is a polyurethane shake styled after natural cedar, at a fraction of the weight — roughly 170 lbs. per square, about a quarter of real wood shake. It carries a Class A fire rating and resists the rot, splitting, and insect damage that eventually come for real cedar.",
   },
   {
-    key: 'standing_seam_metal', manufacturer: 'BRN', name: 'Standing Seam Metal Roof', category: 'metal',
+    key: 'standing_seam_metal', manufacturer: '', name: 'Standing Seam Metal Roof', category: 'metal',
     ratePerSquare: 2099,
     tagline: 'A lifetime metal roof system',
     body: 'Standing seam metal is a fully different roofing system from asphalt shingles — concealed fasteners, raised interlocking seams, and a service life measured in decades rather than years. The right recommendation when a homeowner wants to stop thinking about their roof.',
@@ -166,7 +167,7 @@ function resolveCustomProduct(input: CustomProductInput): RoofingProduct | null 
     category: 'shingle',
     ratePerSquare: Math.round(rate * 100) / 100,
     tagline: 'Custom product and pricing for this job',
-    body: 'A custom product and price entered by your Best Roofing Now rep for this specific job — ask them for material and warranty details.',
+    body: 'A custom product and price entered by your rep for this specific job — ask them for material and warranty details.',
   };
 }
 
@@ -211,7 +212,7 @@ function resolveServiceProduct(input: ServiceTierInput): RoofingProduct | null {
   if (!serviceTierRateOk(input.ratePerSquare)) return null;
   return {
     key: input.service,
-    manufacturer: 'Best Roofing Now',
+    manufacturer: companyBrand().displayName,
     name: SERVICE_TIER_LABELS[input.service],
     category: 'service',
     ratePerSquare: Math.round(Number(input.ratePerSquare) * 100) / 100,

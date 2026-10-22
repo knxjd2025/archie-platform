@@ -204,7 +204,7 @@ export function registerFinalWalkthroughRoutes(app: Express) {
             jobExternalId: existing.jobExternalId,
             clientName,
             note: `Final walkthrough — ${issue.item}: ${issue.note}`,
-            // Two Charlotte days. The old UTC date math made an evening
+            // Two Eastern days. The old UTC date math made an evening
             // walkthrough's issues come due a day late.
             dueDate: etPlusDays(2),
             assignedTo: assignee,

@@ -57,7 +57,7 @@ describe('product imagery', () => {
     // PRODUCT_IMAGES ships empty. A stock roof must never be captioned as a
     // specific shingle.
     const img = productImage('landmark');
-    expect(img.src).toContain('http');
+    expect(img.src).toMatch(/\/certainteed\/roof-\d\.jpg$/);
     expect(img.caption).not.toContain('Landmark');
     expect(img.caption.toLowerCase()).toContain('not your house');
   });

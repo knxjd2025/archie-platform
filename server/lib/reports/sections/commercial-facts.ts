@@ -221,7 +221,7 @@ export function reroofPath(insp: CommercialContext | null | undefined, style: Se
  * like-for-like replacement that leaves the building "no less conforming" is
  * exempt from the alteration provisions (NC amends C503.1; the model code's
  * roof-replacement trigger is not adopted), and Group F/S/U buildings are
- * outside the energy code entirely — so the upgrade is BRN's recommendation,
+ * outside the energy code entirely — so the upgrade is the company's recommendation,
  * and the report says so. Numbers print only once the table is verified.
  */
 export function energyCodeNote(insp: CommercialContext | null | undefined, iso: { label: string } | null | undefined, style: SectionStyle): string {

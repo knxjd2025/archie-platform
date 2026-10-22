@@ -3,7 +3,7 @@
  *
  * Extracted from render-presentation-scrollcraft.ts chProcess. Copy is
  * verbatim — it is already reviewed, customer-tested prose, and the decking
- * promise in step 2 is a commitment BRN makes, not marketing.
+ * promise in step 2 is a commitment the company makes, not marketing.
  *
  * Renders `ig-row` / `ig-rows`, which BOTH scrollcraft pages already style.
  */

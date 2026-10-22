@@ -12,12 +12,14 @@
  * Guardrails (hard): never invent damage or conditions; only report what the
  * inputs support; storm/wind/hail is ONLY ever "possible, pending verification
  * by an insurance adjuster" — never asserted as confirmed; replace-vs-repair
- * follows the documented condition (BRN is repair-first); omit any component
+ * follows the documented condition (reports are repair-first); omit any component
  * subsection that has no grounded observation.
  */
 import type { JobTreadClient } from '../../integrations/jobtread.js';
 import { analyzeRoofImageWithFallback, analyzeRoofImageWithGemini, combineAnalysisResults, type RoofAnalysisResult } from './groq-vision.js';
 import { esc } from './report-theme.js';
+import { companyBrand } from './company-brand.js';
+import { isCertainTeedCredentialed } from './certainteed-data.js';
 
 /**
  * pdf-parse is pinned at v1 (CJS) but may be hoisted to v2 (ESM) in some
@@ -47,6 +49,9 @@ export interface FindingsInput {
 }
 
 /** Pull the inspector's written documentation from every JobTread source. */
+/** Comments the app itself posted on the job (report links and the like), which are not inspector notes. */
+const isAutoComment = (m: string): boolean => /auto-generated/i.test(m) || /\/r\/[A-Za-z0-9_-]{16,}/.test(m);
+
 async function gatherInspectorText(client: JobTreadClient, jobId: string): Promise<string> {
   const parts: string[] = [];
   try {
@@ -57,7 +62,7 @@ async function gatherInspectorText(client: JobTreadClient, jobId: string): Promi
   try {
     const cd: any = await client.paveQuery({ job: { $: { id: jobId }, comments: { $: { size: 40, sortBy: [{ field: 'createdAt', order: 'asc' }] }, nodes: { message: {}, createdByUser: { name: {} } } } } });
     for (const c of cd?.job?.comments?.nodes || []) {
-      if (c?.message && !/auto-generated|reports\.bestroofersnow/i.test(c.message)) parts.push(`Note (${c.createdByUser?.name || 'staff'}): ${c.message}`);
+      if (c?.message && !isAutoComment(c.message)) parts.push(`Note (${c.createdByUser?.name || 'staff'}): ${c.message}`);
     }
   } catch { /* non-fatal */ }
   // uploaded inspection-report PDFs (paginated)
@@ -161,19 +166,31 @@ async function analyzePhotos(photoUrls: string[], groqKey: string, geminiKey?: s
   return lines.join('\n');
 }
 
-const SYS_PROMPT = `You are a senior roofing inspector writing the "Inspection Findings" section of a report for Best Roofing Now (BRN) — a CertainTeed-certified, honest, repair-first roofer in Charlotte NC. Write an IN-DEPTH, professional yet homeowner-friendly assessment.
+/**
+ * Who the report is from, for the AI prompts: the company's name, where it is,
+ * and a CertainTeed credential only when the company has entered one. The
+ * "honest, repair-first" stance is how every report is written, not a claim.
+ */
+export function promptCompanyLine(): string {
+  const p = companyBrand();
+  const where = p.cityState ? ` in ${p.cityState}` : '';
+  const cred = isCertainTeedCredentialed() ? 'a CertainTeed-credentialed, ' : 'an ';
+  return `${p.displayName} — ${cred}honest, repair-first ${p.trade || 'roofing'} company${where}`;
+}
+
+const findingsSystemPrompt = (): string => `You are a senior roofing inspector writing the "Inspection Findings" section of a report for ${promptCompanyLine()}. Write an IN-DEPTH, professional yet homeowner-friendly assessment.
 
 ABSOLUTE RULES (legal — do not break):
 1. Use ONLY the provided inputs. NEVER invent damage, measurements, ages, counts, timeframes, or conditions not supported by an input. Only cite a repair timeframe if it appears in the evidence (e.g. a "Suggested action" window).
 2. STORM FENCE: The "Possible Storm-Related Indicators" section may ONLY reference observations explicitly listed under "STORM-CATEGORY observations". If that line says NONE, OMIT the storm section entirely. NEVER infer a storm/wind/hail cause from debris, staining, granule loss, weathering, age, biological/algae growth, or any non-storm item. Every storm bullet must be framed as "possible … pending verification by a licensed insurance adjuster", and never assert a claim is owed. EXCEPTION — INSPECTOR-DOCUMENTED STORM DAMAGE: when the inspector's note explicitly documents wind/hail/storm damage (an authoritative finding) and/or recommends an insurance claim, you MAY describe it as observed wind/storm damage (not merely "possible"), reference any documented storm dates, and recommend filing an insurance claim and an adjuster inspection. Even then, never state the claim is approved/owed or that coverage is guaranteed — the insurance adjuster makes the coverage determination.
-3. REPLACE vs REPAIR: BRN is repair-first. Recommend replacement ONLY when an input documents it, and ATTRIBUTE it to that specific basis (e.g. "the inspector's note that the roof is at the end of its serviceable life"). Do NOT imply that minor/monitor-level photo wear corroborates replacement. Use the evidence's own severity and timeframe words — do NOT escalate to "urgent" unless an input says immediate/critical.
+3. REPLACE vs REPAIR: we are repair-first. Recommend replacement ONLY when an input documents it, and ATTRIBUTE it to that specific basis (e.g. "the inspector's note that the roof is at the end of its serviceable life"). Do NOT imply that minor/monitor-level photo wear corroborates replacement. Use the evidence's own severity and timeframe words — do NOT escalate to "urgent" unless an input says immediate/critical.
 4. NO PHOTO COUNTS: NEVER mention how many photos or images were reviewed, the size of the photo set, or that the assessment is "based on N of M photos". Do not reference image counts anywhere. Just present the findings.
-5. COMPLETENESS & ACTIONS: Use EVERY real observation in the inputs (do not drop items like roof-edge wear, debris/cleaning, chimney, or inspector-flagged siding); group under sensible headers (e.g. put chimney mortar/cap and chimney flashing together under "Flashings & Penetrations"). In the Recommendation, surface the concrete next steps using the suggested actions in the inputs, stated as the work BRN recommends/will perform.
+5. COMPLETENESS & ACTIONS: Use EVERY real observation in the inputs (do not drop items like roof-edge wear, debris/cleaning, chimney, or inspector-flagged siding); group under sensible headers (e.g. put chimney mortar/cap and chimney flashing together under "Flashings & Penetrations"). In the Recommendation, surface the concrete next steps using the suggested actions in the inputs, stated as the work we recommend/will perform.
 6. OMIT EMPTY COMPONENTS: Include a component section ONLY when you have at least one ACTUAL OBSERVED condition for it. A recommendation to inspect/check an area is NOT an observation — if all you have for a component is a suggestion to inspect it, put that in the Recommendation section, never in its own component section. LEAVE OUT entirely any component you have no observed condition for. NEVER write a section body like "No specific observations are noted", "not assessable", "no issues", or "recommend on-site verification" — if you would write any of those, omit the whole section.
 7. LOW-SLOPE/FLAT: If an input notes low-slope / flat roofing squares, briefly note that area's different considerations (only if noted).
-8. THIS IS THE INSPECTION: these findings are made from the job's on-site inspection photos. NEVER defer a condition or finding to a future or separate visit — do NOT write that anything "will be confirmed on site", "after an on-site inspection", "pending an on-site assessment", and NEVER tell the homeowner to schedule, arrange, or get a "close-up", "physical", or any further inspection. The chimney, flashing, skylights, etc. are already documented; state recommended work as the work BRN will perform, not as an inspection to book. State what the inputs show. When the inspector's note states an overall condition (e.g. poor, end of serviceable life) that differs from any AI photo rating, the INSPECTOR'S assessment is authoritative — report the inspector's condition, not the AI's.
+8. THIS IS THE INSPECTION: these findings are made from the job's on-site inspection photos. NEVER defer a condition or finding to a future or separate visit — do NOT write that anything "will be confirmed on site", "after an on-site inspection", "pending an on-site assessment", and NEVER tell the homeowner to schedule, arrange, or get a "close-up", "physical", or any further inspection. The chimney, flashing, skylights, etc. are already documented; state recommended work as the work we will perform, not as an inspection to book. State what the inputs show. When the inspector's note states an overall condition (e.g. poor, end of serviceable life) that differs from any AI photo rating, the INSPECTOR'S assessment is authoritative — report the inspector's condition, not the AI's.
 9. NEVER ADVERTISE MISSING INFORMATION: do NOT write that anything is "not specified", "not stated", "not determinable", "not available", "not provided", "unknown from the inputs", "no information", or similar — never call attention to a gap. Present only what the inputs DO show and silently omit the rest. DETERMINE THE OVERALL CONDITION by combining the inspector's notes with the AI photo observations: if the photos show dirt/debris, missing/damaged/creased shingles, granule loss, algae/moss, or other wear, the roof is NOT in good condition — describe it as dirty, worn, fair, or poor as the observations warrant; if the photos show a clean, intact roof, it is in good condition. ALWAYS lead with the inspector's notes (your primary source), then incorporate the photo observations.
-10. BRN'S OWN VOICE: write as Best Roofing Now, first person ("we recommend", "we found"). NEVER mention "AI", an "AI review", "AI-assisted", "AI recommendations", a "photo analysis model", or any tooling — the reader must never see the machinery. Phrase recommendations as BRN's own (e.g. "We recommend a professional low-pressure chemical cleaning…"), never "the AI recommendations suggest…".
+10. OUR OWN VOICE: write as ${companyBrand().displayName}, first person ("we recommend", "we found"). NEVER mention "AI", an "AI review", "AI-assisted", "AI recommendations", a "photo analysis model", or any tooling — the reader must never see the machinery. Phrase recommendations as our own (e.g. "We recommend a professional low-pressure chemical cleaning…"), never "the AI recommendations suggest…".
 
 OUTPUT FORMAT (Markdown-ish) — include ONLY sections that have real content; omit every other section:
 "## Overview" — 4-7 sentences: the overall condition (lead with the inspector's note, then the photo observations), roof material/type if visible, approximate age/remaining life ONLY if grounded (otherwise OMIT age and remaining-life entirely — never say they're unknown or undeterminable), and the headline takeaway. Never state that any detail is missing from the inputs.
@@ -239,7 +256,7 @@ export async function synthesize(inspectorText: string, photoDigest: string, gro
   // findings read thin. It binds harder now that ~40 photos are analysed
   // rather than 8, so there is far more real observation to write from.
   const maxTokens = Math.min(Math.max(Number(process.env.REPORT_FINDINGS_TOKENS) || 4000, 1600), 8000);
-  return groqChatWithFallback(groqKey, [{ role: 'system', content: SYS_PROMPT }, { role: 'user', content: user }], { temperature: 0.2, maxTokens });
+  return groqChatWithFallback(groqKey, [{ role: 'system', content: findingsSystemPrompt() }, { role: 'user', content: user }], { temperature: 0.2, maxTokens });
 }
 
 // Phrasings that mean "nothing was actually observed here" — banned as a section body.
@@ -285,7 +302,7 @@ export function scrubGapLanguage(text: string): string {
 }
 
 /**
- * Deterministic backstop that keeps customer-facing copy in BRN's own voice: removes any
+ * Deterministic backstop that keeps customer-facing copy in the company's own voice: removes any
  * "AI"/"AI recommendations"/"AI-assisted" exposure, and drops clauses that tell the reader
  * to schedule a separate/close-up/physical inspection (reports are made FROM the site photos).
  */

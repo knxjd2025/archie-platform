@@ -120,11 +120,15 @@ describe('signatureBlockHtml', () => {
     const html = signatureBlockHtml([
       signer({ signedAt: '2026-09-18T15:00:00Z', signedName: 'Dana Whitfield', signatureKind: 'drawn', signatureImage: 'AAAA', geo: geo() }),
       signer({ id: 2, name: 'Sam Reyes', role: 'company', signedAt: '2026-09-18T16:00:00Z', signedName: 'Sam Reyes', signatureKind: 'typed' }),
-    ]);
+    ], 'Acme Test Roofing LLC');
     expect(html).toContain('data:image/jpeg;base64,AAAA');
-    expect(html).toContain('Sam Reyes');
-    expect(html).toContain('Best Roofing Now');
+    expect(html).toContain('Sam Reyes</b> — Acme Test Roofing LLC'); // the company signs under its own name
     expect(html).toContain('At the property');
+  });
+
+  it('names no company when none is given', () => {
+    const html = signatureBlockHtml([signer({ role: 'company', signedAt: '2026-09-18T16:00:00Z', signedName: 'Sam Reyes' })]);
+    expect(html).not.toContain(' — ');
   });
 
   it('says who has not signed rather than leaving a blank line', () => {

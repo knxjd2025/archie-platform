@@ -1,8 +1,16 @@
 import { describe, it, expect } from 'vitest';
-import { PLAYBOOK, fillTemplate, playbookDoc } from '../playbook';
+import { PLAYBOOK, companyFillFrom, fillTemplate, playbookDoc } from '../playbook';
+import { resolveCompanyProfile } from '../company';
 import { checklistTotal, inlineHtml, parsePlaybookText, renderPlaybookDocument, renderPlaybookPrintPage } from '../playbook-document';
 
-const ctx = { repName: 'Casey Rep', repTitle: 'Sales Consultant', repCell: '(704) 555-0100', repEmail: 'casey@bestroofingnow.com', customerName: 'Pat Homeowner', customerLabel: 'Pat Homeowner' };
+const ACME = resolveCompanyProfile({
+  id: '0e5f1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b', name: 'Acme Test Roofing',
+  branding: { legalName: 'Acme Test Roofing LLC', shortName: 'Acme Roofing', phone: '(555) 010-2030', website: 'https://acme.test', city: 'Springfield', state: 'IL', primaryColor: '#225588', logoUrl: 'https://acme.test/logo.png' },
+  settings: { credentials: ['Acme Credential One', 'Fully insured'] },
+});
+const ctx = { ...companyFillFrom(ACME), repName: 'Casey Rep', repTitle: 'Sales Consultant', repCell: '(555) 010-0100', repEmail: 'casey@acme.test', customerName: 'Pat Homeowner', customerLabel: 'Pat Homeowner' };
+/** The company this library was first written for. */
+const FORMER_COMPANY = /Best Roofing|bestroof|Charlotte|ShingleMaster|\bAngi\b|0e1f57|b8322b/i;
 const words = (s: string) => new Set(s.toLowerCase().match(/[a-z]{4,}/g) || []);
 
 describe('parsePlaybookText', () => {
@@ -22,11 +30,11 @@ describe('parsePlaybookText', () => {
     const blocks = parsePlaybookText([
       'Sorry I Missed You!', '', 'NOTE: Leave this at the door.', '', 'WHAT YOU GET', '• First thing', '  ○ Sub point', '• Second thing',
       '', 'Hi, my name is Casey.', '-------', 'Hello there, I am Casey.', '', 'Regards,', '', 'NAME', 'TITLE', 'PHONE',
-    ].join('\n'), { kind: 'letter', signature: 'Casey Rep\nSales Consultant, Best Roofing Now' });
+    ].join('\n'), { kind: 'letter', signature: 'Casey Rep\nSales Consultant, Acme Roofing' });
     expect(blocks.map((b) => b.t)).toEqual(['title', 'callout', 'h2', 'list', 'p', 'rule', 'p', 'signoff']);
     const list = blocks[3] as any;
     expect(list.items.map((it: any) => [it.text, it.depth])).toEqual([['First thing', 0], ['Sub point', 1], ['Second thing', 0]]);
-    expect((blocks[7] as any).lines).toEqual(['Casey Rep', 'Sales Consultant, Best Roofing Now']);
+    expect((blocks[7] as any).lines).toEqual(['Casey Rep', 'Sales Consultant, Acme Roofing']);
   });
 
   it('joins PDF-wrapped checklist items and numbers the tick boxes', () => {
@@ -60,7 +68,10 @@ describe('rendering', () => {
     const letter = PLAYBOOK.find((d) => d.kind === 'letter')!;
     const lh = renderPlaybookDocument(letter, { mode: 'screen', text: fillTemplate(letter.body, ctx).text, ctx });
     expect(lh).toContain('pbd-letterhead');
-    expect(lh).toContain('CertainTeed ShingleMaster');
+    expect(lh).toContain('Acme Credential One'); // the company's own credentials
+    expect(lh).toContain('Acme Test Roofing LLC · Springfield, IL · (555) 010-2030 · acme.test');
+    expect(lh).toContain('https://acme.test/logo.png');
+    expect(lh).toContain('--pb-primary:#225588');
     expect(lh).not.toContain(letter.title); // the internal title never prints on a customer letter
     const guide = PLAYBOOK.find((d) => d.kind === 'guide')!;
     expect(renderPlaybookDocument(guide, { mode: 'screen' })).toContain('Sales Playbook');
@@ -91,7 +102,20 @@ describe('every document in every mode', () => {
     for (const d of PLAYBOOK) {
       const text = fillTemplate(d.body, ctx).text;
       expect(renderPlaybookDocument(d, { mode: 'email', text, ctx }), d.title).not.toMatch(/class="/);
-      expect(renderPlaybookDocument(d, { mode: 'screen', text, ctx }), d.title).toContain('Best Roofing Now');
+      const screen = renderPlaybookDocument(d, { mode: 'screen', text, ctx });
+      expect(screen, d.title).toContain('Acme Roofing');
+      expect(screen, d.title).not.toMatch(FORMER_COMPANY);
+      expect(renderPlaybookDocument(d, { mode: 'email', text, ctx }), d.title).toContain('#225588');
+    }
+  });
+
+  it('with no company in the context, shows no one\'s name, logo or credentials', () => {
+    const letter = PLAYBOOK.find((d) => d.kind === 'letter')!;
+    for (const mode of ['screen', 'print', 'email'] as const) {
+      const html = renderPlaybookDocument(letter, { mode });
+      expect(html, mode).not.toMatch(FORMER_COMPANY);
+      expect(html, mode).not.toContain('<img');
+      expect(html, mode).not.toContain('pbd-cred');
     }
   });
 });

@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { PLAYBOOK, PLAYBOOK_GROUPS, fillTemplate, subjectOf, incomePlan, pointsFor, stageForColumn, STAGE_CHECKLISTS, playbookDoc } from '../playbook';
+import { PLAYBOOK, PLAYBOOK_GROUPS, companyFillFrom, fillTemplate, subjectOf, incomePlan, pointsFor, stageForColumn, STAGE_CHECKLISTS, playbookDoc } from '../playbook';
+import { resolveCompanyProfile } from '../company';
+
+const ACME = resolveCompanyProfile({
+  id: '0e5f1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b', name: 'Acme Test Roofing',
+  branding: { shortName: 'Acme Roofing', phone: '(555) 010-2030', website: 'https://acme.test' },
+  settings: { credentials: ['Fully insured'], workmanshipYears: 10 },
+});
+/** The company this library was first written for: none of it may reach a template. */
+const FORMER_COMPANY = /Best Roofing|bestroof|\bBRN\b|Charlotte|North Carolina|704-|843-271|336-583|Cochran|Bragg|Anthony Smith/;
 
 describe('playbook library', () => {
   it('has every group populated and unique ids', () => {
@@ -12,7 +21,7 @@ describe('playbook library', () => {
     for (const d of PLAYBOOK) {
       expect(d.body).not.toMatch(/roofstrategist/i);
       expect(d.body).not.toMatch(/LockDown LIVE/);
-      expect(d.body).not.toMatch(/james@bestroofingnow/i);
+      for (const text of [d.body, d.summary, d.title, d.source]) expect(text, d.id).not.toMatch(FORMER_COMPANY);
     }
   });
   it('every checklist step points at a real document', () => {
@@ -21,16 +30,16 @@ describe('playbook library', () => {
 });
 
 describe('fillTemplate', () => {
-  const ctx = { repName: 'Casey Rep', repCell: '(704) 555-0100', repEmail: 'casey@bestroofingnow.com', customerName: 'Pat Homeowner', customerAddress: '12 Oak St, Charlotte, NC 28205', street: 'Oak St', cityState: 'Charlotte, NC', date: 'September 16, 2026' };
+  const ctx = { ...companyFillFrom(ACME), repName: 'Casey Rep', repCell: '(555) 010-0100', repEmail: 'casey@acme.test', customerName: 'Pat Homeowner', customerAddress: '12 Oak St, Springfield, IL 62705', street: 'Oak St', cityState: 'Springfield, IL', date: 'September 16, 2026' };
   it('fills rep, customer, company and date placeholders and lists what is left', () => {
     const r = fillTemplate('Dear [HOMEOWNER NAME],\nWe are on [STREET NAME]. Call [YOUR NAME] at [YOUR CELL #] or [EMAIL]. [COMPANY NAME] [COMPANY WEBSITE] [DATE]. Storm on [STORM DATE].', ctx);
-    expect(r.text).toBe('Dear Pat Homeowner,\nWe are on Oak St. Call Casey Rep at (704) 555-0100 or casey@bestroofingnow.com. Best Roofing Now bestroofingnow.com September 16, 2026. Storm on [STORM DATE].');
+    expect(r.text).toBe('Dear Pat Homeowner,\nWe are on Oak St. Call Casey Rep at (555) 010-0100 or casey@acme.test. Acme Roofing acme.test September 16, 2026. Storm on [STORM DATE].');
     expect(r.remaining).toEqual(['STORM DATE']);
     expect(r.filled.map((f) => f.placeholder)).toContain('YOUR CELL #');
   });
   it('uses the first name for first-name placeholders and the office phone when the rep has no cell', () => {
     const r = fillTemplate('Hi [CUSTOMER FIRST NAME], call [PHONE]', { ...ctx, repCell: null });
-    expect(r.text).toBe('Hi Pat, call (704) 605-6047');
+    expect(r.text).toBe('Hi Pat, call (555) 010-2030');
   });
   it('leaves unknown placeholders intact rather than blanking them', () => {
     const r = fillTemplate('[HAIL/WIND/HURRICANE/STORM] hit [NEIGHBORHOOD]', { ...ctx, street: null });
@@ -39,7 +48,13 @@ describe('fillTemplate', () => {
   });
   it('builds a signature block', () => {
     const r = fillTemplate('Thanks,\n[EMAIL SIGNATURE]', ctx);
-    expect(r.text).toContain('Casey Rep\nBest Roofing Now\nCell: (704) 555-0100\nOffice: (704) 605-6047\ncasey@bestroofingnow.com\nbestroofingnow.com');
+    expect(r.text).toContain('Casey Rep\nAcme Roofing\nCell: (555) 010-0100\nOffice: (555) 010-2030\ncasey@acme.test\nacme.test');
+  });
+  it("fills company placeholders from the company's own profile, and leaves the rest for the rep", () => {
+    expect(companyFillFrom(ACME)).toMatchObject({ companyName: 'Acme Roofing', officePhone: '(555) 010-2030', companyWebsite: 'acme.test', credentials: 'Fully insured', warrantyLength: '10-year workmanship' });
+    const r = fillTemplate('[COMPANY NAME] · [OFFICE PHONE] · [INSERT CREDENTIALS] · [INSERT WARRANTY LENGTH]', { repName: 'Casey' });
+    expect(r.text).toBe('[COMPANY NAME] · [OFFICE PHONE] · [INSERT CREDENTIALS] · [INSERT WARRANTY LENGTH]');
+    expect(r.remaining).toEqual(['COMPANY NAME', 'OFFICE PHONE', 'INSERT CREDENTIALS', 'INSERT WARRANTY LENGTH']);
   });
 });
 

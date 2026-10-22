@@ -31,7 +31,7 @@ import { inspectionOurWorkSection, photoRecordSection, inspectionNarrativeSectio
 import { commercialContextOf } from './commercial-context.js';
 import { assemblyPathsHtml, assemblyDiagramDocumentHtml, ASSEMBLY_CSS_DOCUMENT, ASSEMBLY_JS } from './sections/assembly-diagram.js';
 import { evidenceBlockDocument, photoRecordBlockDocument, EVIDENCE_CSS_DOCUMENT } from './sections/commercial-chapters.js';
-import { COMMERCIAL_INCLUDES } from './commercial-products.js';
+import { commercialIncludes } from './commercial-products.js';
 import { warrantyFor } from './product-warranty.js';
 import { scopeTotalOf } from './scope-items.js';
 import type { TierPricing } from './roofing-products.js';
@@ -175,7 +175,7 @@ export function commercialIncludedSection(report: ComprehensiveRoofReport): stri
   const tiers = pricedTiers(report);
   if (!tiers) return '';
   const t = tiers[report.selectedTier ?? 'better'];
-  const items = t.product.system ? COMMERCIAL_INCLUDES[t.product.system] : null;
+  const items = t.product.system ? commercialIncludes(t.product.system) : null;
   if (!items?.length) return '';
   const w = warrantyFor(t.product);
   return section('What Is Included', t.product.name, `<ul style="line-height:1.8;padding-left:20px">${items.map((i) => `<li>${esc(i)}</li>`).join('')}${t.iso ? `<li>${esc(t.iso.label)}</li>` : ''}</ul>

@@ -17,6 +17,9 @@ import type { Request } from 'express';
 import { googleMapsKey } from '../lib/reports/google-key';
 import { haversineMeters, type GeoSource, type SignerGeo } from '../../shared/signatures';
 
+/** Nominatim's usage policy requires an identifiable app with a way to reach it. */
+const NOMINATIM_UA = `Archie/1.0 (${process.env.APP_BASE_URL || 'self-hosted'})`;
+
 const num = (v: unknown): number | null => {
   const n = typeof v === 'number' ? v : Number.parseFloat(String(v ?? ''));
   return Number.isFinite(n) ? n : null;
@@ -89,7 +92,7 @@ export async function reverseGeocode(lat: number, lng: number): Promise<{ addres
   try {
     const r = await fetch(
       `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18`,
-      { headers: { 'User-Agent': 'BestRoofingNow-TeamApp/1.0 (app.bestroofingnow.com)' } },
+      { headers: { 'User-Agent': NOMINATIM_UA } },
     );
     if (r.ok) {
       const data: any = await r.json();
@@ -130,7 +133,7 @@ export async function geocodeProperty(address: string): Promise<{ lat: number; l
   try {
     const r = await fetch(
       `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`,
-      { headers: { 'User-Agent': 'BestRoofingNow-TeamApp/1.0 (app.bestroofingnow.com)' } },
+      { headers: { 'User-Agent': NOMINATIM_UA } },
     );
     if (r.ok) {
       const data: any = await r.json();

@@ -1,6 +1,9 @@
 /**
  * Turns a Sales Playbook document's plain text (exported from Word/PDF
- * training files) into a structured, Best Roofing Now–branded document.
+ * training files) into a structured document branded as the company it is
+ * for: its name, logo, colors and contact details come from the fill context
+ * (companyFillFrom in playbook.ts), and a detail it has not entered is left
+ * off rather than filled with another company's.
  *
  * One renderer serves all three places a document appears so they never
  * drift apart:
@@ -11,7 +14,7 @@
  *
  * Every piece of text is HTML-escaped here; callers may inject the result.
  */
-import { COMPANY_DEFAULTS, signatureBlock, subjectOf, type FillContext, type PlaybookDoc } from './playbook';
+import { signatureBlock, subjectOf, type FillContext, type PlaybookDoc } from './playbook';
 
 /* ------------------------------------------------------------------ */
 /* Structure                                                           */
@@ -287,10 +290,34 @@ export function splitLetterNotes(blocks: DocBlock[]): { notes: DocBlock[]; lette
 /* Brand                                                               */
 /* ------------------------------------------------------------------ */
 
-export const BRAND = {
-  navy: '#0e1f57', navyDeep: '#081134', brick: '#b8322b', brickDark: '#8e231e',
+/** The document palette. primary/accent are the company's (paletteFor); the rest are neutral. */
+export interface DocPalette {
+  primary: string; primaryDeep: string; accent: string;
+  ink: string; muted: string; line: string; paper: string; wash: string; blankBg: string;
+}
+
+export const DEFAULT_PALETTE: DocPalette = {
+  primary: '#1F3A5F', primaryDeep: '#16293F', accent: '#1F2937',
   ink: '#1c2233', muted: '#5f6677', line: '#e3e6ee', paper: '#ffffff', wash: '#f4f6fb', blankBg: '#fdf3d7',
 };
+
+const HEX = /^#[0-9a-f]{6}$/i;
+/** Darken a #rrggbb color by `amount` (0–1). */
+const darken = (hex: string, amount: number): string => {
+  const n = parseInt(hex.slice(1), 16);
+  const ch = (shift: number) => Math.max(0, Math.round(((n >> shift) & 255) * (1 - amount)));
+  return `#${[16, 8, 0].map((sh) => ch(sh).toString(16).padStart(2, '0')).join('')}`;
+};
+
+/** The company's colors, from the fill context, over the neutral palette. */
+export function paletteFor(ctx?: Pick<FillContext, 'brandColor' | 'accentColor'> | null): DocPalette {
+  const primary = ctx?.brandColor && HEX.test(ctx.brandColor) ? ctx.brandColor : DEFAULT_PALETTE.primary;
+  const accent = ctx?.accentColor && HEX.test(ctx.accentColor) ? ctx.accentColor : primary === DEFAULT_PALETTE.primary ? DEFAULT_PALETTE.accent : primary;
+  return { ...DEFAULT_PALETTE, primary, primaryDeep: darken(primary, 0.3), accent };
+}
+
+/** The palette the email-mode inline styles use while a document renders (set by renderPlaybookDocument). */
+let ACTIVE_PALETTE: DocPalette = DEFAULT_PALETTE;
 
 const KIND_EYEBROW: Record<PlaybookDoc['kind'], string> = {
   checklist: 'Checklist', guide: 'Training guide', script: 'Script', letter: 'Letter', email: 'Email', reference: 'Reference sheet',
@@ -305,29 +332,29 @@ export type RenderMode = 'screen' | 'print' | 'email';
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
 
 /** Email clients need inline styles; screen and print use classes. */
-const INLINE: Record<string, string> = {
-  title: `font-family:Georgia,'Times New Roman',serif;font-size:24px;line-height:1.25;color:${BRAND.navy};margin:0 0 14px;font-weight:700`,
-  h2: `font-family:Arial,Helvetica,sans-serif;font-size:13px;letter-spacing:1.5px;text-transform:uppercase;color:${BRAND.brick};margin:22px 0 8px;font-weight:700;border-bottom:2px solid ${BRAND.line};padding-bottom:5px`,
-  h3: `font-family:Georgia,'Times New Roman',serif;font-size:18px;color:${BRAND.navy};margin:18px 0 6px;font-weight:700`,
-  lead: `margin:18px 0 8px;font-size:15px;line-height:1.6;color:${BRAND.ink}`,
-  leadLabel: `display:inline-block;font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#ffffff;background:${BRAND.navy};border-radius:4px;padding:2px 8px;margin-right:8px;font-weight:700`,
-  p: `margin:0 0 14px;font-size:15px;line-height:1.65;color:${BRAND.ink}`,
-  say: `margin:0 0 14px;font-size:15px;line-height:1.65;color:${BRAND.ink};background:${BRAND.wash};border-left:4px solid ${BRAND.navy};padding:10px 14px;border-radius:0 6px 6px 0`,
-  ps: `margin:18px 0 14px;font-size:14px;line-height:1.6;color:${BRAND.muted};font-style:italic`,
-  ul: `margin:0 0 14px;padding-left:22px;font-size:15px;line-height:1.6;color:${BRAND.ink}`,
+const inlineStyles = (): Record<string, string> => ({
+  title: `font-family:Georgia,'Times New Roman',serif;font-size:24px;line-height:1.25;color:${ACTIVE_PALETTE.primary};margin:0 0 14px;font-weight:700`,
+  h2: `font-family:Arial,Helvetica,sans-serif;font-size:13px;letter-spacing:1.5px;text-transform:uppercase;color:${ACTIVE_PALETTE.accent};margin:22px 0 8px;font-weight:700;border-bottom:2px solid ${ACTIVE_PALETTE.line};padding-bottom:5px`,
+  h3: `font-family:Georgia,'Times New Roman',serif;font-size:18px;color:${ACTIVE_PALETTE.primary};margin:18px 0 6px;font-weight:700`,
+  lead: `margin:18px 0 8px;font-size:15px;line-height:1.6;color:${ACTIVE_PALETTE.ink}`,
+  leadLabel: `display:inline-block;font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#ffffff;background:${ACTIVE_PALETTE.primary};border-radius:4px;padding:2px 8px;margin-right:8px;font-weight:700`,
+  p: `margin:0 0 14px;font-size:15px;line-height:1.65;color:${ACTIVE_PALETTE.ink}`,
+  say: `margin:0 0 14px;font-size:15px;line-height:1.65;color:${ACTIVE_PALETTE.ink};background:${ACTIVE_PALETTE.wash};border-left:4px solid ${ACTIVE_PALETTE.primary};padding:10px 14px;border-radius:0 6px 6px 0`,
+  ps: `margin:18px 0 14px;font-size:14px;line-height:1.6;color:${ACTIVE_PALETTE.muted};font-style:italic`,
+  ul: `margin:0 0 14px;padding-left:22px;font-size:15px;line-height:1.6;color:${ACTIVE_PALETTE.ink}`,
   li: 'margin:0 0 6px',
-  callout: `margin:0 0 16px;background:#fbf1f0;border:1px solid #efd3d0;border-radius:8px;padding:10px 14px;font-size:14px;line-height:1.6;color:${BRAND.ink}`,
-  calloutLabel: `font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:${BRAND.brick};font-weight:700;display:block;margin-bottom:2px`,
-  rule: `border:0;border-top:1px solid ${BRAND.line};margin:18px 0`,
+  callout: `margin:0 0 16px;background:#fbf1f0;border:1px solid #efd3d0;border-radius:8px;padding:10px 14px;font-size:14px;line-height:1.6;color:${ACTIVE_PALETTE.ink}`,
+  calloutLabel: `font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:${ACTIVE_PALETTE.accent};font-weight:700;display:block;margin-bottom:2px`,
+  rule: `border:0;border-top:1px solid ${ACTIVE_PALETTE.line};margin:18px 0`,
   links: `margin:0 0 14px;font-size:14px`,
-  a: `color:${BRAND.navy};text-decoration:underline`,
-  tags: `margin:0 0 14px;font-size:14px;color:${BRAND.navy};font-weight:700`,
-  signoff: `margin:22px 0 14px;font-size:15px;line-height:1.55;color:${BRAND.ink}`,
-  sigName: `font-family:Georgia,'Times New Roman',serif;font-size:17px;color:${BRAND.navy};font-weight:700`,
-};
+  a: `color:${ACTIVE_PALETTE.primary};text-decoration:underline`,
+  tags: `margin:0 0 14px;font-size:14px;color:${ACTIVE_PALETTE.primary};font-weight:700`,
+  signoff: `margin:22px 0 14px;font-size:15px;line-height:1.55;color:${ACTIVE_PALETTE.ink}`,
+  sigName: `font-family:Georgia,'Times New Roman',serif;font-size:17px;color:${ACTIVE_PALETTE.primary};font-weight:700`,
+});
 
 function attr(mode: RenderMode, cls: string, inlineKey?: string): string {
-  if (mode === 'email') return inlineKey && INLINE[inlineKey] ? ` style="${INLINE[inlineKey]}"` : '';
+  if (mode === 'email') { const st = inlineStyles(); return inlineKey && st[inlineKey] ? ` style="${st[inlineKey]}"` : ''; }
   return ` class="${cls}"`;
 }
 
@@ -400,7 +427,7 @@ function renderList(b: Extract<DocBlock, { t: 'list' }>, mode: RenderMode, check
   const open = (depth: number) => {
     const tag = b.ordered && depth === 0 ? 'ol' : 'ul';
     const hasChecks = b.items.some((it) => it.check);
-    html += `<${tag}${mode === 'email' ? ` style="${INLINE.ul}${hasChecks ? ';list-style:none;padding-left:4px' : ''}"` : ` class="pbd-list${hasChecks ? ' pbd-checks' : ''} pbd-d${depth}"`}>`;
+    html += `<${tag}${mode === 'email' ? ` style="${inlineStyles().ul}${hasChecks ? ';list-style:none;padding-left:4px' : ''}"` : ` class="pbd-list${hasChecks ? ' pbd-checks' : ''} pbd-d${depth}"`}>`;
     stack.push(depth);
   };
   const close = () => { const d = stack.pop()!; html += `</li></${b.ordered && d === 0 ? 'ol' : 'ul'}>`; };
@@ -413,11 +440,11 @@ function renderList(b: Extract<DocBlock, { t: 'list' }>, mode: RenderMode, check
     }
     const done = it.check && it.n !== undefined && !!checked?.has(it.n);
     if (it.check) {
-      if (mode === 'email') html += `<li style="${INLINE.li}">☐ ${inlineHtml(it.text, mode)}`;
+      if (mode === 'email') html += `<li style="${inlineStyles().li}">☐ ${inlineHtml(it.text, mode)}`;
       else if (mode === 'print') html += `<li class="pbd-check-item${done ? ' is-done' : ''}"><span class="pbd-box">${done ? '✓' : ''}</span><span>${inlineHtml(it.text, mode)}</span>`;
       else html += `<li class="pbd-check-item${done ? ' is-done' : ''}"><button type="button" class="pbd-box" data-check="${it.n}" aria-pressed="${done}" aria-label="Mark done">${done ? '✓' : ''}</button><span>${inlineHtml(it.text, mode)}</span>`;
     } else {
-      html += `<li${mode === 'email' ? ` style="${INLINE.li}"` : ''}>${inlineHtml(it.text, mode)}`;
+      html += `<li${mode === 'email' ? ` style="${inlineStyles().li}"` : ''}>${inlineHtml(it.text, mode)}`;
     }
   });
   while (stack.length) close();
@@ -445,10 +472,18 @@ export function checklistTotal(doc: Pick<PlaybookDoc, 'body' | 'title' | 'kind'>
     .reduce((n, b) => n + (b.t === 'list' ? b.items.filter((it) => it.check).length : 0), 0);
 }
 
-/** The full branded sheet: letterhead, body and footer. */
+/** The full branded sheet: letterhead, body and footer, in the company's name and colors. */
 export function renderPlaybookDocument(doc: PlaybookDoc, o: DocumentOptions): string {
-  const c = { ...COMPANY_DEFAULTS, ...Object.fromEntries(Object.entries(o.ctx || {}).filter(([, v]) => v)) } as FillContext & typeof COMPANY_DEFAULTS & { customerLabel?: string | null };
-  const logo = o.logoUrl || '/logo.jpg';
+  const outer = ACTIVE_PALETTE;
+  ACTIVE_PALETTE = paletteFor(o.ctx);
+  try { return renderWithPalette(doc, o); } finally { ACTIVE_PALETTE = outer; }
+}
+
+function renderWithPalette(doc: PlaybookDoc, o: DocumentOptions): string {
+  const c = { ...Object.fromEntries(Object.entries(o.ctx || {}).filter(([, v]) => v)) } as FillContext & { customerLabel?: string | null };
+  const name = c.companyName || '';
+  const legal = c.companyLegalName || name;
+  const logo = o.logoUrl || c.companyLogoUrl || '';
   const text = o.text ?? doc.body;
   const email = doc.kind === 'email' ? subjectOf(doc, text) : null;
   const signature = o.ctx?.repName ? signatureBlock({ ...c }) : null;
@@ -457,55 +492,67 @@ export function renderPlaybookDocument(doc: PlaybookDoc, o: DocumentOptions): st
   const body = renderBlocks(blocks, o.mode, { checked: o.checked, kind: doc.kind });
   const notesHtml = notes.length && o.mode === 'screen'
     ? `<aside class="pbd-notes"><span class="pbd-notes-label">Before you send · not printed</span>${renderBlocks(notes, 'screen', { kind: doc.kind })}</aside>` : '';
-  const phone = c.officePhone; const site = c.companyWebsite;
+  const phone = c.officePhone || ''; const site = c.companyWebsite || '';
+  const siteLink = (style = '') => (site ? `<a href="https://${esc(site)}"${style}>${esc(site)}</a>` : '');
+  // The logo, or the company's name in its place when it has no logo.
+  const mark = (cls: string) => (logo
+    ? `<img class="${cls}" src="${esc(logo)}" alt="${esc(name)}">`
+    : name ? `<span class="pbd-wordmark">${esc(name)}</span>` : '');
 
   if (o.mode === 'email') {
-    return `<div style="max-width:640px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;color:${BRAND.ink};background:#ffffff">
-<div style="padding:18px 24px 12px;border-bottom:3px solid ${BRAND.brick}"><img src="${esc(logo)}" alt="Best Roofing Now" width="180" style="display:block;width:180px;max-width:60%;height:auto;border:0"></div>
+    const contact = [name ? `<b style="font-size:13px">${esc(name)}</b>` : '', esc(phone), siteLink(' style="color:#ffffff"')].filter(Boolean).join(' &nbsp;·&nbsp; ');
+    const head = logo
+      ? `<img src="${esc(logo)}" alt="${esc(name)}" width="180" style="display:block;width:180px;max-width:60%;height:auto;border:0">`
+      : name ? `<b style="font-family:Georgia,'Times New Roman',serif;font-size:20px;color:${ACTIVE_PALETTE.primary}">${esc(name)}</b>` : '';
+    return `<div style="max-width:640px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;color:${ACTIVE_PALETTE.ink};background:#ffffff">
+${head ? `<div style="padding:18px 24px 12px;border-bottom:3px solid ${ACTIVE_PALETTE.accent}">${head}</div>` : ''}
 <div style="padding:22px 24px 8px">${body}</div>
-<div style="background:${BRAND.navy};color:#ffffff;padding:14px 24px;font-size:12px;line-height:1.6">
-<b style="font-size:13px">Best Roofing Now</b> &nbsp;·&nbsp; ${esc(phone)} &nbsp;·&nbsp; <a href="https://${esc(site)}" style="color:#ffffff">${esc(site)}</a><br>
-<span style="color:#c9d0e6">${esc(capitalise(c.credentials))}</span></div></div>`;
+${contact || c.credentials ? `<div style="background:${ACTIVE_PALETTE.primary};color:#ffffff;padding:14px 24px;font-size:12px;line-height:1.6">
+${contact}${c.credentials ? `${contact ? '<br>' : ''}<span style="color:#e5e7eb">${esc(capitalise(c.credentials))}</span>` : ''}</div>` : ''}</div>`;
   }
 
-  const credentials = `<p class="pbd-cred">${esc(capitalise(c.credentials))}</p>`;
+  const credentials = c.credentials ? `<p class="pbd-cred">${esc(capitalise(c.credentials))}</p>` : '';
   let head = '';
   let foot = '';
   if (doc.kind === 'letter') {
-    const contact = [o.ctx?.repName ? `<b>${esc(o.ctx.repName)}</b>` : null, o.ctx?.repTitle ? esc(o.ctx.repTitle) : null, o.ctx?.repCell ? `Cell ${esc(o.ctx.repCell)}` : null, `Office ${esc(phone)}`, o.ctx?.repEmail ? esc(o.ctx.repEmail) : null, esc(site)].filter(Boolean).join('<br>');
-    head = `<header class="pbd-letterhead"><img class="pbd-logo" src="${esc(logo)}" alt="Best Roofing Now"><address>${contact}</address></header><div class="pbd-bars"><i></i><i></i></div>`;
-    foot = `<footer class="pbd-foot pbd-foot--letter">${credentials}<p>Best Roofing Now LLC · Charlotte, NC · ${esc(phone)} · ${esc(site)}</p></footer>`;
+    const contact = [o.ctx?.repName ? `<b>${esc(o.ctx.repName)}</b>` : null, o.ctx?.repTitle ? esc(o.ctx.repTitle) : null, o.ctx?.repCell ? `Cell ${esc(o.ctx.repCell)}` : null, phone ? `Office ${esc(phone)}` : null, o.ctx?.repEmail ? esc(o.ctx.repEmail) : null, site ? esc(site) : null].filter(Boolean).join('<br>');
+    head = `<header class="pbd-letterhead">${mark('pbd-logo')}<address>${contact}</address></header><div class="pbd-bars"><i></i><i></i></div>`;
+    const line = [legal, c.companyCityState, phone, site].filter(Boolean).map((x) => esc(String(x))).join(' · ');
+    foot = `<footer class="pbd-foot pbd-foot--letter">${credentials}${line ? `<p>${line}</p>` : ''}</footer>`;
   } else if (doc.kind === 'email') {
     const from = o.ctx?.repName ? `${esc(o.ctx.repName)}${o.ctx.repEmail ? ` &lt;${esc(o.ctx.repEmail)}&gt;` : ''}` : 'You';
     const to = o.ctx?.customerLabel ? esc(o.ctx.customerLabel) : '<span class="pbd-muted">Pick a customer</span>';
     head = `<div class="pbd-envelope"><div><span>From</span>${from}</div><div><span>To</span>${to}</div><div class="pbd-subject"><span>Subject</span>${inlineHtml(email!.subject, o.mode)}</div></div>
-<header class="pbd-mailhead"><img class="pbd-logo" src="${esc(logo)}" alt="Best Roofing Now"></header>`;
-    foot = `<footer class="pbd-mailfoot"><p><b>Best Roofing Now</b> · ${esc(phone)} · ${esc(site)}</p>${credentials}</footer>`;
+<header class="pbd-mailhead">${mark('pbd-logo')}</header>`;
+    const line = [name ? `<b>${esc(name)}</b>` : '', esc(phone), esc(site)].filter(Boolean).join(' · ');
+    foot = `<footer class="pbd-mailfoot">${line ? `<p>${line}</p>` : ''}${credentials}</footer>`;
   } else {
     const meta = [
       doc.audience ? `For ${esc(doc.audience)}` : null,
       doc.stage ? `Stage: ${esc(STAGE_LABEL(doc.stage))}` : null,
       doc.videos.length ? `${doc.videos.length} training video${doc.videos.length === 1 ? '' : 's'}` : null,
     ].filter(Boolean).map((m) => `<span>${m}</span>`).join('');
-    head = `<header class="pbd-cover"><div class="pbd-cover-top"><img class="pbd-logo" src="${esc(logo)}" alt="Best Roofing Now"><span class="pbd-eyebrow">Sales Playbook<b>${KIND_EYEBROW[doc.kind]}</b></span></div>
+    head = `<header class="pbd-cover"><div class="pbd-cover-top">${mark('pbd-logo')}<span class="pbd-eyebrow">Sales Playbook<b>${KIND_EYEBROW[doc.kind]}</b></span></div>
 <h1 class="pbd-doc-title">${esc(doc.title)}</h1>${doc.summary && !norm(doc.body).includes(norm(doc.summary).slice(0, 40)) ? `<p class="pbd-summary">${esc(doc.summary)}</p>` : ''}${meta ? `<div class="pbd-meta">${meta}</div>` : ''}</header>`;
-    foot = `<footer class="pbd-foot"><p><b>Best Roofing Now</b> · Sales Playbook · ${KIND_EYEBROW[doc.kind]}</p><p>For the Best Roofing Now team. Not for distribution.</p></footer>`;
+    foot = `<footer class="pbd-foot"><p>${name ? `<b>${esc(name)}</b> · ` : ''}Sales Playbook · ${KIND_EYEBROW[doc.kind]}</p><p>For the ${name ? `${esc(name)} ` : ''}team. Not for distribution.</p></footer>`;
   }
-  return `<article class="pbd pbd--${doc.kind} pbd--${o.mode}">${notesHtml}${head}<div class="pbd-body">${body}</div>${foot}</article>`;
+  const vars = `--pb-primary:${ACTIVE_PALETTE.primary};--pb-primary-deep:${ACTIVE_PALETTE.primaryDeep};--pb-accent:${ACTIVE_PALETTE.accent}`;
+  return `<article class="pbd pbd--${doc.kind} pbd--${o.mode}" style="${vars}">${notesHtml}${head}<div class="pbd-body">${body}</div>${foot}</article>`;
 }
 
 function capitalise(s: string): string { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
 
 /** Standalone printable page (letterhead and all), opened in a new window. */
 export function renderPlaybookPrintPage(doc: PlaybookDoc, o: Omit<DocumentOptions, 'mode'>): string {
+  const pal = paletteFor(o.ctx);
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${esc(doc.kind === 'letter' || doc.kind === 'email' ? 'Best Roofing Now' : `${doc.title} · Best Roofing Now`)}</title>
+<title>${esc([doc.kind === 'letter' || doc.kind === 'email' ? '' : doc.title, o.ctx?.companyName || ''].filter(Boolean).join(' · ') || doc.title)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&display=swap">
 <style>${PLAYBOOK_DOC_CSS}
 html,body{margin:0;background:#e9ecf3}
-.pbd-printbar{position:sticky;top:0;z-index:2;display:flex;gap:10px;justify-content:center;padding:10px;background:${BRAND.navyDeep};font:500 13px Inter,Arial,sans-serif;color:#fff}
-.pbd-printbar button{font:600 13px Inter,Arial,sans-serif;border:0;border-radius:8px;padding:8px 14px;cursor:pointer;background:${BRAND.brick};color:#fff}
+.pbd-printbar{position:sticky;top:0;z-index:2;display:flex;gap:10px;justify-content:center;padding:10px;background:${pal.primaryDeep};font:500 13px Inter,Arial,sans-serif;color:#fff}
+.pbd-printbar button{font:600 13px Inter,Arial,sans-serif;border:0;border-radius:8px;padding:8px 14px;cursor:pointer;background:${pal.accent};color:#fff}
 .pbd--print{margin:24px auto;max-width:8.5in;box-shadow:0 8px 30px rgba(8,17,52,.18)}
 @media print{html,body{background:#fff}.pbd-printbar{display:none}.pbd--print{margin:0;max-width:none;box-shadow:none}}
 </style></head><body>
@@ -520,24 +567,25 @@ ${renderPlaybookDocument(doc, { ...o, mode: 'print' })}
 /* ------------------------------------------------------------------ */
 
 export const PLAYBOOK_DOC_CSS = `
-.pbd{--navy:${BRAND.navy};--navy-deep:${BRAND.navyDeep};--brick:${BRAND.brick};--ink:${BRAND.ink};--muted:${BRAND.muted};--line:${BRAND.line};--wash:${BRAND.wash};
+.pbd{--pb-primary:${DEFAULT_PALETTE.primary};--pb-primary-deep:${DEFAULT_PALETTE.primaryDeep};--pb-accent:${DEFAULT_PALETTE.accent};--ink:${DEFAULT_PALETTE.ink};--muted:${DEFAULT_PALETTE.muted};--line:${DEFAULT_PALETTE.line};--wash:${DEFAULT_PALETTE.wash};
   background:#fff;color:var(--ink);font-family:Inter,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;font-size:15px;line-height:1.65;
   -webkit-font-smoothing:antialiased;border-radius:4px;overflow:hidden;position:relative;text-align:left}
 .pbd *{box-sizing:border-box}
 .pbd-logo{display:block;height:auto;width:190px;max-width:48%}
+.pbd-wordmark{display:block;font-family:Fraunces,Georgia,serif;font-size:22px;font-weight:700;color:var(--pb-primary);max-width:60%}
 .pbd-body{padding:28px 44px 12px;overflow-wrap:anywhere}
 .pbd-muted{color:var(--muted)}
 
 /* Internal documents: cover band */
-.pbd-cover{padding:26px 44px 22px;border-bottom:3px solid var(--brick);background:linear-gradient(180deg,#fff 0%,var(--wash) 100%)}
+.pbd-cover{padding:26px 44px 22px;border-bottom:3px solid var(--pb-accent);background:linear-gradient(180deg,#fff 0%,var(--wash) 100%)}
 .pbd-cover-top{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px}
 .pbd-cover .pbd-logo{width:150px}
 .pbd-eyebrow{display:flex;flex-direction:column;align-items:flex-end;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:600;text-align:right}
-.pbd-eyebrow b{color:var(--brick);font-size:12px;letter-spacing:.12em;margin-top:2px}
-.pbd-doc-title{font-family:Fraunces,Georgia,'Times New Roman',serif;font-weight:700;font-size:30px;line-height:1.15;color:var(--navy);margin:0;text-wrap:balance;letter-spacing:-.01em}
+.pbd-eyebrow b{color:var(--pb-accent);font-size:12px;letter-spacing:.12em;margin-top:2px}
+.pbd-doc-title{font-family:Fraunces,Georgia,'Times New Roman',serif;font-weight:700;font-size:30px;line-height:1.15;color:var(--pb-primary);margin:0;text-wrap:balance;letter-spacing:-.01em}
 .pbd-summary{margin:8px 0 0;color:var(--muted);font-size:15px;max-width:62ch}
 .pbd-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
-.pbd-meta span{font-size:11.5px;font-weight:600;color:var(--navy);background:#fff;border:1px solid var(--line);border-radius:999px;padding:2px 10px;text-transform:capitalize}
+.pbd-meta span{font-size:11.5px;font-weight:600;color:var(--pb-primary);background:#fff;border:1px solid var(--line);border-radius:999px;padding:2px 10px;text-transform:capitalize}
 
 /* Rep-only notes above a letter (screen only) */
 .pbd-notes{background:#fff8e6;border-bottom:1px solid #f0dfae;padding:14px 44px 4px;font-size:13.5px}
@@ -549,8 +597,8 @@ export const PLAYBOOK_DOC_CSS = `
 /* Letters: letterhead */
 .pbd-letterhead{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;padding:30px 48px 14px}
 .pbd-letterhead address{font-style:normal;font-size:12px;line-height:1.55;color:var(--muted);text-align:right}
-.pbd-letterhead address b{color:var(--navy);font-size:13px}
-.pbd-bars{padding:0 48px}.pbd-bars i{display:block;height:3px;background:var(--brick);border-radius:2px}.pbd-bars i+i{height:5px;background:var(--navy);margin-top:3px}
+.pbd-letterhead address b{color:var(--pb-primary);font-size:13px}
+.pbd-bars{padding:0 48px}.pbd-bars i{display:block;height:3px;background:var(--pb-accent);border-radius:2px}.pbd-bars i+i{height:5px;background:var(--pb-primary);margin-top:3px}
 .pbd--letter .pbd-body{padding:30px 60px 12px;font-size:15.5px}
 .pbd--letter .pbd-title{text-align:center}
 
@@ -558,40 +606,40 @@ export const PLAYBOOK_DOC_CSS = `
 .pbd-envelope{background:var(--wash);border-bottom:1px solid var(--line);padding:12px 20px;font-size:13px}
 .pbd-envelope div{display:flex;gap:10px;padding:2px 0}
 .pbd-envelope span{width:58px;flex-shrink:0;color:var(--muted);font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;padding-top:2px}
-.pbd-subject{font-weight:600;color:var(--navy)}
-.pbd-mailhead{padding:22px 36px 14px;border-bottom:3px solid var(--brick)}
+.pbd-subject{font-weight:600;color:var(--pb-primary)}
+.pbd-mailhead{padding:22px 36px 14px;border-bottom:3px solid var(--pb-accent)}
 .pbd-mailhead .pbd-logo{width:170px}
 .pbd--email .pbd-body{padding:26px 36px 8px}
-.pbd-mailfoot{background:var(--navy);color:#fff;padding:14px 36px;font-size:12.5px}
+.pbd-mailfoot{background:var(--pb-primary);color:#fff;padding:14px 36px;font-size:12.5px}
 .pbd-mailfoot p{margin:0}.pbd-mailfoot .pbd-cred{color:#c9d0e6;margin-top:4px;text-align:left}
 
 /* Body typography */
-.pbd-title{font-family:Fraunces,Georgia,serif;font-weight:700;font-size:27px;line-height:1.2;color:var(--navy);margin:0 0 16px;text-wrap:balance}
-.pbd-h2{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--brick);font-weight:700;margin:28px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--line)}
-.pbd-h3{font-family:Fraunces,Georgia,serif;font-size:19px;line-height:1.3;color:var(--navy);font-weight:600;margin:22px 0 6px;text-wrap:balance}
+.pbd-title{font-family:Fraunces,Georgia,serif;font-weight:700;font-size:27px;line-height:1.2;color:var(--pb-primary);margin:0 0 16px;text-wrap:balance}
+.pbd-h2{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--pb-accent);font-weight:700;margin:28px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--line)}
+.pbd-h3{font-family:Fraunces,Georgia,serif;font-size:19px;line-height:1.3;color:var(--pb-primary);font-weight:600;margin:22px 0 6px;text-wrap:balance}
 .pbd-body>:first-child{margin-top:0}
 .pbd-p{margin:0 0 14px;max-width:72ch}
 .pbd-salutation{margin-top:6px}
 .pbd-ps{color:var(--muted);font-style:italic;margin-top:18px}
-.pbd-say{position:relative;background:var(--wash);border-left:4px solid var(--navy);border-radius:0 10px 10px 0;padding:12px 16px 12px 18px;max-width:none}
+.pbd-say{position:relative;background:var(--wash);border-left:4px solid var(--pb-primary);border-radius:0 10px 10px 0;padding:12px 16px 12px 18px;max-width:none}
 .pbd-lead{margin:22px 0 10px;max-width:72ch}
-.pbd-lead-label{display:inline-block;background:var(--navy);color:#fff;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;border-radius:4px;padding:2px 8px;margin-right:8px;vertical-align:2px}
+.pbd-lead-label{display:inline-block;background:var(--pb-primary);color:#fff;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;border-radius:4px;padding:2px 8px;margin-right:8px;vertical-align:2px}
 .pbd-callout{background:#fbf1f0;border:1px solid #efd3d0;border-radius:10px;padding:10px 16px;margin:0 0 16px;font-size:14.5px}
-.pbd-callout-label{display:block;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--brick);font-weight:700;margin-bottom:2px}
+.pbd-callout-label{display:block;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--pb-accent);font-weight:700;margin-bottom:2px}
 .pbd-rule{border:0;border-top:1px solid var(--line);margin:20px 0}
 .pbd-or{display:flex;align-items:center;gap:10px;margin:4px 0 14px;color:var(--muted);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600}
 .pbd-or:before,.pbd-or:after{content:'';flex:1;border-top:1px dashed var(--line)}
 .pbd-links{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0 0 16px}
 .pbd-links-label{font-size:12px;color:var(--muted);margin-right:4px}
-.pbd-links .pbd-link{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;text-decoration:none;color:var(--navy);border:1px solid var(--line);border-radius:999px;padding:3px 12px 3px 10px;background:#fff}
-.pbd-links .pbd-link:before{content:'▶';font-size:9px;color:var(--brick)}
-.pbd-link{color:var(--navy);text-decoration:underline;text-underline-offset:2px}
+.pbd-links .pbd-link{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;text-decoration:none;color:var(--pb-primary);border:1px solid var(--line);border-radius:999px;padding:3px 12px 3px 10px;background:#fff}
+.pbd-links .pbd-link:before{content:'▶';font-size:9px;color:var(--pb-accent)}
+.pbd-link{color:var(--pb-primary);text-decoration:underline;text-underline-offset:2px}
 .pbd-tags{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 18px}
-.pbd-tags span{border:1.5px solid var(--navy);border-radius:8px;padding:4px 12px;font-weight:600;color:var(--navy);font-size:14px}
-.pbd-tags b{color:var(--brick);font-family:Fraunces,Georgia,serif;font-size:17px}
+.pbd-tags span{border:1.5px solid var(--pb-primary);border-radius:8px;padding:4px 12px;font-weight:600;color:var(--pb-primary);font-size:14px}
+.pbd-tags b{color:var(--pb-accent);font-family:Fraunces,Georgia,serif;font-size:17px}
 .pbd-signoff{margin:26px 0 16px;line-height:1.55}
-.pbd-sig-name{display:inline-block;font-family:Fraunces,Georgia,serif;font-size:20px;font-weight:600;color:var(--navy);margin-top:14px}
-.pbd strong{color:var(--navy)}
+.pbd-sig-name{display:inline-block;font-family:Fraunces,Georgia,serif;font-size:20px;font-weight:600;color:var(--pb-primary);margin-top:14px}
+.pbd strong{color:var(--pb-primary)}
 mark.pbd-blank{background:#fdf0c4;color:#7a4b00;border-radius:4px;padding:0 3px;font-weight:500}
 span.pbd-blank{display:inline-block;min-width:1.6in;border-bottom:1px solid #8a90a0;color:#9aa0ad;font-size:.7em;line-height:1.2;vertical-align:baseline;padding:0 4px}
 .pbd-fill{display:inline-block;min-width:1.1in;border-bottom:1px solid #8a90a0;height:1em;vertical-align:baseline;margin:0 2px}
@@ -601,25 +649,25 @@ span.pbd-blank{display:inline-block;min-width:1.6in;border-bottom:1px solid #8a9
 .pbd-list{margin:0 0 16px;padding-left:22px}
 .pbd-list .pbd-list{margin:6px 0 4px}
 .pbd-list li{margin:0 0 7px;padding-left:4px;max-width:72ch}
-ul.pbd-list>li::marker{color:var(--brick);font-size:1.05em}
-ul.pbd-list.pbd-d1>li::marker{color:var(--navy)}
+ul.pbd-list>li::marker{color:var(--pb-accent);font-size:1.05em}
+ul.pbd-list.pbd-d1>li::marker{color:var(--pb-primary)}
 ul.pbd-list.pbd-d1{list-style:circle}ul.pbd-list.pbd-d2{list-style:square}
-ol.pbd-list>li::marker{color:var(--brick);font-weight:700;font-family:Fraunces,Georgia,serif}
+ol.pbd-list>li::marker{color:var(--pb-accent);font-weight:700;font-family:Fraunces,Georgia,serif}
 .pbd-checks{list-style:none;padding-left:0}
 .pbd-checks .pbd-checks{padding-left:28px}
 .pbd-check-item{display:flex;gap:10px;align-items:flex-start;padding:7px 0 7px;margin:0!important;border-bottom:1px solid #eef0f5}
 .pbd-check-item:last-child{border-bottom:0}
-.pbd-box{flex-shrink:0;width:20px;height:20px;margin-top:2px;border:2px solid var(--navy);border-radius:5px;background:#fff;color:#fff;font:700 12px/16px Inter,Arial,sans-serif;text-align:center;padding:0;cursor:pointer}
-.pbd-check-item.is-done .pbd-box{background:var(--navy)}
+.pbd-box{flex-shrink:0;width:20px;height:20px;margin-top:2px;border:2px solid var(--pb-primary);border-radius:5px;background:#fff;color:#fff;font:700 12px/16px Inter,Arial,sans-serif;text-align:center;padding:0;cursor:pointer}
+.pbd-check-item.is-done .pbd-box{background:var(--pb-primary)}
 .pbd-check-item.is-done>span:last-child{color:#8a90a0;text-decoration:line-through;text-decoration-color:#b9bfcc}
 button.pbd-box:focus-visible{outline:3px solid #9fb3ea;outline-offset:2px}
 
 /* Footers */
 .pbd-foot{margin-top:18px;padding:14px 44px 18px;border-top:1px solid var(--line);font-size:11.5px;color:var(--muted);display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px 16px}
-.pbd-foot p{margin:0}.pbd-foot b{color:var(--navy)}
+.pbd-foot p{margin:0}.pbd-foot b{color:var(--pb-primary)}
 .pbd-foot--letter{display:block;text-align:center;padding:14px 48px 22px;border-top:0;position:relative}
-.pbd-foot--letter:before{content:'';display:block;height:3px;background:var(--brick);margin:0 0 12px;border-radius:2px}
-.pbd-cred{margin:0 0 3px;font-size:11.5px;color:var(--navy);font-weight:500;text-align:center}
+.pbd-foot--letter:before{content:'';display:block;height:3px;background:var(--pb-accent);margin:0 0 12px;border-radius:2px}
+.pbd-cred{margin:0 0 3px;font-size:11.5px;color:var(--pb-primary);font-weight:500;text-align:center}
 
 /* Small screens */
 @media (max-width:640px){
@@ -642,6 +690,6 @@ button.pbd-box:focus-visible{outline:3px solid #9fb3ea;outline-offset:2px}
   .pbd-h2,.pbd-h3,.pbd-title{break-after:avoid}
   .pbd-say{background:#f4f6fb!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .pbd-lead-label,.pbd-mailfoot,.pbd-bars i,.pbd-check-item.is-done .pbd-box{-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  a.pbd-link{text-decoration:none;color:var(--navy)}
+  a.pbd-link{text-decoration:none;color:var(--pb-primary)}
 }
 `;

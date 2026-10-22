@@ -5,7 +5,7 @@
  * blob, autosaved draft → locked submit → JobTread comment), with one extra
  * field type: 'verify', an inspection point answered Pass / Issue / N/A.
  *
- * What it exists to catch, in James's words: nails, any damage or defect,
+ * What it exists to catch, in the owner's words: nails, any damage or defect,
  * and anything the crew left behind. Every Issue must carry a note, and on
  * submit each one becomes a follow-up so it can't be forgotten.
  */

@@ -6,9 +6,10 @@
  * but the vents and the metal; CeDur, DaVinci, Union Corrugating and DECRA
  * make the top layer (and their own starter / ridge / trim) and nothing
  * underneath it, so those packages sit on CertainTeed's underlayments and
- * vents — James's call (2026-09-14), one brand he is already credentialed
- * with. Where NO manufacturer makes the piece (drip edge, step flashing,
- * pipe boots), the step says so plainly and names it as BRN-supplied.
+ * vents (decided 2026-09-14: one brand a roofer is most likely to be
+ * credentialed with). Where NO manufacturer makes the piece (drip edge, step
+ * flashing, pipe boots), the step says so plainly and names it as supplied by
+ * the company doing the work (COMPANY_SUPPLIED, shown as its name).
  *
  * Product names are spelled the way the manufacturer prints them. Every
  * `spec` line is a figure the manufacturer publishes on its own site — no
@@ -19,8 +20,8 @@
  * other product.
  *
  * Images are self-hosted under client/public/roof-systems/ (served by the
- * app's own static host). Site photos were pulled with James's sign-off
- * while he clears rights with each manufacturer (TAMKO and DECRA license
+ * app's own static host). Site photos were pulled while rights are being
+ * cleared with each manufacturer (TAMKO and DECRA license
  * contractor use outright; CertainTeed / Duro-Last / CeDur / Westlake want
  * written permission or their contractor-portal assets; GAF's own
  * guidelines point certified contractors at Partner Portal assets — its
@@ -29,6 +30,7 @@
  */
 import type { ProductKey, RoofingProduct } from './roofing-products.js';
 import type { CommercialProductKey } from './commercial-products.js';
+import { companyBrand } from './company-brand.js';
 
 export type ComponentRole =
   | 'drip-edge' | 'ice-water' | 'underlayment' | 'starter' | 'field' | 'hip-ridge'
@@ -42,7 +44,7 @@ export interface RoofSystemComponent {
   step: string;
   /** The product, spelled as the manufacturer prints it. May carry HTML entities. */
   name: string;
-  /** Who makes it. "Best Roofing Now" when no manufacturer in the package does. */
+  /** Who makes it. COMPANY_SUPPLIED when no manufacturer in the package does (shown as the company's name, makerName). */
   maker: string;
   /** What it is and why it is there. Plain English, no jargon. */
   plain: string;
@@ -69,26 +71,39 @@ export interface RoofSystem {
  * also mailed, printed, and rendered outside it. REPORT_ASSET_BASE lets a
  * preview deployment point at itself.
  */
-export const ASSET_BASE = (process.env.REPORT_ASSET_BASE || 'https://app.bestroofingnow.com').replace(/\/$/, '');
+export const ASSET_BASE = (process.env.REPORT_ASSET_BASE || process.env.APP_BASE_URL || '').replace(/\/$/, '');
 export function assetUrl(path: string): string {
   return `${ASSET_BASE}/roof-systems/${path}`;
 }
 
 /* ------------------------------------------------------- shared parts --- */
 
-const BRN = 'Best Roofing Now';
+/**
+ * The maker of a part no manufacturer in the package makes: the company doing
+ * the work supplies it. Data here is built once at load, before any company is
+ * known, so it carries this marker and makerName() turns it into the name.
+ */
+export const COMPANY_SUPPLIED = '@company';
+
+/** True when the company doing the work supplies the part itself. */
+export const isCompanySupplied = (c: Pick<RoofSystemComponent, 'maker'>): boolean => c.maker === COMPANY_SUPPLIED;
+
+/** Who makes a part, for display: the manufacturer, or the current company's name. */
+export function makerName(c: Pick<RoofSystemComponent, 'maker'>): string {
+  return isCompanySupplied(c) ? companyBrand().displayName : c.maker;
+}
 
 /** No manufacturer in any residential package makes drip edge. */
 const dripEdge = (why: string): RoofSystemComponent => ({
   role: 'drip-edge', step: 'Metal edge on every eave and rake',
-  name: 'Metal drip edge', maker: BRN,
+  name: 'Metal drip edge', maker: COMPANY_SUPPLIED,
   plain: `${why} A corrosion-resistant metal edge goes on first along the bottom of every slope and up every side edge. It covers the cut end of the wood deck and kicks water out into the gutter instead of letting it wick back under the roof.`,
   image: null,
 });
 
 const flashing = (extra = ''): RoofSystemComponent => ({
   role: 'flashing', step: 'Seal every wall, chimney and pipe',
-  name: 'Step flashing, counter-flashing and pipe boots', maker: BRN,
+  name: 'Step flashing, counter-flashing and pipe boots', maker: COMPANY_SUPPLIED,
   plain: `Everywhere the roof meets something that is not roof &mdash; a wall, a chimney, a plumbing vent &mdash; gets new metal flashing woven into the courses and a new boot around each pipe. These are where most roof leaks actually start, so nothing here is reused from the old roof.${extra ? ' ' + extra : ''}`,
   image: null,
 });
@@ -279,7 +294,7 @@ const TAMKO_SYSTEM: RoofSystem = {
     flashing(),
     {
       role: 'exhaust', step: 'Let the attic breathe out at the peak',
-      name: 'Continuous ridge vent', maker: BRN,
+      name: 'Continuous ridge vent', maker: COMPANY_SUPPLIED,
       plain: 'TAMKO does not currently sell a ridge vent, so we supply a low-profile vent that runs the length of the peak under the cap. TAMKO does require the attic to be ventilated to keep the shingle warranty in force, so this step is not optional.',
       spec: 'TAMKO requires 1 sq ft of net free vent area per 150 sq ft of attic floor (1/300 with balanced high and low venting), with equal or greater intake at the soffits (TAMKO).',
       image: null,
@@ -423,7 +438,7 @@ const CEDUR_SYSTEM: RoofSystem = {
     },
     {
       role: 'fasteners', step: 'Nail it the way CeDur specifies',
-      name: 'Hot-dipped galvanized ring-shank roofing nails', maker: BRN,
+      name: 'Hot-dipped galvanized ring-shank roofing nails', maker: COMPANY_SUPPLIED,
       plain: 'CeDur is specific about the nail, and so are we: a ring-shank nail that will not back out of the deck as the roof heats and cools.',
       spec: '1-3/4" hot-dipped galvanized ring-shank, 11 gauge, 5/16" head; roughly 400 nails per square; flashing metal no lighter than 26 gauge (CeDur).',
       image: null,
@@ -510,7 +525,7 @@ export function roofSystemFor(product: Pick<RoofingProduct, 'key'> | ProductKey 
 /**
  * GAF product-page photos, captured from the rendered page (the CDN refuses
  * any non-browser client). GAF's contractor guidelines prefer Partner Portal
- * assets — swap these for those when James pulls them.
+ * assets — swap these for those once they are pulled.
  */
 const GAF_TPO_SYSTEM: RoofSystem = {
   maker: 'GAF',
@@ -587,7 +602,7 @@ function duroLastSystem(layover: boolean): RoofSystem {
       layover
         ? {
             role: 'prep', step: 'Prepare the existing roof',
-            name: 'Existing roof surveyed, repaired and separated', maker: BRN,
+            name: 'Existing roof surveyed, repaired and separated', maker: COMPANY_SUPPLIED,
             plain: 'On a layover the old roof stays. We core-sample it for trapped moisture, replace any wet insulation, and lay a separation sheet so the new system never touches the old surface directly.',
             image: null,
           }

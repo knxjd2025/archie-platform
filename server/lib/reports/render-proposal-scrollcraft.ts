@@ -3,8 +3,7 @@
  *
  * Unlike a normal scroll-craft build this is NOT one static page: it is a
  * TEMPLATE a specific job's real data is poured into every time a rep
- * generates a Proposal (see scrollcraft/builds/brn-proposal/BRIEF.md for the
- * full interview this was built from). The design system, chapters and
+ * generates a Proposal. The design system, chapters and
  * bespoke devices are fixed; the customer name, address, damage photos,
  * storm history and Good/Better/Best pricing are not.
  *
@@ -519,7 +518,7 @@ export const PAGE_CSS = `
 :root {
   --sc-canvas: #F7F4EE; --sc-surface: #FFFFFF;
   --sc-ink: #17130F; --sc-ink-soft: #6B6259;
-  --sc-accent: #C8102E; --sc-accent-ink: #FFFFFF;
+  --sc-accent: #1F3A5F; --sc-accent-ink: #FFFFFF;
   --sc-font-display: 'Fraunces', Georgia, serif;
   --sc-font-text: 'Archivo', system-ui, sans-serif;
 }
@@ -736,7 +735,7 @@ export const PAGE_JS = `
     document.documentElement.setAttribute('data-tier', tier);
   }
   tabs.forEach(function (t) { t.addEventListener('click', function () { select(t.dataset.tier); track({ selectedTier: t.dataset.tier }); }); });
-  document.addEventListener('brn:select-tier', function (e) { var tier = e.detail && e.detail.tier; if (tier) { select(tier); track({ selectedTier: tier }); } });
+  document.addEventListener('report:select-tier', function (e) { var tier = e.detail && e.detail.tier; if (tier) { select(tier); track({ selectedTier: tier }); } });
 
   var invSeen = false;
   if (invCount && 'IntersectionObserver' in window) {

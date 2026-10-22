@@ -14,7 +14,7 @@ import { serviceTierRateOk, SERVICE_TIER_RATE_MIN, SERVICE_TIER_RATE_MAX } from 
 
 const base: any = {
   id: 'svc', generatedAt: '2026-10-05T12:00:00.000Z',
-  property: { address: '9 Test Ln', city: 'Charlotte', state: 'NC' },
+  property: { address: '9 Test Ln', city: 'Springfield', state: 'IL' },
   damageAnalysis: { totalPhotosAnalyzed: 0, photos: [] },
   repairEstimate: { lineItems: [], total: 0, notes: [] },
 };

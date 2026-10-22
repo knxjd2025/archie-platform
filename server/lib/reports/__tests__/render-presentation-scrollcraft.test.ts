@@ -2,11 +2,14 @@ import { describe, it, expect } from 'vitest';
 import { renderPresentationScrollcraftHtml } from '../render-presentation-scrollcraft';
 import { applyReplacementPricing } from '../estimate-replacement';
 import { usd } from '../report-theme';
+import { withProfile } from '../../../tenant/context';
+import { TEST_PROFILE } from '../../../__tests__/helpers/tenant';
+import { FORMER_COMPANY } from './profiles';
 
 const baseReport: any = {
   id: 'r1',
   generatedAt: '2026-09-06T00:00:00Z',
-  property: { address: '550 Manning Dr', city: 'Charlotte', state: 'NC', zip: '28202' },
+  property: { address: '550 Manning Dr', city: 'Springfield', state: 'IL', zip: '62701' },
   damageAnalysis: {
     totalPhotosAnalyzed: 3,
     photos: [
@@ -158,16 +161,26 @@ describe('renderPresentationScrollcraftHtml', () => {
     expect(html).not.toContain('>Chimney<');
   });
 
-  it('embeds a real interactive project map (fed by this app\'s own proxy, not a link-out) and the real HFS Financial financing application, with no invented numbers', () => {
-    const html = renderPresentationScrollcraftHtml(priced(), {});
-    expect(html).toContain('id="ch-our-work"');
-    expect(html).toContain('data-brn-map-container');
-    expect(html).toContain("fetch('/api/projects-map')"); // same-origin proxy, not a direct cross-origin call
-    expect(html).toContain('https://www.bestroofingnow.com/projects/'); // per-pin "See Photos" link target
+  it("carries the company's own financing link, and leaves out the map and financing a company does not have", () => {
+    const html = withProfile(TEST_PROFILE, () => renderPresentationScrollcraftHtml(priced(), {}));
     expect(html).toContain('id="ch-financing"');
-    expect(html).toContain('https://www.hfsfinancial.net/promo/6a9220ac271898d8cd349096');
+    expect(html).toContain('https://lender.test/apply');
     expect(html).not.toMatch(/\d+(\.\d+)?%\s*APR/i);
     expect(html).not.toMatch(/\$\d+\s*\/\s*mo/i);
+    // No per-company project feed yet, so no "Our Work" map for anyone.
+    expect(html).not.toContain('id="ch-our-work"');
+    const bare = renderPresentationScrollcraftHtml(priced(), {});
+    expect(bare).not.toContain('id="ch-financing"');
+    expect(bare).not.toContain('id="ch-our-work"');
+  });
+
+  it('is the current company\'s document, with no other company in it', () => {
+    const html = withProfile(TEST_PROFILE, () => renderPresentationScrollcraftHtml(priced(), {}));
+    expect(html).toContain('Acme Roofing');
+    expect(html).toContain('--brand:#225588');
+    expect(html).not.toMatch(FORMER_COMPANY);
+    const bare = renderPresentationScrollcraftHtml(priced(), {});
+    expect(bare).not.toMatch(FORMER_COMPANY);
   });
 
   // Caught by an actual narrow-viewport render (390px, iframe-isolated so
@@ -180,20 +193,5 @@ describe('renderPresentationScrollcraftHtml', () => {
   it('stacks the At a Glance stat grid to one column on narrow viewports', () => {
     const html = renderPresentationScrollcraftHtml(priced(), {});
     expect(html).toMatch(/@media \(max-width: 480px\) \{ \.obj-stats \{ grid-template-columns: 1fr; \} \}/);
-  });
-
-  // The project map defaults to a genuine Charlotte-area view (zoom 11,
-  // centered on Charlotte) rather than fitBounds() over every marker —
-  // confirmed live that fitBounds zoomed out to a multi-state view because
-  // the real dataset has bad-geocode outliers (one 400 miles away in
-  // Louisville KY). Gestures are "greedy" so one finger pans and the wheel
-  // zooms in an embedded report without Google's "use two fingers" overlay.
-  it('defaults the project map to a Charlotte-area view with reliable, always-on zoom/pan', () => {
-    const html = renderPresentationScrollcraftHtml(priced(), {});
-    expect(html).toContain('zoom: 11');
-    expect(html).toContain('lat: 35.2271, lng: -80.8431');
-    expect(html).toContain("gestureHandling: 'greedy'");
-    expect(html).toContain('maps.googleapis.com/maps/api/js');
-    expect(html).not.toMatch(/openstreetmap/i);
   });
 });

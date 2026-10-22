@@ -6,6 +6,7 @@
  * a claim is approved, owed, or covered.
  */
 import { esc } from './report-theme.js';
+import { companyBrand } from './company-brand.js';
 import type { StormReport, StormEvent } from './storm-history-service.js';
 import { getHailSizeLevel } from './storm-history-service.js';
 
@@ -131,8 +132,8 @@ export function renderStormSection(report: StormReport, opts: StormSectionOption
     : '';
 
   const claimNote = recommendClaim
-    ? `<p style="margin:14px 0 0">Best Roofing Now works directly with insurance adjusters every week. If you choose to file, we will meet your adjuster on the roof, walk the documented damage with them, and make sure nothing is missed. Filing a claim is your decision, and approval is always up to your carrier — but the storm history and the damage on your roof give you a well-supported case.</p>`
-    : `<p style="margin:14px 0 0">This is why we recommend staying ahead of small problems — a sealed, maintained roof handles weather like this far better than one that's been let go. If a future storm ever does real damage, document it and give us a call; we work with adjusters every week and can tell you honestly whether it's worth a claim.</p>`;
+    ? `<p style="margin:14px 0 0">${esc(companyBrand().displayName)} works directly with insurance adjusters. If you choose to file, we will meet your adjuster on the roof, walk the documented damage with them, and make sure nothing is missed. Filing a claim is your decision, and approval is always up to your carrier — but the storm history and the damage on your roof give you a well-supported case.</p>`
+    : `<p style="margin:14px 0 0">This is why we recommend staying ahead of small problems — a sealed, maintained roof handles weather like this far better than one that's been let go. If a future storm ever does real damage, document it and give us a call; we can tell you honestly whether it's worth a claim.</p>`;
 
   return `<section class="sec">
     <div class="sec-head"><h2>Storm &amp; Weather History</h2><span class="n">${swdiContributed ? 'NOAA / NWS verified records' : 'NWS storm records'}</span></div>

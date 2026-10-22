@@ -249,9 +249,10 @@ export const stamp = (iso: string | null | undefined, tz = 'America/New_York'): 
  * The signature block appended to the document itself — what a homeowner
  * expects to see at the bottom of something they signed. The audit detail
  * (IP, device, coordinates) is not here; it goes on its own page, so the
- * document reads like a document.
+ * document reads like a document. `companyName` is the company's own name,
+ * printed beside a company signer; with none, the signer's name stands alone.
  */
-export function signatureBlockHtml(signers: SignerView[]): string {
+export function signatureBlockHtml(signers: SignerView[], companyName = ''): string {
   const cells = signers.map((s) => {
     const mark = s.signatureImage
       ? `<img src="data:image/jpeg;base64,${s.signatureImage}" alt="Signature of ${escapeHtml(s.name)}" style="max-height:54px;max-width:260px;display:block">`
@@ -260,7 +261,7 @@ export function signatureBlockHtml(signers: SignerView[]): string {
     return `<td style="vertical-align:top;padding:0 18px 0 0;min-width:240px">
       <div style="min-height:58px">${s.signedAt ? mark : '<span style="color:#999">Not yet signed</span>'}</div>
       <div style="border-top:1px solid #333;padding-top:5px;font-size:12px">
-        <b>${escapeHtml(s.name)}</b>${s.role === 'company' ? ' — Best Roofing Now' : ''}<br>
+        <b>${escapeHtml(s.name)}</b>${s.role === 'company' && companyName ? ` — ${escapeHtml(companyName)}` : ''}<br>
         ${s.signedAt ? `Signed ${escapeHtml(stamp(s.signedAt))}` : ''}
         ${where ? `<br><span style="color:#666">${escapeHtml(where)}</span>` : ''}
       </div></td>`;

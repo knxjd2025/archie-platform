@@ -9,7 +9,7 @@ import { brandStyleTag, companyBrand, documentMetaTags } from './company-brand.j
 import { MOBILE_CSS, MOBILE_JS } from './sections/mobile.js';
 
 export const THEME_CSS = `
-  :root{--paper:#FBF7F1;--card:#fff;--ink:#211A14;--muted:#6B6055;--line:#E7DECF;--red:#C8102E;--fire:#EE4B2B;--green:#2E7D52;--gold:#B8860B;color-scheme:light}
+  :root{--paper:#FBF7F1;--card:#fff;--ink:#211A14;--muted:#6B6055;--line:#E7DECF;--red:#1F3A5F;--fire:#EE4B2B;--green:#2E7D52;--gold:#B8860B;color-scheme:light}
   *{box-sizing:border-box}html,body{margin:0;padding:0}
   body{background:var(--paper);color:var(--ink);font-family:'Inter',-apple-system,'Segoe UI',Roboto,sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased}
   .page{max-width:940px;margin:0 auto;padding:0 22px 60px}

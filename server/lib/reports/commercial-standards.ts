@@ -5,7 +5,7 @@
  * source and set `verifiedOn`. Until then the report makes the argument in
  * plain English and the citation stays off the page.
  *
- * Section numbers below are DRAFTS for James to check against the 2018 NC
+ * Section numbers below are DRAFTS for the company to check against the 2018 NC
  * Building Code (IBC 2015 base) and the 2018 NC Energy Conservation Code —
  * see COMMERCIAL_STANDARDS_REVIEW.md. Do not set verifiedOn from memory.
  */
@@ -25,7 +25,7 @@ export type CommercialStandardKey =
  * (2015 IBC base) and 2018 NC Energy Conservation Code as rendered on
  * UpCodes / OSFM material. The 2024 NC codes (2021 IBC base) are adopted
  * but were not confirmed effective; when they are, §1511 becomes §1512.
- * Every entry stays unverified until James checks it against the printed code.
+ * Every entry stays unverified until someone checks it against the printed code.
  */
 export const COMMERCIAL_STANDARDS: Record<CommercialStandardKey, StandardRef> = {
   'recover-limits': { cite: 'Section 1511.3.1.1', title: 'A roof recover is not permitted where the existing roof is water-soaked or deteriorated, or has two or more applications of any roof covering', verifiedOn: null },
@@ -37,7 +37,7 @@ export const COMMERCIAL_STANDARDS: Record<CommercialStandardKey, StandardRef> = 
   'fire-class': { cite: 'Section 1505.1 — ASTM E108 / UL 790', title: 'Roof assemblies classified A, B or C by ASTM E108 or UL 790; minimum class by construction type per Table 1505.1', verifiedOn: null },
   'wind-uplift': { cite: 'Section 1504.1 / Chapter 16 — FM 4474, UL 580, UL 1897', title: 'Roof decks and coverings designed for the Chapter 16 (ASCE 7) wind loads; uplift resistance by an approved test method', verifiedOn: null },
   'equipment-guards': { cite: 'Section 1015.6', title: 'Guards where serviceable rooftop equipment sits within 10 ft of an edge more than 30 in above the surface below (or ANSI/ASSE Z359.1 anchorage in lieu)', verifiedOn: null },
-  'energy-r-value': { cite: '2018 NC Energy Conservation Code Table C402.1.3 / C402.1.4', title: 'Climate Zone 3 (Charlotte): insulation entirely above deck R-25ci, or U-0.039', verifiedOn: null },
+  'energy-r-value': { cite: '2018 NC Energy Conservation Code Table C402.1.3 / C402.1.4', title: 'Climate Zone 3: insulation entirely above deck R-25ci, or U-0.039', verifiedOn: null },
   'energy-reroof': { cite: '2018 NC Energy Conservation Code C503.1, Exception e', title: 'Roof recover and roof replacement that leave the building no less conforming are exempt from the alteration provisions — an insulation upgrade is a recommendation, not a mandate (NC amendment; the model IECC C503.3.1 trigger is not adopted)', verifiedOn: null },
   'energy-cool-roof': { cite: '2018 NC Energy Conservation Code C402.3 / Table C402.3', title: 'Low-slope roofs over cooled space in Climate Zones 1–3: 3-year aged solar reflectance 0.55 and emittance 0.75, or aged SRI 64 (exceptions for ballast, PV, shaded areas, metal building roofs)', verifiedOn: null },
   'energy-exempt-fsu': { cite: '2018 NC Energy Conservation Code C101.2, Exception 2 (G.S. 143-138(b18))', title: 'No energy-code provisions apply to a building whose primary occupancy is Group F, S or U — most warehouses and factories', verifiedOn: null },
@@ -58,7 +58,7 @@ export function printableCommercialRefs(keys: CommercialStandardKey[]): Standard
   return keys.map((k) => COMMERCIAL_STANDARDS[k]).filter((r) => !!r.verifiedOn);
 }
 
-/** James's worksheet rows. */
+/** The review worksheet rows. */
 export function commercialStandardsReviewSheet(): Array<{ key: string; cite: string; title: string; verifiedOn: string | null }> {
   return (Object.keys(COMMERCIAL_STANDARDS) as CommercialStandardKey[]).map((key) => ({ key, ...COMMERCIAL_STANDARDS[key] }));
 }

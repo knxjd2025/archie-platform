@@ -2,7 +2,7 @@
  * Turn the rep's chosen scope items into priced estimate lines, and pick
  * them back out of a report for rendering.
  *
- * Pricing rule (decided with James, 2026-09-14): a rep gets the catalog
+ * Pricing rule (2026-09-14): a rep gets the catalog
  * price; a Sales Leader or above may override a price or add an item the
  * catalog does not have. Enforced here, with the caller's role, never by
  * what the client chose to send.

@@ -68,7 +68,7 @@ function routeHandler(method: 'get' | 'put' | 'post', path: string) {
       send: (b: unknown) => { body = b; return res; },
       set: () => res,
     });
-    await handler({ headers: {}, query: {}, body: {}, session: { user: { email: 'rep@bestroofingnow.com', name: 'Rep', role: 'sales' } }, ...req }, res);
+    await handler({ headers: {}, query: {}, body: {}, session: { user: { email: 'rep@acme.test', name: 'Rep', role: 'sales' } }, ...req }, res);
     return { status, body };
   };
 }

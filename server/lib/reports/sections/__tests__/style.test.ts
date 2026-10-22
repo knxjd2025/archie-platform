@@ -54,7 +54,7 @@ describe('the two CSS bundles', () => {
 
   it('keeps the CTA a button, the way the live page renders it', () => {
     // render-presentation-scrollcraft.ts:660-661 styles .cta-tel a as a solid
-    // pill. Downgrading it to a text link would quietly demote the HFS Financial
+    // pill. Downgrading it to a text link would quietly demote the financing
     // and phone CTAs on a document already going to customers.
     for (const css of [SECTION_CSS_SCROLL, SECTION_CSS_DOCUMENT]) {
       expect(css).toContain('border-radius');

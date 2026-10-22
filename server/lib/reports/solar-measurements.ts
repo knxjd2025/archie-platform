@@ -2,7 +2,7 @@
  * Google Solar API roof measurements for proposals.
  *
  * Geocodes the address, calls buildingInsights:findClosest, and returns roof
- * area in squares plus an installed (+waste) figure. James's rule: billable
+ * area in squares plus an installed (+waste) figure. The rule: billable
  * squares = measured squares + 15% (waste, starter, hip/ridge, cut-in).
  *
  * Env: GOOGLE_MAPS_API_KEY (Geocoding + Solar API enabled); see google-key.ts.

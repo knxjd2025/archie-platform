@@ -9,10 +9,12 @@ import { renderProposalScrollcraftHtml } from '../render-proposal-scrollcraft';
 import { renderPresentationScrollcraftHtml } from '../render-presentation-scrollcraft';
 import { applyReplacementPricing } from '../estimate-replacement';
 import type { TierSelection } from '../roofing-products';
+import { withProfile } from '../../../tenant/context';
+import { CREDENTIALED_PROFILE, BARE_PROFILE } from './profiles';
 
 const report = (extra: any = {}): any => ({
   id: 'r-n', generatedAt: '2026-09-14T00:00:00Z',
-  property: { address: '4 Narrative Way', city: 'Charlotte', state: 'NC' },
+  property: { address: '4 Narrative Way', city: 'Springfield', state: 'IL' },
   stormHistory: { yearsAnalyzed: 3, searchRadiusMiles: 5, totalEvents: 4, hailEvents: 3, windEvents: 1, tornadoEvents: 0, largestHailInches: 1.5, highestWindMph: 62, riskLevel: 'high', riskScore: 70, claimPotential: 'high', eventsByYear: { 2025: { hail: 2, wind: 1, total: 3 }, 2024: { hail: 1, wind: 0, total: 1 } }, recommendedDateOfLoss: { date: '2025-05-20', eventType: 'Hail', magnitude: '1.5" hail', reason: 'largest' } },
   damageAnalysis: {
     totalPhotosAnalyzed: 2, photosWithDamage: 2, overallSeverity: 'high', roofAge: { estimatedAgeYears: 14, expectedLifespanYears: 25, remainingLifeYears: 11, confidence: 'medium', indicators: [], roofMaterial: 'asphalt_architectural', materialCondition: 'fair' },
@@ -120,10 +122,13 @@ describe('narrative rendering', () => {
 });
 
 describe('warranty follows the product', () => {
-  it('CertainTeed keeps the 50/15 claim; metal and synthetics get no invented number', () => {
-    const ct = warrantyFor(productByKey('landmark_pro')!);
+  it('CertainTeed keeps the 50-year claim for a credentialed company; metal and synthetics get no invented number', () => {
+    const ct = withProfile(CREDENTIALED_PROFILE, () => warrantyFor(productByKey('landmark_pro')!));
     expect(ct.manufacturerYears).toBe(50);
+    expect(ct.workmanshipYears).toBe(15);
     expect(ct.certainteed).toBe(true);
+    // A company without the credential cannot register the extended coverage, so no figure.
+    expect(withProfile(BARE_PROFILE, () => warrantyFor(productByKey('landmark_pro')!)).manufacturerYears).toBeNull();
     const metal = warrantyFor(productByKey('standing_seam_metal')!);
     expect(metal.manufacturerYears).toBeNull();
     expect(metal.certainteed).toBe(false);
@@ -134,12 +139,12 @@ describe('warranty follows the product', () => {
 
   it('a metal proposal does not print the 50-year CertainTeed seal or the Integrity System copy', () => {
     const tiers = { good: 'landmark', better: 'standing_seam_metal', best: 'landmark_presidential' } as TierSelection;
-    const html = renderProposalScrollcraftHtml(applyReplacementPricing(report(), { tierSelection: tiers, squares: 30, selectedTier: 'better' }), { customer: 'T' });
+    const html = withProfile(CREDENTIALED_PROFILE, () => renderProposalScrollcraftHtml(applyReplacementPricing(report(), { tierSelection: tiers, squares: 30, selectedTier: 'better' }), { customer: 'T' }));
     expect(html).not.toContain('data-sc-count="0 50"');
     expect(html).toContain('What Stands Behind It');
     expect(html).toContain('data-sc-count="0 15"');
     expect(html).not.toContain('SureStart');
-    const shingle = renderProposalScrollcraftHtml(applyReplacementPricing(report(), { tierSelection: tiers, squares: 30, selectedTier: 'good' }), { customer: 'T' });
+    const shingle = withProfile(CREDENTIALED_PROFILE, () => renderProposalScrollcraftHtml(applyReplacementPricing(report(), { tierSelection: tiers, squares: 30, selectedTier: 'good' }), { customer: 'T' }));
     expect(shingle).toContain('data-sc-count="0 50"');
     expect(shingle).toContain('The Integrity Roof System');
   });

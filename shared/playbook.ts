@@ -4,6 +4,7 @@
  * uses and the logic that fills them from the rep, the customer and the office.
  */
 import library from './playbook/library.json';
+import type { CompanyProfile } from './company';
 
 export type PlaybookGroup = 'process' | 'scripts' | 'objections' | 'letters' | 'emails' | 'productivity';
 export type PlaybookKind = 'checklist' | 'guide' | 'script' | 'letter' | 'email' | 'reference';
@@ -47,11 +48,20 @@ export interface FillContext {
   repTitle?: string | null;
   customerName?: string | null;
   customerAddress?: string | null;
-  /** Street name without the house number, e.g. "Mallard Creek Road". */
+  /** Street name without the house number, e.g. "Elm Street". */
   street?: string | null;
   cityState?: string | null;
   neighborhood?: string | null;
   companyName?: string | null;
+  /** Name for letterheads and footers, e.g. "Acme Roofing LLC". */
+  companyLegalName?: string | null;
+  /** "City, ST" of the office, for letter footers. */
+  companyCityState?: string | null;
+  /** Absolute logo URL from the company's profile. */
+  companyLogoUrl?: string | null;
+  /** The company's brand colors (#rrggbb) for the printed and emailed document. */
+  brandColor?: string | null;
+  accentColor?: string | null;
   companyWebsite?: string | null;
   officePhone?: string | null;
   credentials?: string | null;
@@ -61,13 +71,27 @@ export interface FillContext {
   date?: string | null;
 }
 
-export const COMPANY_DEFAULTS = {
-  companyName: 'Best Roofing Now',
-  companyWebsite: 'bestroofingnow.com',
-  officePhone: '(704) 605-6047',
-  warrantyLength: '15-year workmanship',
-  credentials: 'a CertainTeed ShingleMaster, GAF Certified and Owens Corning Preferred contractor, Angi Super Service Award winner 2021–2023, 5.0★ on Google',
-};
+/**
+ * What a template can say about the company, from its profile. Only what the
+ * company entered: a placeholder it has no value for (credentials, warranty)
+ * stays in brackets for the rep, never filled with someone else's claim.
+ */
+export function companyFillFrom(p: CompanyProfile): Pick<FillContext,
+  'companyName' | 'companyLegalName' | 'companyCityState' | 'companyLogoUrl' | 'brandColor' | 'accentColor' | 'companyWebsite' | 'officePhone' | 'warrantyLength' | 'credentials' | 'reviewLink'> {
+  return {
+    companyName: p.displayName || null,
+    companyLegalName: p.legalName || null,
+    companyCityState: p.cityState || null,
+    companyLogoUrl: p.logoUrl || null,
+    brandColor: p.colors.primary,
+    accentColor: p.colors.accent,
+    companyWebsite: p.websiteLabel || null,
+    officePhone: p.phone || null,
+    warrantyLength: p.workmanshipWarranty || (p.workmanshipYears ? `${p.workmanshipYears}-year workmanship` : null),
+    credentials: p.credentials.length ? p.credentials.join(', ') : null,
+    reviewLink: p.reviewUrl || null,
+  };
+}
 
 function firstName(full?: string | null): string | null {
   if (!full) return null;
@@ -86,6 +110,7 @@ const FILL_RULES: { test: RegExp; value: (c: FillContext) => string | null | und
   { test: /^(your\s*name|name|rep\s*name)$/i, value: (c) => c.repName },
   { test: /^(your\s*)?(cell\s*(phone)?\s*#?|phone(\s*number)?|insert\s*phone|rep\s*cell)$/i, value: (c) => c.repCell || c.officePhone },
   { test: /^(your\s*phone\s*number)$/i, value: (c) => c.repCell || c.officePhone },
+  { test: /^office\s*phone$/i, value: (c) => c.officePhone },
   { test: /^(insert\s*your\s*)?(your\s*)?e-?mail(\s*address)?$/i, value: (c) => c.repEmail },
   { test: /^rep\s*email$/i, value: (c) => c.repEmail },
   { test: /^(your\s*job\s*)?title$/i, value: (c) => c.repTitle },
@@ -106,8 +131,8 @@ const FILL_RULES: { test: RegExp; value: (c: FillContext) => string | null | und
 ];
 
 export function signatureBlock(c: FillContext): string {
-  const company = c.companyName || COMPANY_DEFAULTS.companyName;
-  return [c.repName, c.repTitle ? `${c.repTitle}, ${company}` : company, c.repCell ? `Cell: ${c.repCell}` : null, c.officePhone ? `Office: ${c.officePhone}` : null, c.repEmail, c.companyWebsite]
+  const company = c.companyName || null;
+  return [c.repName, c.repTitle ? [c.repTitle, company].filter(Boolean).join(', ') : company, c.repCell ? `Cell: ${c.repCell}` : null, c.officePhone ? `Office: ${c.officePhone}` : null, c.repEmail, c.companyWebsite]
     .filter(Boolean)
     .join('\n');
 }
@@ -122,7 +147,7 @@ export interface FillResult {
 
 /** Fill every placeholder the context can answer; leave the rest for the rep, in brackets, so nothing goes out half-baked unnoticed. */
 export function fillTemplate(body: string, ctx: FillContext): FillResult {
-  const c: FillContext = { ...COMPANY_DEFAULTS, date: todayLong(), ...stripNulls(ctx) };
+  const c: FillContext = { date: todayLong(), ...stripNulls(ctx) };
   const filled = new Map<string, string>();
   const remaining = new Set<string>();
   const text = body.replace(/\[([^\]\n]{1,80})\]/g, (whole, inner: string) => {

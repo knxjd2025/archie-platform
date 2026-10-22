@@ -19,11 +19,13 @@ import {
   type SignatureRequestView, type SignerView,
 } from '../../shared/signatures';
 import { htmlToText } from './providers';
+import { currentProfile } from '../tenant/context';
 
 /** A long report is recorded by fingerprint and link, not by dumping its text. */
 const MAX_EMBEDDED_TEXT = 14000;
 
-const ROLE_LABEL: Record<string, string> = { customer: 'Customer', company: 'Best Roofing Now' };
+/** How each signer's role reads on the record; the company signs under its own name. */
+const roleLabel = (role: string): string => (role === 'company' ? currentProfile().legalName : role === 'customer' ? 'Customer' : role);
 
 export function signedPdf(req: SignatureRequestView, documentHtml: string, documentUrl: string): Buffer {
   const lines: PdfLine[] = [];
@@ -77,7 +79,7 @@ export function signedPdf(req: SignatureRequestView, documentHtml: string, docum
   lines.push({ kind: 'space', size: 14 });
   lines.push({ kind: 'heading', text: 'Audit trail' });
   for (const s of req.signers) {
-    lines.push({ kind: 'subheading', text: `${s.name} — ${ROLE_LABEL[s.role] || s.role}` });
+    lines.push({ kind: 'subheading', text: `${s.name} — ${roleLabel(s.role)}` });
     for (const [label, value] of auditRows(s)) lines.push({ kind: 'row', label, value });
     lines.push({ kind: 'space', size: 8 });
   }
@@ -90,7 +92,7 @@ export function signedPdf(req: SignatureRequestView, documentHtml: string, docum
   return buildPdf(
     req.status === 'signed' ? 'Signed document' : 'Signature record',
     lines,
-    `${req.title} · ${req.docHash.slice(0, 16)} · Best Roofing Now`,
+    `${req.title} · ${req.docHash.slice(0, 16)} · ${currentProfile().legalName}`,
     // Addresses, coordinates and user agents need more room than a column
     // sized for dollar amounts.
     { valueX: 230 },

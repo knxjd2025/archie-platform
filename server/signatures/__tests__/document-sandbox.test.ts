@@ -55,7 +55,7 @@ describe('the signing page', () => {
   it('takes the frame height only from the frame, as a number', as(() => {
     const html = page();
     expect(html).toContain('e.source !== frame.contentWindow');
-    expect(html).toContain("typeof e.data.brnDocHeight !== 'number'");
+    expect(html).toContain("typeof e.data.signDocHeight !== 'number'");
   }));
 });
 
@@ -91,7 +91,7 @@ function routeHandler(method: 'get' | 'post', path: string) {
 async function makeRequest(html: string) {
   const [r] = await dbm.db.insert(schema.signatureRequests).values({
     jobExternalId: JOB, sourceKind: 'report', title: 'Roof report', html,
-    docHash: 'x', status: 'sent', createdBy: 'rep@bestroofingnow.com', sentBy: 'rep@bestroofingnow.com',
+    docHash: 'x', status: 'sent', createdBy: 'rep@acme.test', sentBy: 'rep@acme.test',
   }).returning();
   const token = crypto.randomBytes(16).toString('hex');
   await dbm.db.insert(schema.signatureSigners).values({ requestId: r.id, ordinal: 0, name: 'Karen Whitfield', role: 'customer', email: 'k@example.com', token });
@@ -123,13 +123,13 @@ describe.skipIf(!hasDb)('the frozen document', () => {
     expect(csp).not.toContain('allow-same-origin');
     // The report itself is untouched; the height script lands before the real end of the body.
     expect(res.body).toContain('<script>var s = "</body>";</script>');
-    expect(res.body).toMatch(/brnDocHeight[\s\S]*<\/script><\/body><\/html>$/);
+    expect(res.body).toMatch(/signDocHeight[\s\S]*<\/script><\/body><\/html>$/);
   }));
 
   it('wraps a fragment and still sizes it', as(async () => {
     const token = await makeRequest('<p>The certificate</p>');
     const res = await routeHandler('get', '/r/s/:token/document')({ params: { token } });
-    expect(res.body).toMatch(/<p>The certificate<\/p>[\s\S]*brnDocHeight[\s\S]*<\/body><\/html>$/);
+    expect(res.body).toMatch(/<p>The certificate<\/p>[\s\S]*signDocHeight[\s\S]*<\/body><\/html>$/);
   }));
 
   it('serves the signing page under its own script-only CSP', as(async () => {

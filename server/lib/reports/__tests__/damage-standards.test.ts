@@ -12,7 +12,7 @@ const finding = (type: string, severity = 'high') => ({
 
 const reportWith = (types: string[]): any => ({
   id: 'r-std', generatedAt: '2026-09-14T12:00:00.000Z', version: '2.0',
-  property: { address: '1 Test St', city: 'Charlotte', state: 'NC', latitude: 35.2, longitude: -80.8 },
+  property: { address: '1 Test St', city: 'Springfield', state: 'IL', latitude: 35.2, longitude: -80.8 },
   stormHistory: { yearsAnalyzed: 3, searchRadiusMiles: 5, totalEvents: 0, hailEvents: 0, windEvents: 0, tornadoEvents: 0, riskLevel: 'low', riskScore: 0, claimPotential: 'none', eventsByYear: {} },
   damageAnalysis: {
     totalPhotosAnalyzed: types.length, photosWithDamage: types.length, overallSeverity: 'high', roofAge: null, damageTypes: [],

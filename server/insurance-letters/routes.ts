@@ -15,7 +15,8 @@ import { requireAuth } from '../auth/middleware';
 import { ownsLead, type SessionUser } from '../access/rep-scope';
 import { asyncHandler } from '../lib/async-handler';
 import { logWrite } from '../writes/log';
-import { OFFICE_ADDRESS_DEFAULT, OFFICE_PHONE } from '../../shared/neighbor-letters';
+import { officeAddressOf } from '../../shared/neighbor-letters';
+import { currentProfile } from '../tenant/context';
 import {
   INSURANCE_LETTERS, buildInsuranceLetter, depreciationDue, isInsuranceLetterKind, letterDef, missingLetterFields,
   type ClaimLetterFields, type InsuranceLetterKind, type LetterImage,
@@ -30,7 +31,8 @@ import { certificatePdf } from '../certificates/pdf';
 import { signaturesOf } from '../certificates/routes';
 import type { CertificateData } from '../../shared/certificate-of-completion';
 
-const COMPANY_NAME = 'Best Roofing Now';
+/** The name the company signs letters with. */
+const companyName = (): string => currentProfile().legalName;
 const NEIGHBOR_SETTINGS_KEY = 'neighbor_letters';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_PHOTOS = 6;
@@ -50,7 +52,7 @@ const money = (v: unknown): number => {
 async function officeAddress(): Promise<string> {
   const [row] = await db.select({ value: settings.value }).from(settings).where(eq(settings.key, NEIGHBOR_SETTINGS_KEY));
   const v = (row?.value ?? {}) as { officeAddress?: string };
-  return v.officeAddress || OFFICE_ADDRESS_DEFAULT;
+  return v.officeAddress || officeAddressOf(currentProfile());
 }
 
 /**
@@ -94,7 +96,7 @@ function normalizeFields(kind: InsuranceLetterKind, b: any): ClaimLetterFields {
     enclosures: list.map((x: unknown) => str(x, 120)).filter(Boolean).slice(0, 10),
     senderName: str(b?.senderName, 120), senderTitle: str(b?.senderTitle, 120),
     senderPhone: str(b?.senderPhone, 40), senderEmail: str(b?.senderEmail, 160),
-    companyName: COMPANY_NAME, officeAddress: str(b?.officeAddress, 200), companyPhone: str(b?.companyPhone, 40),
+    companyName: companyName(), officeAddress: str(b?.officeAddress, 200), companyPhone: str(b?.companyPhone, 40),
   };
 }
 
@@ -303,11 +305,11 @@ export function registerInsuranceLetterRoutes(app: Express) {
         enclosures: [...letterDef('depreciation').enclosures],
         senderName: me?.name || user.name || '',
         senderTitle: me?.role === 'admin' ? 'Owner' : 'Project Manager',
-        senderPhone: me?.phone || OFFICE_PHONE,
+        senderPhone: me?.phone || currentProfile().phone,
         senderEmail: user.email,
-        companyName: COMPANY_NAME,
+        companyName: companyName(),
         officeAddress: await officeAddress(),
-        companyPhone: OFFICE_PHONE,
+        companyPhone: currentProfile().phone,
       },
     });
   }));

@@ -1,5 +1,5 @@
 /**
- * NOT WIRED UP, ON PURPOSE. James declined this feature on 2026-09-19.
+ * NOT WIRED UP, ON PURPOSE. The feature was declined on 2026-09-19.
  *
  * Nothing calls `isRoofRendersEnabled`, `pickBestExteriorPhoto` or
  * `generateRoofColorRenders`, and that is the intended state — it is not an
@@ -18,7 +18,7 @@
  * "Your new roof — visualized": Gemini image-edits of the customer's OWN
  * inspection photo showing a brand-new CertainTeed Landmark roof, in the 8
  * most popular colors. STANDARD on every full-replacement proposal
- * (per James, 2026-06-10; prototype = Tyler Smith job #0382).
+ * (as first specified, 2026-06-10).
  *
  * Pipeline: pick the best exterior photo (Gemini vision rank, fallback first
  * photo) -> edit it once per color with the newest Gemini image model ->
@@ -34,7 +34,7 @@ const IMAGE_MODELS = ['gemini-3-pro-image-preview', 'gemini-2.5-flash-image'];
 const VISION_MODEL = 'gemini-2.5-flash';
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
-/** The 8 most-chosen Landmark colors in the Charlotte market. */
+/** The 8 most-chosen Landmark colors. */
 export const LANDMARK_RENDER_COLORS: Array<{ slug: string; name: string; promptDesc: string; blurb: string }> = [
   { slug: 'weathered-wood',  name: 'Weathered Wood',  promptDesc: 'a warm earthy blend of soft browns, tans and gray',            blurb: 'The #1 most popular Landmark color — warm, earthy, goes with everything' },
   { slug: 'moire-black',     name: 'Moiré Black',     promptDesc: 'a deep charcoal-black blend with subtle gray shadow tones',    blurb: 'Deep charcoal black — bold, modern, striking' },

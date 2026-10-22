@@ -78,7 +78,7 @@ export const PERMA_BOOT_FIRST_RATE = 450;
  * $450 for the first boot on a job and $200 for every boot after it, whatever
  * else is sold alongside: the first boot carries the setup and the work of
  * tying a retrofit into the existing roof. (Until 2026-10-06 the $450 applied
- * only when boots were the whole job; Best Roofing Now made it every job.)
+ * only when boots were the whole job; it was made every job.)
  */
 export function permaBootTotal(count: number): number {
   if (count <= 0) return 0;

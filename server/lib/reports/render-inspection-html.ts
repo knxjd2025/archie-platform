@@ -1,7 +1,7 @@
 /**
  * Premium roof INSPECTION report renderer. Renders a ComprehensiveRoofReport
  * (storm history + AI photo damage analysis + repair estimate) in the shared
- * BRN premium theme. Section builders are exported for the combined report.
+ * Premium report theme. Section builders are exported for the combined report.
  *
  * This is the one document meant to be read by the homeowner, the office,
  * AND the insurance adjuster — written at a 5th-grade reading level and
@@ -264,7 +264,7 @@ export function inspectionAboutAndClaimsSection(): string {
       <li><b>Insurance approves the claim</b> and tells you (and us) what's covered.</li>
       <li><b>We schedule the work</b> and keep you updated the whole way through.</li>
     </ol>
-    <p class="muted tiny" style="margin-top:12px">We do this every week. If any of this is confusing, just call us &mdash; we're happy to walk you through it before you ever call your insurance company.</p>
+    <p class="muted tiny" style="margin-top:12px">If any of this is confusing, just call us &mdash; we're happy to walk you through it before you ever call your insurance company.</p>
   </section>`;
 }
 
@@ -285,7 +285,7 @@ export function inspectionNextSteps(): string {
       <li>Give us a call so we can talk about what we found.</li>
       <li>If it's a storm claim, we'll help you get the adjuster meeting scheduled.</li>
       <li>If it's not, we'll walk you through your repair or replacement options.</li>
-      <li>Reach out anytime: <a href="${companyTel()}" style="color:inherit"><b>${companyBrand().phone}</b></a></li>
+      ${companyBrand().phone ? `<li>Reach out anytime: <a href="${companyTel()}" style="color:inherit"><b>${esc(companyBrand().phone)}</b></a></li>` : ''}
     </ol>
     ${credentialMarkers().length ? `<div class="cred">${credentialMarkers().map((m) => `<span>${esc(m)}</span>`).join('')}</div>` : ''}
   </section>`;

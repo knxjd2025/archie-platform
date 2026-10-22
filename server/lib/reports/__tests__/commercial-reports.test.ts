@@ -10,6 +10,8 @@ import { commercialSnapshot, isCommercialReport, commercialContextOf } from '../
 import { existingAssembly, conditionMatrix, reroofPath, drainageAndMoisture } from '../sections/commercial-facts';
 import { DOCUMENT_STYLE } from '../sections/style';
 import { commercialStandardsReviewSheet } from '../commercial-standards';
+import { withProfile } from '../../../tenant/context';
+import { TEST_PROFILE, BARE_PROFILE, FORMER_COMPANY } from './profiles';
 
 const answers = (over: Record<string, any> = {}): Record<string, any> => ({
   'Inspection Date': '2026-09-14', 'Inspector Name': 'Sam Rep', 'Inspection Type': 'Condition Assessment', 'How was the roof accessed?': 'Walked the roof',
@@ -39,7 +41,7 @@ const ctx = (over: Record<string, any> = {}, recommendation: string | null = nul
 
 const report = (): any => ({
   id: 'r-com', generatedAt: '2026-09-14T12:00:00.000Z', version: '2.0',
-  property: { address: '400 Warehouse Way', city: 'Charlotte', state: 'NC', latitude: 35.2, longitude: -80.8 },
+  property: { address: '400 Warehouse Way', city: 'Springfield', state: 'IL', latitude: 35.2, longitude: -80.8 },
   stormHistory: { yearsAnalyzed: 3, searchRadiusMiles: 5, totalEvents: 0, hailEvents: 0, windEvents: 0, tornadoEvents: 0, largestHailInches: 0, highestWindMph: 0, riskLevel: 'low', riskScore: 5, claimPotential: 'low', eventsByYear: {}, recommendedDateOfLoss: null },
   damageAnalysis: { totalPhotosAnalyzed: 0, photosWithDamage: 0, overallSeverity: 'none', roofAge: null, damageTypes: [], aiSummary: '', photos: [] },
   repairEstimate: { lineItems: [], subtotal: 0, multiplierApplied: 1, total: 0, notes: [] },
@@ -171,22 +173,25 @@ describe('commercial documents never talk to a homeowner', () => {
   const residential = /your home|old shingles|need to be home|homeowners|change my color/i;
   it('proposal, presentation, condition report and estimate use building-owner copy', () => {
     const { report: r, ctx: c } = priced();
-    const pres = renderCommercialPresentationHtml(r, { customer: 'Warehouse LLC', rep: 'Sam Rep', inspection: c });
-    const prop = renderCommercialProposalHtml(r, { customer: 'Warehouse LLC', inspection: c });
-    const insp = renderCommercialInspectionHtml(r, { customer: 'Warehouse LLC', inspection: c } as any);
-    const est = renderEstimateHtml(r, { customer: 'Warehouse LLC', inspection: c });
+    const [pres, prop, insp, est] = withProfile(TEST_PROFILE, () => [
+      renderCommercialPresentationHtml(r, { customer: 'Warehouse LLC', rep: 'Sam Rep', inspection: c }),
+      renderCommercialProposalHtml(r, { customer: 'Warehouse LLC', inspection: c }),
+      renderCommercialInspectionHtml(r, { customer: 'Warehouse LLC', inspection: c } as any),
+      renderEstimateHtml(r, { customer: 'Warehouse LLC', inspection: c }),
+    ]);
     for (const html of [pres, prop, insp, est]) {
       expect(html).not.toMatch(residential);
-      expect(html).not.toContain('HFS Financial');
+      expect(html).not.toContain('Test Lender'); // consumer financing is residential
     }
-    expect(pres).toContain("We treat your building exactly like it's our own family's.");
+    // The company's own values, addressed to a building owner.
+    expect(pres).toContain('We tell you the truth about your building.');
     expect(pres).toContain('Questions Building Owners Ask');
     expect(pres).toContain('One decision left, Warehouse LLC.');
     expect(prop).toContain('One decision left, Warehouse LLC.');
     expect(est).not.toContain('<h2>Financing</h2>');
     // the residential documents keep their own voice
-    const res = renderPresentationScrollcraftHtml(applyReplacementPricing(report(), { tierSelection: { good: 'landmark', better: 'landmark_pro', best: 'landmark_premium' }, squares: 30, selectedTier: 'better' }), { customer: 'Pat Jones' });
-    expect(res).toContain("We treat your home exactly like it's our own family's.");
+    const res = withProfile(TEST_PROFILE, () => renderPresentationScrollcraftHtml(applyReplacementPricing(report(), { tierSelection: { good: 'landmark', better: 'landmark_pro', best: 'landmark_premium' }, squares: 30, selectedTier: 'better' }), { customer: 'Pat Jones' }));
+    expect(res).toContain('We tell you the truth about your home.');
     expect(res).toContain('One decision left, Pat.');
   });
 });
@@ -212,23 +217,34 @@ describe('the Investment chapter follows the tapped tier', () => {
   });
 });
 
-describe('Best Roofing Now on every commercial document', () => {
-  const LOGO = 'https://reports.bestroofersnow.com/assets/brn/logo.png';
-  it('the logo on the cover, the company chapter and the roof words, on all three', () => {
+describe('the company on every commercial document', () => {
+  const LOGO = 'https://acme.test/logo.png';
+  const render = () => {
     const { report: r, ctx: c } = priced();
-    const docs = {
+    return {
       inspection: renderCommercialInspectionHtml(r, { jobType: 'retail', inspection: c }),
       proposal: renderCommercialProposalHtml(r, { customer: 'Warehouse LLC', inspection: c }),
       presentation: renderCommercialPresentationHtml(r, { customer: 'Warehouse LLC', rep: 'Sam Rep', inspection: c }),
     };
-    for (const [name, html] of Object.entries(docs)) {
+  };
+  it('the logo on the cover, the company chapter and the roof words, on all three', () => {
+    for (const [name, html] of Object.entries(withProfile(TEST_PROFILE, render))) {
       const body = html.slice(html.indexOf('<body'));
       expect(body.indexOf(LOGO), name).toBeGreaterThan(-1);
       expect(body.indexOf(LOGO), `${name}: logo before the first chapter`).toBeLessThan(body.indexOf('<h2'));
       expect(html, name).toContain('>Why Building Owners Choose Us</h2>');
       expect(html, name).toContain('>Roof Words, Made Simple</h2>');
-      expect(html, name).toContain('We tell people the truth, even when it is not a sale.');
+      expect(html, name).toContain('We do it right the first time.');
       expect(html, name).not.toMatch(/your home|homeowner|general contractor/i);
+      expect(html, name).not.toMatch(FORMER_COMPANY);
+    }
+  });
+  it('a company with no logo and no promise gets neither, and no one else\'s', () => {
+    for (const [name, html] of Object.entries(withProfile(BARE_PROFILE, render))) {
+      expect(html, name).not.toContain('class="bx-logo"');
+      expect(html, name).not.toContain('bx-promise">');
+      expect(html, name).toContain('>Roof Words, Made Simple</h2>');
+      expect(html, name).not.toMatch(FORMER_COMPANY);
     }
   });
 });

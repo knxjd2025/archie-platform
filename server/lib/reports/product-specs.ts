@@ -6,17 +6,17 @@
  * printed 01/26 — the newest CertainTeed document found; used as the
  * tie-breaker wherever an older brochure disagrees with it).
  *
- * Two things confirmed with James before this was written rather than
+ * Two things confirmed with the owner before this was written rather than
  * guessed:
  *  - The catalog's "Tamko Titan Basic" isn't a real Tamko product name —
- *    their only current Titan line is the premium Titan XT. James confirmed
+ *    their only current Titan line is the premium Titan XT. The owner confirmed
  *    that's the intended product, so specs below are Titan XT's real ones.
  *  - CertainTeed's own documents disagree with each other on a few color
  *    lists across print dates/regions (Landmark, Landmark PRO, Landmark
  *    Premium, Presidential Shake) — colorNote flags this per-product rather
  *    than silently picking one list and presenting it as uncontested.
  *
- * Standing Seam Metal has no manufacturer spec here on purpose — it's BRN's
+ * Standing Seam Metal has no manufacturer spec here on purpose — it's a
  * generic system description (roofing-products.ts), not one named
  * manufacturer's published product, so there's no data sheet to cite.
  */
@@ -45,7 +45,7 @@ export const PRODUCT_SPECS: Partial<Record<ProductKey, ProductSpec>> = {
     fireRating: 'UL Class A',
     algaeWarrantyYears: 25,
     colors: ['Georgetown Gray', 'Weathered Wood', 'Moiré Black', 'Thunderstorm Gray', 'Terra Cotta', 'Burnt Sienna', 'Heather Blend', 'Painted Desert', 'Sunrise Cedar'],
-    colorNote: 'CertainTeed’s current (01/26) color lineup for this product; an older brochure lists several different names (Silver Birch, Cobblestone Gray, Resawn Shake, Hunter Green, Colonial Slate). Availability is plant/region-dependent — confirm the exact Charlotte-market lineup before a customer picks.',
+    colorNote: 'CertainTeed’s current (01/26) color lineup for this product; an older brochure lists several different names (Silver Birch, Cobblestone Gray, Resawn Shake, Hunter Green, Colonial Slate). Availability is plant/region-dependent — confirm the exact local-market lineup before a customer picks.',
   },
   landmark_pro: {
     windRatingText: 'ASTM D3161 Class F, ASTM D7158 Class H — 15-year 110 mph wind warranty, upgradeable to 160 mph with CertainTeed starter strip + hip &amp; ridge',
