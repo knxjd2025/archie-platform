@@ -1,71 +1,62 @@
 /**
- * Best Roofing Now itself, on every commercial document: the logo on the
- * cover and at the close, who we are and what we believe, the roofs we put
- * on and the buildings we work on, how we look after a roof once it is on,
- * and a short list of roof words in plain English.
+ * The company itself, on every commercial document: the logo on the cover
+ * and at the close, who it is and what it believes, common commercial roof
+ * types, how it looks after a roof once it is on, and a short list of roof
+ * words in plain English.
  *
  * Written for a building owner who is not a roofer: short sentences,
- * everyday words, about a 5th-grade reading level. Every claim comes from
- * brand-facts.ts, which records where it was checked.
+ * everyday words, about a 5th-grade reading level. Every claim about the
+ * company is the company's own (its profile, shared/company.ts); a part it
+ * has not filled in is left out rather than invented.
  *
  * Each block comes in two shells — the scroll chapters of the Proposal and
  * Presentation, and the document sections of the Inspection.
  */
 import { esc } from '../report-theme.js';
-import { BRN_ASSETS, BRN_BRAND } from '../brn-brand.js';
-import { COMPANY_VALUES_COMMERCIAL } from '../certainteed-data.js';
-import {
-  BRAND_PROMISE, FOUNDING_FACT, COMMERCIAL_SYSTEM_FACTS, COMMERCIAL_BUILDING_TYPES,
-  MAINTENANCE_PROGRAM_FACTS, COMMERCIAL_SERVICE_FACTS, COMMUNITY_FACTS, TRUST_STATS,
-} from '../brand-facts.js';
+import { companyBrand, companyTel, companyValues } from '../company-brand.js';
+import { COMMERCIAL_ROOF_TYPES } from '../packs/roofing-commercial.js';
 
-const LOGO_ALT = 'Best Roofing Now';
-const tel = `tel:+1${BRN_BRAND.phone.replace(/\D/g, '')}`;
-const site = BRN_BRAND.website.replace(/^https?:\/\//, '');
-
-/** The logo, on a white plate so it reads on a dark page as well as a light one. */
+/** The logo, on a white plate so it reads on a dark page as well as a light one. Nothing when there is no logo. */
 export function brandLogo(className = 'bx-logo'): string {
-  return `<span class="${esc(className)}"><img src="${esc(BRN_ASSETS.logo)}" alt="${LOGO_ALT}" width="309" height="148"></span>`;
+  const p = companyBrand();
+  if (!p.logoUrl) return '';
+  return `<span class="${esc(className)}"><img src="${esc(p.logoUrl)}" alt="${esc(p.displayName)}" width="309" height="148"></span>`;
 }
-
-/** The one community line that carries a number. */
-const charity = TRUST_STATS.find((f) => /donated/i.test(f.text))?.text;
 
 /* ----------------------------------------------------------- the content --- */
 
 /**
- * `story` adds who started the company and what we believe. The scroll
- * documents leave it out: their Who We Are chapter already tells it.
+ * `story` adds the company's tagline and values. The scroll documents leave
+ * them out: their Who We Are chapter already tells it.
  */
 function aboutBody(story: boolean): string {
-  const values = COMPANY_VALUES_COMMERCIAL
+  const p = companyBrand();
+  const values = companyValues('commercial')
     .map(([t, d]) => `<div class="bx-card"><b>${esc(t)}</b><span>${esc(d)}</span></div>`).join('');
-  const systems = COMMERCIAL_SYSTEM_FACTS
+  const systems = COMMERCIAL_ROOF_TYPES
     .map((f) => `<div class="bx-card"><b>${esc(f.name)}</b><span>${esc(f.text)}</span></div>`).join('');
-  const buildings = COMMERCIAL_BUILDING_TYPES.list.map((b) => `<span class="bx-chip">${esc(b)}</span>`).join('');
-  const plans = MAINTENANCE_PROGRAM_FACTS
+  const plans = p.maintenancePlans
     .map((f) => `<div class="bx-card${f.tag ? ' bx-card--pick' : ''}"><b>${esc(f.name)}${f.tag ? ` <em>${esc(f.tag)}</em>` : ''}</b><span>${esc(f.text)}</span></div>`).join('');
-  const service = COMMERCIAL_SERVICE_FACTS.map((f) => `<li>${esc(f.text)}</li>`).join('');
-  const community = [...COMMUNITY_FACTS.map((f) => f.text), ...(charity ? [charity] : [])].map((t) => `<li>${esc(t)}</li>`).join('');
-  return `<blockquote class="bx-promise">&ldquo;${esc(BRAND_PROMISE.text)}&rdquo;</blockquote>
-    <p class="bx-p">${story ? `${esc(FOUNDING_FACT.text)} ` : ''}We are a family company in ${esc(BRN_BRAND.city)}. We fix and replace roofs on homes and on all kinds of buildings. We use our own crews, and we take photos of our work so you can see it.</p>
-${story ? `
+  const service = p.serviceFacts.map((t) => `<li>${esc(t)}</li>`).join('');
+  const community = p.community.map((t) => `<li>${esc(t)}</li>`).join('');
+  const intro = [story && p.tagline ? esc(p.tagline) : '', p.serviceArea ? `We work across ${esc(p.serviceArea)}.` : '']
+    .filter(Boolean).join(' ');
+  return `${p.promise ? `<blockquote class="bx-promise">&ldquo;${esc(p.promise)}&rdquo;</blockquote>` : ''}
+    ${intro ? `<p class="bx-p">${intro}</p>` : ''}
+${story && values ? `
     <h3 class="bx-h">What we believe</h3>
     <div class="bx-grid">${values}</div>
 ` : ''}
-    <h3 class="bx-h">Roofs we put on</h3>
+    <h3 class="bx-h">Common commercial roof types</h3>
     <div class="bx-grid">${systems}</div>
-
-    <h3 class="bx-h">Buildings we work on</h3>
-    <div class="bx-chips">${buildings}</div>
-
+${plans || service ? `
     <h3 class="bx-h">We stay after the job is done</h3>
-    <p class="bx-p">A flat roof lasts longer when someone checks it. Pick the plan that fits your building.</p>
-    <div class="bx-grid">${plans}</div>
-    <ul class="bx-list">${service}</ul>
-
+    ${plans ? `<p class="bx-p">A flat roof lasts longer when someone checks it. Pick the plan that fits your building.</p>
+    <div class="bx-grid">${plans}</div>` : ''}
+    ${service ? `<ul class="bx-list">${service}</ul>` : ''}
+` : ''}${community ? `
     <h3 class="bx-h">Part of our community</h3>
-    <ul class="bx-list">${community}</ul>`;
+    <ul class="bx-list">${community}</ul>` : ''}`;
 }
 
 /** Roof words a building owner will see in this document, in plain English. */
@@ -96,8 +87,8 @@ function wordsBody(): string {
 /* ---------------------------------------------------- scroll (Proposal) --- */
 
 /** Who we are, for the Proposal and Presentation. */
-export function chapterAboutBrn(): string {
-  return `<section class="sc-section ch ch--paper" id="ch-about-brn">
+export function chapterAboutCompany(): string {
+  return `<section class="sc-section ch ch--paper" id="ch-about-company">
     <div class="sc-wrap sc-stack" data-sc-in data-sc-stagger="50">
       <p class="sc-label">Chapter {{CH}}</p>
       <h2 class="sc-display sc-display--lg">Why Building Owners Choose Us</h2>
@@ -119,12 +110,19 @@ export function chapterRoofWords(): string {
 
 /** The logo and how to reach us, at the very end of a scroll document. */
 export function brandCloser(): string {
-  const awards = BRN_ASSETS.awards.map((a) => `<img src="${esc(a.src)}" alt="${esc(a.alt)}" loading="lazy">`).join('');
+  const p = companyBrand();
+  const awards = p.awards.map((a) => `<img src="${esc(a.src)}" alt="${esc(a.alt)}" loading="lazy">`).join('');
+  const tel = companyTel();
+  const contact = [
+    p.phone && tel ? `<a href="${tel}">${esc(p.phone)}</a>` : '',
+    p.email ? `<a href="mailto:${esc(p.email)}">${esc(p.email)}</a>` : '',
+    p.website ? `<a href="${esc(p.website)}">${esc(p.websiteLabel)}</a>` : '',
+  ].filter(Boolean).join(' &middot; ');
   return `<footer class="bx-close">
     ${brandLogo()}
-    <p class="bx-close-line">${esc(BRAND_PROMISE.text)}</p>
-    <p class="bx-close-contact"><a href="${tel}">${esc(BRN_BRAND.phone)}</a> &middot; <a href="mailto:${esc(BRN_BRAND.email)}">${esc(BRN_BRAND.email)}</a> &middot; <a href="${esc(BRN_BRAND.website)}">${esc(site)}</a></p>
-    <div class="bx-awards">${awards}</div>
+    <p class="bx-close-line">${esc(p.promise || p.displayName)}</p>
+    ${contact ? `<p class="bx-close-contact">${contact}</p>` : ''}
+    ${awards ? `<div class="bx-awards">${awards}</div>` : ''}
   </footer>`;
 }
 
@@ -134,7 +132,7 @@ function docSection(title: string, inner: string): string {
   return `<section><div class="sec-head"><h2>${title}</h2></div><div class="bx bx--doc">${inner}</div></section>`;
 }
 
-export function aboutBrnSectionDocument(): string {
+export function aboutCompanySectionDocument(): string {
   return docSection('Why Building Owners Choose Us', aboutBody(true));
 }
 
@@ -151,7 +149,7 @@ export const COMMERCIAL_BRAND_CSS = `
 .bx-logo img { height: 64px; width: auto; display: block; }
 .title-logo { margin-bottom: 28px; }
 .title-logo .bx-logo img { height: 84px; }
-.bx { --bx-ink: #17130F; --bx-soft: #5A5149; --bx-line: #E4DCD0; --bx-red: #C8102E; color: var(--bx-ink); }
+.bx { --bx-ink: #17130F; --bx-soft: #5A5149; --bx-line: #E4DCD0; --bx-red: var(--brand, #1F3A5F); color: var(--bx-ink); }
 .bx-promise { margin: 18px 0 10px; padding: 14px 20px; border-left: 4px solid var(--bx-red); font-family: 'Fraunces', Georgia, serif; font-size: 22px; line-height: 1.35; font-style: italic; background: #fff; border-radius: 0 12px 12px 0; }
 .bx-p { font-size: 17px; line-height: 1.6; max-width: 62ch; margin: 10px 0; }
 .bx-h { font-family: 'Fraunces', Georgia, serif; font-size: 21px; margin: 30px 0 10px; }

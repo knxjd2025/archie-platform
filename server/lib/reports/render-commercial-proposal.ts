@@ -21,7 +21,7 @@ import { PROJECT_MAP_HEAD, PROJECT_MAP_CSS, PROJECT_MAP_JS } from './project-map
 import { SCROLL_STYLE } from './sections/style.js';
 import { scopeTotalOf } from './scope-items.js';
 import {
-  BRAND, PAGE_CSS, PAGE_JS, numberChapters,
+  PAGE_CSS, PAGE_JS, numberChapters,
   chapterWhoWeAre, chapterYourOptions, chapterInvestment, chapterProduct, chapterSystem, chapterWarranty, chapterOurWork, chapterNextStep, chapterYourRoof,
 } from './render-proposal-scrollcraft.js';
 import {
@@ -34,9 +34,10 @@ import {
   customSections, withSectionNotes, COMMERCIAL_CHAPTERS_CSS, COMMERCIAL_MIN_CHAPTERS,
 } from './sections/commercial-chapters.js';
 import { ASSEMBLY_CSS, ASSEMBLY_JS } from './sections/assembly-diagram.js';
-import { brandLogo, brandCloser, chapterAboutBrn, chapterRoofWords, COMMERCIAL_BRAND_CSS } from './sections/commercial-brand.js';
+import { brandLogo, brandCloser, chapterAboutCompany, chapterRoofWords, COMMERCIAL_BRAND_CSS } from './sections/commercial-brand.js';
 import { REROOF_PATH_LABEL } from '../../../shared/commercial-inspection-form.js';
 import type { InspectionFactsContext } from './sections/inspection-facts.js';
+import { brandStyleTag, companyBrand, documentMetaTags } from './company-brand.js';
 
 function fmtDate(iso?: string | null): string {
   if (!iso) return '';
@@ -61,7 +62,7 @@ function chapterWelcome(report: ComprehensiveRoofReport, customer: string, jobTy
       <p class="sc-label folio-eyebrow">A Commercial Roofing Proposal, Prepared For${jobType === 'insurance' ? ' &middot; Insurance Claim' : ''}</p>
       <h1 class="sc-display sc-display--xl title-name" ${COVER_NAME_ATTRS}>${esc(customer)}</h1>
       <p class="sc-lede title-address">${esc(where)}</p>
-      <p class="sc-body title-date">${esc(fmtDate(report.generatedAt))} &middot; Prepared by ${esc(BRAND.name)}</p>
+      <p class="sc-body title-date">${esc(fmtDate(report.generatedAt))} &middot; Prepared by ${esc(companyBrand().displayName)}</p>
       <p class="sc-body title-intro">We climbed up on your roof and checked every part of it. This proposal shows you what we found, what your roof needs, and what it will cost. We looked first and priced second &mdash; not the other way around.</p>
     </div>
   </section>`;
@@ -207,7 +208,7 @@ export function commercialProposalSections(report: ComprehensiveRoofReport, opts
     { key: 'narrative', label: 'Your Roof', html: chapterYourRoof(report) },
     { key: 'safety', label: 'Safety & Access', html: chapterSafety(insp) },
     { key: 'who', label: 'Who We Are', html: chapterWhoWeAre('commercial') },
-    { key: 'about-brn', label: 'Why Building Owners Choose Us', html: chapterAboutBrn() },
+    { key: 'about-company', label: 'Why Building Owners Choose Us', html: chapterAboutCompany() },
     { key: 'company', label: 'Company Information', html: chapterCompany(), required: true },
     { key: 'options', label: 'Your Options', html: chapterYourOptions(pricing, startingTier, scopeTotalOf(report), report) },
     { key: 'investment', label: 'Investment', html: chapterInvestment(startingTier, pricing, report) },
@@ -240,7 +241,7 @@ export function renderCommercialProposalHtml(report: ComprehensiveRoofReport, op
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Commercial Roofing Proposal for ${esc(customer)} &middot; ${esc(BRAND.name)}</title>
+<title>Commercial Roofing Proposal for ${esc(customer)} &middot; ${esc(companyBrand().displayName)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
 ${PROJECT_MAP_HEAD}
@@ -260,6 +261,8 @@ ${PROJECT_MAP_HEAD}
 <style>${COMMERCIAL_BRAND_CSS}</style>
 <style>${PROJECT_MAP_CSS}</style>
 <style>${MOBILE_CSS}</style>
+${documentMetaTags(`Commercial Roofing Proposal for ${customer}`)}
+${brandStyleTag()}
 </head>
 <body>
 <span data-sc-progress></span>

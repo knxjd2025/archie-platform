@@ -4,7 +4,7 @@ import { handoffUrl, mintHandoff, redeemHandoff, sweepExpiredHandoffs } from './
 import { isAllowedLoginEmail, isBlockedLoginEmail, memberCanLogin } from './allowlist';
 import { findSignInMember, touchLogin } from '../storage/team';
 import { getCurrentCompany } from '../tenant/companies';
-import { isLiveCompany } from '../../shared/company';
+import { isLiveCompany, resolveCompanyProfile } from '../../shared/company';
 import { runAsCompany } from '../tenant/context';
 import { requireAuth } from './middleware';
 
@@ -169,6 +169,9 @@ export function registerAuthRoutes(app: Express) {
     res.json({
       user: req.session.user,
       company: company && { id: company.id, slug: company.slug, name: company.name, trade: company.trade, branding: company.branding },
+      // Everything the app's screens need to say the company's name and use
+      // its colors and contact details (shared/company.ts).
+      profile: company ? resolveCompanyProfile(company) : null,
     });
   });
 }

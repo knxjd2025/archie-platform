@@ -5,13 +5,16 @@
  * The seal used to print "50-Yr Manufacturer / 15-Yr Workmanship" for every
  * product — including standing seam metal, stone-coated steel and the
  * synthetic shakes, none of which carry CertainTeed's 50-year figure. The
- * 50-year claim is kept for CertainTeed shingles (it is the SureStart PLUS
- * coverage BRN can register as a ShingleMaster); every other product gets an
- * honest line with no invented number, confirmed in writing at signing.
- * BRN's own 15-year workmanship warranty applies to all of them.
+ * 50-year claim is kept for CertainTeed shingles only when the company holds
+ * a CertainTeed credential (that is the SureStart PLUS coverage a credentialed
+ * contractor can register); every other product gets an honest line with no
+ * invented number, confirmed in writing at signing. The company's own
+ * workmanship years (its profile) apply to all of them, and are left off when
+ * the company has not entered them.
  */
 import type { RoofingProduct } from './roofing-products.js';
-import { WARRANTY } from './certainteed-data.js';
+import { warranty, isCertainTeedCredentialed } from './certainteed-data.js';
+import { companyBrand } from './company-brand.js';
 
 export interface ProductWarranty {
   manufacturer: string;
@@ -19,7 +22,8 @@ export interface ProductWarranty {
   manufacturerLine: string;
   /** A year figure the seal may animate to, or null when there is none we can stand behind. */
   manufacturerYears: number | null;
-  workmanshipYears: number;
+  /** The company's workmanship years, or null when it has not entered them. */
+  workmanshipYears: number | null;
   /** Whether the CertainTeed certification copy (SureStart PLUS, Integrity Roof System) applies. */
   certainteed: boolean;
   /** A tune-up or cleaning: no new roof, so no warranty chapter and no workmanship figure. */
@@ -29,17 +33,21 @@ export interface ProductWarranty {
 const CONFIRMED = 'confirmed in writing at signing';
 
 export function warrantyFor(product: Pick<RoofingProduct, 'key' | 'manufacturer' | 'name'> & { category?: RoofingProduct['category'] }): ProductWarranty {
-  const workmanshipYears = WARRANTY.workmanshipYears;
+  const w = warranty();
+  const workmanshipYears = w.workmanshipYears;
   // A tune-up or cleaning installs nothing: no manufacturer warranty, and the
   // workmanship warranty on a new roof does not apply. Say so; claim nothing.
   if (product.category === 'service' || product.key === 'tune_up' || product.key === 'cleaning') {
-    return { manufacturer: 'Best Roofing Now', manufacturerLine: 'Maintenance on your existing roof &mdash; it carries no manufacturer warranty and does not reset your roof&rsquo;s age', manufacturerYears: null, workmanshipYears, certainteed: false, service: true };
+    return { manufacturer: companyBrand().displayName, manufacturerLine: 'Maintenance on your existing roof &mdash; it carries no manufacturer warranty and does not reset your roof&rsquo;s age', manufacturerYears: null, workmanshipYears, certainteed: false, service: true };
   }
   if (product.manufacturer === 'CertainTeed') {
+    if (!isCertainTeedCredentialed()) {
+      return { manufacturer: 'CertainTeed', manufacturerLine: `CertainTeed limited lifetime manufacturer warranty — terms ${CONFIRMED}`, manufacturerYears: null, workmanshipYears, certainteed: true };
+    }
     return {
       manufacturer: 'CertainTeed',
-      manufacturerLine: `${WARRANTY.manufacturerYears}-year manufacturer warranty — CertainTeed SureStart&trade; PLUS extended coverage, registered by Best Roofing Now as a CertainTeed ShingleMaster&trade;`,
-      manufacturerYears: WARRANTY.manufacturerYears,
+      manufacturerLine: `${w.manufacturerYears}-year manufacturer warranty — CertainTeed SureStart&trade; PLUS extended coverage, registered by ${companyBrand().displayName.replace(/&/g, '&amp;').replace(/</g, '&lt;')} as a CertainTeed-credentialed contractor`,
+      manufacturerYears: w.manufacturerYears,
       workmanshipYears,
       certainteed: true,
     };

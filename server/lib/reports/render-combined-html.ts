@@ -14,8 +14,8 @@ import {
   colorsSection, colorRendersSection, integritySection, warrantySection, investmentSection,
   acceptSection, reportFooter,
 } from './render-proposal-html.js';
+import { companyBrand } from './company-brand.js';
 
-const BRAND = { name: 'Best Roofing Now' };
 
 export interface CombinedInput {
   report: ComprehensiveRoofReport;
@@ -34,7 +34,7 @@ function combinedHero(input: CombinedInput): string {
     p.rep ? `<div>Prepared by ${esc(p.rep)}</div>` : '',
   ].join('');
   return `<div class="hero">
-    <div class="hero__brand">${BRAND.name}</div>
+    <div class="hero__brand">${companyBrand().displayName}</div>
     <h1>Roof Inspection &amp; Replacement Proposal</h1>
     <div class="hero__for">Prepared for ${esc(p.customer)}</div>
     <div class="hero__promise">&ldquo;We tell people the truth, even when it isn't a sale.&rdquo;</div>
@@ -72,7 +72,7 @@ export function combinedSections(input: CombinedInput): ReportSection[] {
 export function renderCombinedHtml(input: CombinedInput): string {
   const body = joinSections(arrangeSections(combinedSections(input), (input.report as any).layout));
   return premiumShell({
-    title: `Roof Inspection & Proposal · ${input.proposal.customer} · ${BRAND.name}`,
+    title: `Roof Inspection & Proposal · ${input.proposal.customer} · ${companyBrand().displayName}`,
     hero: combinedHero(input),
     body,
   });

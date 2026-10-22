@@ -1,5 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { isCompanyId, runAsCompany } from './context';
+// Registers the profile loader runAsCompany uses (documents need the company's name).
+import './profile';
 
 /**
  * Runs the rest of the request as the signed-in person's company, so every
@@ -11,7 +13,7 @@ import { isCompanyId, runAsCompany } from './context';
 export function tenantFromSession(req: Request, _res: Response, next: NextFunction): void {
   const companyId = req.session?.user?.companyId;
   if (isCompanyId(companyId)) {
-    runAsCompany(companyId, next);
+    runAsCompany(companyId, next).catch(next);
     return;
   }
   next();

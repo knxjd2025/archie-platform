@@ -14,6 +14,7 @@ import type { PgColumn, PgTable } from 'drizzle-orm/pg-core';
 import { db } from '../db';
 import { clientReports, jobCertificates, signatureSigners } from '../../shared/schema';
 import { isCompanyId, runAsCompany, runAsSystem } from './context';
+import './profile';
 
 type TokenTable = PgTable & { companyId: PgColumn };
 
@@ -32,8 +33,8 @@ export async function companyForToken(table: TokenTable, column: PgColumn, token
 export function companyFromToken(table: TokenTable, column: PgColumn, param = 'token'): RequestHandler {
   return (req: Request, _res: Response, next: NextFunction) => {
     companyForToken(table, column, String(req.params[param] ?? '')).then((companyId) => {
-      if (companyId) runAsCompany(companyId, next);
-      else next();
+      if (companyId) return runAsCompany(companyId, next);
+      next();
     }, next);
   };
 }

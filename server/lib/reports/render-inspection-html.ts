@@ -15,13 +15,10 @@ import { premiumShell, esc, usd, usd2 } from './report-theme.js';
 import { arrangeSections, joinSections, type ReportSection } from './layout.js';
 import { toEstimateLines, estimateTotal } from './estimate-lines.js';
 import { reportFooter } from './render-proposal-html.js';
-import { CRED_MARKERS, COMPANY_VALUES, OWNERS_STORY } from './certainteed-data.js';
-import { CREDENTIAL_FACTS, TRUST_STATS, FINANCING_FACT } from './brand-facts.js';
-import { BRN_BRAND } from './brn-brand.js';
 import { plainLanguageFor, plainSeverity } from './plain-language-damage.js';
 import { standardsFor, renderStandardsFootnote } from './damage-standards.js';
 import type { ComprehensiveRoofReport } from './comprehensive-roof-report.js';
-import { PROJECT_MAP_HEAD, PROJECT_MAP_CSS, PROJECT_MAP_JS, projectMapContainerHtml } from './project-map-widget.js';
+import { PROJECT_MAP_HEAD, PROJECT_MAP_CSS, PROJECT_MAP_JS, projectMapContainerHtml, ourWorkMapAvailable } from './project-map-widget.js';
 import { consolidateFindings, occurrenceLabel, usefulLocations, type ConsolidatedFinding } from './consolidate-findings.js';
 import { DOCUMENT_STYLE, SECTION_CSS_DOCUMENT } from './sections/style.js';
 import { stormEvidence } from './sections/storm-evidence.js';
@@ -33,8 +30,8 @@ import {
 import { ANATOMY_CSS, ANATOMY_JS } from './sections/anatomy.js';
 import { GLANCE_CSS, GLANCE_JS, fold, residentialGlance } from './sections/inspection-glance.js';
 import { shingleRoofAnatomy } from './sections/roof-anatomy-shingle.js';
+import { companyBrand, companyTel, companyValues, credentialMarkers, ownersStory } from './company-brand.js';
 
-const BRAND = { name: 'Best Roofing Now', phone: '(704) 605-6047' };
 
 // NOAA storm dates arrive date-only ("2026-04-08"), which parses as UTC
 // midnight and prints as the day BEFORE in any negative-offset timezone —
@@ -55,7 +52,7 @@ const sev = (s: string) => (s || 'none').toLowerCase();
 export function inspectionHero(report: ComprehensiveRoofReport, jobType?: 'retail' | 'insurance'): string {
   const p = report.property;
   return `<div class="hero">
-    <div class="hero__brand">${BRAND.name}${jobType === 'insurance' ? ' &middot; Insurance Claim' : ''}</div>
+    <div class="hero__brand">${companyBrand().displayName}${jobType === 'insurance' ? ' &middot; Insurance Claim' : ''}</div>
     <h1>Roof Inspection Report</h1>
     <div class="hero__for">${esc(p.address)}, ${esc(p.city)}, ${esc(p.state)} ${esc(p.zip || '')}</div>
     <div class="hero__meta"><div>Report #${esc(report.id)}</div><div>${fmtDate(report.generatedAt)}</div><div>${report.damageAnalysis?.photos?.length ?? 0} photos on file</div></div>
@@ -234,19 +231,30 @@ export function inspectionEstimateSection(report: ComprehensiveRoofReport): stri
  * dealing with, and tells the homeowner what happens next either way.
  */
 export function inspectionAboutAndClaimsSection(): string {
-  // Every line here is a verified fact (brand-facts.ts, reviewed monthly) or
-  // the owners' own story — not a phrase a template author made up.
-  const stats = TRUST_STATS.map((f) => `<div class="fact"><span>${esc(f.text)}</span></div>`).join('');
-  const creds = [...CREDENTIAL_FACTS, FINANCING_FACT].map((f) => `<span>${esc(f.text)}</span>`).join('');
+  // Every line here is the company's own (its profile): its story, values,
+  // countable claims and credentials. A part it has not filled in is left out.
+  const p = companyBrand();
+  const story = ownersStory();
+  const stats = p.trustStats.map((t) => `<div class="fact"><span>${esc(t)}</span></div>`).join('');
+  const creds = [...p.credentials, ...(p.financingLine ? [p.financingLine] : [])].map((t) => `<span>${esc(t)}</span>`).join('');
+  const values = companyValues().map(([t, d]) => `<div class="value"><b>${esc(t)}</b><span>${esc(d)}</span></div>`).join('');
+  const tel = companyTel();
+  const contact = [
+    esc(p.legalName),
+    p.cityState && esc(p.cityState),
+    p.phone && (tel ? `<a href="${tel}" style="color:inherit">${esc(p.phone)}</a>` : esc(p.phone)),
+    p.email && esc(p.email),
+    p.websiteLabel && esc(p.websiteLabel),
+  ].filter(Boolean).join(' &middot; ');
   return `<section>
-    <div class="sec-head"><h2>About Best Roofing Now &amp; Filing a Claim</h2></div>
-    <h3 style="margin:0 0 8px;font-size:17px">${OWNERS_STORY.heading}</h3>
-    ${OWNERS_STORY.paragraphs.map((p) => `<p class="lead" style="margin:0 0 10px">${p}</p>`).join('')}
-    <div class="values">${COMPANY_VALUES.map(([t, d]) => `<div class="value"><b>${esc(t)}</b><span>${esc(d)}</span></div>`).join('')}</div>
-    <h3 style="margin:22px 0 8px;font-size:15px">By the numbers</h3>
-    <div class="fact-grid">${stats}</div>
-    <div class="cred" style="margin-top:10px">${creds}</div>
-    <p class="muted tiny" style="margin-top:10px">${esc(BRN_BRAND.legalName)} &middot; ${esc(BRN_BRAND.city)}, ${esc(BRN_BRAND.state)} &middot; <a href="tel:+1${BRN_BRAND.phone.replace(/\D/g, '')}" style="color:inherit">${esc(BRN_BRAND.phone)}</a> &middot; ${esc(BRN_BRAND.email)} &middot; ${esc(BRN_BRAND.website.replace('https://', ''))}</p>
+    <div class="sec-head"><h2>About ${esc(p.displayName)} &amp; Filing a Claim</h2></div>
+    ${story ? `<h3 style="margin:0 0 8px;font-size:17px">${esc(story.heading)}</h3>
+    ${story.paragraphs.map((t) => `<p class="lead" style="margin:0 0 10px">${esc(t)}</p>`).join('')}` : ''}
+    ${values ? `<div class="values">${values}</div>` : ''}
+    ${stats ? `<h3 style="margin:22px 0 8px;font-size:15px">By the numbers</h3>
+    <div class="fact-grid">${stats}</div>` : ''}
+    ${creds ? `<div class="cred" style="margin-top:10px">${creds}</div>` : ''}
+    <p class="muted tiny" style="margin-top:10px">${contact}</p>
     <h3 style="margin:22px 0 10px;font-size:17px">If You Decide to File an Insurance Claim</h3>
     <p style="margin:0 0 10px">Filing a claim can feel confusing. Here it is in five simple steps:</p>
     <ol style="line-height:1.9;padding-left:20px;margin:0">
@@ -260,11 +268,12 @@ export function inspectionAboutAndClaimsSection(): string {
   </section>`;
 }
 
-/** Real completed projects near the customer — same live map embedded in every report type, fed by this app's own proxy of bestroofingnow.com's own project data (project-map-proxy.ts). */
+/** Real completed projects near the customer, on a live map. Left out until Archie has a per-company project feed (project-map-widget.ts). */
 export function inspectionOurWorkSection(): string {
+  if (!ourWorkMapAvailable()) return '';
   return `<section>
     <div class="sec-head"><h2>See Our Work Near You</h2></div>
-    <p class="muted tiny" style="margin-bottom:10px">Real completed roofing projects across the Charlotte area &mdash; tap any pin to see before &amp; after photos from a job near you.</p>
+    <p class="muted tiny" style="margin-bottom:10px">Real completed projects near you &mdash; tap any pin to see before &amp; after photos from a real job.</p>
     ${projectMapContainerHtml()}
   </section>`;
 }
@@ -276,9 +285,9 @@ export function inspectionNextSteps(): string {
       <li>Give us a call so we can talk about what we found.</li>
       <li>If it's a storm claim, we'll help you get the adjuster meeting scheduled.</li>
       <li>If it's not, we'll walk you through your repair or replacement options.</li>
-      <li>Reach out anytime: <a href="tel:+1${BRAND.phone.replace(/\D/g, '')}" style="color:inherit"><b>${BRAND.phone}</b></a></li>
+      <li>Reach out anytime: <a href="${companyTel()}" style="color:inherit"><b>${companyBrand().phone}</b></a></li>
     </ol>
-    <div class="cred">${CRED_MARKERS.map(m => `<span>${esc(m)}</span>`).join('')}</div>
+    ${credentialMarkers().length ? `<div class="cred">${credentialMarkers().map((m) => `<span>${esc(m)}</span>`).join('')}</div>` : ''}
   </section>`;
 }
 
@@ -403,7 +412,7 @@ export function renderInspectionHtml(
 
   const body = joinSections(arrangeSections(inspectionSections(report, opts), (report as any).layout));
   return premiumShell({
-    title: `Roof Inspection Report · ${report.property.address} · ${BRAND.name}`,
+    title: `Roof Inspection Report · ${report.property.address} · ${companyBrand().displayName}`,
     hero: inspectionHero(report, opts.jobType),
     body,
     extraHead: `${PROJECT_MAP_HEAD}<style>${PROJECT_MAP_CSS}${SECTION_CSS_DOCUMENT}${INSPECTION_FACTS_CSS}${NARRATIVE_CSS}${ANATOMY_CSS}${GLANCE_CSS}</style>`,

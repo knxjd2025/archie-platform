@@ -1,10 +1,11 @@
 /**
- * Shared premium "flowing document" theme for BRN reports (inspection,
+ * Shared premium "flowing document" theme for reports (inspection,
  * proposal, combined). One CSS block + a document shell + small formatters,
- * so all three report types look like one product.
+ * so all three report types look like one product. The company's name, logo
+ * and colors come from its profile at render time (company-brand.ts).
  */
 
-import { BRN_ASSETS } from './brn-brand.js';
+import { brandStyleTag, companyBrand, documentMetaTags } from './company-brand.js';
 import { MOBILE_CSS, MOBILE_JS } from './sections/mobile.js';
 
 export const THEME_CSS = `
@@ -131,20 +132,22 @@ export interface ShellOptions {
 
 const FONTS = `<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">`;
 
-/** Shared brand footer (logo + Angi awards + socials) appended to every report. */
+/** Shared brand footer (logo, award badges, links) appended to every report. Parts the company has not entered are left out. */
 export function brandFooter(): string {
-  const awards = BRN_ASSETS.awards
-    .map((a) => `<img src="${a.src}" alt="${esc(a.alt)}"/>`)
+  const p = companyBrand();
+  const awards = p.awards
+    .map((a) => `<img src="${esc(a.src)}" alt="${esc(a.alt)}"/>`)
     .join('');
-  const socials = BRN_ASSETS.socials
-    .map((s) => `<a class="soc" href="${s.url}">${esc(s.label)}<span>${esc(s.url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, ''))}</span></a>`)
+  const socials = p.links
+    .map((s) => `<a class="soc" href="${esc(s.url)}">${esc(s.label)}<span>${esc(s.url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, ''))}</span></a>`)
     .join('');
+  if (!p.logoUrl && !awards && !socials) return '';
   return `<div class="brandfoot">
-  <img class="brandfoot__logo" src="${BRN_ASSETS.logo}" alt="Best Roofing Now"/>
-  <h3>Recognized for service, year after year</h3>
-  <div class="awards">${awards}</div>
-  <h3>Connect with Best Roofing Now</h3>
-  <div class="socials">${socials}</div>
+  ${p.logoUrl ? `<img class="brandfoot__logo" src="${esc(p.logoUrl)}" alt="${esc(p.displayName)}"/>` : ''}
+  ${awards ? `<h3>Recognized for service</h3>
+  <div class="awards">${awards}</div>` : ''}
+  ${socials ? `<h3>Connect with ${esc(p.displayName)}</h3>
+  <div class="socials">${socials}</div>` : ''}
 </div>`;
 }
 
@@ -153,23 +156,13 @@ export function premiumShell(opts: ShellOptions): string {
 <meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
 <meta name="robots" content="noindex, nofollow"/>
 <title>${esc(opts.title)}</title>
-<link rel="icon" href="${BRN_ASSETS.logo}"/>
-<link rel="apple-touch-icon" href="${BRN_ASSETS.logo}"/>
+${documentMetaTags(opts.title)}
 <meta name="theme-color" content="#2c1d14"/>
-<meta name="description" content="${esc(opts.title)} — prepared by Best Roofing Now, Charlotte NC."/>
-<meta property="og:title" content="${esc(opts.title)}"/>
-<meta property="og:description" content="Prepared by Best Roofing Now — Charlotte's honest, family-run, CertainTeed-certified roofer."/>
-<meta property="og:type" content="website"/>
-<meta property="og:site_name" content="Best Roofing Now"/>
-<meta property="og:image" content="${BRN_ASSETS.logo}"/>
-<meta property="og:image:alt" content="Best Roofing Now"/>
-<meta name="twitter:card" content="summary"/>
-<meta name="twitter:title" content="${esc(opts.title)}"/>
-<meta name="twitter:image" content="${BRN_ASSETS.logo}"/>
 ${FONTS}
 <style>${THEME_CSS}</style>
 ${opts.extraHead || ''}
 <style>${MOBILE_CSS}</style>
+${brandStyleTag()}
 </head>
 <body>
 <button class="print-btn" type="button" onclick="window.print()" aria-label="Print or save as PDF">&#9113; Print / Save PDF</button>

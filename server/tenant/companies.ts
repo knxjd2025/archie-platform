@@ -5,6 +5,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { db } from '../db';
 import { companies, type Company } from '../../shared/schema';
 import { currentCompanyId, runAsCompany, runAsSystem } from './context';
+import './profile';
 
 import { LIVE_STATUSES, isLiveCompany } from '../../shared/company';
 

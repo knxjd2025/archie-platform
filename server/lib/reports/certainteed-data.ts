@@ -1,16 +1,18 @@
 /**
- * CertainTeed product, color, pricing, and warranty data for BRN proposals.
+ * CertainTeed product, color, pricing, and warranty data for roofing proposals
+ * (the roofing trade pack).
  *
- * Color palette + lifestyle images are hosted on R2 (extracted from the
- * CertainTeed Landmark / Landmark PRO brochures). Tier pricing defaults are
- * Best Roofing Now's standard per-square retail rates; they can be overridden
- * per job. Reflects James's spec: Good=Landmark, Better=Landmark PRO,
- * Best=Landmark Solaris (cool roof) + full weather package.
+ * Color palette + lifestyle images are served from REPORT_ASSET_BASE
+ * (extracted from the CertainTeed Landmark / Landmark PRO brochures). Tier
+ * pricing defaults are starting per-square retail rates; they can be
+ * overridden per job. Good=Landmark, Better=Landmark PRO, Best=Landmark
+ * Solaris (cool roof) + full weather package.
  */
+import { companyBrand } from './company-brand.js';
 
-import { CREDENTIAL_MARKERS } from './brand-facts.js';
-
-export const ASSET_BASE = 'https://reports.bestroofersnow.com/assets/certainteed';
+/** Where report images (product photos, palettes) are hosted. Set REPORT_ASSET_BASE in production. */
+export const REPORT_ASSET_BASE = (process.env.REPORT_ASSET_BASE || '/report-assets').replace(/\/$/, '');
+export const ASSET_BASE = `${REPORT_ASSET_BASE}/certainteed`;
 
 export const COLOR_ASSETS = {
   landmark1: `${ASSET_BASE}/palette-landmark-1.jpg`,
@@ -28,11 +30,11 @@ export interface ProductTier {
   accent: string;
   tagline: string;
   body: string;             // educational paragraph (may contain entities)
-  ratePerSquare: number;    // default BRN retail rate
+  ratePerSquare: number;    // default retail rate
   recommended?: boolean;
 }
 
-/** Default per-square rates (James's Carbonaro pricing convention). */
+/** Default per-square rates (charm pricing). Starting points until the company sets its own. */
 export const DEFAULT_RATES: Record<TierKey, number> = {
   good: 427.99,
   better: 472.99,
@@ -80,27 +82,6 @@ export const SCOPE_ROWS: Array<[string, boolean | string, boolean | string, bool
   ['Extra nailing for high-wind security', false, false, true],
 ];
 
-export const COMPANY_VALUES: Array<[string, string]> = [
-  ['Integrity First', 'We tell the truth, even when it means losing a sale.'],
-  ['Service Before Self', 'A military value Fred carried out of the service and into every project.'],
-  ['Excellence in All We Do', 'The highest standards, from the tear-off to the final nail sweep.'],
-  ['Family Values', "We treat your home exactly like it's our own family's."],
-];
-
-/** The same values addressed to a building owner — commercial documents never say "your home". */
-export const COMPANY_VALUES_COMMERCIAL: Array<[string, string]> = COMPANY_VALUES.map(([t, d]) =>
-  t === 'Family Values' ? [t, "We treat your building exactly like it's our own family's."] : [t, d],
-);
-
-export const OWNERS_STORY = {
-  heading: 'A father, a son, and a higher standard',
-  paragraphs: [
-    'Best Roofing Now was founded by <b>Fred Turner</b>, a military veteran, and his son <b>James Turner</b>. Fred brought the discipline, accountability, and service-before-self mindset of his years in the military; James brought the business side. Together they saw what was wrong with the roofing industry &mdash; the pressure, the cut corners, the half-truths &mdash; and decided to do it differently.',
-    "That's why our crews are our own, our work is photo-documented, and our first answer is always the honest one. When we say your roof is built right, it's because a Turner put their name on it.",
-  ],
-  signature: '&mdash; Fred &amp; James Turner, Best Roofing Now',
-};
-
 /** CertainTeed Integrity Roof System components (educational). */
 export const INTEGRITY_SYSTEM: Array<[string, string]> = [
   ['WinterGuard&trade; Waterproofing Underlayment', "CertainTeed's self-adhering ice &amp; water membrane goes down first in the valleys, around penetrations, and along vulnerable edges. It seals around each nail, so wind-driven rain and ice-dam backup can't find a way in."],
@@ -111,18 +92,28 @@ export const INTEGRITY_SYSTEM: Array<[string, string]> = [
   ['Ridge Vent + Intake Ventilation', 'Balanced exhaust and intake venting lets the attic breathe &mdash; cooler in summer, drier in winter. Proper ventilation is also required to keep the manufacturer warranty in force.'],
 ];
 
-export const WARRANTY = {
-  manufacturerYears: 50,
-  workmanshipYears: 15, // CertainTeed-backed workmanship (product/manufacturer coverage is the 50-yr figure)
-  certificationCopy:
-    "Here's something most homeowners don't know: a manufacturer's strongest warranties can only be registered by <b>credentialed contractors</b> who install the full system. Best Roofing Now is a <b>CertainTeed-certified contractor</b>, and because we install the complete Integrity Roof System&trade; with qualifying CertainTeed components, we can register CertainTeed's extended SureStart&trade; PLUS coverage on your roof. That's the reason we can stand behind every roof &mdash; Good, Better, or Best &mdash; with the warranty below. A non-certified roofer simply can't offer it.",
-};
+/** CertainTeed's manufacturer warranty on the full Integrity Roof System, in years. */
+export const MANUFACTURER_WARRANTY_YEARS = 50;
+
+/** True when the company has entered a CertainTeed credential (ShingleMaster, SELECT, etc.). */
+export function isCertainTeedCredentialed(): boolean {
+  const p = companyBrand();
+  return [...p.certifications, ...p.credentials].some((c) => /certainteed|shinglemaster/i.test(c));
+}
 
 /**
- * Re-exported from brand-facts.ts — do NOT re-add a literal list here.
- * This used to be its own array saying "5★ BBB A+" and "CertainTeed
- * Certified", while brn-brand.ts held a different list. Both were wrong and
- * both were on customer documents. brand-facts.test.ts fails if a literal
- * comes back.
+ * The warranty for the current company: the manufacturer's years, the
+ * company's own workmanship years (null when it has not entered them), and
+ * the extended-coverage copy, which is only true of a credentialed contractor.
  */
-export const CRED_MARKERS = CREDENTIAL_MARKERS;
+export function warranty(): { manufacturerYears: number; workmanshipYears: number | null; certificationCopy: string } {
+  const p = companyBrand();
+  const name = p.displayName.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  return {
+    manufacturerYears: MANUFACTURER_WARRANTY_YEARS,
+    workmanshipYears: p.workmanshipYears,
+    certificationCopy: isCertainTeedCredentialed()
+      ? `Here's something most homeowners don't know: a manufacturer's strongest warranties can only be registered by <b>credentialed contractors</b> who install the full system. ${name} is a <b>CertainTeed-credentialed contractor</b>, and because we install the complete Integrity Roof System&trade; with qualifying CertainTeed components, we can register CertainTeed's extended SureStart&trade; PLUS coverage on your roof. That's the reason we can stand behind every roof &mdash; Good, Better, or Best &mdash; with the warranty below.`
+      : `Your roof is installed as a complete CertainTeed Integrity Roof System&trade;: every layer comes from one manufacturer and is installed to its instructions, which is what keeps the manufacturer's warranty in force.`,
+  };
+}

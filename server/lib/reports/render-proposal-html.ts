@@ -6,12 +6,11 @@
  */
 import { premiumShell, esc, usd, usd2, checkCell } from './report-theme.js';
 import {
-  COLOR_ASSETS, PRODUCT_TIERS, SCOPE_ROWS, COMPANY_VALUES, OWNERS_STORY,
-  INTEGRITY_SYSTEM, WARRANTY, CRED_MARKERS, DEFAULT_RATES, type TierKey,
+  COLOR_ASSETS, PRODUCT_TIERS, SCOPE_ROWS,
+  INTEGRITY_SYSTEM, warranty, DEFAULT_RATES, type TierKey,
 } from './certainteed-data.js';
+import { companyBrand, companyTel, companyValues, credentialMarkers, ownersStory } from './company-brand.js';
 
-const BRAND = { name: 'Best Roofing Now', phone: '(704) 605-6047', email: 'office@bestroofingnow.com', web: 'bestroofingnow.com', city: 'Charlotte, NC' };
-const TEL = '+17046056047';
 
 export interface ProposalInput {
   customer: string;
@@ -33,7 +32,7 @@ export interface ProposalInput {
   segments?: number;
   imageryDate?: string;
   wastePct?: number;
-  /** Optional per-tier rate overrides ($/square). Defaults to BRN standard rates. */
+  /** Optional per-tier rate overrides ($/square). Defaults to the standard starting rates. */
   rates?: Partial<Record<TierKey, number>>;
   /** Override which tier is shown as "Recommended" (defaults to the PRODUCT_TIERS recommended tier = Best). */
   recommendedTier?: TierKey;
@@ -166,10 +165,10 @@ export function proposalHero(input: ProposalInput): string {
     ? `<div class="hero__sat"><img loading="lazy" src="${esc(input.heroPhotoUrl)}" alt="${esc(input.address)}"/><span class="hero__sattag">Your home</span></div>`
     : '';
   return `<div class="hero">
-    <div class="hero__brand">${BRAND.name}</div>
+    <div class="hero__brand">${esc(companyBrand().displayName)}</div>
     <h1>${input.heroTitle ? esc(input.heroTitle) : 'Roof Replacement Proposal'}</h1>
     <div class="hero__for">Prepared for ${esc(input.customer)}</div>
-    <div class="hero__promise">&ldquo;We tell people the truth, even when it isn't a sale.&rdquo;</div>
+    ${companyBrand().promise ? `<div class="hero__promise">&ldquo;${esc(companyBrand().promise)}&rdquo;</div>` : ''}
     <div class="hero__meta">${meta}</div>
     ${sat}
   </div>`;
@@ -178,22 +177,30 @@ export function proposalHero(input: ProposalInput): string {
 export function welcomeSection(input: ProposalInput): string {
   return `<section>
     <div class="sec-head"><h2>Welcome, ${esc(firstName(input.customer))}</h2><span class="n">A note before the numbers</span></div>
-    <p class="lead">Thank you for inviting Best Roofing Now to look at your roof. Before we talk about price, we want you to know exactly who we are, how your roof will be built, and what your choices are. We would rather you make a confident, informed decision than a fast one. Take your time with this &mdash; and ask us anything.</p>
+    <p class="lead">Thank you for inviting ${esc(companyBrand().displayName)} to look at your roof. Before we talk about price, we want you to know exactly who we are, how your roof will be built, and what your choices are. We would rather you make a confident, informed decision than a fast one. Take your time with this &mdash; and ask us anything.</p>
   </section>`;
 }
 
 export function companySection(): string {
+  const p = companyBrand();
+  const values = companyValues().map(([t, d]) => `<div class="value"><b>${esc(t)}</b><span>${esc(d)}</span></div>`).join('');
+  const since = p.foundedYear ? `since ${p.foundedYear}` : '';
+  const note = [p.cityState, since].filter(Boolean).join(', ');
+  const lead = [p.tagline, ...p.trustStats.slice(0, 3)].filter(Boolean).map((t) => esc(t)).join(' &middot; ');
+  if (!values && !lead) return '';
   return `<section>
-    <div class="sec-head"><h2>Who We Are</h2><span class="n">Charlotte, family-run, since 2019</span></div>
-    <p class="lead">Best Roofing Now started in 2019 with one truck and a simple idea: build a roofing company that puts honesty ahead of the hard sell. ${new Date().getFullYear() - 2019} years and <b>500+ roofs</b> later, that hasn't changed. We're local, family-owned, BBB A+ accredited, and certified by CertainTeed.</p>
-    <div class="values">${COMPANY_VALUES.map(([t, d]) => `<div class="value"><b>${t}</b><span>${d}</span></div>`).join('')}</div>
+    <div class="sec-head"><h2>Who We Are</h2>${note ? `<span class="n">${esc(note)}</span>` : ''}</div>
+    ${lead ? `<p class="lead">${lead}</p>` : ''}
+    ${values ? `<div class="values">${values}</div>` : ''}
   </section>`;
 }
 
 export function ownersSection(): string {
+  const story = ownersStory();
+  if (!story) return '';
   return `<section>
-    <div class="sec-head"><h2>About the Owners</h2><span class="n">Fred &amp; James Turner</span></div>
-    <div class="owner"><h3>${OWNERS_STORY.heading}</h3>${OWNERS_STORY.paragraphs.map(p => `<p>${p}</p>`).join('')}<div class="sig">${OWNERS_STORY.signature}</div></div>
+    <div class="sec-head"><h2>About the Owners</h2></div>
+    <div class="owner"><h3>${esc(story.heading)}</h3>${story.paragraphs.map((t) => `<p>${esc(t)}</p>`).join('')}<div class="sig">${story.signature}</div></div>
   </section>`;
 }
 
@@ -254,17 +261,20 @@ export function integritySection(): string {
 }
 
 export function warrantySection(): string {
+  const w = warranty();
+  const workmanship = w.workmanshipYears ? `a ${w.workmanshipYears}-year workmanship warranty` : 'our workmanship warranty';
+  const markers = credentialMarkers().map((m) => `<span>${esc(m)}</span>`).join('');
   return `<section>
-    <div class="sec-head"><h2>Your Warranty</h2><span class="n">Backed by certification</span></div>
-    <p class="lead">${WARRANTY.certificationCopy}</p>
+    <div class="sec-head"><h2>Your Warranty</h2></div>
+    <p class="lead">${w.certificationCopy}</p>
     <div class="warr">
       <div class="warr__badges">
-        <div class="badge"><div class="num">${WARRANTY.manufacturerYears}</div><div class="lbl">YEAR<br/>Manufacturer Warranty</div></div>
-        <div class="badge"><div class="num">${WARRANTY.workmanshipYears}</div><div class="lbl">YEAR<br/>Workmanship Warranty</div></div>
+        <div class="badge"><div class="num">${w.manufacturerYears}</div><div class="lbl">YEAR<br/>Manufacturer Warranty</div></div>
+        ${w.workmanshipYears ? `<div class="badge"><div class="num">${w.workmanshipYears}</div><div class="lbl">YEAR<br/>Workmanship Warranty</div></div>` : ''}
       </div>
-      <div><h2>Covered coming and going.</h2><p>Your roof carries a ${WARRANTY.manufacturerYears}-year manufacturer warranty on the materials and a ${WARRANTY.workmanshipYears}-year workmanship warranty from us on the installation. If it's ever the product, CertainTeed stands behind it. If it's ever the work, we do. You're covered either way &mdash; in writing.</p></div>
+      <div><h2>Covered coming and going.</h2><p>Your roof carries a ${w.manufacturerYears}-year manufacturer warranty on the materials and ${workmanship} from us on the installation. If it's ever the product, CertainTeed stands behind it. If it's ever the work, we do. You're covered either way &mdash; in writing.</p></div>
     </div>
-    <div class="cred">${CRED_MARKERS.map(m => `<span>${esc(m)}</span>`).join('')}</div>
+    ${markers ? `<div class="cred">${markers}</div>` : ''}
   </section>`;
 }
 
@@ -377,7 +387,7 @@ export function investmentSection(input: ProposalInput): string {
       <div class="tier__shingle">${p.shingle}</div>
       <div class="tier__price">${total}</div>
       <div class="tier__rate">${rateLine}</div>
-      <div class="tier__warranty">${WARRANTY.manufacturerYears}-Yr Manufacturer + ${WARRANTY.workmanshipYears}-Yr Workmanship</div>
+      <div class="tier__warranty">${warranty().manufacturerYears}-Yr Manufacturer${warranty().workmanshipYears ? ` + ${warranty().workmanshipYears}-Yr Workmanship` : ''}</div>
     </article>`;
   };
   const flatNote = flatSq > 0
@@ -482,8 +492,8 @@ export function acceptSection(input: ProposalInput): string {
   const repCta = input.rep ? `${esc(input.rep)} &middot; ` : '';
   return `<div class="accept">
     <h2>Ready when you are, ${esc(firstName(input.customer))}.</h2>
-    <p>Pick your package and color and we'll lock in your spot on the schedule.${input.validUntil ? ` This pricing is held through ${esc(input.validUntil)}.` : ''} Most roofs are done in a single day.${input.rep ? ` Any questions at all, reach out to your Best Roofing Now rep${rep} &mdash; happy to walk through any of this with you.` : ''}</p>
-    <a class="cta" href="tel:${TEL}">Call ${repCta}${BRAND.phone}</a>
+    <p>Pick your package and color and we'll lock in your spot on the schedule.${input.validUntil ? ` This pricing is held through ${esc(input.validUntil)}.` : ''} Most roofs are done in a single day.${input.rep ? ` Any questions at all, reach out to your ${esc(companyBrand().displayName)} rep${rep} &mdash; happy to walk through any of this with you.` : ''}</p>
+    <a class="cta" href="${companyTel()}">Call ${repCta}${companyBrand().phone}</a>
     <div class="sign"><div class="sigline">Package selected (Good / Better / Best) &amp; color</div><div class="sigline">Homeowner signature &amp; date</div></div>
   </div>`;
 }
@@ -493,7 +503,7 @@ export function reportFooter(kind: 'proposal' | 'claim' = 'proposal'): string {
     ? 'This claim documentation package is provided in good faith based on our inspection photos and measurements. Observed damage is documented for the homeowner and their insurance carrier; the carrier&rsquo;s adjuster determines causation, scope, and coverage.'
     : 'This proposal is provided in good faith based on the inspection photos and measurements. Final scope, quantities, and pricing are confirmed before work begins.';
   return `<footer>
-    <div><b>${BRAND.name}</b> &middot; ${BRAND.city} &middot; <a href="tel:${TEL}" style="color:inherit">${BRAND.phone}</a> &middot; <a href="mailto:${BRAND.email}" style="color:inherit">${BRAND.email}</a> &middot; <a href="https://${BRAND.web}" target="_blank" rel="noopener" style="color:inherit">${BRAND.web}</a></div>
+    <div><b>${companyBrand().displayName}</b> &middot; ${companyBrand().cityState} &middot; <a href="${companyTel()}" style="color:inherit">${companyBrand().phone}</a> &middot; <a href="mailto:${companyBrand().email}" style="color:inherit">${companyBrand().email}</a> &middot; <a href="https://${companyBrand().websiteLabel}" target="_blank" rel="noopener" style="color:inherit">${companyBrand().websiteLabel}</a></div>
     <div class="fineprint" style="margin-top:8px;max-width:760px;margin-left:auto;margin-right:auto">${fineprint}</div>
   </footer>`;
 }
@@ -523,7 +533,7 @@ export function renderProposalHtml(input: ProposalInput): string {
     reportFooter(),
   ].join('\n');
   return premiumShell({
-    title: `${input.heroTitle || 'Roof Replacement Proposal'} · ${input.customer} · ${BRAND.name}`,
+    title: `${input.heroTitle || 'Roof Replacement Proposal'} · ${input.customer} · ${companyBrand().displayName}`,
     hero: proposalHero(input),
     body,
   });
@@ -552,8 +562,8 @@ export function repairAcceptSection(input: ProposalInput): string {
   const repCta = input.rep ? `${esc(input.rep)} &middot; ` : '';
   return `<div class="accept">
     <h2>Questions about the repair, ${esc(firstName(input.customer))}?</h2>
-    <p>We're happy to walk through any part of this estimate.${input.rep ? ` Reach out to your Best Roofing Now rep${rep} anytime &mdash; we'll give you a straight answer.` : ''}</p>
-    <a class="cta" href="tel:${TEL}">Call ${repCta}${BRAND.phone}</a>
+    <p>We're happy to walk through any part of this estimate.${input.rep ? ` Reach out to your ${esc(companyBrand().displayName)} rep${rep} anytime &mdash; we'll give you a straight answer.` : ''}</p>
+    <a class="cta" href="${companyTel()}">Call ${repCta}${companyBrand().phone}</a>
     <div class="sign"><div class="sigline">Repair approved &amp; scheduled</div><div class="sigline">Homeowner signature &amp; date</div></div>
   </div>`;
 }
@@ -570,7 +580,7 @@ export function renderRepairOnlyHtml(input: ProposalInput): string {
     reportFooter(),
   ].join('\n');
   return premiumShell({
-    title: `Roof Repair Estimate · ${input.customer} · ${BRAND.name}`,
+    title: `Roof Repair Estimate · ${input.customer} · ${companyBrand().displayName}`,
     hero: proposalHero({ ...input, heroTitle: 'Roof Repair Estimate' }),
     body,
   });
@@ -582,8 +592,8 @@ export function claimAcceptSection(input: ProposalInput): string {
   const repCta = input.rep ? `${esc(input.rep)} &middot; ` : '';
   return `<div class="accept">
     <h2>We'll meet your adjuster on the roof, ${esc(firstName(input.customer))}.</h2>
-    <p>This package documents the wind damage to your roof to support your insurance claim. Best Roofing Now will meet your insurance adjuster on site, walk the documented damage with them, and make sure the full scope of damage is on the table. Your carrier makes the final determination on coverage.${input.rep ? ` Any questions, reach out to your Best Roofing Now rep${rep} anytime.` : ''}</p>
-    <a class="cta" href="tel:${TEL}">Call ${repCta}${BRAND.phone}</a>
+    <p>This package documents the wind damage to your roof to support your insurance claim. ${esc(companyBrand().displayName)} will meet your insurance adjuster on site, walk the documented damage with them, and make sure the full scope of damage is on the table. Your carrier makes the final determination on coverage.${input.rep ? ` Any questions, reach out to your ${esc(companyBrand().displayName)} rep${rep} anytime.` : ''}</p>
+    <a class="cta" href="${companyTel()}">Call ${repCta}${companyBrand().phone}</a>
     <div class="sign"><div class="sigline">Date of loss</div><div class="sigline">Homeowner signature &amp; date</div></div>
   </div>`;
 }
@@ -603,7 +613,7 @@ export function renderClaimHtml(input: ProposalInput): string {
     reportFooter('claim'),
   ].join('\n');
   return premiumShell({
-    title: `Wind Damage Insurance Claim · ${input.customer} · ${BRAND.name}`,
+    title: `Wind Damage Insurance Claim · ${input.customer} · ${companyBrand().displayName}`,
     hero: proposalHero({ ...input, heroTitle: 'Wind Damage Insurance Claim' }),
     body,
   });

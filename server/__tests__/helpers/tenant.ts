@@ -51,3 +51,30 @@ export const inCompany = (getId: () => string) =>
   // No parameters on the returned function: vitest reads a test function's
   // first parameter as a fixture request.
   <R,>(fn: () => R | PromiseLike<R>) => (): Promise<R> => runAsCompany(getId(), fn);
+
+/**
+ * A filled-in company profile for tests of documents, letters and prompts:
+ * run the code under test inside withProfile(TEST_PROFILE, fn) (from
+ * server/tenant/context) and assert it shows this company, never a hardcoded one.
+ */
+export const TEST_PROFILE = (await import('../../../shared/company')).resolveCompanyProfile({
+  id: TEST_COMPANY_ID,
+  slug: 'acme-test',
+  name: 'Acme Test Roofing',
+  trade: 'roofing',
+  branding: {
+    legalName: 'Acme Test Roofing LLC', shortName: 'Acme Roofing', phone: '(555) 010-2030', email: 'office@acme.test',
+    website: 'https://acme.test', address: '1 Test Way', city: 'Springfield', state: 'IL', zip: '62701',
+    primaryColor: '#225588', logoUrl: 'https://acme.test/logo.png', tagline: 'Honest roofs in Springfield',
+    reviewUrl: 'https://acme.test/review', links: [{ label: 'Website', url: 'https://acme.test' }],
+    awards: [{ src: 'https://acme.test/award.png', alt: 'Test award' }], foundedYear: 2010,
+  },
+  settings: {
+    credentials: ['Acme Credential One', 'Fully insured'], trustStats: ['4.9★ on Google · 50 reviews'],
+    certifications: [], workmanshipYears: 10, workmanshipWarranty: '10-year workmanship warranty',
+    promise: 'We do it right the first time.', values: [{ title: 'Honesty', text: 'We tell you the truth about your home.' }],
+    story: { heading: 'Our story', paragraphs: ['Acme started in a garage.'], signature: '— The Acme team' },
+    whyUs: ['Local crews'], community: ['Springfield Chamber member'], serviceArea: 'Springfield and nearby towns',
+    financingLine: 'Financing available', financing: { partner: 'Test Lender', applyUrl: 'https://lender.test/apply' },
+  },
+});

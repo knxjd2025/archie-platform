@@ -29,6 +29,16 @@
  * than city or product until that gets backfilled on their side.
  */
 
+/**
+ * Archie: the "Our Work" map showed one company's completed projects from its
+ * own website. Archie has no per-company project feed yet, so every report
+ * leaves the map out until one is built (it will come from each company's
+ * own finished jobs).
+ */
+export function ourWorkMapAvailable(): boolean {
+  return false;
+}
+
 export const PROJECT_MAP_HEAD = `<link rel="preconnect" href="https://maps.googleapis.com"><link rel="preconnect" href="https://maps.gstatic.com" crossorigin>`;
 
 /**

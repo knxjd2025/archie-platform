@@ -18,7 +18,6 @@
 import { premiumShell, esc, usd } from './report-theme.js';
 import { arrangeSections, joinSections, type ReportSection } from './layout.js';
 import { reportFooter } from './render-proposal-html.js';
-import { CRED_MARKERS } from './certainteed-data.js';
 import type { ComprehensiveRoofReport } from './comprehensive-roof-report.js';
 import { PROJECT_MAP_HEAD, PROJECT_MAP_CSS, PROJECT_MAP_JS } from './project-map-widget.js';
 import { DOCUMENT_STYLE, SECTION_CSS_DOCUMENT } from './sections/style.js';
@@ -40,9 +39,9 @@ import { REROOF_PATH_LABEL } from '../../../shared/commercial-inspection-form.js
 import { ANATOMY_CSS, ANATOMY_JS } from './sections/anatomy.js';
 import { GLANCE_CSS, GLANCE_JS, fold, commercialGlance } from './sections/inspection-glance.js';
 import { flatRoofAnatomy } from './sections/roof-anatomy-flat.js';
-import { brandLogo, aboutBrnSectionDocument, roofWordsSectionDocument, COMMERCIAL_BRAND_CSS } from './sections/commercial-brand.js';
+import { brandLogo, aboutCompanySectionDocument, roofWordsSectionDocument, COMMERCIAL_BRAND_CSS } from './sections/commercial-brand.js';
+import { companyBrand, companyTel, credentialMarkers } from './company-brand.js';
 
-const BRAND = { name: 'Best Roofing Now', phone: '(704) 605-6047' };
 
 function fmtDate(iso: string): string {
   try {
@@ -63,7 +62,7 @@ export function commercialInspectionHero(report: ComprehensiveRoofReport, jobTyp
   const p = report.property;
   return `<div class="hero">
     <div class="hero__logo">${brandLogo()}</div>
-    <div class="hero__brand">${BRAND.name} &middot; Commercial${jobType === 'insurance' ? ' &middot; Insurance Claim' : ''}</div>
+    <div class="hero__brand">${companyBrand().displayName} &middot; Commercial${jobType === 'insurance' ? ' &middot; Insurance Claim' : ''}</div>
     <h1>Commercial Roof Condition Report</h1>
     <div class="hero__for">${esc(p.address)}, ${esc(p.city)}, ${esc(p.state)} ${esc(p.zip || '')}</div>
     <div class="hero__meta"><div>Report #${esc(report.id)}</div><div>${fmtDate(report.generatedAt)}</div><div>Low-slope roof assessment</div></div>
@@ -99,9 +98,9 @@ export function commercialNextSteps(insp: InspectionFactsContext | null): string
       ${open.length ? `<li>Check the things we still need to know: ${esc(open.join('; '))}</li>` : ''}
       <li>We go over this report with you, on the roof or on the phone. We have a photo for every problem.</li>
       <li>We send you a proposal with the choices that fit your roof, priced by the size of your roof.</li>
-      <li>Reach out anytime: <a href="tel:+1${BRAND.phone.replace(/\D/g, '')}" style="color:inherit"><b>${BRAND.phone}</b></a></li>
+      <li>Reach out anytime: <a href="${companyTel()}" style="color:inherit"><b>${companyBrand().phone}</b></a></li>
     </ol>
-    <div class="cred">${CRED_MARKERS.map((m) => `<span>${esc(m)}</span>`).join('')}</div>
+    ${credentialMarkers().length ? `<div class="cred">${credentialMarkers().map((m) => `<span>${esc(m)}</span>`).join('')}</div>` : ''}
   </section>`;
 }
 
@@ -220,7 +219,7 @@ export function commercialInspectionSections(
     { key: 'safety', label: 'Safety & Access', html: section('Safety &amp; Access', null, safetyAndAccess(insp, DOCUMENT_STYLE)) },
     { key: 'checklist', label: 'The Inspection, Field by Field', html: section('The Inspection, Field by Field', 'Every answer the inspector recorded', fold('Show every answer the inspector recorded', fullChecklist(insp as any, DOCUMENT_STYLE))) },
     { key: 'maintenance', label: 'Keeping This Roof', html: section('Keeping This Roof', 'The maintenance program', maintenancePlan(DOCUMENT_STYLE)) },
-    { key: 'about', label: 'Why Building Owners Choose Us', html: aboutBrnSectionDocument() },
+    { key: 'about', label: 'Why Building Owners Choose Us', html: aboutCompanySectionDocument() },
     { key: 'our-work', label: 'Our Work', html: inspectionOurWorkSection() },
     { key: 'next-steps', label: 'Next Steps', html: commercialNextSteps(insp) },
     // The full photo list closes the document, whatever order the rep saved.
@@ -235,7 +234,7 @@ export function renderCommercialInspectionHtml(
 ): string {
   const body = joinSections(arrangeSections(commercialInspectionSections(report, opts), (report as any).layout));
   return premiumShell({
-    title: `Commercial Roof Condition Report · ${report.property.address} · ${BRAND.name}`,
+    title: `Commercial Roof Condition Report · ${report.property.address} · ${companyBrand().displayName}`,
     hero: commercialInspectionHero(report, opts.jobType),
     body,
     extraHead: `${PROJECT_MAP_HEAD}<style>${PROJECT_MAP_CSS}${SECTION_CSS_DOCUMENT}${INSPECTION_FACTS_CSS}${COMMERCIAL_FACTS_CSS}${NARRATIVE_CSS}${ASSEMBLY_CSS_DOCUMENT}${EVIDENCE_CSS_DOCUMENT}${COMMERCIAL_BRAND_CSS}${ANATOMY_CSS}${GLANCE_CSS}</style>`,

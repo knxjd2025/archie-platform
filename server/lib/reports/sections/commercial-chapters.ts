@@ -28,10 +28,8 @@ import {
   SCAN_COMPONENTS, SCAN_COMPONENT_LABEL, SCAN_COMPONENT_RATING_FIELD, type ScanComponent,
 } from '../commercial-photo-scan.js';
 import { COMMERCIAL_INCLUDES } from '../commercial-products.js';
-import { BRN_BRAND } from '../brn-brand.js';
-import { CREDENTIAL_FACTS, TRUST_STATS } from '../brand-facts.js';
+import { companyBrand } from '../company-brand.js';
 import { warrantyFor } from '../product-warranty.js';
-import { WARRANTY } from '../certainteed-data.js';
 import type { TierPricing } from '../roofing-products.js';
 import type { ReportSection } from '../layout.js';
 
@@ -229,26 +227,27 @@ export function photoRecordBlockDocument(report: any, insp: InspectionFactsConte
 
 /* --------------------------------------------------------------- company --- */
 
-/** Who the building owner is contracting with. Every claim comes from brand-facts.ts. */
+/** Who the building owner is contracting with. Every claim is the company's own (its profile). */
 export function chapterCompany(): string {
-  const facts = factGrid([
-    ['Company', BRN_BRAND.legalName],
-    ['Based in', `${BRN_BRAND.city}, ${BRN_BRAND.state}`],
-    ['Phone', BRN_BRAND.phone],
-    ['Email', BRN_BRAND.email],
-    ['Website', BRN_BRAND.website.replace(/^https?:\/\//, '')],
-    ['Workmanship warranty', `${WARRANTY.workmanshipYears} years, on every roof we install`],
-  ]);
-  const creds = CREDENTIAL_FACTS.map((f) => `<span>${esc(f.text)}</span>`).join('');
-  const stats = TRUST_STATS.map((f) => `<li>${esc(f.text)}</li>`).join('');
+  const p = companyBrand();
+  const rows: Array<[string, string]> = [['Company', p.legalName]];
+  if (p.cityState) rows.push(['Based in', p.cityState]);
+  if (p.phone) rows.push(['Phone', p.phone]);
+  if (p.email) rows.push(['Email', p.email]);
+  if (p.websiteLabel) rows.push(['Website', p.websiteLabel]);
+  for (const l of p.licenses) rows.push(['License', l]);
+  if (p.workmanshipYears) rows.push(['Workmanship warranty', `${p.workmanshipYears} years, on every roof we install`]);
+  const facts = factGrid(rows);
+  const creds = p.credentials.map((t) => `<span>${esc(t)}</span>`).join('');
+  const stats = p.trustStats.map((t) => `<li>${esc(t)}</li>`).join('');
   return `<section class="sc-section ch ch--paper" id="ch-company">
     <div class="sc-wrap sc-stack" data-sc-in data-sc-stagger="60">
       <p class="sc-label">Chapter {{CH}}</p>
       <h2 class="sc-display sc-display--lg">Company Information</h2>
       <p class="sc-body sc-prose">Who you are contracting with, and how to reach us. Our Certificate of Insurance and W-9 are provided before any work starts.</p>
       ${facts}
-      <div class="cred">${creds}</div>
-      <ul class="sc-body co-stats">${stats}</ul>
+      ${creds ? `<div class="cred">${creds}</div>` : ''}
+      ${stats ? `<ul class="sc-body co-stats">${stats}</ul>` : ''}
     </div>
   </section>`;
 }

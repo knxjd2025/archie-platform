@@ -7,6 +7,7 @@
  * fails closed. See docs/archie/01-multi-company.md.
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { resolveCompanyProfile, type CompanyProfile } from '../../shared/company';
 
 export interface TenantContext {
   /** The company this work is for, or null for cross-company system work. */
@@ -15,7 +16,14 @@ export interface TenantContext {
   system: boolean;
   /** Why system access was needed, for logs. */
   reason?: string;
+  /** The company's name, contact details and claims, for documents (server/tenant/profile.ts). */
+  profile?: CompanyProfile;
 }
+
+/** Loads a company's profile. Registered by server/tenant/profile.ts (it needs the database). */
+type ProfileLoader = (companyId: string) => Promise<CompanyProfile | null>;
+let profileLoader: ProfileLoader | null = null;
+export function setProfileLoader(fn: ProfileLoader | null): void { profileLoader = fn; }
 
 const storage = new AsyncLocalStorage<TenantContext>();
 
@@ -49,8 +57,39 @@ export function requireCompanyId(): string {
  */
 export function runAsCompany<T>(companyId: string, fn: () => T | PromiseLike<T>): Promise<T> {
   if (!UUID_RE.test(companyId)) return Promise.reject(new Error(`runAsCompany: not a company id: ${String(companyId)}`));
-  return storage.run({ companyId, system: false }, async () => await fn());
+  const ctx: TenantContext = { companyId, system: false };
+  return storage.run(ctx, async () => {
+    // The company's profile, so documents rendered in here know whose they
+    // are (currentProfile). Loaded once and cached per company; a failure to
+    // load is not a failure of the work, which may never render anything.
+    if (profileLoader) {
+      try { ctx.profile = (await profileLoader(companyId)) ?? undefined; }
+      catch (err) { console.warn(`[tenant] could not load the profile for ${companyId}:`, err instanceof Error ? err.message : err); }
+    }
+    return await fn();
+  });
 }
+
+/**
+ * The current company's profile. Throws inside company work whose profile did
+ * not load: a document must never go out under the wrong name or none. With no
+ * company at all (tests of pure rendering, scripts), returns a neutral profile.
+ */
+export function currentProfile(): CompanyProfile {
+  const ctx = storage.getStore();
+  if (ctx?.profile) return ctx.profile;
+  if (ctx?.companyId) throw new Error(`No profile loaded for company ${ctx.companyId}`);
+  return NEUTRAL_PROFILE;
+}
+
+/** Run fn with a given profile, for tests and previews of how a document will look. */
+export function withProfile<T>(profile: CompanyProfile, fn: () => T): T {
+  const outer = storage.getStore();
+  return storage.run({ companyId: outer?.companyId ?? null, system: outer?.system ?? false, reason: outer?.reason, profile }, fn);
+}
+
+/** What documents show when no company is in context: placeholders, no claims. */
+export const NEUTRAL_PROFILE: CompanyProfile = resolveCompanyProfile({ id: '00000000-0000-0000-0000-000000000000', name: 'Your Company' });
 
 /**
  * Run fn with access to every company's rows. Only for the few lookups that
@@ -75,9 +114,9 @@ export function bindTenant<A extends unknown[], R>(fn: (...args: A) => R): (...a
 }
 
 /** Enter a context for the rest of the current async flow (used by request middleware). */
-export function enterCompany(companyId: string): void {
+export function enterCompany(companyId: string, profile?: CompanyProfile): void {
   if (!UUID_RE.test(companyId)) throw new Error(`enterCompany: not a company id: ${String(companyId)}`);
-  storage.enterWith({ companyId, system: false });
+  storage.enterWith({ companyId, system: false, profile });
 }
 
 export const isCompanyId = (v: unknown): v is string => typeof v === 'string' && UUID_RE.test(v);

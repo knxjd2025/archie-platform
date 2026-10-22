@@ -8,9 +8,9 @@
  * bespoke devices are fixed; the customer name, address, damage photos,
  * storm history and Good/Better/Best pricing are not.
  *
- * Real assets only — no AI-generated imagery anywhere (no KIE_AI_API_KEY in
- * this environment, and James was explicit that Fred & James's photo must be
- * their real one, never generated). Grammar bans on this page: `scrub`
+ * Real assets only — no AI-generated imagery anywhere: the owners' photo is
+ * the company's own (its profile), never generated, and left out when there
+ * is none. Grammar bans on this page: `scrub`
  * beyond one chapter (there is no video anywhere), `spotlight`, `magnet`,
  * a full-bleed scrub hero, centred hero copy. See references/uniqueness.md
  * §2.2 in the scroll-craft skill for the full spec this follows.
@@ -21,7 +21,7 @@ import { arrangeSections, tagSection, type ReportSection } from './layout.js';
 import { SCROLLCRAFT_JS, SCROLLCRAFT_CSS } from './scrollcraft-engine.js';
 import { MOBILE_CSS, MOBILE_JS } from './sections/mobile.js';
 import type { TierPricing } from './roofing-products.js';
-import { COMPANY_VALUES, COMPANY_VALUES_COMMERCIAL, OWNERS_STORY, WARRANTY, CRED_MARKERS } from './certainteed-data.js';
+import { warranty } from './certainteed-data.js';
 import { plainLanguageFor, plainSeverity } from './plain-language-damage.js';
 import { standardsFor, renderStandardsFootnote } from './damage-standards.js';
 import { scopeTotalOf } from './scope-items.js';
@@ -33,20 +33,18 @@ import { stormEvidence } from './sections/storm-evidence.js';
 import { warrantyFor } from './product-warranty.js';
 import { factGrid } from './sections/style.js';
 import type { ComprehensiveRoofReport } from './comprehensive-roof-report.js';
-import { PROJECT_MAP_HEAD, PROJECT_MAP_CSS, PROJECT_MAP_JS, projectMapContainerHtml } from './project-map-widget.js';
+import { PROJECT_MAP_HEAD, PROJECT_MAP_CSS, PROJECT_MAP_JS, projectMapContainerHtml, ourWorkMapAvailable } from './project-map-widget.js';
 import { SCROLL_STYLE, SECTION_CSS_SCROLL } from './sections/style.js';
 import { productSpecPanel } from './sections/product-spec-panel.js';
 import { colorOptions } from './sections/color-options.js';
 import { serviceIncludesList } from './sections/product-spec-panel.js';
 import { isServiceProduct } from './roofing-products.js';
 import { howTheJobRuns } from './sections/how-the-job-runs.js';
-import { financing } from './sections/financing.js';
-import { whyBRN } from './sections/why-brn.js';
+import { financing, hasFinancing } from './sections/financing.js';
+import { whyUs } from './sections/why-us.js';
+import { brandStyleTag, companyBrand, companyValues, credentialMarkers, documentMetaTags, ownersStory } from './company-brand.js';
 
-export const BRAND = { name: 'Best Roofing Now', phone: '(704) 605-6047' };
 
-/** Real photo from bestroofingnow.com/about — never replace with a generated image. */
-const FOUNDERS_PHOTO = 'https://cms.bestroofingnow.com/wp-content/uploads/2023/12/WhatsApp-Image-2023-12-14-at-8.23.58-AM-1.jpeg';
 
 function fmtDate(iso?: string | null): string {
   if (!iso) return '';
@@ -99,7 +97,7 @@ function chapterWelcome(report: ComprehensiveRoofReport, customer: string, jobTy
       <p class="sc-label folio-eyebrow">A Proposal, Prepared For${jobType === 'insurance' ? ' &middot; Insurance Claim' : ''}</p>
       <h1 class="sc-display sc-display--xl title-name" ${COVER_NAME_ATTRS}>${esc(customer)}</h1>
       <p class="sc-lede title-address">${esc(where)}</p>
-      <p class="sc-body title-date">${esc(fmtDate(report.generatedAt))} &middot; Prepared by ${esc(BRAND.name)}</p>
+      <p class="sc-body title-date">${esc(fmtDate(report.generatedAt))} &middot; Prepared by ${esc(companyBrand().displayName)}</p>
       <p class="sc-body title-intro">Everything in this proposal comes from the actual inspection of your roof: what we found, what it costs to fix at three real levels, and the warranty we can register because we install it right. Nothing here is a template with your name dropped in.</p>
     </div>
   </section>`;
@@ -246,29 +244,32 @@ export function chapterFindingsExplained(report: ComprehensiveRoofReport): strin
 }
 
 /**
- * Who we are — the owners' story, the values list, and the credibility band.
- *
- * whyBRN is called in its FULL mode on purpose. Its trust stats ($100,000 of
- * profits donated, the Angi Super Service Awards, 500+ roofs, 5.0★ on 65+
- * reviews) reach a customer on no other document: the Estimate calls
- * whyBRN(..., { compact: true }), which is the credential chips only.
+ * Who we are — the owners' story, the values list, and the credibility band,
+ * all from the company's profile. whyUs is called in its FULL mode on
+ * purpose: its countable claims reach a customer on no other document (the
+ * Estimate shows only the credential chips). With nothing entered, the
+ * chapter drops out.
  */
 export function chapterWhoWeAre(audience: 'residential' | 'commercial' = 'residential'): string {
-  const values = (audience === 'commercial' ? COMPANY_VALUES_COMMERCIAL : COMPANY_VALUES).map(([t, d]) => `<div class="value-line"><b>${esc(t)}</b><span>${esc(d)}</span></div>`).join('');
+  const story = ownersStory();
+  const values = companyValues(audience).map(([t, d]) => `<div class="value-line"><b>${esc(t)}</b><span>${esc(d)}</span></div>`).join('');
+  const band = whyUs(SCROLL_STYLE);
+  if (!story && !values && !band.trim()) return '';
+  const p = companyBrand();
   return `<section class="sc-section ch ch--paper" id="ch-who">
     <div class="sc-wrap who-grid">
       <div class="sc-stack" data-sc-in data-sc-stagger="70">
         <p class="sc-label">Chapter {{CH}}</p>
-        <h2 class="sc-display sc-display--lg">${esc(OWNERS_STORY.heading)}</h2>
-        ${OWNERS_STORY.paragraphs.map((p) => `<p class="sc-body">${p}</p>`).join('')}
-        <p class="sig">${OWNERS_STORY.signature}</p>
-        <div class="values-list">${values}</div>
-        ${whyBRN(SCROLL_STYLE)}
+        <h2 class="sc-display sc-display--lg">${esc(story?.heading || `About ${p.displayName}`)}</h2>
+        ${story ? story.paragraphs.map((t) => `<p class="sc-body">${esc(t)}</p>`).join('') : ''}
+        ${story ? `<p class="sig">${story.signature}</p>` : ''}
+        ${values ? `<div class="values-list">${values}</div>` : ''}
+        ${band}
       </div>
-      <figure data-sc-reveal="right" data-sc-reveal-at="0.15 0.6" class="who-photo">
-        <img src="${esc(FOUNDERS_PHOTO)}" alt="Fred and James Turner, founders of Best Roofing Now" loading="lazy">
-        <figcaption>Fred &amp; James Turner &mdash; Best Roofing Now</figcaption>
-      </figure>
+      ${story?.photoUrl ? `<figure data-sc-reveal="right" data-sc-reveal-at="0.15 0.6" class="who-photo">
+        <img src="${esc(story.photoUrl)}" alt="${esc(story.photoCaption || `The team at ${p.displayName}`)}" loading="lazy">
+        ${story.photoCaption ? `<figcaption>${esc(story.photoCaption)}</figcaption>` : ''}
+      </figure>` : ''}
     </div>
   </section>`;
 }
@@ -427,10 +428,12 @@ export function chapterProcess(): string {
 
 /**
  * Financing, from the shared builder (./sections/financing.ts), which quotes
- * no APR and no monthly payment on purpose — the real numbers come from
- * HFS Financial's own application, not a figure invented in a template.
+ * no APR and no monthly payment on purpose — the real numbers come from the
+ * lender's own application, not a figure invented in a template. Left out when
+ * the company offers no financing partner.
  */
 export function chapterFinancing(): string {
+  if (!hasFinancing()) return '';
   return `<section class="sc-section ch ch--paper" id="ch-financing">
     <div class="sc-wrap sc-stack" data-sc-in>
       <p class="sc-label">Chapter {{CH}}</p>
@@ -461,9 +464,10 @@ export function chapterWarranty(t: TierPricing): string {
   // The Integrity Roof System and its SureStart PLUS registration are a
   // CertainTeed claim; a metal or synthetic roof gets the workmanship promise
   // and its own manufacturer's terms, never CertainTeed's number.
+  const workmanship = w.workmanshipYears ? `our own <b>${w.workmanshipYears}-year workmanship warranty</b>` : 'our workmanship warranty';
   const lede = w.certainteed
-    ? WARRANTY.certificationCopy
-    : `Every roof we install carries our own <b>${w.workmanshipYears}-year workmanship warranty</b> on the installation. The <b>${esc(t.product.name)}</b> carries its manufacturer's warranty on the material &mdash; ${w.manufacturerLine}.`;
+    ? warranty().certificationCopy
+    : `Every roof we install carries ${workmanship} on the installation. The <b>${esc(t.product.name)}</b> carries its manufacturer's warranty on the material &mdash; ${w.manufacturerLine}.`;
   const seal = w.manufacturerYears != null
     ? `<div><span data-sc-count="0 ${w.manufacturerYears}" data-sc-count-ms="1200">0</span><b>Yr Manufacturer</b></div>`
     : `<div class="cert-seal--text"><span>${esc(w.manufacturer)}</span><b>Manufacturer warranty</b></div>`;
@@ -475,7 +479,7 @@ export function chapterWarranty(t: TierPricing): string {
       <div class="certificate">
         <div class="cert-seal">
           ${seal}
-          <div><span data-sc-count="0 ${w.workmanshipYears}" data-sc-count-ms="1200">0</span><b>Yr Workmanship</b></div>
+          ${w.workmanshipYears ? `<div><span data-sc-count="0 ${w.workmanshipYears}" data-sc-count-ms="1200">0</span><b>Yr Workmanship</b></div>` : ''}
         </div>
         ${w.certainteed ? `<p class="sc-body tiny">${w.manufacturerLine}.</p>` : ''}
       </div>
@@ -484,11 +488,12 @@ export function chapterWarranty(t: TierPricing): string {
 }
 
 export function chapterOurWork(): string {
+  if (!ourWorkMapAvailable()) return '';
   return `<section class="sc-section ch ch--paper" id="ch-our-work">
     <div class="sc-wrap sc-stack" data-sc-in>
       <p class="sc-label">Chapter {{CH}}</p>
       <h2 class="sc-display sc-display--lg">See Our Work Near You</h2>
-      <p class="sc-body">Real completed roofing projects across the Charlotte area &mdash; tap any pin to see before &amp; after photos from a job near you, not a stock image.</p>
+      <p class="sc-body">Real completed projects near you &mdash; tap any pin to see before &amp; after photos from a real job, not a stock image.</p>
       ${projectMapContainerHtml()}
     </div>
   </section>`;
@@ -496,13 +501,14 @@ export function chapterOurWork(): string {
 
 /** `salutation` defaults to the customer's first name; a company is addressed by its full name. */
 export function chapterNextStep(customer: string, salutation: string = customer.split(' ')[0] || 'there'): string {
-  const markers = CRED_MARKERS.map((m) => `<span>${esc(m)}</span>`).join(' &middot; ');
+  const markers = credentialMarkers().map((m) => `<span>${esc(m)}</span>`).join(' &middot; ');
+  const p = companyBrand();
   return `<section class="sc-section ch ch--dark ch--close" id="ch-next">
     <div class="sc-wrap">
       <p class="sc-label">Chapter {{CH}}</p>
       <h2 class="sc-display sc-display--md">One decision left, ${esc(salutation)}.</h2>
-      <p class="sc-body">Tell your Best Roofing Now rep which tier you want, and we turn this proposal into a signed job &mdash; the same numbers you saw above, nothing renegotiated after the fact. Call ${esc(BRAND.phone)} or reply to your rep directly.</p>
-      <p class="colophon">${esc(BRAND.name)} &middot; ${markers}</p>
+      <p class="sc-body">Tell your ${esc(p.displayName)} rep which tier you want, and we turn this proposal into a signed job &mdash; the same numbers you saw above, nothing renegotiated after the fact. ${p.phone ? `Call ${esc(p.phone)} or reply` : 'Reply'} to your rep directly.</p>
+      <p class="colophon">${esc(p.displayName)}${markers ? ` &middot; ${markers}` : ''}</p>
     </div>
   </section>`;
 }
@@ -630,7 +636,7 @@ ${ROOF_SYSTEM_CSS_SCROLL}
 .ch--close { padding-block: var(--sc-10); }
 .colophon { margin-top: var(--sc-8); padding-top: var(--sc-5); border-top: 1px solid var(--sc-hairline); font-size: var(--sc-t-xs); letter-spacing: var(--sc-track-wide); text-transform: uppercase; color: var(--sc-ink-soft); }
 
-/* whyBRN renders its trust stats as a plain <ul class="sc-body">, and the
+/* whyUs renders its trust stats as a plain <ul class="sc-body">, and the
    engine's .sc-body is margin:0 — without this the list sits flush under the
    values list with no separation from the credential chips above it. */
 .cred + ul.sc-body { margin-top: var(--sc-5); line-height: 1.9; padding-left: 1.2em; }
@@ -826,7 +832,7 @@ export function renderProposalScrollcraftHtml(report: ComprehensiveRoofReport, o
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Proposal for ${esc(customer)} &middot; ${esc(BRAND.name)}</title>
+<title>Proposal for ${esc(customer)} &middot; ${esc(companyBrand().displayName)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
 ${PROJECT_MAP_HEAD}
@@ -834,6 +840,8 @@ ${PROJECT_MAP_HEAD}
 <style>${PAGE_CSS}</style>
 <style>${PROJECT_MAP_CSS}</style>
 <style>${MOBILE_CSS}</style>
+${documentMetaTags(`Proposal for ${customer}`)}
+${brandStyleTag()}
 </head>
 <body>
 <span data-sc-progress></span>

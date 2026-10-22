@@ -15,7 +15,7 @@ import { reportFooter } from './render-proposal-html.js';
 import { SCOPE_ROWS } from './certainteed-data.js';
 import { toEstimateLines, estimateTotal } from './estimate-lines.js';
 import type { ComprehensiveRoofReport } from './comprehensive-roof-report.js';
-import { PROJECT_MAP_HEAD, PROJECT_MAP_CSS, PROJECT_MAP_JS, projectMapContainerHtml } from './project-map-widget.js';
+import { PROJECT_MAP_HEAD, PROJECT_MAP_CSS, PROJECT_MAP_JS, projectMapContainerHtml, ourWorkMapAvailable } from './project-map-widget.js';
 import { DOCUMENT_STYLE, SECTION_CSS_DOCUMENT } from './sections/style.js';
 import { scopeTotalOf } from './scope-items.js';
 import { standardsFor, renderStandardsFootnote } from './damage-standards.js';
@@ -29,10 +29,10 @@ import { roofSystemFor } from './roof-systems.js';
 import { warrantyFor } from './product-warranty.js';
 import { productSpecPanel } from './sections/product-spec-panel.js';
 import { colorOptions } from './sections/color-options.js';
-import { financing } from './sections/financing.js';
-import { whyBRN } from './sections/why-brn.js';
+import { financing, hasFinancing } from './sections/financing.js';
+import { whyUs } from './sections/why-us.js';
+import { companyBrand, companyTel } from './company-brand.js';
 
-const BRAND = { name: 'Best Roofing Now', phone: '(704) 605-6047' };
 
 function fmtDate(iso?: string): string {
   try { return new Date(iso || Date.now()).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }); }
@@ -55,7 +55,7 @@ export function estimateHero(report: ComprehensiveRoofReport, customer?: string,
   const where = [p?.address, p?.city, p?.state].filter(Boolean).join(', ');
   return `<header class="hero">
     <div class="hero__in">
-      <p class="eyebrow">${esc(BRAND.name)}${jobType === 'insurance' ? ' · Insurance Claim' : ''}</p>
+      <p class="eyebrow">${esc(companyBrand().displayName)}${jobType === 'insurance' ? ' · Insurance Claim' : ''}</p>
       <h1>${esc(estimateTitle(report))}</h1>
       <p class="sub">${esc(customer || '')}${customer ? ' · ' : ''}${esc(where)}</p>
       <p class="sub tiny">Prepared ${esc(fmtDate(report.generatedAt))}</p>
@@ -226,7 +226,7 @@ function replacementCovers(report: ComprehensiveRoofReport, option: any, inspect
   return `<section>
     <div class="sec-head"><h2>What This Covers</h2><span class="n">your new roof</span></div>
     ${panel}
-    ${w ? `<p class="muted tiny" style="margin:4px 0 14px"><b>Backed by:</b> ${w.manufacturerLine}; ${w.workmanshipYears}-year Best Roofing Now workmanship warranty on the installation.</p>` : ''}
+    ${w ? `<p class="muted tiny" style="margin:4px 0 14px"><b>Backed by:</b> ${w.manufacturerLine}; ${w.workmanshipYears ? `${w.workmanshipYears}-year ` : ''}${esc(companyBrand().displayName)} workmanship warranty on the installation.</p>` : ''}
     ${isoLine}
     ${walkthrough}
     <p style="font-weight:600;margin-bottom:8px">Every replacement we install includes:</p>
@@ -273,8 +273,9 @@ export function estimateColorSection(report: ComprehensiveRoofReport): string {
   return `<section><div class="sec-head"><h2>Your Color Options</h2></div>${inner}</section>`;
 }
 
-/** Financing — shown on every estimate: a repair bill is a surprise expense too. */
+/** Financing — shown on every estimate when the company offers it: a repair bill is a surprise expense too. */
 export function estimateFinancingSection(): string {
+  if (!hasFinancing()) return '';
   return `<section><div class="sec-head"><h2>Financing</h2></div>${financing(DOCUMENT_STYLE)}</section>`;
 }
 
@@ -315,11 +316,12 @@ export function estimateBasisSection(report: ComprehensiveRoofReport, damageSumm
   </section>`;
 }
 
-/** Real completed projects near the customer — same live map embedded in every report type, fed by this app's own proxy of bestroofingnow.com's own project data (project-map-proxy.ts). */
+/** Real completed projects near the customer, on a live map. Left out until Archie has a per-company project feed (project-map-widget.ts). */
 export function estimateOurWorkSection(): string {
+  if (!ourWorkMapAvailable()) return '';
   return `<section>
     <div class="sec-head"><h2>See Our Work Near You</h2></div>
-    <p class="muted tiny" style="margin-bottom:10px">Real completed roofing projects across the Charlotte area &mdash; tap any pin to see before &amp; after photos from a job near you.</p>
+    <p class="muted tiny" style="margin-bottom:10px">Real completed projects near you &mdash; tap any pin to see before &amp; after photos from a real job.</p>
     ${projectMapContainerHtml()}
   </section>`;
 }
@@ -334,10 +336,10 @@ export function estimateTermsSection(report: ComprehensiveRoofReport, jobType?: 
       <li>Pricing reflects current local labor and material costs and is valid for 30 days.</li>
       <li>Hidden damage (decking, underlayment) found once work begins is quoted separately before we proceed.</li>
       ${jobType === 'insurance' ? '<li>We review the eligible scope directly with your adjuster.</li>' : ''}
-      <li>Questions? Call us at <a href="tel:+1${BRAND.phone.replace(/\D/g, '')}" style="color:inherit"><b>${esc(BRAND.phone)}</b></a>.</li>
+      <li>Questions? Call us at <a href="${companyTel()}" style="color:inherit"><b>${esc(companyBrand().phone)}</b></a>.</li>
     </ul>
     ${extra}
-    ${whyBRN(DOCUMENT_STYLE, { compact: true })}
+    ${whyUs(DOCUMENT_STYLE, { compact: true })}
   </section>`;
 }
 
@@ -402,7 +404,7 @@ export function estimateSections(
     { key: 'scope', label: 'Scope of Work', html: estimateScopeSection(report) },
     { key: 'covers', label: 'What the Price Covers', html: estimateCoversSection(report, opts.inspection) },
     { key: 'colors', label: 'Color Options', html: estimateColorSection(report) },
-    // consumer financing (HFS Financial) is a residential program; a commercial estimate carries none
+    // consumer financing is a residential program; a commercial estimate carries none
     ...(isCommercialReport(report) ? [] : [{ key: 'financing', label: 'Financing', html: estimateFinancingSection() }]),
     { key: 'basis', label: 'Basis of the Estimate', html: estimateBasisSection(report, opts.inspection?.damageSummary, opts.jobType) },
     { key: 'existing-roof', label: 'The Existing Roof', html: estimateExistingRoofSection(report, opts.inspection) },
@@ -419,7 +421,7 @@ export function renderEstimateHtml(
   const body = joinSections(arrangeSections(estimateSections(report, opts), (report as any).layout));
 
   return premiumShell({
-    title: `${estimateTitle(report)} · ${report.property?.address ?? ''} · ${BRAND.name}`,
+    title: `${estimateTitle(report)} · ${report.property?.address ?? ''} · ${companyBrand().displayName}`,
     hero: estimateHero(report, opts.customer, opts.jobType),
     body,
     // SECTION_CSS_DOCUMENT, never SECTION_CSS_SCROLL: the scroll bundle is

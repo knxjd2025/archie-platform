@@ -11,7 +11,7 @@ import { clientReports, leads, settings, teamMembers } from '../../shared/schema
 import { requireAuth, requireRole } from '../auth/middleware';
 import { ownsLead, type SessionUser } from '../access/rep-scope';
 import { logWrite } from '../writes/log';
-import { TRUST_STATS } from '../lib/reports/brand-facts';
+import { currentProfile } from '../tenant/context';
 import { warrantyFor } from '../lib/reports/product-warranty';
 import { OFFICE_ADDRESS_DEFAULT, SITE, reviewCountFrom, streetOnly, type LetterKind } from '../../shared/neighbor-letters';
 import { sendFailure } from '../lib/failure';
@@ -72,7 +72,7 @@ export function registerNeighborLetterRoutes(app: Express) {
       if (!(await ownsLead(user, lead.externalId))) return res.status(404).json({ error: 'not found' });
       const [me] = await db.select({ name: teamMembers.name, phone: teamMembers.phone, role: teamMembers.role }).from(teamMembers).where(eq(teamMembers.email, user.email));
       const [office, getting] = await Promise.all([loadSettings(), gettingLinesFor(lead.externalId).catch(() => ({ lines: [] as string[], source: null as string | null }))]);
-      const reviewStat = TRUST_STATS.find((f) => /reviews/i.test(f.text))?.text ?? null;
+      const reviewStat = currentProfile().trustStats.find((t) => /reviews/i.test(t)) ?? null;
       res.json({
         repName: me?.name || user.name,
         repCell: me?.phone || '',
