@@ -1,15 +1,16 @@
-const DEFAULT_ALLOWLIST = 'james@bestroofingnow.com,admin@bestroofingnow.com';
-
 /**
- * Addresses that may never sign in or be put on the roster, whatever the
- * roster says. James's call (2026-09-15): the one bestroofingnow.com account
- * that must not get in or join is fred@. LOGIN_BLOCKLIST adds more (CSV).
+ * Operator-level sign-in limits for the whole Archie deployment, on top of
+ * each company's roster. Both are empty unless set.
+ *
+ * LOGIN_ALLOWLIST (CSV): when set, only these addresses may sign in at all
+ * (useful while a deployment is private). LOGIN_BLOCKLIST (CSV): addresses
+ * that may never sign in or be put on any roster, whatever a roster says.
  */
-const DEFAULT_BLOCKLIST = 'fred@bestroofingnow.com';
+const DEFAULT_ALLOWLIST = '';
 
 export function isBlockedLoginEmail(email: string, blocklistCsv?: string): boolean {
   if (!email) return false;
-  const raw = [DEFAULT_BLOCKLIST, blocklistCsv ?? process.env.LOGIN_BLOCKLIST ?? ''].join(',');
+  const raw = blocklistCsv ?? process.env.LOGIN_BLOCKLIST ?? '';
   const blocked = raw.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
   return blocked.includes(email.trim().toLowerCase());
 }

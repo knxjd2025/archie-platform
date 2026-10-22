@@ -2,13 +2,12 @@
  * Inbox watch — the pure rules: which window a scan covers, what to ask Gmail
  * for, and how an email is sorted into lead / customer / important / other.
  *
- * Window rule (James, 2026-09-15): a scan looks back 72 hours the first time;
+ * Window rule: a scan looks back 72 hours the first time;
  * after that it starts where the last scan stopped, because that time was
  * already looked at. A gap longer than 72 hours is still capped at 72 hours.
  */
 
 export const LOOKBACK_HOURS = 72;
-export const COMPANY_DOMAIN = 'bestroofingnow.com';
 
 export type InboxCategory = 'lead' | 'customer' | 'important' | 'other';
 
@@ -127,7 +126,9 @@ const NOISE_SUBJECT = /\b(unsubscribe|webinar|newsletter|% off|sale ends|your re
 /** Deterministic first pass; the LLM only refines what this leaves in doubt. */
 export function heuristicClassify(m: InboxMessage, known: Map<string, KnownContact>, mailbox: string): Classification {
   const from = m.fromEmail.toLowerCase();
-  if (!from || from === mailbox.toLowerCase() || from.endsWith('@' + COMPANY_DOMAIN)) return { category: 'other', score: 0, reason: 'internal mail' };
+  // Mail from the mailbox's own domain is the team writing to itself.
+  const ownDomain = mailbox.toLowerCase().split('@')[1] ?? '';
+  if (!from || from === mailbox.toLowerCase() || (ownDomain && from.endsWith('@' + ownDomain))) return { category: 'other', score: 0, reason: 'internal mail' };
   const text = `${m.subject} ${m.snippet}`;
   const matched = known.get(from) || null;
   if (matched) {
@@ -152,8 +153,9 @@ export function needsModel(c: Classification): boolean {
   return c.score >= 25 && c.score < 80 && !c.matched;
 }
 
-export const CLASSIFY_SYSTEM = `You sort a roofing company's inbox (Best Roofing Now, Charlotte NC). For each email decide:
-- "lead": a homeowner or business asking about roofing work, an estimate, an inspection, a repair, storm damage, or wanting to be contacted.
+/** The classifier's instructions, for the company whose inbox it is. */
+export const classifySystem = (company: { displayName: string; trade: string; cityState: string }) => `You sort the inbox of ${company.displayName}, a ${company.trade} company${company.cityState ? ` in ${company.cityState}` : ''}. For each email decide:
+- "lead": a homeowner or business asking about ${company.trade} work, an estimate, an inspection, a repair, storm damage, or wanting to be contacted.
 - "customer": an existing customer or job contact writing about their job (scheduling, questions, complaints, payments).
 - "important": not a lead but the team must not miss it — insurance adjusters and claims, permits and inspectors, supplier or crew issues, invoices, contracts and signatures, legal, deadlines, cancellations.
 - "other": newsletters, receipts, notifications, vendors selling to us, anything that can wait.

@@ -17,7 +17,7 @@ beforeAll(() => {
 
 const BOOK_TOOLS = ['get_my_leads', 'get_pipeline_summary', 'get_project', 'get_follow_ups', 'create_follow_up', 'get_my_schedule', 'get_my_kpis', 'lookup_job', 'get_job_commissions'] as const;
 
-const ALL_ARCHIE_TOOLS = ['get_leads', 'get_pipeline', 'get_receivables', 'get_payables', 'get_schedule', 'get_calendar', 'get_lead_kpis', 'get_watchlist', 'search_email', 'search_drive', 'read_drive_file'] as const;
+const ALL_ARCHIE_TOOLS = ['get_leads', 'get_pipeline', 'get_receivables', 'get_payables', 'get_schedule', 'get_calendar', 'get_lead_kpis', 'search_email', 'search_drive', 'read_drive_file'] as const;
 
 describe('buildArchieForRole', () => {
   it('registers exactly the role-allowed Archie tools (plus base knowledge tool)', () => {

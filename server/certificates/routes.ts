@@ -30,7 +30,7 @@ import {
 import { certificatePdf } from './pdf';
 import { sendAsMailbox } from '../brain/gmail-delegated';
 import { memberByEmail } from '../access/team-scope';
-import { COMPANY_DOMAIN, OFFICE_CALENDAR } from '../calendar/access';
+import { sendingMailboxFor } from '../calendar/access';
 import { JobTreadClient } from '../integrations/jobtread';
 import { rateLimit } from '../lib/rate-limit';
 import { certificateLinkCompany } from '../tenant/public-links';
@@ -80,11 +80,6 @@ async function company() {
 }
 
 /** The mailbox the signing link goes out from — the sender's own where they have one. */
-async function sendingMailboxFor(email: string): Promise<string> {
-  const e = (email || '').trim().toLowerCase();
-  const me = await memberByEmail(e).catch(() => null);
-  return me?.active && e.endsWith(COMPANY_DOMAIN) ? e : OFFICE_CALENDAR;
-}
 
 const signaturesOf = (row: typeof jobCertificates.$inferSelect): CertificateSignatures => ({
   companySigner: row.companySigner || '',
@@ -548,7 +543,7 @@ export async function recordCertificateSignatures(externalId: string, s: {
 /** Where the homeowner signs. Absolute, because it is pasted into an email. */
 function signUrlFor(token: string | null): string | null {
   if (!token) return null;
-  const base = (process.env.APP_BASE_URL || 'https://app.bestroofingnow.com').replace(/\/+$/, '');
+  const base = (process.env.APP_BASE_URL || '').replace(/\/+$/, '');
   return `${base}/r/sign/${token}`;
 }
 

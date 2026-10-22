@@ -7,24 +7,22 @@
  * agents — so bringing it back is this one line rather than a re-write.
  *
  * These hide the UI only. The server keeps answering, deliberately: the agent
- * routes behind the BRN Advisor are the same ones the Ops Brain and the CMO's
- * new-lead handling use, and disabling those would break work that has nothing
- * to do with the screen being hidden.
+ * routes behind the Advisor are the same ones the CMO's new-lead handling
+ * uses, and disabling those would break work that has nothing to do with the
+ * screen being hidden.
  */
 export const FEATURES = {
   /**
-   * The BRN Advisor — the one assistant everyone uses, with the person's own
-   * book, the North Carolina reference and the company website behind it, and
+   * The Archie Advisor — the one assistant everyone uses, with the person's
+   * own book, the trade reference and the company website behind it, and
    * the specialists (Sales Manager, Customer Service, COO, Project
    * Coordinator, Estimator, CMO, CEO, CFO, CPA, Tax Accountant, Tax Lawyer)
    * still reachable from its screen.
    *
-   * Hidden from everyone on 2026-09-19 at James's request. Turned back on
-   * 2026-10-02, also at his request, after the Advisor was rebuilt. Set to
-   * false to hide it again: the nav entry, the dashboard's "Ask Advisor"
+   * Set to false to hide it: the nav entry, the dashboard's "Ask Advisor"
    * buttons and the page itself all follow this one flag.
    */
-  brnAdvisor: true,
+  advisor: true,
 } as const;
 
 export type FeatureName = keyof typeof FEATURES;

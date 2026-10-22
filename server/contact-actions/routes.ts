@@ -13,6 +13,7 @@
  * rep-scoped through ownsLead() — a rep can only reach their own clients.
  */
 import type { Express, Request, Response } from 'express';
+import { currentProfile } from '../tenant/context';
 import { currentGhlLocationId, ghlAppBase } from '../integrations/ghl/connection';
 import { eq } from 'drizzle-orm';
 import { db } from '../db';
@@ -187,7 +188,7 @@ export function registerContactActionRoutes(app: Express) {
     if (!found.contactId) return res.status(502).json({ error: 'GoHighLevel has no contact for this client and one could not be created.' });
     const result = channel === 'sms'
       ? await ghl.sendSms(lead.phone!, message, found.contactId)
-      : await ghl.sendEmail(found.contactId, subject || 'Best Roofing Now', message);
+      : await ghl.sendEmail(found.contactId, subject || currentProfile().displayName, message);
     if (!result.success) return res.status(502).json({ error: result.error || 'GoHighLevel did not accept the message.' });
     res.json({ ok: true, contactId: found.contactId, messageId: result.messageId ?? null });
   }));

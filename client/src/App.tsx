@@ -207,7 +207,7 @@ function App() {
     if (page === 'leads' || page === 'inbox' || page === 'sales' || page === 'client' || page === 'canvass' || page === 'kpis' || page === 'cheat-sheet' || page === 'playbook' || page === 'sales-journey' || page === 'commercial-training') return isSalesPlus;
     // The Advisor follows its switch (shared/features.ts): when that is
     // off the page is refused here and so drops out of the nav as well.
-    if (page === 'chat') return FEATURES.brnAdvisor;
+    if (page === 'chat') return FEATURES.advisor;
     // Every role may open Monday; /api/meetings returns only the meetings
     // that role is actually in, so a rep sees the sales meeting and no more.
     return true; // dashboard + schedule + monday are open to everyone signed in

@@ -63,27 +63,25 @@ describe('calendarMailboxes', () => {
     // A hard-coded list once omitted a rep entirely, so their appointments were
     // invisible app-wide even though delegation worked for their mailbox.
     expect(
-      calendarMailboxes([m('pat@acme.test'), m('morgan@acme.test')]),
+      calendarMailboxes([m('pat@acme.test'), m('morgan@acme.test')], 'acme.test'),
     ).toEqual(['morgan@acme.test', 'pat@acme.test']);
   });
 
   it('skips deactivated people', () => {
-    expect(calendarMailboxes([m('a@x.com'), m('gone@x.com', false)])).toEqual(['a@x.com']);
+    expect(calendarMailboxes([m('a@x.com'), m('gone@x.com', false)], 'x.com')).toEqual(['a@x.com']);
   });
 
   it('dedupes and normalises case', () => {
-    expect(calendarMailboxes([m('A@x.com'), m('a@x.com'), m(' a@x.com ')])).toEqual(['a@x.com']);
+    expect(calendarMailboxes([m('A@x.com'), m('a@x.com'), m(' a@x.com ')], 'x.com')).toEqual(['a@x.com']);
   });
 
   it('ignores rows without a usable address', () => {
-    expect(calendarMailboxes([m('a@x.com'), m(''), m('not-an-email'), { email: null, active: true }])).toEqual(['a@x.com']);
+    expect(calendarMailboxes([m('a@x.com'), m(''), m('not-an-email'), { email: null, active: true }], 'x.com')).toEqual(['a@x.com']);
   });
 
-  it('falls back rather than sweeping nothing', () => {
-    // An empty sweep would wipe the team schedule to zero rows, which reads as
-    // "no appointments" instead of as a failure.
-    for (const empty of [[], [m('gone@x.com', false)]]) {
-      expect(calendarMailboxes(empty).length).toBeGreaterThan(0);
-    }
+  it('sweeps nobody without a delegated domain, and nobody off the domain', () => {
+    // Pruning only touches mailboxes that were swept, so an empty sweep removes nothing.
+    expect(calendarMailboxes([m('a@x.com')], '')).toEqual([]);
+    expect(calendarMailboxes([m('a@x.com'), m('b@gmail.com')], 'x.com')).toEqual(['a@x.com']);
   });
 });

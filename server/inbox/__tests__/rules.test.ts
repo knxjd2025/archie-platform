@@ -34,7 +34,7 @@ const msg = (over: Partial<InboxMessage>): InboxMessage => ({
   messageId: 'm1', threadId: 't1', fromName: 'Pat Jones', fromEmail: 'pat@example.com', subject: '', snippet: '', receivedAt: now, labelIds: ['UNREAD'], ...over,
 });
 const known = new Map([['sam@client.com', { email: 'sam@client.com', name: 'Sam Client', externalId: 'jt-1' }]]);
-const me = 'joven@bestroofingnow.com';
+const me = 'jo@acme.test';
 
 describe('sorting the inbox', () => {
   it('reads a From header', () => {
@@ -58,7 +58,7 @@ describe('sorting the inbox', () => {
     expect(heuristicClassify(msg({ subject: 'Signed contract attached' }), known, me).category).toBe('important');
   });
   it('internal mail, newsletters and notifications are not worth a row', () => {
-    expect(heuristicClassify(msg({ fromEmail: 'james@bestroofingnow.com', subject: 'roof leak estimate' }), known, me).score).toBe(0);
+    expect(heuristicClassify(msg({ fromEmail: 'pat@acme.test', subject: 'roof leak estimate' }), known, me).score).toBe(0);
     expect(heuristicClassify(msg({ fromEmail: 'noreply@shopify.com', subject: 'Your receipt' }), known, me).category).toBe('other');
     expect(heuristicClassify(msg({ fromEmail: 'news@vendor.com', subject: 'Unsubscribe or save 20% off' }), known, me).score).toBeLessThan(25);
   });

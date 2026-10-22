@@ -3,12 +3,13 @@
  * Window rule and classification live in ./rules.ts (pure, tested).
  */
 import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
+import { currentProfile } from '../tenant/context';
 import { db } from '../db';
 import { inboxItems, inboxScans, leads } from '../../shared/schema';
 import { getDelegatedGmail } from '../brain/gmail-delegated';
 import { completeJson } from '../lib/llm-json';
 import {
-  scanWindow, readWindowOldestFirst, gmailQuery, parseFrom, heuristicClassify, needsModel, classifyPrompt, parseClassifications, CLASSIFY_SYSTEM, isActionable,
+  scanWindow, readWindowOldestFirst, gmailQuery, parseFrom, heuristicClassify, needsModel, classifyPrompt, parseClassifications, classifySystem, isActionable,
   type InboxMessage, type KnownContact, type Classification, type ScanWindow,
 } from './rules';
 
@@ -70,7 +71,7 @@ async function refineWithModel(items: InboxMessage[], first: Map<string, Classif
   const unsure = items.filter((m) => needsModel(first.get(m.messageId)!)).slice(0, 25);
   if (!unsure.length) return;
   try {
-    const raw = await completeJson(CLASSIFY_SYSTEM, classifyPrompt(unsure));
+    const raw = await completeJson(classifySystem(currentProfile()), classifyPrompt(unsure));
     for (const [id, c] of parseClassifications(raw)) {
       const h = first.get(id);
       if (h) first.set(id, { ...c, matched: h.matched });

@@ -167,34 +167,4 @@ export async function fetchLeads(
   return rows.map(shapeLead);
 }
 
-export interface WatchItem {
-  source: string;
-  kind: string;
-  summary: string;
-  urgency: string;
-  owner: string;
-  state: string;
-  contact: string | null;
-  openedAt: string | null;
-}
-export function shapeLoop(r: any): WatchItem {
-  const c = r.contact || {};
-  return {
-    source: r.source,
-    kind: r.kind,
-    summary: r.summary,
-    urgency: r.urgency,
-    owner: r.owner,
-    state: r.state,
-    contact: c.name || c.email || c.phone || null,
-    openedAt: iso(r.openedAt),
-  };
-}
 
-// The BRN ops brain's flagged items. Archie has no brain, so the watchlist is
-// empty; kept so the assistant's tool answers "nothing flagged" until it is retired.
-export async function fetchWatchlist(
-  _opts: { source?: string; urgency?: string; limit?: number } = {},
-): Promise<WatchItem[]> {
-  return [];
-}

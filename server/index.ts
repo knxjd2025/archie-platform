@@ -107,7 +107,7 @@ async function start() {
       console.log(`
 ╔═══════════════════════════════════════════════════════════════╗
 ║                                                               ║
-║   🏠 Best Roofing Now AI Executive Team                       ║
+║   Archie                                                      ║
 ║                                                               ║
 ║   Server running on http://localhost:${PORT}                     ║
 ║                                                               ║

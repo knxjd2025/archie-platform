@@ -7,57 +7,56 @@ const row = (sourceId: string, calendarSource: string | null, start: string | nu
   ({ sourceId, calendarSource, start: start === null ? null : new Date(start) });
 
 describe('calendarMailboxes', () => {
-  it('takes the active roster, and falls back rather than syncing nothing', () => {
+  it('takes the active roster on the company domain, and nothing without one', () => {
     expect(calendarMailboxes([
-      { email: 'Thomas@BestRoofingNow.com', active: true },
-      { email: 'gone@bestroofingnow.com', active: false },
-      { email: 'banning@bestroofingnow.com', active: true },
-    ])).toEqual(['banning@bestroofingnow.com', 'thomas@bestroofingnow.com']);
+      { email: 'Toni@Acme.test', active: true },
+      { email: 'gone@acme.test', active: false },
+      { email: 'bo@acme.test', active: true },
+    ], 'acme.test')).toEqual(['bo@acme.test', 'toni@acme.test']);
 
-    expect(calendarMailboxes([]).length).toBeGreaterThan(0);
-    expect(calendarMailboxes([{ email: 'gone@x.com', active: false }]).length).toBeGreaterThan(0);
+    expect(calendarMailboxes([{ email: 'bo@acme.test', active: true }], '')).toEqual([]);
   });
 });
 
 describe('prunableSourceIds', () => {
-  const swept = ['banning@bestroofingnow.com', 'james@bestroofingnow.com'];
+  const swept = ['bo@acme.test', 'pat@acme.test'];
 
   it('prunes a row whose event Google no longer returns', () => {
     const stored = [
-      row('banning@bestroofingnow.com:kept', 'banning@bestroofingnow.com', '2026-09-22T14:00:00Z'),
-      row('banning@bestroofingnow.com:cancelled', 'banning@bestroofingnow.com', '2026-09-22T16:00:00Z'),
+      row('bo@acme.test:kept', 'bo@acme.test', '2026-09-22T14:00:00Z'),
+      row('bo@acme.test:cancelled', 'bo@acme.test', '2026-09-22T16:00:00Z'),
     ];
-    const seen = new Set(['banning@bestroofingnow.com:kept']);
-    expect(prunableSourceIds(stored, seen, swept, WINDOW)).toEqual(['banning@bestroofingnow.com:cancelled']);
+    const seen = new Set(['bo@acme.test:kept']);
+    expect(prunableSourceIds(stored, seen, swept, WINDOW)).toEqual(['bo@acme.test:cancelled']);
   });
 
   it('leaves a mailbox alone when its listing failed', () => {
-    // thomas@ threw, so it is absent from `swept`. Its silence is not evidence
+    // toni@ threw, so it is absent from `swept`. Its silence is not evidence
     // that every appointment on it was cancelled.
-    const stored = [row('thomas@bestroofingnow.com:a', 'thomas@bestroofingnow.com', '2026-09-22T14:00:00Z')];
+    const stored = [row('toni@acme.test:a', 'toni@acme.test', '2026-09-22T14:00:00Z')];
     expect(prunableSourceIds(stored, new Set(), swept, WINDOW)).toEqual([]);
   });
 
   it('never prunes outside the window Google was asked about', () => {
     const stored = [
-      row('james@bestroofingnow.com:old', 'james@bestroofingnow.com', '2026-06-01T14:00:00Z'),
-      row('james@bestroofingnow.com:future', 'james@bestroofingnow.com', '2027-01-01T14:00:00Z'),
+      row('pat@acme.test:old', 'pat@acme.test', '2026-06-01T14:00:00Z'),
+      row('pat@acme.test:future', 'pat@acme.test', '2027-01-01T14:00:00Z'),
     ];
     expect(prunableSourceIds(stored, new Set(), swept, WINDOW)).toEqual([]);
   });
 
   it('keeps the window boundaries themselves', () => {
     const stored = [
-      row('james@bestroofingnow.com:from', 'james@bestroofingnow.com', WINDOW.from.toISOString()),
-      row('james@bestroofingnow.com:to', 'james@bestroofingnow.com', WINDOW.to.toISOString()),
+      row('pat@acme.test:from', 'pat@acme.test', WINDOW.from.toISOString()),
+      row('pat@acme.test:to', 'pat@acme.test', WINDOW.to.toISOString()),
     ];
     expect(prunableSourceIds(stored, new Set(), swept, WINDOW).sort())
-      .toEqual(['james@bestroofingnow.com:from', 'james@bestroofingnow.com:to']);
+      .toEqual(['pat@acme.test:from', 'pat@acme.test:to']);
   });
 
   it('never prunes a row that cannot be placed in the window', () => {
     const stored = [
-      row('james@bestroofingnow.com:nostart', 'james@bestroofingnow.com', null),
+      row('pat@acme.test:nostart', 'pat@acme.test', null),
       row('orphan', null, '2026-09-22T14:00:00Z'),
     ];
     expect(prunableSourceIds(stored, new Set(), swept, WINDOW)).toEqual([]);
@@ -65,15 +64,15 @@ describe('prunableSourceIds', () => {
 
   it('prunes nothing when every stored row was seen', () => {
     const stored = [
-      row('banning@bestroofingnow.com:a', 'banning@bestroofingnow.com', '2026-09-22T14:00:00Z'),
-      row('james@bestroofingnow.com:b', 'james@bestroofingnow.com', '2026-09-23T14:00:00Z'),
+      row('bo@acme.test:a', 'bo@acme.test', '2026-09-22T14:00:00Z'),
+      row('pat@acme.test:b', 'pat@acme.test', '2026-09-23T14:00:00Z'),
     ];
     const seen = new Set(stored.map((r) => r.sourceId));
     expect(prunableSourceIds(stored, seen, swept, WINDOW)).toEqual([]);
   });
 
   it('prunes every row of a swept mailbox that genuinely emptied', () => {
-    const stored = [row('banning@bestroofingnow.com:a', 'banning@bestroofingnow.com', '2026-09-22T14:00:00Z')];
-    expect(prunableSourceIds(stored, new Set(), swept, WINDOW)).toEqual(['banning@bestroofingnow.com:a']);
+    const stored = [row('bo@acme.test:a', 'bo@acme.test', '2026-09-22T14:00:00Z')];
+    expect(prunableSourceIds(stored, new Set(), swept, WINDOW)).toEqual(['bo@acme.test:a']);
   });
 });

@@ -2,27 +2,27 @@ import { describe, it, expect } from 'vitest';
 import { boardPeople, canBookOn, fromGhlEvent, fromGoogleEvent, sells } from '../calendar/board';
 
 const roster = [
-  { email: 'james@bestroofingnow.com', name: 'James Turner', role: 'admin', active: true, jobtreadSalesRep: 'James Turner' },
-  { email: 'thomas@bestroofingnow.com', name: 'Thomas Bramhill', role: 'sales', active: true, jobtreadSalesRep: 'Thomas Bramhill' },
-  { email: 'admin@bestroofingnow.com', name: 'Office Admin', role: 'admin', active: true, jobtreadSalesRep: null },
-  { email: 'old@bestroofingnow.com', name: 'Old Rep', role: 'sales', active: false, jobtreadSalesRep: 'Old Rep' },
+  { email: 'jamie@acme.test', name: 'Jamie Owner', role: 'admin', active: true, jobtreadSalesRep: 'Jamie Owner' },
+  { email: 'toni@acme.test', name: 'Toni Reed', role: 'sales', active: true, jobtreadSalesRep: 'Toni Reed' },
+  { email: 'admin@acme.test', name: 'Office Admin', role: 'admin', active: true, jobtreadSalesRep: null },
+  { email: 'old@acme.test', name: 'Old Rep', role: 'sales', active: false, jobtreadSalesRep: 'Old Rep' },
   { email: 'someone@gmail.com', name: 'Outside', role: 'sales', active: true, jobtreadSalesRep: null },
 ];
 
 describe('boardPeople', () => {
-  it('shows the sales reps and James by default, office calendars on request', () => {
-    expect(boardPeople(roster, null, new Set()).map((p) => p.name)).toEqual(['James Turner', 'Outside', 'Thomas Bramhill']);
-    expect(boardPeople(roster, null, new Set(), true).map((p) => p.name)).toEqual(['James Turner', 'Office Admin', 'Outside', 'Thomas Bramhill']);
+  it('shows the sales reps and the owner by default, office calendars on request', () => {
+    expect(boardPeople(roster, null, new Set()).map((p) => p.name)).toEqual(['Jamie Owner', 'Outside', 'Toni Reed']);
+    expect(boardPeople(roster, null, new Set(), true).map((p) => p.name)).toEqual(['Jamie Owner', 'Office Admin', 'Outside', 'Toni Reed']);
   });
   it('limits a scoped rep to the calendars they may see and flags each source', () => {
-    const people = boardPeople(roster, ['thomas@bestroofingnow.com', 'someone@gmail.com'], new Set(['someone@gmail.com']));
+    const people = boardPeople(roster, ['toni@acme.test', 'someone@gmail.com'], new Set(['someone@gmail.com']), false, 'acme.test');
     expect(people).toEqual([
       { email: 'someone@gmail.com', name: 'Outside', role: 'sales', google: false, ghl: true, jobtreadSalesRep: null },
-      { email: 'thomas@bestroofingnow.com', name: 'Thomas Bramhill', role: 'sales', google: true, ghl: false, jobtreadSalesRep: 'Thomas Bramhill' },
+      { email: 'toni@acme.test', name: 'Toni Reed', role: 'sales', google: true, ghl: false, jobtreadSalesRep: 'Toni Reed' },
     ]);
   });
   it('counts a JobTread Sales Rep name as selling', () => {
-    expect(sells({ role: 'admin', jobtreadSalesRep: 'James Turner' })).toBe(true);
+    expect(sells({ role: 'admin', jobtreadSalesRep: 'Jamie Owner' })).toBe(true);
     expect(sells({ role: 'customer_service', jobtreadSalesRep: null })).toBe(false);
   });
 });
@@ -46,8 +46,8 @@ describe('event mapping', () => {
 
 describe('canBookOn', () => {
   it('lets anyone book on their own calendar and on calendars they can see', () => {
-    expect(canBookOn({ email: 'Joven@bestroofingnow.com' }, 'joven@bestroofingnow.com', [])).toBe(true);
-    expect(canBookOn({ email: 'joven@bestroofingnow.com' }, 'thomas@bestroofingnow.com', null)).toBe(true);
-    expect(canBookOn({ email: 'banning@bestroofingnow.com' }, 'thomas@bestroofingnow.com', ['banning@bestroofingnow.com'])).toBe(false);
+    expect(canBookOn({ email: 'Jo@acme.test' }, 'jo@acme.test', [])).toBe(true);
+    expect(canBookOn({ email: 'jo@acme.test' }, 'toni@acme.test', null)).toBe(true);
+    expect(canBookOn({ email: 'banning@acme.test' }, 'toni@acme.test', ['banning@acme.test'])).toBe(false);
   });
 });

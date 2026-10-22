@@ -1,36 +1,27 @@
 import { inArray } from 'drizzle-orm';
-import { getDelegatedCalendar } from '../brain/calendar-brain';
+import { delegatedDomainForCurrentCompany, getDelegatedCalendar } from '../integrations/google-workspace';
 import { appointments, teamMembers } from '../../shared/schema';
 import { db } from '../db';
 import { upsertBySourceId } from './run';
 import { mapAppointment, type RawGEvent } from './calendar-map';
 
-// Fallback if the roster query returns nothing — the working calendars from the
-// caught-up audit: sales (Banning), office (Admin), owner (James). Syncing zero
-// mailboxes would silently empty the team schedule, which reads as "nobody has
-// any appointments" rather than as a failure.
-const FALLBACK_SOURCES = [
-  'banning@bestroofingnow.com',
-  'admin@bestroofingnow.com',
-  'james@bestroofingnow.com',
-];
-
 /**
- * Which mailboxes to sweep. Derived from the team roster rather than hard-coded
- * so a new hire's calendar appears without a code change — the previous fixed
- * list silently omitted Thomas, whose appointments were invisible to the whole
- * app even though delegation worked for his mailbox.
+ * Which mailboxes to sweep: the company's active team members on the Google
+ * Workspace domain the operator delegated to it (integrations/google-workspace.ts).
+ * No domain, no mailboxes: the sweep does nothing rather than guess.
  */
 export function calendarMailboxes(
   members: Array<{ email: string | null; active: boolean | null }>,
+  domain: string,
 ): string[] {
+  if (!domain) return [];
   const seen = new Set<string>();
   for (const m of members) {
     if (!m.active) continue;
     const email = (m.email || '').trim().toLowerCase();
-    if (email.includes('@')) seen.add(email);
+    if (email.endsWith(`@${domain.toLowerCase()}`)) seen.add(email);
   }
-  return seen.size ? Array.from(seen).sort() : [...FALLBACK_SOURCES];
+  return Array.from(seen).sort();
 }
 
 export interface StoredAppointment { sourceId: string; calendarSource: string | null; start: Date | null }
@@ -91,7 +82,7 @@ export async function syncCalendar(now: Date = new Date()): Promise<Record<strin
   const seen = new Set<string>();
   const swept: string[] = [];
   let failed = 0;
-  for (const mailbox of calendarMailboxes(roster)) {
+  for (const mailbox of calendarMailboxes(roster, delegatedDomainForCurrentCompany() ?? '')) {
     try {
       for (const ev of await listAllEvents(mailbox, timeMin, timeMax)) {
         const row = mapAppointment(ev, mailbox);

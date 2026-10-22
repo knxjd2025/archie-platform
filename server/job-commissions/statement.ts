@@ -6,6 +6,7 @@
  * admin reading the record are looking at the same sheet of paper.
  */
 import { buildPdf, type PdfLine } from '../lib/pdf/simple-pdf';
+import { currentProfile } from '../tenant/context';
 import {
   COMMISSION_LINES, COMMISSION_LINE_LABEL, JOB_COMMISSION_CHECKS, JOB_COMMISSION_STATUS_LABEL,
   computeJobCommission, isAdjusted, sourcesFor, type ChecksState, type CommissionSources, type JobCommissionStatus,
@@ -17,7 +18,7 @@ const usd = (n: number) => (Number.isFinite(n) ? n : 0).toLocaleString('en-US', 
 const day = (d: Date | string | null | undefined) =>
   (d ? new Date(d).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—');
 /**
- * Who did it, for a printed page: 'james@bestroofingnow.com' → 'james', and
+ * Who did it, for a printed page: 'dana@acme.test' → 'dana', and
  * anything the app opened by itself → 'automatically'. A bare dash here read
  * as a missing name rather than as "nobody typed this in".
  */
@@ -132,6 +133,6 @@ export function commissionStatementPdf(row: JobCommission, generatedBy: string):
   return buildPdf(
     'Commission statement',
     commissionStatementLines(row),
-    `Best Roofing Now · ${row.jobName || row.jobExternalId} · saved by ${who(generatedBy)} on ${day(new Date())}`,
+    `${currentProfile().displayName} · ${row.jobName || row.jobExternalId} · saved by ${who(generatedBy)} on ${day(new Date())}`,
   );
 }

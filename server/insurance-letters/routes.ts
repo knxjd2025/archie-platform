@@ -23,7 +23,7 @@ import {
 import { JobTreadClient } from '../integrations/jobtread';
 import { sendAsMailboxWithAttachments, type MailAttachment } from '../brain/gmail-delegated';
 import { memberByEmail } from '../access/team-scope';
-import { COMPANY_DOMAIN, OFFICE_CALENDAR } from '../calendar/access';
+import { sendingMailboxFor } from '../calendar/access';
 import { decodeImagePayload, MAX_UPLOAD_BYTES } from '../photos/routes';
 import { jobCertificates } from '../../shared/schema';
 import { certificatePdf } from '../certificates/pdf';
@@ -59,11 +59,6 @@ async function officeAddress(): Promise<string> {
  * it; otherwise the office mailbox. A Workspace mailbox and its calendar id
  * are the same address, which is why this mirrors calendar/access.ts.
  */
-async function sendingMailboxFor(email: string): Promise<string> {
-  const e = (email || '').trim().toLowerCase();
-  const me = await memberByEmail(e).catch(() => null);
-  return me?.active && e.endsWith(COMPANY_DOMAIN) ? e : OFFICE_CALENDAR;
-}
 
 const str = (v: unknown, max = 200): string => String(v ?? '').replace(/[\r\n]+/g, ' ').trim().slice(0, max);
 

@@ -8,7 +8,6 @@ export type ArchieToolName =
   | 'get_schedule'
   | 'get_calendar'
   | 'get_lead_kpis'
-  | 'get_watchlist'
   | 'search_email'
   | 'search_drive'
   | 'read_drive_file'
@@ -17,8 +16,8 @@ export type ArchieToolName =
   | 'jobtread_schema';
 
 // Minimum role for each Archie tool. Mirrors the cockpit section minimums in
-// shared/rbac.ts (leads/pipeline=sales, ar=manager, ap=admin), with lead KPIs +
-// the flagged-items watchlist treated as manager-level oversight.
+// shared/rbac.ts (leads/pipeline=sales, ar=manager, ap=admin), with lead KPIs
+// treated as manager-level oversight.
 //
 // The two calendar tools are NOT interchangeable, and the split is the whole
 // point of their differing minimums:
@@ -42,7 +41,6 @@ export const ARCHIE_TOOL_MIN_ROLE: Record<ArchieToolName, TeamRole> = {
   get_schedule: 'manager',
   get_receivables: 'manager',
   get_lead_kpis: 'manager',
-  get_watchlist: 'manager',
   search_drive: 'manager',
   read_drive_file: 'manager',
   get_payables: 'admin',

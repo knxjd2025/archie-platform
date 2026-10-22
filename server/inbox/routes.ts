@@ -10,11 +10,11 @@ import { requireAuth } from '../auth/middleware';
 import { teamMemberIdByEmail, type SessionUser } from '../access/rep-scope';
 import { timingSafeEqualStr } from '../security-config';
 import { scanMailbox, lastScanTo } from './scan';
-import { scanWindow, COMPANY_DOMAIN, LOOKBACK_HOURS } from './rules';
+import { scanWindow, LOOKBACK_HOURS } from './rules';
+import { canDelegateMailbox } from '../integrations/google-workspace';
 import { sendFailure } from '../lib/failure';
 import { asyncHandler } from '../lib/async-handler';
 
-const isCompanyMailbox = (email: string) => email.toLowerCase().endsWith('@' + COMPANY_DOMAIN);
 
 function cronAuthorized(req: Request): boolean {
   const secret = process.env.CRON_SECRET;
@@ -35,7 +35,7 @@ export function registerInboxRoutes(app: Express) {
         .where(and(eq(inboxItems.mailbox, mailbox), eq(inboxItems.status, 'new'), gte(inboxItems.score, 50))).groupBy(inboxItems.category);
       const counts: Record<string, number> = {};
       for (const r of rows) counts[r.category] = Number(r.n);
-      res.json({ mailbox, canScan: isCompanyMailbox(mailbox), lastScanAt: last?.toISOString() ?? null, nextWindow: { from: w.from.toISOString(), to: w.to.toISOString(), firstScan: w.firstScan, hours: Math.round((w.to.getTime() - w.from.getTime()) / 36e5) }, counts, lookbackHours: LOOKBACK_HOURS });
+      res.json({ mailbox, canScan: canDelegateMailbox(mailbox), lastScanAt: last?.toISOString() ?? null, nextWindow: { from: w.from.toISOString(), to: w.to.toISOString(), firstScan: w.firstScan, hours: Math.round((w.to.getTime() - w.from.getTime()) / 36e5) }, counts, lookbackHours: LOOKBACK_HOURS });
     } catch (e: any) { return sendFailure(res, e, 'GET /api/inbox/summary', 500); }
   });
 
@@ -44,8 +44,8 @@ export function registerInboxRoutes(app: Express) {
     try {
       const user = req.session.user! as SessionUser;
       const mailbox = user.email.toLowerCase();
-      if (!isCompanyMailbox(mailbox)) return res.status(400).json({ error: `Inbox watch works on @${COMPANY_DOMAIN} mailboxes.` });
-      if (!process.env.GOOGLE_SA_KEY) return res.status(503).json({ error: 'Google Workspace access is not configured on the server.' });
+      // Only a mailbox on the Google Workspace domain delegated to this company.
+      if (!canDelegateMailbox(mailbox)) return res.status(400).json({ error: 'Inbox watch needs Google Workspace connected for your company and a mailbox on its domain.' });
       const result = await scanMailbox(mailbox, user.email);
       res.json({ ok: true, ...result });
     } catch (e: any) { return sendFailure(res, e, 'POST /api/inbox/scan', 502, 'Could not read the mailbox.'); }
@@ -104,7 +104,7 @@ export function registerInboxRoutes(app: Express) {
     const out: Record<string, any> = {};
     for (const m of members) {
       const mailbox = m.email.toLowerCase();
-      if (!isCompanyMailbox(mailbox)) continue;
+      if (!canDelegateMailbox(mailbox)) continue;
       try { out[mailbox] = await scanMailbox(mailbox, 'cron'); }
       catch (e: any) { out[mailbox] = { error: e?.message || 'failed' }; }
     }

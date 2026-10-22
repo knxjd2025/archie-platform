@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { shapeDeal, shapeInvoice, shapeAppointment, shapeLead, shapeLoop } from '../reports';
+import { shapeDeal, shapeInvoice, shapeAppointment, shapeLead } from '../reports';
 
 describe('report shapers', () => {
   it('shapeDeal converts decimal string amount to number', () => {
@@ -24,15 +24,5 @@ describe('report shapers', () => {
   it('shapeLead joins name and passes status/source', () => {
     const out = shapeLead({ firstName: 'Dana', lastName: 'Lee', status: 'new', source: 'jobtread', serviceType: 'replacement', city: 'Charlotte', state: 'NC' });
     expect(out).toMatchObject({ name: 'Dana Lee', status: 'new', source: 'jobtread', serviceType: 'replacement', city: 'Charlotte' });
-  });
-  it('shapeLoop summarizes a flagged item and picks a contact label', () => {
-    const opened = new Date('2026-09-01T14:00:00Z');
-    const out = shapeLoop({ source: 'gmail', kind: 'lead_reply', summary: 'New lead reply not answered', urgency: 'urgent', owner: 'james', state: 'open', contact: { name: 'Jane Doe', email: 'jane@x.com' }, openedAt: opened });
-    expect(out).toMatchObject({ source: 'gmail', kind: 'lead_reply', urgency: 'urgent', owner: 'james', state: 'open', contact: 'Jane Doe' });
-    expect(out.openedAt).toBe(opened.toISOString());
-  });
-  it('shapeLoop falls back to email/phone when no contact name', () => {
-    expect(shapeLoop({ source: 'ghl', kind: 'x', summary: 's', urgency: 'normal', owner: 'unassigned', state: 'open', contact: { phone: '704-555-1212' }, openedAt: null }).contact).toBe('704-555-1212');
-    expect(shapeLoop({ source: 'ghl', kind: 'x', summary: 's', urgency: 'normal', owner: 'unassigned', state: 'open', contact: null, openedAt: null }).contact).toBe(null);
   });
 });

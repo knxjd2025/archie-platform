@@ -12,7 +12,7 @@ import { appointments, teamMembers } from '../../shared/schema';
 import { getDelegatedCalendar } from '../brain/calendar-brain';
 import { GoHighLevelClient } from '../integrations/gohighlevel';
 import { classifyKind } from '../sync/calendar-map';
-import { visibleCalendarsFor, COMPANY_DOMAIN } from './access';
+import { visibleCalendarsFor, companyDomain } from './access';
 import { mergeDuplicates } from '../../shared/schedule-board';
 import type { SessionUser } from '../access/rep-scope';
 
@@ -62,6 +62,7 @@ export function boardPeople(
   visible: string[] | null,
   ghlEmails: Set<string>,
   everyone = false,
+  domain = '',
 ): BoardPerson[] {
   return roster
     .filter((m) => m.active)
@@ -69,7 +70,7 @@ export function boardPeople(
     .filter((m) => visible === null || visible.includes(m.email.toLowerCase()))
     .map((m) => ({
       email: m.email.toLowerCase(), name: m.name, role: m.role,
-      google: m.email.toLowerCase().endsWith(COMPANY_DOMAIN), ghl: ghlEmails.has(m.email.toLowerCase()),
+      google: !!domain && m.email.toLowerCase().endsWith(`@${domain}`), ghl: ghlEmails.has(m.email.toLowerCase()),
       jobtreadSalesRep: m.jobtreadSalesRep,
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -148,7 +149,7 @@ export async function loadBoard(user: SessionUser, from: Date, to: Date, everyon
     db.select({ email: teamMembers.email, name: teamMembers.name, role: teamMembers.role, active: teamMembers.active, jobtreadSalesRep: teamMembers.jobtreadSalesRep }).from(teamMembers),
     ghlUsersByEmail(),
   ]);
-  const people = boardPeople(roster, visible, new Set(ghlUsers.keys()), everyone);
+  const people = boardPeople(roster, visible, new Set(ghlUsers.keys()), everyone, companyDomain());
   // Only worth offering "show office calendars" when there are some to add.
   const canSeeEveryone = boardPeople(roster, visible, new Set(), true).length > boardPeople(roster, visible, new Set(), false).length;
   const warnings: BoardWarning[] = [];

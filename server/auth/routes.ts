@@ -9,8 +9,7 @@ import { runAsCompany } from '../tenant/context';
 import { requireAuth } from './middleware';
 
 // Build the Google callback URL from the incoming request's host, so login
-// works on whatever domain the app is served from (best-roofing-ai.vercel.app
-// AND app.bestroofingnow.com) with no env cutover. The auth request and the
+// works on whatever domain the app is served from with no env cutover. The auth request and the
 // token exchange MUST use the same value — both derive it from the same host.
 // Each domain's callback URL must be listed in the Google OAuth client.
 function callbackUrl(req: Request): string {

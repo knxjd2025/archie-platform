@@ -14,20 +14,45 @@ import { db } from '../db';
 import { settings } from '../../shared/schema';
 import { memberByEmail, visibleEmailsFor } from '../access/team-scope';
 import type { SessionUser } from '../access/rep-scope';
+import { delegatedDomainForCurrentCompany } from '../integrations/google-workspace';
+import { currentProfile } from '../tenant/context';
 
-export const OFFICE_CALENDAR = 'admin@bestroofingnow.com';
-export const COMPANY_DOMAIN = '@bestroofingnow.com';
 export const SEE_ALL_KEY = 'calendar.seeAll';
 
-/** Pure: a roster member with a company mailbox books on their own calendar. */
-export function calendarFor(email: string, isActiveMember: boolean): string {
+/**
+ * @deprecated Kept until the signing routes move to sendingMailboxFor. The
+ * company's domain and office mailbox now come from the company itself.
+ */
+export const COMPANY_DOMAIN = '@company-domain.invalid';
+/** @deprecated See COMPANY_DOMAIN. Empty: mail without a sender goes out through the company's GHL. */
+export const OFFICE_CALENDAR = '';
+
+/** The company's Google Workspace domain, when the operator delegated one; '' otherwise. */
+export const companyDomain = (): string => delegatedDomainForCurrentCompany() ?? '';
+
+/** The office's own mailbox and calendar: the company email on its profile. */
+export const officeMailbox = (): string => currentProfile().email.toLowerCase();
+
+/** Pure: a roster member with a mailbox on the company's domain books on their own calendar. */
+export function calendarFor(email: string, isActiveMember: boolean, domain: string, office: string): string {
   const e = (email || '').trim().toLowerCase();
-  return isActiveMember && e.endsWith(COMPANY_DOMAIN) ? e : OFFICE_CALENDAR;
+  return isActiveMember && !!domain && e.endsWith(`@${domain}`) ? e : office;
+}
+
+/**
+ * Who an email from this person goes out as: themselves when they are an
+ * active team member, otherwise the office. Whether it goes through Google or
+ * the company's GHL is decided when it is sent (integrations/company-mail.ts).
+ */
+export async function sendingMailboxFor(email: string): Promise<string> {
+  const e = (email || '').trim().toLowerCase();
+  const me = await memberByEmail(e).catch(() => null);
+  return me?.active ? e : officeMailbox();
 }
 
 export async function bookingCalendarFor(email: string): Promise<string> {
   const me = await memberByEmail((email || '').toLowerCase()).catch(() => null);
-  return calendarFor(email, !!me?.active);
+  return calendarFor(email, !!me?.active, companyDomain(), officeMailbox());
 }
 
 export async function calendarSeeAllEmails(): Promise<string[]> {

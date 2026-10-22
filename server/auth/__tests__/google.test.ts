@@ -16,20 +16,20 @@ describe('buildGoogleAuthUrl', () => {
     expect(url).toContain('redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fgoogle%2Fcallback');
     expect(url).toContain('scope=');
     expect(decodeURIComponent(url)).toContain('email');
-    expect(url).toContain('hd=bestroofingnow.com');
+    expect(url).not.toContain('hd=');
   });
 });
 
 describe('profileFromUserinfo', () => {
   it('accepts a verified address', () => {
-    expect(profileFromUserinfo({ email: 'thomas@bestroofingnow.com', verified_email: true, name: 'Thomas', id: '123' }))
-      .toEqual({ email: 'thomas@bestroofingnow.com', name: 'Thomas', sub: '123' });
+    expect(profileFromUserinfo({ email: 'dana@acme.test', verified_email: true, name: 'Dana', id: '123' }))
+      .toEqual({ email: 'dana@acme.test', name: 'Dana', sub: '123' });
   });
   it('refuses an address Google has not verified', () => {
     // The address is matched against the roster and is the only identity
     // check, so an unverified one must not sign anybody in.
-    expect(() => profileFromUserinfo({ email: 'thomas@bestroofingnow.com', verified_email: false })).toThrow(/not verified/);
-    expect(() => profileFromUserinfo({ email: 'thomas@bestroofingnow.com' })).toThrow(/not verified/);
+    expect(() => profileFromUserinfo({ email: 'dana@acme.test', verified_email: false })).toThrow(/not verified/);
+    expect(() => profileFromUserinfo({ email: 'dana@acme.test' })).toThrow(/not verified/);
   });
   it('refuses a profile with no address', () => {
     expect(() => profileFromUserinfo({ verified_email: true })).toThrow(/missing email/);

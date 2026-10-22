@@ -6,6 +6,7 @@ import {
   CountryCode,
   RemovedTransaction,
 } from 'plaid';
+import { currentCompanyId, currentProfile } from '../tenant/context';
 import { perCompany } from '../tenant/per-company';
 import { db } from '../db';
 import { plaidItems, plaidTransactions } from '../../shared/schema';
@@ -70,8 +71,8 @@ export class PlaidClient {
     if (!this.available) throw new Error('Plaid not configured');
 
     const response = await this.client.linkTokenCreate({
-      user: { client_user_id: 'bestroofing-admin' },
-      client_name: 'Best Roofing Now',
+      user: { client_user_id: `company-${currentCompanyId() ?? 'none'}` },
+      client_name: currentProfile().displayName,
       products: [Products.Transactions],
       country_codes: [CountryCode.Us],
       language: 'en',

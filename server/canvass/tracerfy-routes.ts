@@ -8,6 +8,7 @@
  * MAX_ROWS_PER_PULL rows. Nothing here runs on a schedule.
  */
 import type { Express, Request, Response } from 'express';
+import { currentProfile } from '../tenant/context';
 import { and, desc, eq, inArray, type SQL } from 'drizzle-orm';
 import { db } from '../db';
 import { canvassAreas, canvassEnrichment, canvassProperties, canvassPropertyMeta } from '../../shared/schema';
@@ -226,7 +227,7 @@ export function registerTracerfyRoutes(app: Express) {
       const name = String(req.body?.name || '').trim().slice(0, 120) || `Area ${new Date().toLocaleDateString('en-US')}`;
       const geography = tracerfyGeography(shape);
       const tf = client();
-      const started = await tf.executeList({ geography, filter_overrides: tracerfyOverrides(filters), requested_count: requested, name: `BRN ${name}` });
+      const started = await tf.executeList({ geography, filter_overrides: tracerfyOverrides(filters), requested_count: requested, name: `${currentProfile().displayName} · ${name}` });
       const [area] = await db.insert(canvassAreas).values({
         name, shape, filters, geography, status: 'running', tracerfyListId: started.id,
         previewCount: Number(req.body?.previewCount) || null, requestedCount: requested, createdBy: user.email,

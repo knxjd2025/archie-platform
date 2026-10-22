@@ -105,9 +105,9 @@ export default function Dashboard({ onNavigate, onOpenClient }: Props) {
           <p className="text-sm text-gray-500 mt-1">Here's what's on the schedule.</p>
         </div>
         <ScheduleSection items={s?.upcoming || []} onNavigate={onNavigate} />
-        <div className={`grid gap-3 ${FEATURES.brnAdvisor ? 'grid-cols-2' : 'grid-cols-1'}`}>
+        <div className={`grid gap-3 ${FEATURES.advisor ? 'grid-cols-2' : 'grid-cols-1'}`}>
           <Action icon="📅" label="Full schedule" onClick={() => onNavigate('schedule')} />
-          {FEATURES.brnAdvisor && <Action icon="✨" label="Ask Advisor" onClick={() => onNavigate('chat')} />}
+          {FEATURES.advisor && <Action icon="✨" label="Ask Advisor" onClick={() => onNavigate('chat')} />}
         </div>
       </div>
     );
@@ -149,7 +149,7 @@ export default function Dashboard({ onNavigate, onOpenClient }: Props) {
             <p className="text-sm font-semibold text-red-800">💸 {money(s.overdueAR.total)} overdue</p>
             <p className="text-xs text-red-600">{s.overdueAR.count} invoice{s.overdueAR.count > 1 ? 's' : ''} past due — worth a follow-up.</p>
           </div>
-          {FEATURES.brnAdvisor && <button onClick={() => onNavigate('chat')} className="text-xs px-3 py-1.5 rounded-lg bg-white border border-red-200 text-red-700">Ask Advisor</button>}
+          {FEATURES.advisor && <button onClick={() => onNavigate('chat')} className="text-xs px-3 py-1.5 rounded-lg bg-white border border-red-200 text-red-700">Ask Advisor</button>}
         </div>
       )}
 
@@ -212,13 +212,13 @@ export default function Dashboard({ onNavigate, onOpenClient }: Props) {
       {/* Four tiles sit as 2x2 on a phone. Three leave an orphan in the second
           row, so the last one spans the width instead — deliberate rather than
           a gap where a button used to be. */}
-      <div className={`grid grid-cols-2 gap-3 ${FEATURES.brnAdvisor ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
+      <div className={`grid grid-cols-2 gap-3 ${FEATURES.advisor ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
         <Action icon="➕" label="New lead + book" onClick={() => onNavigate('leads', { newLead: true })} />
-        {FEATURES.brnAdvisor && <Action icon="✨" label="Ask Advisor" onClick={() => onNavigate('chat')} />}
+        {FEATURES.advisor && <Action icon="✨" label="Ask Advisor" onClick={() => onNavigate('chat')} />}
         <Action icon="✉️" label="Messages" onClick={() => onNavigate('conversations')} />
         <Action
           icon="🏗️" label="Production" onClick={() => onNavigate('production')}
-          className={FEATURES.brnAdvisor ? '' : 'col-span-2 sm:col-span-1'}
+          className={FEATURES.advisor ? '' : 'col-span-2 sm:col-span-1'}
         />
       </div>
 

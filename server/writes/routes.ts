@@ -1,4 +1,5 @@
 import type { Express, Request, Response } from 'express';
+import { currentProfile } from '../tenant/context';
 import { eq } from 'drizzle-orm';
 import { db } from '../db';
 import { leads, teamMembers } from '../../shared/schema';
@@ -185,7 +186,7 @@ export function registerWriteRoutes(app: Express) {
     const result =
       channel === 'sms'
         ? await ghl.sendSms('', message, contactId)
-        : await ghl.sendEmail(contactId, subject || 'Message from Best Roofing Now', message, html);
+        : await ghl.sendEmail(contactId, subject || `Message from ${currentProfile().displayName}`, message, html);
 
     await logWrite({
       actor, system: 'ghl', action: channel === 'sms' ? 'reply_sms' : 'reply_email', targetId: contactId,

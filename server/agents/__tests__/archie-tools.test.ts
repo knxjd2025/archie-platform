@@ -15,12 +15,11 @@ describe('archie tool role gate', () => {
       new Set(['get_leads', 'get_pipeline', 'search_email', 'get_calendar', 'recall_past_days']),
     );
   });
-  it('manager adds the team schedule + receivables + KPIs + watchlist + drive (no payables)', () => {
+  it('manager adds the team schedule + receivables + KPIs + drive (no payables)', () => {
     const t = new Set(archieToolsForRole('manager'));
     expect(t.has('get_schedule')).toBe(true);
     expect(t.has('get_receivables')).toBe(true);
     expect(t.has('get_lead_kpis')).toBe(true);
-    expect(t.has('get_watchlist')).toBe(true);
     expect(t.has('search_email')).toBe(true);
     expect(t.has('search_drive')).toBe(true);
     expect(t.has('read_drive_file')).toBe(true);
@@ -28,14 +27,14 @@ describe('archie tool role gate', () => {
   });
   it('admin gets everything including payables', () => {
     expect(archieToolsForRole('admin')).toContain('get_payables');
-    expect(archieToolsForRole('admin').length).toBe(14);
+    expect(archieToolsForRole('admin').length).toBe(13);
   });
   it('isArchieToolAllowed enforces minimums', () => {
     expect(isArchieToolAllowed('sales', 'get_payables')).toBe(false);
     expect(isArchieToolAllowed('admin', 'get_payables')).toBe(true);
     expect(isArchieToolAllowed('production', 'get_leads')).toBe(false);
-    expect(isArchieToolAllowed('sales', 'get_watchlist')).toBe(false);
-    expect(isArchieToolAllowed('manager', 'get_watchlist')).toBe(true);
+    expect(isArchieToolAllowed('sales', 'get_receivables')).toBe(false);
+    expect(isArchieToolAllowed('manager', 'get_receivables')).toBe(true);
     // A rep may search their OWN inbox — delegation impersonates the caller, so
     // search_email cannot reach anyone else's mail. Drive stays manager+
     // because shared company folders surface there.

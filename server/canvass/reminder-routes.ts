@@ -25,7 +25,7 @@ function cronAuthorized(req: Request): boolean {
   return given.length === expected.length && timingSafeEqual(given, expected);
 }
 
-const appUrl = (): string => (process.env.APP_BASE_URL || 'https://app.bestroofingnow.com').replace(/\/+$/, '');
+const appUrl = (): string => (process.env.APP_BASE_URL || '').replace(/\/+$/, '');
 
 export function registerRepReminderRoutes(app: Express) {
   // Scheduled at 12:00 and 13:00 UTC; only the run at 8 AM Eastern sends.

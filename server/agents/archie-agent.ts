@@ -2,7 +2,7 @@ import { BaseAgent, type AgentConfig, type Tool } from './base-agent';
 import { archieToolsForRole, isArchieToolAllowed, type ArchieToolName } from './archie-tools';
 import { recallPastDays } from './chat-store';
 import { type TeamRole } from '../../shared/rbac';
-import { fetchPipeline, fetchInvoicesByKind, fetchSchedule, fetchLeads, fetchWatchlist } from '../storage/reports';
+import { fetchPipeline, fetchInvoicesByKind, fetchSchedule, fetchLeads } from '../storage/reports';
 import { JobTreadClient } from '../integrations/jobtread';
 import { searchEmail, searchDrive, readDriveFile } from './google-tools';
 import { readCalendar } from './calendar-tools';
@@ -85,20 +85,6 @@ const TOOL_DEFS: Partial<Record<ArchieToolName, Omit<Tool, 'execute'> & { execut
     description: 'Lead KPIs from JobTread: win rate, pipeline value, counts by status.',
     parameters: { type: 'object', properties: { period: { type: 'string', description: 'month|year', enum: ['month', 'year'] } } },
     execute: () => async (p) => new JobTreadClient().getLeadKpis({ period: p.period === 'year' ? 'year' : 'month' }),
-  },
-  get_watchlist: {
-    name: 'get_watchlist',
-    description:
-      'Open items the assistant is watching / has flagged (the "Lead Watchdog") from email, texts, JobTread, and the calendar — with summary, urgency, owner, and contact. Optionally filter by source or urgency.',
-    parameters: {
-      type: 'object',
-      properties: {
-        source: { type: 'string', description: 'Filter by source', enum: ['gmail', 'ghl', 'jobtread', 'calendar', 'sms'] },
-        urgency: { type: 'string', description: 'Filter by urgency', enum: ['emergency', 'urgent', 'normal', 'low'] },
-        limit: { type: 'number', description: 'Max items (<=50)' },
-      },
-    },
-    execute: () => async (p) => fetchWatchlist({ source: p.source, urgency: p.urgency, limit: p.limit }),
   },
 };
 

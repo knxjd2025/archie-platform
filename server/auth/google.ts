@@ -3,8 +3,7 @@ import { google } from 'googleapis';
 import { timingSafeEqualStr } from '../security-config';
 
 // The OAuth redirect URI can be passed in (derived from the request's host, so
-// login works on any domain the app is served from — vercel.app AND
-// app.bestroofingnow.com). Falls back to the GOOGLE_OAUTH_REDIRECT env.
+// login works on any domain the app is served from). Falls back to the GOOGLE_OAUTH_REDIRECT env.
 function client(redirectUri?: string) {
   return new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
@@ -20,7 +19,6 @@ export function buildGoogleAuthUrl(redirectUri?: string, state?: string, codeCha
     access_type: 'online',
     prompt: 'select_account',
     scope: ['openid', 'email', 'profile'],
-    hd: 'bestroofingnow.com',
     // Carries the per-sign-in nonce, and whether this sign-in began in the
     // native app so the callback knows to hand a token back to it rather than
     // redirect to the website. See newOAuthState.
@@ -95,8 +93,8 @@ export interface GoogleUserinfo {
 /**
  * The profile sign-in trusts. The address is the whole identity check — it is
  * matched against the roster — so an address Google has not verified is
- * refused rather than taken at its word. `hd` on the auth URL is only a hint
- * to Google's account picker, not an enforced restriction.
+ * refused rather than taken at its word. Any Google account may sign in;
+ * the company roster decides who gets in.
  */
 export function profileFromUserinfo(data: GoogleUserinfo): { email: string; name: string; sub: string } {
   if (!data.email) throw new Error('Google profile missing email');

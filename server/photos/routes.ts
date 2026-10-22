@@ -88,7 +88,7 @@ export function registerPhotoRoutes(app: Express) {
       }
 
       const stamp = new Date().toISOString().slice(0, 10);
-      const name = String(req.body?.name || '').trim() || `BRN app ${stamp}.jpg`;
+      const name = String(req.body?.name || '').trim() || `Archie ${stamp}.jpg`;
       const description = String(req.body?.description || '').trim() || `Uploaded from the Team App by ${user.name}`;
 
       const r = await new JobTreadClient().uploadJobFile(req.params.externalId, {

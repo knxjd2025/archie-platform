@@ -1,25 +1,25 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { isAllowedLoginEmail, isBlockedLoginEmail, memberCanLogin } from '../allowlist';
 
-const LIST = 'james@bestroofingnow.com,admin@bestroofingnow.com';
+const LIST = 'james@acme.test,admin@acme.test';
 
 describe('isAllowedLoginEmail', () => {
   it('allows listed emails, case-insensitively', () => {
-    expect(isAllowedLoginEmail('james@bestroofingnow.com', LIST)).toBe(true);
+    expect(isAllowedLoginEmail('james@acme.test', LIST)).toBe(true);
     expect(isAllowedLoginEmail('Admin@BestRoofingNow.com', LIST)).toBe(true);
   });
   it('rejects unlisted emails', () => {
-    expect(isAllowedLoginEmail('banning@bestroofingnow.com', LIST)).toBe(false);
+    expect(isAllowedLoginEmail('banning@acme.test', LIST)).toBe(false);
     expect(isAllowedLoginEmail('random@gmail.com', LIST)).toBe(false);
   });
   it('trims whitespace in the list', () => {
-    expect(isAllowedLoginEmail('james@bestroofingnow.com', ' james@bestroofingnow.com , x@y.com ')).toBe(true);
+    expect(isAllowedLoginEmail('james@acme.test', ' james@acme.test , x@y.com ')).toBe(true);
   });
   it('rejects empty email', () => {
     expect(isAllowedLoginEmail('', LIST)).toBe(false);
   });
   it('trims whitespace in the email itself', () => {
-    expect(isAllowedLoginEmail('  james@bestroofingnow.com  ', 'james@bestroofingnow.com,admin@bestroofingnow.com')).toBe(true);
+    expect(isAllowedLoginEmail('  james@acme.test  ', 'james@acme.test,admin@acme.test')).toBe(true);
   });
 
   describe('default allowlist fallback', () => {
@@ -37,18 +37,16 @@ describe('isAllowedLoginEmail', () => {
       }
     });
 
-    it('uses default allowlist when no env var and no csv arg', () => {
+    it('names nobody by default (the gate only applies when LOGIN_ALLOWLIST is set)', () => {
       delete process.env.LOGIN_ALLOWLIST;
-      expect(isAllowedLoginEmail('james@bestroofingnow.com')).toBe(true);
-      expect(isAllowedLoginEmail('admin@bestroofingnow.com')).toBe(true);
-      expect(isAllowedLoginEmail('nobody@x.com')).toBe(false);
+      expect(isAllowedLoginEmail('owner@acme.test')).toBe(false);
     });
 
     it('uses env var override over default', () => {
       process.env.LOGIN_ALLOWLIST = 'only@foo.com';
       expect(isAllowedLoginEmail('only@foo.com')).toBe(true);
-      expect(isAllowedLoginEmail('james@bestroofingnow.com')).toBe(false);
-      expect(isAllowedLoginEmail('admin@bestroofingnow.com')).toBe(false);
+      expect(isAllowedLoginEmail('james@acme.test')).toBe(false);
+      expect(isAllowedLoginEmail('admin@acme.test')).toBe(false);
     });
   });
 });
@@ -80,14 +78,12 @@ describe('memberCanLogin', () => {
 });
 
 describe('isBlockedLoginEmail', () => {
-  it('blocks fred@bestroofingnow.com always, case-insensitively, and nobody else by default', () => {
-    expect(isBlockedLoginEmail('fred@bestroofingnow.com', '')).toBe(true);
-    expect(isBlockedLoginEmail('  Fred@BestRoofingNow.com ', '')).toBe(true);
-    expect(isBlockedLoginEmail('james@bestroofingnow.com', '')).toBe(false);
+  it('blocks nobody by default', () => {
+    expect(isBlockedLoginEmail('fred@acme.test', '')).toBe(false);
     expect(isBlockedLoginEmail('', '')).toBe(false);
   });
-  it('LOGIN_BLOCKLIST adds to the default, never replaces it', () => {
-    expect(isBlockedLoginEmail('x@bestroofingnow.com', 'x@bestroofingnow.com')).toBe(true);
-    expect(isBlockedLoginEmail('fred@bestroofingnow.com', 'x@bestroofingnow.com')).toBe(true);
+  it('blocks what LOGIN_BLOCKLIST lists, case-insensitively', () => {
+    expect(isBlockedLoginEmail('  Fred@Acme.test ', 'fred@acme.test')).toBe(true);
+    expect(isBlockedLoginEmail('dana@acme.test', 'fred@acme.test')).toBe(false);
   });
 });
