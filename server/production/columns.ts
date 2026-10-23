@@ -1,4 +1,4 @@
-// The production portion of BRN's JobTread "Status" pipeline (scheduling →
+// The production portion of the JobTread "Status" pipeline (scheduling →
 // complete), grouped into board columns. Sales/insurance stages that come
 // before "Buyer Approved" and the "Lost" stage are intentionally excluded —
 // they belong to the sales pipeline, not the production board.

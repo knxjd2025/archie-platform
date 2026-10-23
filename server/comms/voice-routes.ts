@@ -17,6 +17,7 @@
 import type { Express, Request, Response } from 'express';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { db } from '../db';
+import { currentProfile } from '../tenant/context';
 import { calls, leads, phoneNumbers, settings, teamMembers } from '../../shared/schema';
 import { requireAuth, requireRole } from '../auth/middleware';
 import { ownsLead, type SessionUser } from '../access/rep-scope';
@@ -212,7 +213,7 @@ export function registerVoiceRoutes(app: Express): void {
     }
     try {
       const r = await getTwilioClient().ensureTwimlApp({
-        friendlyName: 'Best Roofing Now — browser calling',
+        friendlyName: `${currentProfile().displayName} · browser calling`,
         voiceUrl: `${base}/api/voice/browser-dial`,
         statusCallback: `${base}/api/voice/status`,
       });
@@ -654,7 +655,7 @@ export function registerVoiceRoutes(app: Express): void {
     res.type('text/xml').send(inboundTwiml({
       forwardTo: decision.ring,
       ringClients: decision.ringClients,
-      greeting: 'Thank you for calling Best Roofing Now.',
+      greeting: `Thank you for calling ${currentProfile().displayName}.`,
       announceRecording: true,
       recordingStatusCallback: `${baseUrl(req)}/api/voice/recording`,
       ringSeconds,

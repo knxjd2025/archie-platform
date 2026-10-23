@@ -1,5 +1,5 @@
 /**
- * Commission calculator, ported from the standalone BRN Commission Calculator
+ * Commission calculator, ported from a standalone commission calculator
  * tool. A draft is computed and saved on creation; a manager's approval is the
  * durable payout record (mirrors reports/routes.ts's /present idempotency).
  */

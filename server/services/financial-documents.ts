@@ -94,7 +94,7 @@ function extractDate(filename: string): string | null {
     return `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`;
   }
 
-  // Match year from filenames like bestroofingnowllc_Q1_2025
+  // Match year from filenames like acmeroofingllc_Q1_2025
   const qMatch = filename.match(/Q(\d)_(\d{4})/);
   if (qMatch) {
     const quarter = parseInt(qMatch[1]);

@@ -5,7 +5,7 @@
  * Two routes, picked per message:
  *   1. Google Workspace, when the operator has delegated the company's domain
  *      (google-workspace.ts) and `from` is a mailbox in it. The message lands
- *      in that person's Sent folder, as it did in the BRN app.
+ *      in that person's Sent folder.
  *   2. Otherwise the company's GHL sub-account (ghl/messaging.ts), from its
  *      default sender. This is the normal route for every Archie company.
  *

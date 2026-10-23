@@ -153,7 +153,7 @@ export const teamMembers = pgTable('team_members', {
   lastLoginAt: timestamp('last_login_at'),
   createdBy: text('created_by'),
   // The exact JobTread "Sales Rep" dropdown value for this person (e.g.
-  // "Thomas Bramhill"). Used to attribute JobTread jobs to a rep login.
+  // "Dana Reed"). Used to attribute JobTread jobs to a rep login.
   jobtreadSalesRep: text('jobtread_sales_rep'),
   // Reporting line: the sales leader this person reports to. Drives 'team'
   // data scope — a leader sees their own records plus their direct reports'.
@@ -184,7 +184,7 @@ export const repAssignments = pgTable('rep_assignments', {
   source: text('source').notNull().default('manual'),
   /** 'high' | 'medium' | 'low' — lets a human tell a guess from a decision. */
   confidence: text('confidence'),
-  /** Human-readable why, e.g. "task assigned to Thomas Bramhill". */
+  /** Human-readable why, e.g. "task assigned to Dana Reed". */
   evidence: text('evidence'),
   assignedBy: text('assigned_by'),
   assignedAt: timestamp('assigned_at').defaultNow(),
@@ -522,7 +522,7 @@ export type NewKpiEvent = typeof kpiEvents.$inferInsert;
 
 export const commissionStatusEnum = pgEnum('commission_status', ['draft', 'approved']);
 
-// Commission calculations, ported from the standalone BRN Commission Calculator
+// Commission calculations, ported from a standalone commission calculator
 // tool into the app so a manager's approval is a durable record (not lost on
 // refresh) and the AI advisors can read/write the same numbers.
 export const commissions = pgTable('commissions', {

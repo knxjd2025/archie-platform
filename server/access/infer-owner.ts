@@ -7,7 +7,7 @@
  * is the person actually running it.
  *
  * The rules encode how this team works:
- *   - a field rep (Banning, Thomas) on the job IS the rep
+ *   - a field rep (e.g. Dana, Toni) on the job IS the rep
  *   - the owner alone on a job means it is his
  *   - the owner ALONGSIDE a field rep means the field rep owns it and the
  *     owner is sharing, not that ownership is ambiguous
@@ -31,7 +31,7 @@ export interface JobEvidence {
 
 export interface RepIdentity {
   teamMemberId: number;
-  /** JobTread "Sales Rep" / user name, e.g. "Banning Rumsey". */
+  /** JobTread "Sales Rep" / user name, e.g. "Dana Reed". */
   repName: string;
   email: string;
   /** True for people who actually run jobs in the field. */
@@ -71,7 +71,7 @@ function repsIn(names: string[], reps: RepIdentity[]): RepIdentity[] {
 /**
  * Pick an owner from a set of people on the job.
  *
- * A field rep beats the owner: if Banning is on the job it is Banning's, and
+ * A field rep beats the owner: if Dana is on the job it is Dana's, and
  * James being there too means he is helping. Two field reps is a genuine tie —
  * suggest the first as primary and the other as secondary rather than guessing
  * silently, and mark it lower confidence so a human looks.
@@ -98,7 +98,7 @@ const pick = (r: RepIdentity) => ({ teamMemberId: r.teamMemberId, repName: r.rep
  * owner being there too means he is helping — was only ever applied WITHIN a
  * signal. Across signals the owner won by precedence: he is assigned tasks on
  * most jobs, so `tasks` returned him with high confidence and the calendar was
- * never consulted, even when the only appointment was Banning's. Somebody
+ * never consulted, even when the only appointment was Dana's. Somebody
  * drove to that house, and it was not the person who ticked a task.
  */
 function loneFieldRepOnCalendar(ev: JobEvidence, reps: RepIdentity[]): RepIdentity | null {

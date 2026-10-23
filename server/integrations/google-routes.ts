@@ -4,7 +4,7 @@
  * Every route here reads the SIGNED-IN user's own Calendar/Drive through the
  * service account's domain-wide delegation, so there is no "connect" step and
  * no per-user OAuth token to store: the Workspace admin granted the delegation
- * once and each @bestroofingnow.com account is reachable as itself.
+ * once and each account on the company's delegated domain is reachable as itself.
  *
  * This replaced ~22 routes that shared one process-global OAuth token. Those
  * had two problems. None of them called requireAuth (auth in this app is
