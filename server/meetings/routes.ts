@@ -210,7 +210,7 @@ export function registerMeetingRoutes(app: Express) {
 
     const mondayIso = isDate(req.body?.monday) ? req.body.monday : mondayFor(new Date());
     const [week] = await db.select().from(meetingWeeks).where(eq(meetingWeeks.monday, mondayIso));
-    if (!week) return res.status(400).json({ error: 'There is no pack for that Monday yet.' });
+    if (!week) return res.status(400).json({ error: 'There is no meeting pack for that week yet.' });
 
     const notes = String(req.body?.notes ?? '').slice(0, 20000);
     await db.insert(meetingNotes)
@@ -233,7 +233,7 @@ export function registerMeetingRoutes(app: Express) {
 
     const mondayIso = isDate(req.body?.monday) ? req.body.monday : mondayFor(new Date());
     const [week] = await db.select().from(meetingWeeks).where(eq(meetingWeeks.monday, mondayIso));
-    if (!week) return res.status(400).json({ error: 'There is no pack for that Monday yet.' });
+    if (!week) return res.status(400).json({ error: 'There is no meeting pack for that week yet.' });
 
     const ownerEmail = str(req.body?.ownerEmail, 160).toLowerCase() || null;
     const dueDate = isDate(req.body?.dueDate) ? req.body.dueDate : null;

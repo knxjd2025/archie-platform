@@ -26,7 +26,7 @@ import Documents from './pages/documents';
 import ClientDetail from './pages/client-detail';
 import Schedule from './pages/schedule';
 import Assignments from './pages/assignments';
-import Monday from './pages/monday';
+import Meetings from './pages/meetings';
 import CallsPage from './pages/calls';
 import CallBar from './components/CallBar';
 import BugReportButton from './components/BugReportButton';
@@ -34,7 +34,7 @@ import Bugs from './pages/bugs';
 import { setBugPage } from './lib/bug-monitor';
 import { FEATURES } from '../../shared/features';
 
-type Page = 'monday' | 'dashboard' | 'inbox' | 'leads' | 'sales' | 'client' | 'canvass' | 'kpis' | 'commission' | 'payouts' | 'cheat-sheet' | 'playbook' | 'sales-journey' | 'commercial-training' | 'chat' | 'conversations' | 'production' | 'claims' | 'documents' | 'schedule' | 'calls' | 'integrations' | 'team' | 'account' | 'assignments' | 'bugs';
+type Page = 'meetings' | 'dashboard' | 'inbox' | 'leads' | 'sales' | 'client' | 'canvass' | 'kpis' | 'commission' | 'payouts' | 'cheat-sheet' | 'playbook' | 'sales-journey' | 'commercial-training' | 'chat' | 'conversations' | 'production' | 'claims' | 'documents' | 'schedule' | 'calls' | 'integrations' | 'team' | 'account' | 'assignments' | 'bugs';
 
 /**
  * One source of truth for navigation — it drives the desktop top bar, the
@@ -70,7 +70,7 @@ const NAV: {
   { page: 'schedule', label: 'Schedule', icon: '📅', primary: true },
 
   { page: 'calls', label: 'Calls', icon: '📞', group: 'sell' },
-  { page: 'monday', label: 'Monday', icon: '🗓️', group: 'sell' },
+  { page: 'meetings', label: 'Meetings', icon: '🗓️', group: 'sell' },
   { page: 'inbox', label: 'Inbox Leads', icon: '📬', group: 'sell' },
   { page: 'canvass', label: 'Canvass', icon: '🚪', group: 'sell' },
   { page: 'sales', label: 'Sales Pipeline', icon: '📈', group: 'sell' },
@@ -108,7 +108,9 @@ const ROLE_LABEL: Record<string, string> = {
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>(() => {
     try {
-      const saved = localStorage.getItem('archie.page') as Page | null;
+      const raw = localStorage.getItem('archie.page');
+      // The Meetings page used to be called Monday.
+      const saved = (raw === 'monday' ? 'meetings' : raw) as Page | null;
       return saved && saved !== 'client' ? saved : 'dashboard';
     } catch { return 'dashboard'; }
   });
@@ -200,9 +202,9 @@ function App() {
     // The Advisor follows its switch (shared/features.ts): when that is
     // off the page is refused here and so drops out of the nav as well.
     if (page === 'chat') return FEATURES.advisor;
-    // Every role may open Monday; /api/meetings returns only the meetings
+    // Every role may open Meetings; /api/meetings returns only the meetings
     // that role is actually in, so a rep sees the sales meeting and no more.
-    return true; // dashboard + schedule + monday are open to everyone signed in
+    return true; // dashboard + schedule + meetings are open to everyone signed in
   };
   const activePage: Page = canSeePage(currentPage) ? currentPage : 'dashboard';
   // So a bug report, or an error caught on its own, says which screen it came from.
@@ -437,7 +439,7 @@ function App() {
 
       {/* Main Content */}
       <main id="main" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 md:pb-8">
-        {activePage === 'monday' && <Monday onNavigate={handleNavigate} />}
+        {activePage === 'meetings' && <Meetings onNavigate={handleNavigate} />}
         {activePage === 'dashboard' && (
           <Dashboard
             onAgentChat={handleAgentChat}

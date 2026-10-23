@@ -77,14 +77,14 @@ function Section({ s, onOpen }: { s: MeetingSection; onOpen: (page: string) => v
 }
 
 /**
- * Monday morning.
+ * Meetings.
  *
- * Four meetings back to back, each with the numbers its room argues about and
+ * The week's meetings, each with the numbers its room argues about and
  * the handful of things that need deciding. Built on Sunday evening so it is
  * on screen when people sit down, and what gets agreed is written here — open
  * items lead next week's pack rather than being remembered or not.
  */
-export default function Monday({ onNavigate }: { onNavigate?: (page: string) => void }) {
+export default function Meetings({ onNavigate }: { onNavigate?: (page: string) => void }) {
   const { user } = useAuth();
   const [state, setState] = useState<Payload | null>(null);
   const [tab, setTab] = useState<MeetingKey | null>(null);
@@ -151,8 +151,9 @@ export default function Monday({ onNavigate }: { onNavigate?: (page: string) => 
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs text-gray-500">{state?.pack.weekFrom} → {state?.pack.weekTo}</p>
-          <h2 className="text-2xl font-bold text-gray-900">{meetingDayLabel(monday)}</h2>
+          <h2 className="text-2xl font-bold text-gray-900">Meetings</h2>
+          <p className="text-sm text-gray-600">Week of {meetingDayLabel(monday)}</p>
+          {state?.pack.weekFrom && <p className="text-xs text-gray-500">Numbers from {state.pack.weekFrom} to {state.pack.weekTo}</p>}
           <p className="text-sm text-gray-500 mt-0.5">
             {state?.pack.generatedAt
               ? `Prepared ${new Date(state.pack.generatedAt).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' })}`
@@ -175,7 +176,7 @@ export default function Monday({ onNavigate }: { onNavigate?: (page: string) => 
 
       {!state?.generated && (
         <p className="text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
-          Sunday evening's job builds this automatically. {isAdmin ? 'You can build it now with the button above.' : 'It will be here before Monday morning.'}
+          Sunday evening's job builds this automatically. {isAdmin ? 'You can build it now with the button above.' : 'It will be here before the week starts.'}
         </p>
       )}
 
