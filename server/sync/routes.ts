@@ -4,7 +4,7 @@ import { db } from '../db';
 import { leads, syncRuns } from '../../shared/schema';
 import { requireRole } from '../auth/middleware';
 import { asyncHandler } from '../lib/async-handler';
-import { runAllSyncs, runRoofLinkSync } from './index';
+import { runAllSyncs } from './index';
 import { effectiveRunStatus } from './run';
 import { sendFailure } from '../lib/failure';
 
@@ -41,18 +41,7 @@ export function registerSyncRoutes(app: Express) {
     }
   });
 
-  // RoofLink (the old CRM): pull its clients now, or check the key works.
-  app.post('/api/sync/rooflink', requireRole('admin'), asyncHandler(async (_req: Request, res: Response) => {
-    res.json(await runRoofLinkSync());
-  }));
-  app.get('/api/sync/rooflink/health', requireRole('admin'), asyncHandler(async (_req: Request, res: Response) => {
-    const { RoofLinkClient } = await import('../integrations/rooflink');
-    const [health, [imported]] = await Promise.all([
-      new RoofLinkClient().healthCheck(),
-      db.select({ n: sql<number>`count(*)` }).from(leads).where(eq(leads.source, 'rooflink')),
-    ]);
-    res.json({ ...health, importedLeads: Number(imported?.n ?? 0) });
-  }));
+
 
   app.get('/api/sync/status', requireRole('admin'), asyncHandler(async (_req: Request, res: Response) => {
     const rows = await db.select().from(syncRuns).orderBy(desc(syncRuns.startedAt)).limit(20);
@@ -78,9 +67,5 @@ export function registerSyncRoutes(app: Express) {
     res.json({ results });
   }));
 
-  // RoofLink on its own schedule (see runRoofLinkSync for why).
-  app.get('/api/sync/rooflink/cron', asyncHandler(async (req: Request, res: Response) => {
-    if (!cronAuthed(req)) return res.status(401).json({ message: 'no' });
-    res.json({ results: [await runRoofLinkSync()] });
-  }));
+
 }

@@ -8,7 +8,7 @@ import { sendFailure } from '../lib/failure';
 export function registerBoardRoutes(app: Express) {
   /**
    * The calendars this person may see (Google live + GoHighLevel), with
-   * everything on them for the requested Charlotte day(s). ?date=YYYY-MM-DD
+   * everything on them for the requested company day(s). ?date=YYYY-MM-DD
    * (default today), ?days=1..7, ?everyone=1 adds the office calendars.
    */
   app.get('/api/schedule/board', requireAuth, async (req: Request, res: Response) => {

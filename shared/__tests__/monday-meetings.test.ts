@@ -43,12 +43,12 @@ describe('which Monday a pack belongs to', () => {
   });
 
   /**
-   * The job runs on Sunday evening in Charlotte, which is already Monday in
+   * The job runs on Sunday evening in the company's time zone, which is already Monday in
    * UTC. Filed by UTC day the pack would land on the wrong Monday and nobody
    * would find it.
    */
   it('files Sunday evening under tomorrow, not under the UTC day', () => {
-    const sundayNight = new Date('2026-09-21T01:30:00Z');   // 9:30pm Sunday in Charlotte
+    const sundayNight = new Date('2026-09-21T01:30:00Z');   // 9:30pm Sunday in the company's time zone
     expect(mondayFor(sundayNight)).toBe('2026-09-21');
   });
 

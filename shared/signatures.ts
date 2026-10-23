@@ -13,6 +13,7 @@
  *
  * Pure: no imports, no I/O. Shared by the server, the signing page and the app.
  */
+import { boardTz } from './schedule-board';
 
 export type SignatureSourceKind = 'report' | 'certificate' | 'letter';
 
@@ -238,11 +239,12 @@ export function describeDevice(ua: string | null | undefined): string {
 export const escapeHtml = (v: unknown): string =>
   String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-export const stamp = (iso: string | null | undefined, tz = 'America/New_York'): string => {
+export const stamp = (iso: string | null | undefined, tz = boardTz()): string => {
   if (!iso) return '';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  return `${d.toLocaleString('en-US', { timeZone: tz, dateStyle: 'medium', timeStyle: 'short' })} ET`;
+  // The zone's own short name (EDT, CST…) so a reader anywhere knows whose clock it is.
+  return d.toLocaleString('en-US', { timeZone: tz, month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
 };
 
 /**

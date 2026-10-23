@@ -98,7 +98,7 @@ describe('storm summary for the doorstep', () => {
 });
 
 describe('one door knock per visit', () => {
-  const now = new Date('2026-10-15T23:00:00Z'); // 7pm Thursday in Charlotte
+  const now = new Date('2026-10-15T23:00:00Z'); // 7pm Thursday in the company's time zone
   it('counts the first outcome at a house nobody had knocked', () => {
     expect(isNewKnock({ status: 'not_knocked', knockedAt: null }, 'no_answer', now)).toBe(true);
     expect(isNewKnock({ status: null, knockedAt: null }, 'interested', now)).toBe(true);
@@ -107,7 +107,7 @@ describe('one door knock per visit', () => {
     // "No answer" then "Interested" on the same visit used to log two doors.
     expect(isNewKnock({ status: 'no_answer', knockedAt: new Date('2026-10-15T22:50:00Z') }, 'interested', now)).toBe(false);
   });
-  it('counts a return visit on a later Charlotte day', () => {
+  it('counts a return visit on a later company day', () => {
     expect(isNewKnock({ status: 'no_answer', knockedAt: new Date('2026-10-14T22:00:00Z') }, 'no_answer', now)).toBe(true);
   });
   it('treats 9pm and 10pm Eastern as the same evening, though UTC has rolled over', () => {

@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { api } from '../lib/api';
-import ImessageBridge from '../components/ImessageBridge';
 import CommsVersionToggle from '../components/CommsVersionToggle';
 import { fmtDate } from '../lib/format';
 
@@ -144,8 +143,6 @@ export default function AccountPage({ onOpenClient }: { onOpenClient?: (external
       )}
 
       <CommsVersionToggle />
-
-      <ImessageBridge />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {[

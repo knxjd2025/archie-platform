@@ -13,6 +13,7 @@
  * rep-scoped through ownsLead() — a rep can only reach their own clients.
  */
 import type { Express, Request, Response } from 'express';
+import { boardTz } from '../../shared/schedule-board';
 import { currentProfile } from '../tenant/context';
 import { currentGhlLocationId, ghlAppBase } from '../integrations/ghl/connection';
 import { eq } from 'drizzle-orm';
@@ -45,8 +46,8 @@ export function ghlContactLinks(contactId: string | null, locationId: string, te
 /** The note GHL's timeline shows for a call started from the app. */
 export function callLogNote(via: CallVia, actor: string, when = new Date()): string {
   const how = via === 'ghl-app' ? 'LeadConnector app' : via === 'ghl-web' ? 'GHL web dialer' : "rep's own phone";
-  const stamp = when.toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' });
-  return `📞 Call started from the Team App via ${how} by ${actor} — ${stamp} ET`;
+  const stamp = when.toLocaleString('en-US', { timeZone: boardTz(), month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
+  return `📞 Call started from the Team App via ${how} by ${actor} — ${stamp}`;
 }
 
 export function normalizeVia(v: unknown): CallVia | null {

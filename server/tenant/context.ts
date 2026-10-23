@@ -7,6 +7,7 @@
  * fails closed. See docs/archie/01-multi-company.md.
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { setTimeZoneProvider } from '../../shared/schedule-board';
 import { resolveCompanyProfile, type CompanyProfile } from '../../shared/company';
 
 export interface TenantContext {
@@ -114,3 +115,6 @@ export function bindTenant<A extends unknown[], R>(fn: (...args: A) => R): (...a
 }
 
 export const isCompanyId = (v: unknown): v is string => typeof v === 'string' && UUID_RE.test(v);
+
+// Schedules, due dates and stamps use the current company's time zone.
+setTimeZoneProvider(() => currentProfile().timeZone);

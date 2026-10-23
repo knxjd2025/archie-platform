@@ -1,9 +1,33 @@
 import { describe, it, expect } from 'vitest';
-import { addDays, conflictsFor, dayLabel, etInstant, etOffset, etParts, label12, layoutDay, mergeDuplicates, openDays, openSlots, timeLabel } from '../schedule-board';
+import { addDays, boardTz, conflictsFor, dayLabel, etInstant, etOffset, etParts, setTimeZoneProvider, DEFAULT_TZ, label12, layoutDay, mergeDuplicates, openDays, openSlots, timeLabel } from '../schedule-board';
 
 const ev = (id: string, person: string, start: string, end: string, source: 'google' | 'ghl' = 'google', allDay = false) => ({ id, person, start, end, allDay, source, title: id });
 
-describe('Charlotte time', () => {
+describe('the company\'s own time zone', () => {
+  it('works in any zone, including half-hour offsets and daylight saving changes', () => {
+    expect(etOffset('2026-07-01', '12:00', 'America/Denver')).toBe('-06:00');
+    expect(etOffset('2026-01-15', '12:00', 'America/Denver')).toBe('-07:00');
+    expect(etOffset('2026-07-01', '12:00', 'America/Phoenix')).toBe('-07:00');
+    expect(etOffset('2026-07-01', '12:00', 'Asia/Kolkata')).toBe('+05:30');
+    expect(etInstant('2026-11-01', '09:00', 'America/Chicago').toISOString()).toBe('2026-11-01T15:00:00.000Z');
+    expect(etInstant('2026-03-08', '09:00', 'America/Los_Angeles').toISOString()).toBe('2026-03-08T16:00:00.000Z');
+  });
+  it('follows the provider, and falls back on a missing or bad zone', () => {
+    try {
+      setTimeZoneProvider(() => 'America/Denver');
+      expect(boardTz()).toBe('America/Denver');
+      expect(etParts('2026-07-01T18:00:00Z')).toEqual({ date: '2026-07-01', minutes: 12 * 60 });
+      setTimeZoneProvider(() => 'Not/AZone');
+      expect(boardTz()).toBe(DEFAULT_TZ);
+      setTimeZoneProvider(() => { throw new Error('no company'); });
+      expect(boardTz()).toBe(DEFAULT_TZ);
+    } finally {
+      setTimeZoneProvider(() => DEFAULT_TZ);
+    }
+  });
+});
+
+describe('company time', () => {
   it('knows daylight and standard time', () => {
     expect(etOffset('2026-09-17')).toBe('-04:00');
     expect(etOffset('2026-12-17')).toBe('-05:00');

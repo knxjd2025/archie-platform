@@ -6,9 +6,8 @@
  * read or write across companies.
  *
  * The Best Roofing AI app had jobs tied to one company's own systems (JobTread
- * and RoofLink syncs, a Gmail inbox watcher, the ops "brain", Monday meeting
- * packs, outreach). They are not part of Archie; their paths answer 410 so a
- * stray schedule cannot run them.
+ * syncs, a Gmail inbox watcher, the ops "brain", outreach, RoofLink). They are
+ * not part of Archie; their paths answer 410 so a stray schedule cannot run them.
  */
 import type { Express, Request, Response } from 'express';
 
@@ -21,16 +20,15 @@ export const DISABLED_IN_ARCHIE = [
   '/api/sync/cron',
   '/api/sync/rooflink/cron',
   '/api/cron/inbox-watch',
-  '/api/cron/meeting-prep',
-  '/api/cron/meeting-refresh',
   '/api/cron/bug-digest',
 ];
 
 /**
  * Whole areas of the Best Roofing AI app that were one company's own phone
- * and message plumbing (its Twilio numbers, VAPI voice assistant, a Mac
- * iMessage bridge, JobTread webhooks, a public project map for its website).
- * In Archie, calls and texts go through each company's GHL sub-account.
+ * and message plumbing (its Twilio numbers, a Vapi voice assistant and a Mac
+ * iMessage bridge, both removed, JobTread webhooks, a public project map for
+ * its website). In Archie, calls, texts and the AI voice agent go through each
+ * company's GHL sub-account (GHL Voice AI).
  */
 export const DISABLED_PREFIXES_IN_ARCHIE = [
   '/api/vapi',

@@ -15,7 +15,7 @@ const et = (t: string) => {
 };
 
 describe('minutesOfDay', () => {
-  it('reads the clock in Charlotte wherever the viewer is', () => {
+  it("reads the clock in the company's time zone wherever the viewer is", () => {
     expect(minutesOfDay(et('08:00'))).toBeCloseTo(8 * 60, 1);
     expect(minutesOfDay(et('09:30'))).toBeCloseTo(9 * 60 + 30, 1);
     // Same instant, a viewer in London. The meeting is still at 8am Charlotte.

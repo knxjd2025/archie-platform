@@ -28,17 +28,17 @@ function cronAuthorized(req: Request): boolean {
 const appUrl = (): string => (process.env.APP_BASE_URL || '').replace(/\/+$/, '');
 
 export function registerRepReminderRoutes(app: Express) {
-  // Scheduled at 12:00 and 13:00 UTC; only the run at 8 AM Eastern sends.
-  // `?force=1` skips the clock for a manual run — still one message per rep per day.
+  // Scheduled hourly through the US morning (vercel.json); each company sends
+  // on the run that lands on 8 AM in its own time zone. `?force=1` skips the
+  // clock for a manual run — still one message per rep per day.
   app.get('/api/cron/rep-daily-reminder', async (req: Request, res: Response) => {
     if (!cronAuthorized(req)) return res.status(401).json({ error: 'unauthorized' });
     try {
       const now = new Date();
-      if (req.query.force !== '1' && !isSendWindow(now)) {
-        return res.json({ ok: true, skipped: 'outside the 8 AM Eastern window', eastern: easternNow(now) });
-      }
+      const force = req.query.force === '1';
       // Once per company, as that company (server/tenant/cron.ts).
       const companies = await forEachLiveCompany(async () => {
+        if (!force && !isSendWindow(now)) return { skipped: 'outside 8 AM where the company is', local: easternNow(now) };
         const result = await runRepReminders(now, appUrl());
         await logWrite({
           actor: 'system:cron', system: 'app', action: 'rep_daily_reminder', targetId: result.date,

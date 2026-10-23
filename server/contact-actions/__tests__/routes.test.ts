@@ -18,11 +18,11 @@ describe('ghlContactLinks', () => {
 });
 
 describe('callLogNote', () => {
-  it('names how the call was placed, who placed it, and when (Eastern)', () => {
-    const note = callLogNote('ghl-app', 'rep@bestroofingnow.com', new Date('2026-09-14T18:05:00Z'));
+  it("names how the call was placed, who placed it, and when, in the company's zone", () => {
+    const note = callLogNote('ghl-app', 'rep@acme.test', new Date('2026-09-14T18:05:00Z'));
     expect(note).toContain('LeadConnector app');
-    expect(note).toContain('rep@bestroofingnow.com');
-    expect(note).toContain('2:05 PM ET');
+    expect(note).toContain('rep@acme.test');
+    expect(note).toContain('2:05 PM EDT');
     expect(callLogNote('ghl-web', 'a')).toContain('GHL web dialer');
     expect(callLogNote('phone', 'a')).toContain("rep's own phone");
   });

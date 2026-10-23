@@ -7,6 +7,7 @@
  * discussed on any past date.
  */
 import { and, eq, desc, isNull, lt, sql } from 'drizzle-orm';
+import { DEFAULT_TZ } from '../../shared/schedule-board';
 import { db } from '../db';
 import { agentChats, agentChatMessages } from '../../shared/schema';
 import { assistConfigured, summarizeConversation } from '../ai/assist-service';
@@ -21,7 +22,7 @@ export function businessDay(d: Date = new Date()): string {
     return d.toLocaleDateString('en-CA', { timeZone: currentProfile().timeZone });
   } catch {
     // A time zone the runtime doesn't know: fall back rather than break chat.
-    return d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    return d.toLocaleDateString('en-CA', { timeZone: DEFAULT_TZ });
   }
 }
 

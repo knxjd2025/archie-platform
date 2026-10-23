@@ -4,9 +4,6 @@ import SearchOverlay from './components/SearchOverlay';
 import Dashboard from './pages/dashboard';
 import Leads from './pages/leads';
 import Integrations from './pages/integrations';
-import OutreachDashboard from './pages/outreach/OutreachDashboard';
-import CampaignWizard from './pages/outreach/CampaignWizard';
-import OutreachLeads from './pages/outreach/OutreachLeads';
 import { useAuth } from './lib/auth';
 import { CompanyMark, PRODUCT_NAME, useCompany } from './lib/company';
 import { canSeeMoney, type TeamRole } from '../../shared/rbac';
@@ -37,7 +34,7 @@ import Bugs from './pages/bugs';
 import { setBugPage } from './lib/bug-monitor';
 import { FEATURES } from '../../shared/features';
 
-type Page = 'monday' | 'dashboard' | 'inbox' | 'leads' | 'sales' | 'client' | 'canvass' | 'kpis' | 'commission' | 'payouts' | 'cheat-sheet' | 'playbook' | 'sales-journey' | 'commercial-training' | 'chat' | 'conversations' | 'production' | 'claims' | 'documents' | 'schedule' | 'calls' | 'integrations' | 'outreach' | 'outreach-wizard' | 'outreach-leads' | 'outreach-campaign' | 'team' | 'account' | 'assignments' | 'bugs';
+type Page = 'monday' | 'dashboard' | 'inbox' | 'leads' | 'sales' | 'client' | 'canvass' | 'kpis' | 'commission' | 'payouts' | 'cheat-sheet' | 'playbook' | 'sales-journey' | 'commercial-training' | 'chat' | 'conversations' | 'production' | 'claims' | 'documents' | 'schedule' | 'calls' | 'integrations' | 'team' | 'account' | 'assignments' | 'bugs';
 
 /**
  * One source of truth for navigation — it drives the desktop top bar, the
@@ -77,7 +74,6 @@ const NAV: {
   { page: 'inbox', label: 'Inbox Leads', icon: '📬', group: 'sell' },
   { page: 'canvass', label: 'Canvass', icon: '🚪', group: 'sell' },
   { page: 'sales', label: 'Sales Pipeline', icon: '📈', group: 'sell' },
-  { page: 'outreach', label: 'Outreach', icon: '📣', group: 'sell', soon: true }, // wizard/leads pages are still stubs
 
   { page: 'production', label: 'Production', icon: '🏗️', group: 'deliver' },
   { page: 'claims', label: 'Claims', icon: '🧾', group: 'deliver' },
@@ -161,7 +157,7 @@ function App() {
   // On page change: scroll to top, remember the tab, and update the browser title.
   useEffect(() => {
     window.scrollTo({ top: 0 });
-    if (currentPage !== 'client' && !currentPage.startsWith('outreach')) {
+    if (currentPage !== 'client') {
       try { localStorage.setItem('archie.page', currentPage); } catch { /* ignore */ }
     }
     // Built from NAV so a new page can never quietly fall back to the
@@ -170,9 +166,6 @@ function App() {
       ...Object.fromEntries(NAV.map((n) => [n.page, n.label])),
       client: 'Client',
       inbox: 'Inbox Leads',
-      'outreach-wizard': 'New Campaign',
-      'outreach-leads': 'Outreach Leads',
-      'outreach-campaign': 'Campaign',
     };
     document.title = titles[currentPage] ? `${titles[currentPage]} · ${PRODUCT_NAME}` : PRODUCT_NAME;
   }, [currentPage]);
@@ -198,7 +191,6 @@ function App() {
     // Assignment decides whose book a job is in, and therefore who is paid for
     // it — a rep must not be able to move one onto themselves.
     if (page === 'assignments') return isManagerPlus;
-    if (page.startsWith('outreach')) return isManagerPlus;
     // Conversations / Production / Claims / Documents are open to sales+ but their
     // data is rep-scoped server-side (a sales user only sees their own clients) —
     // Claims isn't rep-scoped (whoever's coordinating the claim needs to see it
@@ -225,7 +217,7 @@ function App() {
     setPageData(data || null);
   };
 
-  const isActive = (page: Page) => (page === 'outreach' ? activePage.startsWith('outreach') : activePage === page);
+  const isActive = (page: Page) => activePage === page;
   const go = (page: Page) => {
     // A standalone static build (its own engine, not a React page) — open it
     // rather than swap SPA state into a page that doesn't exist here.
@@ -491,9 +483,6 @@ function App() {
         {activePage === 'schedule' && <Schedule onOpenClient={openClient} />}
         {activePage === 'assignments' && <Assignments onOpenClient={openClient} />}
         {activePage === 'integrations' && <Integrations />}
-        {activePage === 'outreach' && <OutreachDashboard onNavigate={handleNavigate} />}
-        {activePage === 'outreach-wizard' && <CampaignWizard onNavigate={handleNavigate} editCampaignId={pageData?.id} />}
-        {activePage === 'outreach-leads' && <OutreachLeads onNavigate={handleNavigate} campaignId={pageData?.campaignId} />}
         {activePage === 'account' && (
           <AccountPage onOpenClient={openClient} />
         )}

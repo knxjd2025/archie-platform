@@ -45,10 +45,10 @@ export async function loadScorecard(meeting: MeetingKey, mondayIso: string): Pro
 /**
  * The reps a per-rep scorecard is computed for.
  *
- * Anyone active who carries a JobTread rep name — NOT `role = 'sales'`. James
- * sells more than anyone (eleven approved proposals against Banning's five)
- * but his role is admin, so filtering on the role dropped his numbers out of
- * every rep card while still counting them in the company total. Carrying a
+ * Anyone active who carries a JobTread rep name — NOT `role = 'sales'`. An
+ * owner who sells usually has the admin role, so filtering on the role would
+ * drop their numbers out of every rep card while still counting them in the
+ * company total. Carrying a
  * rep name is what makes the data attributable, so that is the test. The
  * office account has no rep name and is correctly left out.
  */

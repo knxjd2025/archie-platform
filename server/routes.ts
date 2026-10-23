@@ -24,7 +24,6 @@ import { registerCanvassRoutes } from './canvass/routes';
 import { registerTracerfyRoutes } from './canvass/tracerfy-routes';
 import { registerRepReminderRoutes } from './canvass/reminder-routes';
 import { registerInboxRoutes } from './inbox/routes';
-import { registerImessageRoutes, imessageConversations } from './imessage/routes';
 import { registerCompanyCamRoutes } from './companycam/routes';
 import { registerKpiRoutes } from './kpis/routes';
 import { registerCommissionRoutes } from './commission/routes';
@@ -62,7 +61,6 @@ import knowledgeRouter from './routes/knowledge';
 import financialRouter from './routes/financial';
 import twilioRouter from './routes/twilio';
 
-import vapiRouter from './routes/vapi';
 import { getTwilioClient } from './integrations/twilio';
 import { sendUpstreamFailure } from './lib/upstream';
 import { sendFailure } from './lib/failure';
@@ -105,7 +103,7 @@ export function registerRoutes(app: Express) {
   // their own requireAuth/requireRole for role checks and defense in depth.
   //
   // Deliberately NOT guarded here: /api/webhooks (Twilio signature),
-  // /api/cron (CRON_SECRET), /api/vapi (shared secret), /r/:token (public
+  // /api/cron (CRON_SECRET), /r/:token (public
   // report share links), and /api/auth/* (sign-in itself).
   app.use('/api/integrations', requireAuth);
   // Company financials, payroll, and live bank-account data — individual pay
@@ -146,7 +144,6 @@ export function registerRoutes(app: Express) {
   registerTracerfyRoutes(app);
   registerRepReminderRoutes(app);
   registerInboxRoutes(app);
-  registerImessageRoutes(app);
   registerCompanyCamRoutes(app);
   registerKpiRoutes(app);
   registerCommissionRoutes(app);
@@ -181,18 +178,6 @@ export function registerRoutes(app: Express) {
     const fullUrl = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
     res.redirect(`/api/financial/quickbooks/callback?${new URL(fullUrl).searchParams.toString()}`);
   });
-
-  // The Vercel cron endpoints (/api/cron/outreach-campaigns,
-  // /api/cron/outreach-send, /api/cron/brain-*) live on the brain router
-  // mounted below. A placeholder router used to be mounted at /api/cron and
-  // /api/outreach as well, which did nothing except answer "Coming Soon" to
-  // anyone, signed in or not — the API sweep found it and it is now gone.
-
-  // ==================== OPS BRAIN (sweep + digest crons) ====================
-  
-
-  // ==================== VAPI VOICE ASSISTANT TOOLS ====================
-  app.use('/api/vapi', vapiRouter);
 
   // ==================== HEALTH CHECK ====================
 
@@ -867,20 +852,7 @@ export function registerRoutes(app: Express) {
 
       const ghl = ghlR.status === 'fulfilled' ? ghlR.value : { contactId: null, messages: [] };
       const jt = jtR.status === 'fulfilled' ? jtR.value : [];
-      // The signed-in person's own iMessage thread with this client (pushed in by their Mac bridge).
-      let im: any[] = [];
-      try {
-        const { imessages } = await import('../shared/schema');
-        const { or: orX, inArray: inX } = await import('drizzle-orm');
-        const digits = String(lead.phone || '').replace(/\D/g, '');
-        const key = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits;
-        const keys = [key, String(lead.email || '').toLowerCase()].filter((k) => k && (k.includes('@') || k.length === 10));
-        const rows = await db.select().from(imessages)
-          .where(and(eq(imessages.owner, user.email.toLowerCase()), keys.length ? orX(eq(imessages.matchedExternalId, lead.externalId!), inX(imessages.handleKey, keys)) : eq(imessages.matchedExternalId, lead.externalId!)))
-          .orderBy(desc(imessages.sentAt)).limit(40);
-        im = rows.map((r) => ({ source: 'imessage', channel: 'imessage', direction: r.direction, body: r.text || (r.hasAttachment ? '📎 attachment' : ''), date: r.sentAt ? r.sentAt.getTime() : 0 }));
-      } catch { /* no bridge, no thread */ }
-      const messages = [...ghl.messages, ...jt, ...im].sort((a, b) => b.date - a.date).slice(0, 60);
+      const messages = [...ghl.messages, ...jt].sort((a, b) => b.date - a.date).slice(0, 60);
       // Deep link to the contact in GoHighLevel. On a phone with the LeadConnector
       // app installed, this universal link opens the app to that contact — one tap
       // from calling on the business number (calls placed here route through GHL,
@@ -902,7 +874,7 @@ export function registerRoutes(app: Express) {
       const [lead] = await db.select().from(leads).where(eq(leads.externalId, req.params.externalId));
       if (!lead) return res.status(404).json({ error: 'not found' });
       if (!(await ownsLead(user, lead.externalId))) return res.status(404).json({ error: 'not found' });
-      if (lead.source !== 'jobtread') return res.json({ estimates: [] }); // RoofLink/GHL clients have no JobTread job
+      if (lead.source !== 'jobtread') return res.json({ estimates: [] }); // GHL clients have no JobTread job
       const r = await new JobTreadClient().getJobEstimates(req.params.externalId, 15);
       res.json(r);
     } catch (error: any) {

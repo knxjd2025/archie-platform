@@ -26,7 +26,6 @@ const SOURCE_LABEL: Record<string, string> = {
   ghl: 'Texts & calls',
   gmail: 'Email',
   jobtread: 'JobTread',
-  imessage: 'iMessage',
 };
 
 function timeAgo(ms: number): string {

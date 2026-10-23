@@ -11,6 +11,7 @@
  * a closed week rather than a week in progress.
  */
 import { and, eq, gte, isNotNull, isNull, lte, ne, sql, type SQL } from 'drizzle-orm';
+import { boardTz } from '../../shared/schedule-board';
 import { db } from '../db';
 import {
   appointments, claims, deals, followUps, inboxItems, jobCommissions, leads, repAssignments, teamMembers,
@@ -24,7 +25,7 @@ export interface MeasureCtx {
   mondayIso: string;
   last: MeasureWindow;
   prior: MeasureWindow;
-  /** The same week as Charlotte calendar dates, for columns that store a date rather than an instant. */
+  /** The same week as company calendar dates, for columns that store a date rather than an instant. */
   lastDates?: { from: string; to: string };
 }
 
@@ -71,7 +72,7 @@ const daysSince = (d: Date | string | null): number => {
 };
 
 /**
- * The week just finished and the one before, as Charlotte days. These were
+ * The week just finished and the one before, as company days. These were
  * built with `new Date('…T00:00:00')`, which is the server's midnight — UTC
  * on Vercel — so every window started at 8pm Sunday Eastern and stopped at
  * 8pm the following Sunday, moving Sunday-evening leads into the wrong week.
@@ -89,15 +90,15 @@ export function measureWindows(mondayIso: string): MeasureCtx {
 
 const CUSTOMER_KINDS = ['inspection', 'adjuster'];
 
-/** Charlotte's date in SQL, as yyyy-mm-dd text. */
-export const ET_TODAY_SQL = sql`to_char((now() at time zone 'America/New_York')::date, 'YYYY-MM-DD')`;
+/** the company's date in SQL, as yyyy-mm-dd text. */
+export const etTodaySql = () => sql`to_char((now() at time zone ${boardTz()})::date, 'YYYY-MM-DD')`;
 
-/** A due-date column is past due: a real yyyy-mm-dd before Charlotte's today. Malformed values never match (and never throw). */
+/** A due-date column is past due: a real yyyy-mm-dd before the company's today. Malformed values never match (and never throw). */
 export function overdueFollowUpSql(due: SQL): SQL {
-  return sql`(${due}::text ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' and ${due}::text < ${ET_TODAY_SQL})`;
+  return sql`(${due}::text ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' and ${due}::text < ${etTodaySql()})`;
 }
 
-/** The Monday-to-Sunday week starting on the meeting's Monday, Charlotte days (it used the server's midnight). */
+/** The Monday-to-Sunday week starting on the meeting's Monday, company days (it used the server's midnight). */
 function weekAhead(mondayIso: string): { from: Date; to: Date } {
   return etDateRange(mondayIso, addDays(mondayIso, 6));
 }
@@ -132,7 +133,7 @@ async function customerAppts(from: Date, to: Date, rep?: RepIdentity): Promise<n
  */
 async function approvedDeals(c: MeasureCtx, rep?: RepIdentity): Promise<Array<{ amount: string | null }>> {
   // issue_date is a plain yyyy-mm-dd, so it is compared with the week's
-  // Charlotte dates. Slicing the UTC ISO string of the window's end gave
+  // company dates. Slicing the UTC ISO string of the window's end gave
   // Monday, not Sunday, once the window was built in Eastern time.
   const { from, to } = c.lastDates ?? weekBefore(c.mondayIso);
   const rows = await db.select({ amount: deals.amount, jobRef: deals.jobRef })
@@ -186,7 +187,7 @@ export const MEASURES: readonly MeasureDef[] = [
       // and old rows hold whatever was typed ("next week"), on which a ::date
       // cast throws and takes the whole scorecard down. Only well-formed
       // yyyy-mm-dd values are compared, as text (which sorts like the date),
-      // against Charlotte's today — current_date is UTC's, a day ahead after 8pm.
+      // against the company's today — current_date is UTC's, a day ahead after 8pm.
       const [row] = await db.select({ n: sql<number>`count(*)` }).from(followUps)
         .where(and(eq(followUps.done, false), overdueFollowUpSql(sql`${followUps.dueDate}`)));
       return n(row?.n);

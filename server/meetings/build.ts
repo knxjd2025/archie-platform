@@ -12,7 +12,7 @@
 import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, lte, ne, sql } from 'drizzle-orm';
 import { db } from '../db';
 import {
-  appointments, claims, deals, followUps, invoices, jobCommissions, imessages, inboxItems, leads,
+  appointments, claims, deals, followUps, invoices, jobCommissions, inboxItems, leads,
   repAssignments, productionPipeline, salesPipeline, teamMembers,
 } from '../../shared/schema';
 import { CLAIM_PIPELINE_STAGES } from '../../shared/claims-pipeline';
@@ -22,7 +22,7 @@ import {
   type Attention, type MeetingAgenda, type MeetingSection, type Metric, weekBefore,
 } from '../../shared/monday-meetings';
 import { etDateRange } from '../../shared/et-periods';
-import { addDays, BOARD_TZ } from '../../shared/schedule-board';
+import { addDays, boardTz } from '../../shared/schedule-board';
 import { measureWindows, overdueFollowUpSql } from './measures';
 
 const money = (n: number): string =>
@@ -49,7 +49,7 @@ function delta(now: number, before: number, moreIsBetter = true): Pick<Metric, '
 
 /**
  * The two windows every "last week vs the week before" number needs, as
- * Charlotte days. These were built with `new Date('…T00:00:00')`, which is the
+ * company days. These were built with `new Date('…T00:00:00')`, which is the
  * server's midnight — UTC on Vercel — so the agenda's week started at 8pm
  * Sunday Eastern and Sunday evening's leads and signings counted in the wrong
  * week, disagreeing with the scorecard that measures.ts already fixed.
@@ -60,7 +60,7 @@ export function windows(mondayIso: string) {
 }
 
 /**
- * The Monday-to-Sunday week the meeting opens, Charlotte days. It used the
+ * The Monday-to-Sunday week the meeting opens, company days. It used the
  * server's midnight and ran to the end of the following Monday, so "booked
  * this week" started at 8pm Sunday Eastern and counted next Monday's diary too.
  */
@@ -68,9 +68,9 @@ export function weekAhead(mondayIso: string): { from: Date; to: Date } {
   return etDateRange(mondayIso, addDays(mondayIso, 6));
 }
 
-/** A weekday label in Charlotte time — the server's would call a 9pm Friday appointment Saturday's. */
+/** A weekday label in company time — the server's would call a 9pm Friday appointment Saturday's. */
 const etWeekday = (d: Date | string, extra: Intl.DateTimeFormatOptions = {}): string =>
-  new Date(d).toLocaleDateString('en-US', { weekday: 'short', timeZone: BOARD_TZ, ...extra });
+  new Date(d).toLocaleDateString('en-US', { weekday: 'short', timeZone: boardTz(), ...extra });
 
 const countRows = async (table: any, where: any): Promise<number> => {
   const [row] = await db.select({ n: sql<number>`count(*)` }).from(table).where(where);
@@ -143,9 +143,8 @@ async function appointmentSections(mondayIso: string): Promise<MeetingSection[]>
 /**
  * Customers who have written to us and not heard back.
  *
- * Email comes from the inbox watch, texts from the iMessage bridge. Only the
- * ones that look like a customer or a lead: the office inbox carries a great
- * deal that is neither.
+ * Email comes from the inbox watch. Only the ones from a customer or a lead:
+ * the office inbox carries a great deal that is neither.
  */
 async function waitingOnUsSections(mondayIso: string): Promise<MeetingSection[]> {
   const w = windows(mondayIso);
@@ -165,23 +164,6 @@ async function waitingOnUsSections(mondayIso: string): Promise<MeetingSection[]>
     ))
     .orderBy(desc(inboxItems.receivedAt)).limit(25);
 
-  // An inbound text with nothing sent back on that thread since.
-  const texts = await db.select({
-    handle: imessages.handle, text: imessages.text, sentAt: imessages.sentAt,
-    matched: imessages.matchedName, direction: imessages.direction, chat: imessages.chatGuid,
-  })
-    .from(imessages)
-    .where(gte(imessages.sentAt, w.last.from))
-    .orderBy(desc(imessages.sentAt)).limit(400);
-
-  const lastByChat = new Map<string, { direction: string | null; who: string; text: string | null; at: Date | null }>();
-  for (const t of texts) {
-    const key = t.chat ?? t.handle ?? '';
-    if (!key || lastByChat.has(key)) continue;          // ordered newest first
-    lastByChat.set(key, { direction: t.direction, who: t.matched || t.handle || 'unknown', text: t.text, at: t.sentAt });
-  }
-  const unanswered = [...lastByChat.values()].filter((t) => t.direction === 'in').slice(0, 15);
-
   return [
     {
       heading: `Emails waiting on a reply · ${emails.length}`,
@@ -191,15 +173,6 @@ async function waitingOnUsSections(mondayIso: string): Promise<MeetingSection[]>
         note: (e.subject ?? '').slice(0, 50),
       })),
       empty: 'Every lead and customer email has been dealt with.',
-    },
-    {
-      heading: `Texts with no answer · ${unanswered.length}`,
-      rows: unanswered.map((t) => ({
-        label: t.who,
-        value: t.at ? `${daysAgo(t.at)}d` : '',
-        note: (t.text ?? '').replace(/\s+/g, ' ').slice(0, 50),
-      })),
-      empty: 'Nobody is waiting on a text back.',
     },
   ];
 }
@@ -265,24 +238,6 @@ async function leadershipAgenda(mondayIso: string): Promise<MeetingAgenda> {
       key: 'unassigned_jobs',
       text: `${orphanJobtread} live job${Number(orphanJobtread) === 1 ? ' has' : 's have'} no rep against them`,
       page: 'assignments', count: Number(orphanJobtread),
-    });
-  }
-
-  // The old CRM's leads are counted apart. They are not JobTread jobs, nobody
-  // is working them, and folding them into the line above buried a number
-  // somebody should act on inside one nobody can.
-  const [{ n: orphanRooflink }] = await db.select({ n: sql<number>`count(*)` })
-    .from(leads)
-    .leftJoin(repAssignments, eq(repAssignments.jobExternalId, leads.externalId))
-    .where(and(
-      isNull(leads.jtSalesRep), isNull(leads.closedOn), isNull(repAssignments.id),
-      eq(leads.source, 'rooflink'),
-    ));
-  if (Number(orphanRooflink)) {
-    attention.push({
-      key: 'rooflink_unclaimed',
-      text: `${orphanRooflink} old RoofLink leads have never been picked up — worth a decision on whether they ever will be`,
-      page: 'leads', count: Number(orphanRooflink),
     });
   }
 

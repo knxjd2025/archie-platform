@@ -7,7 +7,7 @@ const LOCAL = /localhost|127\.0\.0\.1/.test(url) && url.includes('bra_e2e');
 describe.skipIf(!LOCAL)('overdue follow-ups in SQL (database)', async () => {
   const { db } = await import('../../db');
   const { sql } = await import('drizzle-orm');
-  const { overdueFollowUpSql, ET_TODAY_SQL } = await import('../measures');
+  const { overdueFollowUpSql, etTodaySql } = await import('../measures');
   const { etToday, addDays } = await import('../../../shared/schedule-board');
 
   const isOverdue = async (due: string | null) => {
@@ -15,8 +15,8 @@ describe.skipIf(!LOCAL)('overdue follow-ups in SQL (database)', async () => {
     return (r.rows[0] as { v: boolean | null }).v === true;
   };
 
-  it("uses Charlotte's today, not the database's", async () => {
-    const r = await db.execute(sql`select ${ET_TODAY_SQL} as d`);
+  it("uses the company's today, not the database's", async () => {
+    const r = await db.execute(sql`select ${etTodaySql()} as d`);
     expect((r.rows[0] as { d: string }).d).toBe(etToday());
   });
 

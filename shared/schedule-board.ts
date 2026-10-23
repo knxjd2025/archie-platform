@@ -1,42 +1,85 @@
 /**
  * Pure helpers for the availability board (server/calendar/board.ts serves the
  * data, client/src/components/AvailabilityBoard.tsx draws it). Everything is
- * in Charlotte time, whatever timezone the viewer's device is set to.
+ * in the company's own time zone, whatever timezone the viewer's device is set to.
+ *
+ * Which zone: whatever setTimeZoneProvider was given. The server gives the
+ * current company's profile time zone (server/tenant/profile.ts); the app
+ * gives the signed-in company's (client/src/lib/auth.tsx). Before either,
+ * DEFAULT_TZ.
  */
-export const BOARD_TZ = 'America/New_York';
+export const DEFAULT_TZ = 'America/New_York';
+
+let zoneProvider: () => string | null | undefined = () => DEFAULT_TZ;
+
+/** Tell the time helpers where to find the current company's time zone. */
+export function setTimeZoneProvider(fn: () => string | null | undefined): void {
+  zoneProvider = fn;
+}
+
+const validZone = (tz: string): boolean => {
+  try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); return true; } catch { return false; }
+};
+
+/** The current company's IANA time zone. */
+export function boardTz(): string {
+  try {
+    const tz = zoneProvider();
+    return tz && validZone(tz) ? tz : DEFAULT_TZ;
+  } catch {
+    return DEFAULT_TZ;
+  }
+}
 export const DAY_START_HOUR = 7;
 export const DAY_END_HOUR = 20;
 export const SLOT_MINS = 30;
 
 export interface BoardEventLike { id: string; person: string; start: string; end: string; allDay: boolean; source: 'google' | 'ghl' | 'both'; title: string }
 
-const partsFmt = new Intl.DateTimeFormat('en-US', { timeZone: BOARD_TZ, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+const fmtCache = new Map<string, Intl.DateTimeFormat>();
+function partsFmt(tz: string): Intl.DateTimeFormat {
+  let f = fmtCache.get(tz);
+  if (!f) {
+    f = new Intl.DateTimeFormat('en-US', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+    fmtCache.set(tz, f);
+  }
+  return f;
+}
 
-/** Charlotte calendar date (YYYY-MM-DD) and minutes after midnight for an instant. */
-export function etParts(iso: string | Date): { date: string; minutes: number } {
+/** The company's calendar date (YYYY-MM-DD) and minutes after midnight for an instant. */
+export function etParts(iso: string | Date, tz: string = boardTz()): { date: string; minutes: number } {
   const d = typeof iso === 'string' ? new Date(iso) : iso;
-  const p = Object.fromEntries(partsFmt.formatToParts(d).map((x) => [x.type, x.value]));
+  const p = Object.fromEntries(partsFmt(tz).formatToParts(d).map((x) => [x.type, x.value]));
   return { date: `${p.year}-${p.month}-${p.day}`, minutes: Number(p.hour) * 60 + Number(p.minute) };
 }
 
-/** Today's Charlotte date. */
-export function etToday(now: Date = new Date()): string {
-  return etParts(now).date;
+/** Today's date where the company is. */
+export function etToday(now: Date = new Date(), tz: string = boardTz()): string {
+  return etParts(now, tz).date;
 }
 
-/** The UTC offset (e.g. "-04:00") Charlotte is on at a given local date and time. */
-export function etOffset(date: string, time = '12:00'): string {
-  // Try both US Eastern offsets; the right one maps back to the same wall time.
-  for (const off of ['-04:00', '-05:00']) {
-    const p = etParts(new Date(`${date}T${time}:00${off}`));
-    if (p.date === date && p.minutes === hhmmToMinutes(time)) return off;
-  }
-  return '-05:00';
+/** The wall time an instant shows in the zone, read as if it were UTC (ms). */
+const wallAsUtc = (ms: number, tz: string): number => {
+  const p = etParts(new Date(ms), tz);
+  return Date.parse(`${p.date}T${minutesToHhmm(p.minutes)}:00Z`);
+};
+
+/** The UTC offset (e.g. "-04:00") the company's zone is on at a given local date and time. */
+export function etOffset(date: string, time = '12:00', tz: string = boardTz()): string {
+  const wall = Date.parse(`${date}T${time}:00Z`);
+  // Start from the offset an hour either side would have, then settle: two
+  // passes find the right offset across a daylight saving change.
+  let instant = wall - (wallAsUtc(wall, tz) - wall);
+  instant = wall - (wallAsUtc(instant, tz) - instant);
+  const offMin = Math.round((wallAsUtc(instant, tz) - instant) / 60000);
+  const sign = offMin < 0 ? '-' : '+';
+  const abs = Math.abs(offMin);
+  return `${sign}${String(Math.floor(abs / 60)).padStart(2, '0')}:${String(abs % 60).padStart(2, '0')}`;
 }
 
-/** The instant for a Charlotte date + HH:mm. */
-export function etInstant(date: string, time: string): Date {
-  return new Date(`${date}T${time}:00${etOffset(date, time)}`);
+/** The instant for a company-local date + HH:mm. */
+export function etInstant(date: string, time: string, tz: string = boardTz()): Date {
+  return new Date(`${date}T${time}:00${etOffset(date, time, tz)}`);
 }
 
 export function hhmmToMinutes(t: string): number {
@@ -153,7 +196,7 @@ export function openDays<T extends BoardEventLike>(
   });
 }
 
-/** "Today" / "Tomorrow" / "Fri Sep 19" for a Charlotte date. */
+/** "Today" / "Tomorrow" / "Fri Sep 19" for a company-local date. */
 export function dayLabel(date: string, today: string = etToday()): string {
   if (date === today) return 'Today';
   if (date === addDays(today, 1)) return 'Tomorrow';

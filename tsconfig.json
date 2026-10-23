@@ -17,6 +17,6 @@
     "jsx": "react-jsx",
     "lib": ["ES2022", "DOM", "DOM.Iterable"]
   },
-  "include": ["server/**/*", "shared/**/*", "client/src/**/*", "scripts/e2e/**/*"],
+  "include": ["server/**/*", "shared/**/*", "client/src/**/*"],
   "exclude": ["node_modules", "dist"]
 }

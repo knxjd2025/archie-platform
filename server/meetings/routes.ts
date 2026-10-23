@@ -11,6 +11,9 @@
  * so a rep can see their own week before they walk in.
  */
 import type { Express, Request, Response } from 'express';
+import { forEachLiveCompany } from '../tenant/companies';
+import { etParts } from '../../shared/schedule-board';
+import { dayOfWeek } from '../../shared/et-periods';
 import { and, asc, desc, eq, isNull, ne } from 'drizzle-orm';
 import { db } from '../db';
 import { meetingActions, meetingNotes, meetingWeeks, teamMembers } from '../../shared/schema';
@@ -270,7 +273,7 @@ export function registerMeetingRoutes(app: Express) {
   /**
    * Sunday evening: build next morning's pack.
    *
-   * Runs late on Sunday in Charlotte, which is already Monday in UTC — see
+   * Runs late on Sunday in the company's time zone, which is already Monday in UTC — see
    * mondayFor(), which files the pack under the local Monday rather than the
    * UTC day it happens to be.
    */
@@ -415,28 +418,32 @@ export function registerMeetingRoutes(app: Express) {
     res.json({ ok: true });
   }));
 
-  app.get('/api/cron/meeting-prep', asyncHandler(async (req: Request, res: Response) => {
-    if (!cronAuthorized(req)) return res.status(401).json({ error: 'unauthorized' });
-    const mondayIso = mondayFor(new Date());
-    const week = await generatePack(mondayIso, 'system:cron');
-    await logWrite({
-      actor: 'system:cron', system: 'app', action: 'meeting_pack_built', targetId: mondayIso,
-      summary: `Pack for ${mondayIso}`, ok: true, error: null,
-    });
-    res.json({ ok: true, monday: mondayIso, generatedAt: iso(week.generatedAt) });
-  }));
-
   /**
-   * Hourly, just after the syncs: keep this week's numbers current so the
-   * claims, sales and leadership rooms are never a week stale. Only refreshes
-   * a pack the Sunday job already built — it never creates next week's early.
+   * Hourly, for every live company, as that company and in its own time zone:
+   *   - Sunday from 6 PM local, build next week's pack if it is not built yet;
+   *   - otherwise refresh this week's pack so the rooms are never a week stale
+   *     (a refresh never creates a pack early).
    */
-  app.get('/api/cron/meeting-refresh', asyncHandler(async (req: Request, res: Response) => {
+  app.get('/api/cron/meetings', asyncHandler(async (req: Request, res: Response) => {
     if (!cronAuthorized(req)) return res.status(401).json({ error: 'unauthorized' });
-    const mondayIso = mondayFor(new Date());
-    const [existing] = await db.select({ id: meetingWeeks.id }).from(meetingWeeks).where(eq(meetingWeeks.monday, mondayIso));
-    if (!existing) return res.json({ ok: true, monday: mondayIso, skipped: 'no pack yet' });
-    const week = await generatePack(mondayIso, 'system:refresh', { fileIssues: false });
-    res.json({ ok: true, monday: mondayIso, generatedAt: iso(week.generatedAt) });
+    const now = new Date();
+    const companies = await forEachLiveCompany(async () => {
+      const mondayIso = mondayFor(now);
+      const [existing] = await db.select({ id: meetingWeeks.id }).from(meetingWeeks).where(eq(meetingWeeks.monday, mondayIso));
+      const local = etParts(now);
+      const sundayEvening = dayOfWeek(local.date) === 0 && local.minutes >= 18 * 60;
+      if (!existing) {
+        if (!sundayEvening) return { monday: mondayIso, skipped: 'no pack yet' };
+        const week = await generatePack(mondayIso, 'system:cron');
+        await logWrite({
+          actor: 'system:cron', system: 'app', action: 'meeting_pack_built', targetId: mondayIso,
+          summary: `Pack for ${mondayIso}`, ok: true, error: null,
+        });
+        return { monday: mondayIso, built: iso(week.generatedAt) };
+      }
+      const week = await generatePack(mondayIso, 'system:refresh', { fileIssues: false });
+      return { monday: mondayIso, refreshed: iso(week.generatedAt) };
+    });
+    res.json({ ok: companies.every((c) => c.ok), companies });
   }));
 }

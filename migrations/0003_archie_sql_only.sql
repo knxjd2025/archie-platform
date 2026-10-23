@@ -118,12 +118,8 @@ CREATE INDEX IF NOT EXISTS inbox_scans_mailbox_idx ON inbox_scans (mailbox, to_a
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS inbox_items_mailbox_status_idx ON inbox_items (mailbox, status);
 --> statement-breakpoint
-CREATE INDEX IF NOT EXISTS imessages_owner_match_idx ON imessages (owner, matched_external_id);
---> statement-breakpoint
-CREATE INDEX IF NOT EXISTS imessage_outbox_owner_status_idx ON imessage_outbox (owner, status);
---> statement-breakpoint
 
--- Financial integrations and outreach.
+-- Financial integrations.
 CREATE INDEX IF NOT EXISTS idx_integration_tokens_provider ON integration_tokens (provider);
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_integration_tokens_active ON integration_tokens (is_active);
@@ -135,19 +131,3 @@ CREATE INDEX IF NOT EXISTS idx_plaid_transactions_date ON plaid_transactions (da
 CREATE INDEX IF NOT EXISTS idx_plaid_transactions_account ON plaid_transactions (account_id);
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_plaid_transactions_item ON plaid_transactions (plaid_item_id);
---> statement-breakpoint
-CREATE INDEX IF NOT EXISTS idx_outreach_campaigns_status ON outreach_campaigns (status);
---> statement-breakpoint
-CREATE INDEX IF NOT EXISTS idx_outreach_campaigns_next_run ON outreach_campaigns (next_run_at);
---> statement-breakpoint
-CREATE INDEX IF NOT EXISTS idx_outreach_leads_campaign_id ON outreach_leads (campaign_id);
---> statement-breakpoint
-CREATE INDEX IF NOT EXISTS idx_outreach_leads_status ON outreach_leads (status);
---> statement-breakpoint
-CREATE INDEX IF NOT EXISTS idx_outreach_leads_dedupe ON outreach_leads (dedupe_hash);
---> statement-breakpoint
-CREATE INDEX IF NOT EXISTS idx_outreach_leads_scheduled_send ON outreach_leads (status, scheduled_send_at) WHERE status = 'queued' AND scheduled_send_at IS NOT NULL;
---> statement-breakpoint
-CREATE INDEX IF NOT EXISTS idx_outreach_attempts_lead_id ON outreach_attempts (lead_id);
---> statement-breakpoint
-CREATE INDEX IF NOT EXISTS idx_outreach_attempts_campaign_id ON outreach_attempts (campaign_id);

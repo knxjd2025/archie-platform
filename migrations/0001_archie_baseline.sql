@@ -8,11 +8,7 @@ CREATE TYPE "public"."knowledge_category" AS ENUM('company', 'services', 'pricin
 CREATE TYPE "public"."kpi_event_type" AS ENUM('door_knock', 'lead_contacted', 'report_created', 'report_presented', 'referral_received', 'lead_given');--> statement-breakpoint
 CREATE TYPE "public"."lead_status" AS ENUM('new', 'contacted', 'qualified', 'proposal_sent', 'negotiation', 'won', 'lost', 'disqualified');--> statement-breakpoint
 CREATE TYPE "public"."message_role" AS ENUM('user', 'assistant', 'system', 'tool');--> statement-breakpoint
-CREATE TYPE "public"."outreach_attempt_status" AS ENUM('pending', 'sent', 'delivered', 'opened', 'clicked', 'replied', 'bounced', 'failed');--> statement-breakpoint
-CREATE TYPE "public"."outreach_campaign_status" AS ENUM('draft', 'active', 'paused', 'completed');--> statement-breakpoint
-CREATE TYPE "public"."outreach_lead_status" AS ENUM('scraped', 'enriching', 'enriched', 'personalizing', 'personalized', 'queued', 'sent', 'delivered', 'opened', 'replied', 'converted', 'failed', 'bounced');--> statement-breakpoint
 CREATE TYPE "public"."precon_checklist_status" AS ENUM('draft', 'submitted');--> statement-breakpoint
-CREATE TYPE "public"."scrape_job_status" AS ENUM('pending', 'running', 'completed', 'failed');--> statement-breakpoint
 CREATE TYPE "public"."sync_status" AS ENUM('ok', 'partial', 'error');--> statement-breakpoint
 CREATE TYPE "public"."task_status" AS ENUM('pending', 'in_progress', 'completed', 'failed');--> statement-breakpoint
 CREATE TYPE "public"."team_role" AS ENUM('admin', 'sales_director', 'manager', 'customer_service', 'sales', 'production');--> statement-breakpoint
@@ -422,22 +418,6 @@ CREATE TABLE "deals" (
 	"synced_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "email_templates" (
-	"company_id" uuid DEFAULT archie_current_company() NOT NULL,
-	"id" serial PRIMARY KEY NOT NULL,
-	"user_id" integer,
-	"name" text NOT NULL,
-	"subject_template" text NOT NULL,
-	"body_template" text NOT NULL,
-	"subject_prompt" text,
-	"first_line_prompt" text,
-	"target_industries" jsonb,
-	"is_default" boolean DEFAULT false,
-	"is_active" boolean DEFAULT true,
-	"created_at" timestamp DEFAULT now(),
-	"updated_at" timestamp DEFAULT now()
-);
---> statement-breakpoint
 CREATE TABLE "final_walkthroughs" (
 	"company_id" uuid DEFAULT archie_current_company() NOT NULL,
 	"id" serial PRIMARY KEY NOT NULL,
@@ -466,41 +446,6 @@ CREATE TABLE "follow_ups" (
 	"done" boolean DEFAULT false NOT NULL,
 	"created_at" timestamp DEFAULT now(),
 	"completed_at" timestamp
-);
---> statement-breakpoint
-CREATE TABLE "imessage_outbox" (
-	"company_id" uuid DEFAULT archie_current_company() NOT NULL,
-	"id" serial PRIMARY KEY NOT NULL,
-	"owner" text NOT NULL,
-	"to_handle" text NOT NULL,
-	"body" text NOT NULL,
-	"external_id" text,
-	"status" text DEFAULT 'queued' NOT NULL,
-	"error" text,
-	"created_by" text,
-	"created_at" timestamp DEFAULT now(),
-	"updated_at" timestamp DEFAULT now(),
-	"sent_at" timestamp
-);
---> statement-breakpoint
-CREATE TABLE "imessages" (
-	"company_id" uuid DEFAULT archie_current_company() NOT NULL,
-	"id" serial PRIMARY KEY NOT NULL,
-	"owner" text NOT NULL,
-	"guid" text NOT NULL,
-	"chat_guid" text,
-	"handle" text,
-	"handle_key" text,
-	"direction" text NOT NULL,
-	"service" text,
-	"text" text,
-	"has_attachment" boolean DEFAULT false NOT NULL,
-	"is_group" boolean DEFAULT false NOT NULL,
-	"sent_at" timestamp NOT NULL,
-	"matched_external_id" text,
-	"matched_name" text,
-	"created_at" timestamp DEFAULT now(),
-	CONSTRAINT "imessages_guid_unique" UNIQUE("guid")
 );
 --> statement-breakpoint
 CREATE TABLE "inbox_items" (
@@ -906,96 +851,6 @@ CREATE TABLE "native_handoffs" (
 	"expires_at" timestamp NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "outreach_attempts" (
-	"company_id" uuid DEFAULT archie_current_company() NOT NULL,
-	"id" serial PRIMARY KEY NOT NULL,
-	"lead_id" integer NOT NULL,
-	"campaign_id" integer NOT NULL,
-	"user_id" integer NOT NULL,
-	"email_subject" text NOT NULL,
-	"email_first_line" text NOT NULL,
-	"email_body" text,
-	"instantly_email_id" text,
-	"status" "outreach_attempt_status" DEFAULT 'pending' NOT NULL,
-	"sent_at" timestamp,
-	"delivered_at" timestamp,
-	"opened_at" timestamp,
-	"clicked_at" timestamp,
-	"replied_at" timestamp,
-	"bounced_at" timestamp,
-	"error" text,
-	"attempt_number" integer DEFAULT 1,
-	"created_at" timestamp DEFAULT now(),
-	"updated_at" timestamp DEFAULT now()
-);
---> statement-breakpoint
-CREATE TABLE "outreach_campaigns" (
-	"company_id" uuid DEFAULT archie_current_company() NOT NULL,
-	"id" serial PRIMARY KEY NOT NULL,
-	"user_id" integer NOT NULL,
-	"name" text NOT NULL,
-	"status" "outreach_campaign_status" DEFAULT 'draft' NOT NULL,
-	"industries" jsonb NOT NULL,
-	"target_locations" jsonb,
-	"daily_lead_target" integer DEFAULT 250,
-	"instantly_api_key" text,
-	"instantly_campaign_id" text,
-	"email_template_id" integer,
-	"run_time" text DEFAULT '09:00',
-	"timezone" text DEFAULT 'America/New_York',
-	"warm_up_enabled" boolean DEFAULT true,
-	"warm_up_start_date" timestamp,
-	"warm_up_daily_limit" integer DEFAULT 10,
-	"current_daily_limit" integer DEFAULT 10,
-	"total_leads_generated" integer DEFAULT 0,
-	"total_emails_sent" integer DEFAULT 0,
-	"total_opens" integer DEFAULT 0,
-	"total_replies" integer DEFAULT 0,
-	"last_run_at" timestamp,
-	"next_run_at" timestamp,
-	"created_at" timestamp DEFAULT now(),
-	"updated_at" timestamp DEFAULT now()
-);
---> statement-breakpoint
-CREATE TABLE "outreach_leads" (
-	"company_id" uuid DEFAULT archie_current_company() NOT NULL,
-	"id" serial PRIMARY KEY NOT NULL,
-	"campaign_id" integer NOT NULL,
-	"user_id" integer NOT NULL,
-	"company_name" text NOT NULL,
-	"industry" text NOT NULL,
-	"website" text,
-	"phone" text,
-	"address" text,
-	"city" text,
-	"state" text,
-	"zip_code" text,
-	"owner_first_name" text,
-	"owner_last_name" text,
-	"owner_email" text,
-	"email_verified" boolean DEFAULT false,
-	"email_verification_source" text,
-	"email_verification_score" numeric(5, 2),
-	"company_size" text,
-	"year_founded" text,
-	"linkedin_url" text,
-	"facebook_url" text,
-	"google_review_count" integer,
-	"google_rating" numeric(2, 1),
-	"personalized_subject_line" text,
-	"personalized_first_line" text,
-	"personalization_context" jsonb,
-	"status" "outreach_lead_status" DEFAULT 'scraped' NOT NULL,
-	"dedupe_hash" text NOT NULL,
-	"source_url" text,
-	"scrape_job_id" integer,
-	"instantly_lead_id" text,
-	"scheduled_send_at" timestamp,
-	"actual_sent_at" timestamp,
-	"created_at" timestamp DEFAULT now(),
-	"updated_at" timestamp DEFAULT now()
-);
---> statement-breakpoint
 CREATE TABLE "phone_numbers" (
 	"company_id" uuid DEFAULT archie_current_company() NOT NULL,
 	"id" serial PRIMARY KEY NOT NULL,
@@ -1160,25 +1015,6 @@ CREATE TABLE "scorecard_metrics" (
 	"active" boolean DEFAULT true NOT NULL,
 	"created_at" timestamp DEFAULT now(),
 	"updated_at" timestamp DEFAULT now()
-);
---> statement-breakpoint
-CREATE TABLE "scrape_jobs" (
-	"company_id" uuid DEFAULT archie_current_company() NOT NULL,
-	"id" serial PRIMARY KEY NOT NULL,
-	"campaign_id" integer NOT NULL,
-	"user_id" integer NOT NULL,
-	"industry" text NOT NULL,
-	"location" text,
-	"search_query" text NOT NULL,
-	"target_count" integer DEFAULT 50,
-	"status" "scrape_job_status" DEFAULT 'pending' NOT NULL,
-	"leads_found" integer DEFAULT 0,
-	"leads_processed" integer DEFAULT 0,
-	"duplicates_skipped" integer DEFAULT 0,
-	"error" text,
-	"started_at" timestamp,
-	"completed_at" timestamp,
-	"created_at" timestamp DEFAULT now()
 );
 --> statement-breakpoint
 CREATE TABLE "settings" (
@@ -1364,14 +1200,10 @@ ALTER TABLE "conversations" ADD CONSTRAINT "conversations_agent_id_agents_id_fk"
 ALTER TABLE "daily_metrics" ADD CONSTRAINT "daily_metrics_company_id_companies_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "deals" ADD CONSTRAINT "deals_company_id_companies_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "deals" ADD CONSTRAINT "deals_owner_id_team_members_id_fk" FOREIGN KEY ("owner_id") REFERENCES "public"."team_members"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "email_templates" ADD CONSTRAINT "email_templates_company_id_companies_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "email_templates" ADD CONSTRAINT "email_templates_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "final_walkthroughs" ADD CONSTRAINT "final_walkthroughs_company_id_companies_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "final_walkthroughs" ADD CONSTRAINT "final_walkthroughs_team_member_id_team_members_id_fk" FOREIGN KEY ("team_member_id") REFERENCES "public"."team_members"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "follow_ups" ADD CONSTRAINT "follow_ups_company_id_companies_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "follow_ups" ADD CONSTRAINT "follow_ups_assigned_to_team_members_id_fk" FOREIGN KEY ("assigned_to") REFERENCES "public"."team_members"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "imessage_outbox" ADD CONSTRAINT "imessage_outbox_company_id_companies_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "imessages" ADD CONSTRAINT "imessages_company_id_companies_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "inbox_items" ADD CONSTRAINT "inbox_items_company_id_companies_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "inbox_scans" ADD CONSTRAINT "inbox_scans_company_id_companies_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "inspection_submissions" ADD CONSTRAINT "inspection_submissions_company_id_companies_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -1412,16 +1244,6 @@ ALTER TABLE "meeting_weeks" ADD CONSTRAINT "meeting_weeks_company_id_companies_i
 ALTER TABLE "messages" ADD CONSTRAINT "messages_company_id_companies_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "messages" ADD CONSTRAINT "messages_conversation_id_conversations_id_fk" FOREIGN KEY ("conversation_id") REFERENCES "public"."conversations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "native_handoffs" ADD CONSTRAINT "native_handoffs_company_id_companies_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "outreach_attempts" ADD CONSTRAINT "outreach_attempts_company_id_companies_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "outreach_attempts" ADD CONSTRAINT "outreach_attempts_lead_id_outreach_leads_id_fk" FOREIGN KEY ("lead_id") REFERENCES "public"."outreach_leads"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "outreach_attempts" ADD CONSTRAINT "outreach_attempts_campaign_id_outreach_campaigns_id_fk" FOREIGN KEY ("campaign_id") REFERENCES "public"."outreach_campaigns"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "outreach_attempts" ADD CONSTRAINT "outreach_attempts_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "outreach_campaigns" ADD CONSTRAINT "outreach_campaigns_company_id_companies_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "outreach_campaigns" ADD CONSTRAINT "outreach_campaigns_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "outreach_campaigns" ADD CONSTRAINT "outreach_campaigns_email_template_id_email_templates_id_fk" FOREIGN KEY ("email_template_id") REFERENCES "public"."email_templates"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "outreach_leads" ADD CONSTRAINT "outreach_leads_company_id_companies_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "outreach_leads" ADD CONSTRAINT "outreach_leads_campaign_id_outreach_campaigns_id_fk" FOREIGN KEY ("campaign_id") REFERENCES "public"."outreach_campaigns"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "outreach_leads" ADD CONSTRAINT "outreach_leads_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "phone_numbers" ADD CONSTRAINT "phone_numbers_company_id_companies_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "plaid_items" ADD CONSTRAINT "plaid_items_company_id_companies_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "plaid_transactions" ADD CONSTRAINT "plaid_transactions_company_id_companies_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -1438,9 +1260,6 @@ ALTER TABLE "rep_goals" ADD CONSTRAINT "rep_goals_team_member_id_team_members_id
 ALTER TABLE "rocks" ADD CONSTRAINT "rocks_company_id_companies_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "sales_pipeline" ADD CONSTRAINT "sales_pipeline_company_id_companies_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "scorecard_metrics" ADD CONSTRAINT "scorecard_metrics_company_id_companies_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "scrape_jobs" ADD CONSTRAINT "scrape_jobs_company_id_companies_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "scrape_jobs" ADD CONSTRAINT "scrape_jobs_campaign_id_outreach_campaigns_id_fk" FOREIGN KEY ("campaign_id") REFERENCES "public"."outreach_campaigns"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "scrape_jobs" ADD CONSTRAINT "scrape_jobs_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "settings" ADD CONSTRAINT "settings_company_id_companies_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "signature_requests" ADD CONSTRAINT "signature_requests_company_id_companies_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "signature_signers" ADD CONSTRAINT "signature_signers_company_id_companies_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -1458,7 +1277,6 @@ CREATE UNIQUE INDEX "appointments_company_source_id_uq" ON "appointments" USING 
 CREATE UNIQUE INDEX "client_reports_share_token_uq" ON "client_reports" USING btree ("share_token");--> statement-breakpoint
 CREATE UNIQUE INDEX "company_integrations_company_provider_uq" ON "company_integrations" USING btree ("company_id","provider");--> statement-breakpoint
 CREATE UNIQUE INDEX "deals_company_source_id_uq" ON "deals" USING btree ("company_id","source_id");--> statement-breakpoint
-CREATE INDEX "imessages_owner_handle_idx" ON "imessages" USING btree ("owner","handle_key","sent_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "inbox_items_mailbox_message_idx" ON "inbox_items" USING btree ("mailbox","message_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "invoices_company_source_id_uq" ON "invoices" USING btree ("company_id","source_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "job_certificates_company_job_external_id_uq" ON "job_certificates" USING btree ("company_id","job_external_id");--> statement-breakpoint

@@ -37,7 +37,7 @@ export interface AddressTarget {
 }
 
 /**
- * The parts of "550 Manning Dr, Charlotte, NC 28209, USA" a match needs, with
+ * The parts of "12 Oak St, Springfield, IL 62701, USA" a match needs, with
  * the lead's own city/zip columns preferred over what is parsed from the string.
  */
 export function addressTarget(address: string, hints: { city?: string | null; postalCode?: string | null } = {}): AddressTarget {
@@ -203,8 +203,8 @@ export class CompanyCamClient {
   /**
    * Match a street address to an existing CompanyCam project — same street
    * once normalised, plus the same city or zip (see projectMatchesAddress).
-   * "550 Manning Dr, Charlotte, NC 28209, USA" still matches a project stored
-   * as "550 Manning Drive", Charlotte.
+   * "12 Oak St, Springfield, IL 62701, USA" still matches a project stored
+   * as "12 Oak Street", Springfield.
    */
   async findProjectByAddress(
     address: string,

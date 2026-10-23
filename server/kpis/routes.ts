@@ -22,10 +22,10 @@ const RANGES = ['today', 'week', 'month'] as const;
 type Range = (typeof RANGES)[number];
 
 /**
- * Where each tab's count starts, in Charlotte time. This used the server's
+ * Where each tab's count starts, in company time. This used the server's
  * midnight (UTC on Vercel, so "Today" began at 8pm the evening before) and a
  * rolling seven and thirty days for tabs labelled "This week" and "This
- * month". Now: Charlotte's day, the Monday-to-Sunday week the playbook's
+ * month". Now: the company's day, the Monday-to-Sunday week the playbook's
  * goal tracker uses, and the calendar month — so both screens agree.
  */
 export function sinceFor(range: Range, now: Date = new Date()): Date {

@@ -5,6 +5,8 @@
  * source = "playbook:<id>"; re-running replaces its content and chunks.
  *
  *   npx tsx scripts/ingest-playbook.ts
+ *
+ * Runs once for every live company, as that company.
  */
 import 'dotenv/config';
 import { eq } from 'drizzle-orm';
@@ -12,10 +14,11 @@ import { db } from '../server/db';
 import { knowledgeChunks, knowledgeDocuments } from '../shared/schema';
 import { getKnowledgeService } from '../server/rag/knowledge-service';
 import { PLAYBOOK, PLAYBOOK_GROUPS, type PlaybookGroup } from '../shared/playbook';
+import { forEachLiveCompany } from '../server/tenant/companies';
 
 const CATEGORY: Record<PlaybookGroup, 'company' | 'scripts'> = { process: 'company', productivity: 'company', scripts: 'scripts', objections: 'scripts', letters: 'scripts', emails: 'scripts' };
 
-(async () => {
+async function ingestForCompany() {
   let added = 0, updated = 0;
   for (const d of PLAYBOOK) {
     const source = `playbook:${d.id}`;
@@ -31,6 +34,12 @@ const CATEGORY: Record<PlaybookGroup, 'company' | 'scripts'> = { process: 'compa
     } else added++;
     await getKnowledgeService().addDocument(data as any);
   }
-  console.log(`playbook ingested: ${added} added, ${updated} replaced, ${PLAYBOOK.length} total`);
-  process.exit(0);
-})().catch((e) => { console.error(e); process.exit(1); });
+  return { added, updated, total: PLAYBOOK.length };
+}
+
+forEachLiveCompany(ingestForCompany)
+  .then((results) => {
+    for (const r of results) console.log(r.companyId, r.ok ? r.value : r.error);
+    process.exit(results.every((r) => r.ok) ? 0 : 1);
+  })
+  .catch((e) => { console.error(e); process.exit(1); });

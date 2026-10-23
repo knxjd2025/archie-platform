@@ -37,7 +37,7 @@ export interface CompanyBranding {
   licenses?: string[];
   /** Year founded, for "serving you since" lines. */
   foundedYear?: number;
-  /** One line about the company, e.g. "Family-run roofing in Charlotte". */
+  /** One line about the company, e.g. "Family-run roofing in the company's time zone". */
   tagline?: string;
   /** Where customers leave a review (Google, etc.). */
   reviewUrl?: string;
@@ -75,9 +75,9 @@ export interface CompanySettings {
   story?: { heading: string; paragraphs: string[]; signature?: string; photoUrl?: string; photoCaption?: string };
   /** Reasons to choose the company, shown on reports ("Why us"). */
   whyUs?: string[];
-  /** Groups the company belongs to, e.g. ["Member of the Charlotte Chamber"]. */
+  /** Groups the company belongs to, e.g. ["Member of the Springfield Chamber"]. */
   community?: string[];
-  /** Service area in plain words, e.g. "Charlotte and 50 miles around". */
+  /** Service area in plain words, e.g. "Springfield and 50 miles around". */
   serviceArea?: string;
   /** Feature modules switched on for this company. Unset means the default set. */
   modules?: Partial<Record<ArchieModule, boolean>>;

@@ -47,7 +47,7 @@ const INSURANCE_TERMS: { term: string; def: string }[] = [
 const FILING_STEPS = [
   'Get policy docs, verify coverage and deductible.',
   'Call carrier with homeowner on speaker, get claim #.',
-  'Record claim #, policy #, adjuster info in RoofLink/JobTread.',
+  'Record claim #, policy #, adjuster info in the app.',
   'Sign service agreement, scan into file.',
   'Tell homeowner: call us the second the adjuster reaches out.',
   'Mark up damage photos in CompanyCam.',

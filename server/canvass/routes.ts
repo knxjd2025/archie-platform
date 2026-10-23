@@ -56,7 +56,7 @@ async function logDoorKnock(user: SessionUser, canvassId: number) {
 /**
  * Does this status change count as a door knocked? One knock per visit: the
  * first outcome at a house that hadn't been knocked, or the first outcome on a
- * later Charlotte day (a return visit). Every status patch used to log a
+ * later company day (a return visit). Every status patch used to log a
  * knock, so tapping "No answer" then "Interested" on the same doorstep — or
  * fixing a mis-tap — counted two or three doors.
  */

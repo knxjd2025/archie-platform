@@ -10,8 +10,6 @@
     "build": "vite build && esbuild api/index.ts --bundle --platform=node --target=node20 --outfile=api/bundled.js --format=cjs --external:pg-native --external:better-sqlite3 --external:vite --external:lightningcss && esbuild server/index.ts --bundle --platform=node --outdir=dist --format=cjs --external:pg-native --external:better-sqlite3 --external:vite --external:lightningcss",
     "start": "node dist/index.js",
     "test": "vitest run",
-    "e2e": "scripts/e2e/run.sh",
-    "e2e:ui": "E2E_UI=1 scripts/e2e/run.sh",
     "db:generate": "drizzle-kit generate:pg",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:push": "drizzle-kit push",

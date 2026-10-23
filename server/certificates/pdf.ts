@@ -6,10 +6,11 @@
  * rendered through the app's own small PDF writer so it needs no browser.
  */
 import { buildPdf, type PdfLine } from '../lib/pdf/simple-pdf';
+import { boardTz } from '../../shared/schedule-board';
 import { certDate, certificateStatement, type CertificateData, type CertificateSignatures } from '../../shared/certificate-of-completion';
 
 const stamp = (iso: string | null): string =>
-  (iso ? new Date(iso).toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' }) : 'not signed yet');
+  (iso ? new Date(iso).toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: boardTz() }) : 'not signed yet');
 
 export function certificateLines(d: CertificateData, s: CertificateSignatures): PdfLine[] {
   const lines: PdfLine[] = [];

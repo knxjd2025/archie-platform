@@ -113,26 +113,6 @@ export default function ClientDetail({ externalId, onBack, onOpenPlaybook }: { e
   const [msgLoading, setMsgLoading] = useState(true);
   const [messagesError, setMessagesError] = useState(false);
   const [reply, setReply] = useState('');
-  // iMessage through my Mac bridge (only when I have one set up).
-  const [im, setIm] = useState<{ configured: boolean; online: boolean; handle: string | null } | null>(null);
-  const [imText, setImText] = useState('');
-  const [imSending, setImSending] = useState(false);
-  useEffect(() => {
-    api.get<{ bridge: { configured: boolean; online: boolean }; handle: string | null }>(`/api/clients/${externalId}/imessages`)
-      .then((r) => setIm({ configured: r.bridge.configured, online: r.bridge.online, handle: r.handle }))
-      .catch(() => setIm(null));
-  }, [externalId]);
-  const sendImessage = async () => {
-    if (!imText.trim() || !im?.handle) return;
-    setImSending(true);
-    try {
-      const r = await api.post<{ bridgeOnline: boolean }>('/api/imessage/send', { to: im.handle, body: imText.trim(), externalId });
-      setMessages((m) => [{ source: 'imessage', channel: 'imessage', direction: 'outbound', body: imText.trim(), date: Date.now() }, ...m]);
-      setImText('');
-      flash(r.bridgeOnline ? 'Sending from your Mac…' : 'Queued — it sends when your Mac bridge is back online.');
-    } catch (e: any) { flash(e?.message || "Couldn't queue that iMessage."); }
-    finally { setImSending(false); }
-  };
   const [sendingReply, setSendingReply] = useState(false);
   const replyRef = useRef<HTMLInputElement>(null);
   const focusComposer = () => { replyRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); replyRef.current?.focus(); };
@@ -533,13 +513,6 @@ export default function ClientDetail({ externalId, onBack, onOpenPlaybook }: { e
                 </button>
               </div>
             )}
-            {im?.configured && im.handle && (
-              <div className="px-4 py-2.5 border-b border-gray-100 bg-blue-50/40 flex gap-2 items-center">
-                <span className="text-base" title={im.online ? 'Your Mac bridge is online' : 'Your Mac bridge is offline — it sends when it comes back'}>💬</span>
-                <input value={imText} onChange={(e) => setImText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') sendImessage(); }} placeholder={`iMessage ${im.handle} from your Mac${im.online ? '' : ' (bridge offline — will queue)'}`} className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:ring-1 focus:ring-blue-400" />
-                <button onClick={sendImessage} disabled={imSending || !imText.trim()} className="text-sm px-3 py-2 rounded-lg bg-blue-600 text-white font-medium disabled:opacity-50">{imSending ? '…' : 'Send'}</button>
-              </div>
-            )}
             {msgLoading ? (
               <p className="px-4 py-6 text-center text-sm text-gray-400">Loading messages…</p>
             ) : messagesError ? (
@@ -552,7 +525,7 @@ export default function ClientDetail({ externalId, onBack, onOpenPlaybook }: { e
             ) : (
               <div className="divide-y divide-gray-50 max-h-96 overflow-y-auto">
                 {messages.map((m, i) => {
-                  const icon = m.channel === 'imessage' ? '💬' : m.channel === 'sms' ? '📱' : m.channel === 'email' ? '✉️' : m.channel === 'call' ? '📞' : '📝';
+                  const icon = m.channel === 'sms' ? '📱' : m.channel === 'email' ? '✉️' : m.channel === 'call' ? '📞' : '📝';
                   const out = m.direction === 'outbound';
                   return (
                     <div key={i} className="flex items-start gap-2.5 px-4 py-2.5">

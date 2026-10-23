@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { isIsoDate, mondayOf, etDayStart, etWeekStart, etWeekStartDate, etMonthStart, etDateRange, etPlusDays } from '../et-periods';
 
-describe('Charlotte day boundaries', () => {
+describe('company day boundaries', () => {
   it('keeps 8:30pm Eastern on the same day, though UTC has rolled over', () => {
     // 2026-10-15 20:30 EDT is 2026-10-16 00:30Z. The server's own midnight
     // (UTC on Vercel) put this evening's doors on tomorrow.
@@ -44,13 +44,13 @@ describe('the Monday-to-Sunday week', () => {
 
 describe('the calendar month', () => {
   it('starts at Eastern midnight on the 1st, even late on the last evening of the month', () => {
-    // 31 Oct 2026 21:00 EDT = 1 Nov 01:00Z — still October in Charlotte.
+    // 31 Oct 2026 21:00 EDT = 1 Nov 01:00Z — still October in the company's time zone.
     expect(etMonthStart(new Date('2026-11-01T01:00:00Z')).toISOString()).toBe('2026-10-01T04:00:00.000Z');
     expect(etMonthStart(new Date('2026-12-15T12:00:00Z')).toISOString()).toBe('2026-12-01T05:00:00.000Z');
   });
 });
 
-describe('a range of Charlotte days', () => {
+describe('a range of company days', () => {
   it('runs from the first midnight to the last millisecond before the next one, across DST', () => {
     const r = etDateRange('2026-10-26', '2026-11-01');
     expect(r.from.toISOString()).toBe('2026-10-26T04:00:00.000Z');

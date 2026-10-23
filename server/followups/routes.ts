@@ -68,7 +68,7 @@ export function registerFollowUpRoutes(app: Express) {
         .orderBy(asc(followUps.done), sql`${followUps.dueDate} asc nulls last`, desc(followUps.createdAt))
         .limit(500);
 
-      // "due" flag: overdue or due today (date-only comparison). Charlotte's
+      // "due" flag: overdue or due today (date-only comparison). the company's
       // today — the UTC date flipped at 8pm Eastern, so an evening glance showed
       // tomorrow's follow-ups as due today and today's as overdue.
       const today = etToday();

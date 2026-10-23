@@ -11,6 +11,7 @@
  *
  * Pure: no imports, no I/O. Shared by the server, the cron and the app.
  */
+import { boardTz } from './schedule-board';
 
 export type MeetingKey = 'leadership' | 'claims' | 'sales' | 'payroll';
 
@@ -127,10 +128,10 @@ export const meetingMinutes = (m: MeetingDef): number => m.endMin - m.startMin;
  * The Monday a pack belongs to, as YYYY-MM-DD.
  *
  * Read as a calendar day in the company's timezone rather than an instant:
- * the job runs on Sunday evening in Charlotte, which is already Monday in UTC,
+ * the job runs on Sunday evening in the company's time zone, which is already Monday in UTC,
  * and a pack filed under the wrong day is a pack nobody finds.
  */
-export function mondayFor(now: Date, timeZone = 'America/New_York'): string {
+export function mondayFor(now: Date, timeZone = boardTz()): string {
   const local = new Date(now.toLocaleString('en-US', { timeZone }));
   const day = local.getDay();                 // 0 Sun … 6 Sat
   // Sunday looks forward to tomorrow; every other day looks back to this
@@ -183,7 +184,7 @@ export interface Attention {
   /**
    * Stable name for the FINDING, independent of this week's numbers.
    *
-   * The text carries a count ("680 old RoofLink leads…") which moves week to
+   * The text carries a count ("12 live jobs have no rep…") which moves week to
    * week, so keying an auto-filed issue on the text would raise a brand new
    * issue every Monday and reset its age — destroying the one thing that makes
    * a chronic problem visible.
@@ -296,7 +297,7 @@ export const agendaFits = (m: MeetingDef): boolean => agendaMinutes(m) <= meetin
 //
 //  - a Scorecard number is only useful with a goal and one owner. "Down from
 //    last week" cannot be argued with OR acted on; "6 against a goal of 10,
-//    Banning's number" can be both.
+//    Dana's number" can be both.
 //  - Rocks give the room a horizon past seven days. Everything else the pack
 //    computes is this week or last week.
 //  - Issues PERSIST. The pack recomputes its findings every Monday, so an
@@ -466,7 +467,7 @@ export function averageRating(scores: number[]): number | null {
 // ============================================================
 
 /** Minutes since midnight in the company's timezone, wherever the viewer is. */
-export function minutesOfDay(now: Date, timeZone = 'America/New_York'): number {
+export function minutesOfDay(now: Date, timeZone = boardTz()): number {
   const local = new Date(now.toLocaleString('en-US', { timeZone }));
   return local.getHours() * 60 + local.getMinutes() + local.getSeconds() / 60;
 }
@@ -505,7 +506,7 @@ export interface MeetingClock {
  * a running order is ever edited short, the segments should still fill the bar
  * rather than leaving a gap that looks like a rendering fault.
  */
-export function meetingClock(m: MeetingDef, now: Date, timeZone = 'America/New_York'): MeetingClock {
+export function meetingClock(m: MeetingDef, now: Date, timeZone = boardTz()): MeetingClock {
   const total = agendaMinutes(m) || meetingMinutes(m);
   let at = 0;
   const segments: ClockSegment[] = m.runningOrder.map((item) => {

@@ -13,6 +13,7 @@
  * recorded with who typed it and when.
  */
 import { WALKTHROUGH_FIELDS, verifyAnswer, walkthroughIssues, walkthroughTally } from './final-walkthrough';
+import { boardTz } from './schedule-board';
 
 export type CertificateStatus = 'draft' | 'sent' | 'signed';
 
@@ -113,7 +114,7 @@ export function certDate(date: string): string {
 }
 
 const stamp = (iso: string | null): string =>
-  (iso ? new Date(iso).toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' }) : '');
+  (iso ? new Date(iso).toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: boardTz() }) : '');
 
 /** What still has to happen before this certificate can go to a carrier. */
 export function certificateBlockers(d: CertificateData, s: CertificateSignatures): string[] {

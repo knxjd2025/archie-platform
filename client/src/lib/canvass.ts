@@ -1,4 +1,5 @@
 /** Shapes and display tables for the canvassing screen. */
+import { boardTz } from '../../../shared/schedule-board';
 
 export interface Measurements {
   measuredSquares: number;
@@ -87,7 +88,7 @@ export function toDateInput(iso: string | null): string {
   if (!iso) return '';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(d);
+  return new Intl.DateTimeFormat('en-CA', { timeZone: boardTz() }).format(d);
 }
 
 /** Is a follow-up due today or overdue? */

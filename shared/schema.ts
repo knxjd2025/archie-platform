@@ -221,7 +221,7 @@ export const agentChats = pgTable('agent_chats', {
   id: serial('id').primaryKey(),
   userEmail: text('user_email').notNull(),
   agentKey: text('agent_key').notNull(),        // 'advisor' | exec/team agent role
-  day: text('day').notNull(),                   // YYYY-MM-DD (America/New_York business day)
+  day: text('day').notNull(),                   // YYYY-MM-DD (the company's business day)
   summary: text('summary'),
   summarizedAt: timestamp('summarized_at'),
   createdAt: timestamp('created_at').defaultNow(),
@@ -499,45 +499,6 @@ export const inboxItems = pgTable('inbox_items', {
   mailboxMessage: uniqueIndex('inbox_items_mailbox_message_idx').on(t.mailbox, t.messageId),
 }));
 export type InboxItem = typeof inboxItems.$inferSelect;
-
-// iMessage: threads a team member's Mac bridge pushed in (their own only),
-// and replies the app queued for that bridge to send through Messages.app.
-export const imessages = pgTable('imessages', {
-  companyId: companyId(),
-  id: serial('id').primaryKey(),
-  owner: text('owner').notNull(),                 // team member email whose Mac this came from
-  guid: text('guid').notNull().unique(),          // Messages' message guid
-  chatGuid: text('chat_guid'),
-  handle: text('handle'),                          // +1704... or an Apple ID email
-  handleKey: text('handle_key'),                   // normalised for matching
-  direction: text('direction').notNull(),          // inbound | outbound
-  service: text('service'),                        // iMessage | SMS | RCS
-  text: text('text'),
-  hasAttachment: boolean('has_attachment').notNull().default(false),
-  isGroup: boolean('is_group').notNull().default(false),
-  sentAt: timestamp('sent_at').notNull(),
-  matchedExternalId: text('matched_external_id'),
-  matchedName: text('matched_name'),
-  createdAt: timestamp('created_at').defaultNow(),
-}, (t) => ({
-  ownerHandle: index('imessages_owner_handle_idx').on(t.owner, t.handleKey, t.sentAt),
-}));
-export type Imessage = typeof imessages.$inferSelect;
-
-export const imessageOutbox = pgTable('imessage_outbox', {
-  companyId: companyId(),
-  id: serial('id').primaryKey(),
-  owner: text('owner').notNull(),
-  toHandle: text('to_handle').notNull(),
-  body: text('body').notNull(),
-  externalId: text('external_id'),
-  status: text('status').notNull().default('queued'), // queued | sending | sent | failed
-  error: text('error'),
-  createdBy: text('created_by'),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-  sentAt: timestamp('sent_at'),
-});
 
 // Sales-activity KPI log: doors knocked, leads run (contacted), reports made
 // and presented. One row per discrete event, attributed to a team member —
@@ -1086,7 +1047,7 @@ export const knowledgeCategoryEnum = pgEnum('knowledge_category', [
   'company',           // Company info, policies, procedures
   'services',          // Roofing services offered
   'pricing',           // Pricing guidelines, estimates
-  'service_area',      // Charlotte NC and surrounding areas
+  'service_area',      // where the company works
   'industry',          // Roofing industry knowledge
   'faq',               // Common questions and answers
   'scripts',           // Sales scripts, call scripts
@@ -1207,303 +1168,6 @@ export const knowledgeAccessLogRelations = relations(knowledgeAccessLog, ({ one 
   }),
 }));
 
-// ===================
-// Outreach Automation
-// ===================
-
-// Outreach enums
-export const outreachCampaignStatusEnum = pgEnum('outreach_campaign_status', [
-  'draft',
-  'active',
-  'paused',
-  'completed',
-]);
-
-export const outreachLeadStatusEnum = pgEnum('outreach_lead_status', [
-  'scraped',
-  'enriching',
-  'enriched',
-  'personalizing',
-  'personalized',
-  'queued',
-  'sent',
-  'delivered',
-  'opened',
-  'replied',
-  'converted',
-  'failed',
-  'bounced',
-]);
-
-export const outreachAttemptStatusEnum = pgEnum('outreach_attempt_status', [
-  'pending',
-  'sent',
-  'delivered',
-  'opened',
-  'clicked',
-  'replied',
-  'bounced',
-  'failed',
-]);
-
-export const scrapeJobStatusEnum = pgEnum('scrape_job_status', [
-  'pending',
-  'running',
-  'completed',
-  'failed',
-]);
-
-// Email templates for outreach
-export const emailTemplates = pgTable('email_templates', {
-  companyId: companyId(),
-  id: serial('id').primaryKey(),
-  userId: integer('user_id').references(() => users.id),
-  name: text('name').notNull(),
-
-  // Template content with merge tags like {firstName}, {companyName}
-  subjectTemplate: text('subject_template').notNull(),
-  bodyTemplate: text('body_template').notNull(),
-
-  // AI prompts for personalization
-  subjectPrompt: text('subject_prompt'),
-  firstLinePrompt: text('first_line_prompt'),
-
-  // Industry targeting
-  targetIndustries: jsonb('target_industries').$type<string[]>(),
-
-  isDefault: boolean('is_default').default(false),
-  isActive: boolean('is_active').default(true),
-
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-});
-
-// Outreach campaigns
-export const outreachCampaigns = pgTable('outreach_campaigns', {
-  companyId: companyId(),
-  id: serial('id').primaryKey(),
-  userId: integer('user_id').references(() => users.id).notNull(),
-  name: text('name').notNull(),
-  status: outreachCampaignStatusEnum('status').default('draft').notNull(),
-
-  // Targeting configuration
-  industries: jsonb('industries').$type<string[]>().notNull(),
-  targetLocations: jsonb('target_locations').$type<{ city: string; state: string }[]>(),
-  dailyLeadTarget: integer('daily_lead_target').default(250),
-
-  // Email configuration
-  instantlyApiKey: text('instantly_api_key'), // Encrypted in production
-  instantlyCampaignId: text('instantly_campaign_id'),
-  emailTemplateId: integer('email_template_id').references(() => emailTemplates.id),
-
-  // Schedule
-  runTime: text('run_time').default('09:00'), // HH:MM format
-  timezone: text('timezone').default('America/New_York'),
-
-  // Warm-up settings
-  warmUpEnabled: boolean('warm_up_enabled').default(true),
-  warmUpStartDate: timestamp('warm_up_start_date'),
-  warmUpDailyLimit: integer('warm_up_daily_limit').default(10),
-  currentDailyLimit: integer('current_daily_limit').default(10),
-
-  // Tracking stats
-  totalLeadsGenerated: integer('total_leads_generated').default(0),
-  totalEmailsSent: integer('total_emails_sent').default(0),
-  totalOpens: integer('total_opens').default(0),
-  totalReplies: integer('total_replies').default(0),
-
-  // Schedule management
-  lastRunAt: timestamp('last_run_at'),
-  nextRunAt: timestamp('next_run_at'),
-
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-});
-
-// Outreach leads (scraped companies)
-export const outreachLeads = pgTable('outreach_leads', {
-  companyId: companyId(),
-  id: serial('id').primaryKey(),
-  campaignId: integer('campaign_id').references(() => outreachCampaigns.id).notNull(),
-  userId: integer('user_id').references(() => users.id).notNull(),
-
-  // Company information
-  companyName: text('company_name').notNull(),
-  industry: text('industry').notNull(),
-  website: text('website'),
-  phone: text('phone'),
-  address: text('address'),
-  city: text('city'),
-  state: text('state'),
-  zipCode: text('zip_code'),
-
-  // Owner/Contact information
-  ownerFirstName: text('owner_first_name'),
-  ownerLastName: text('owner_last_name'),
-  ownerEmail: text('owner_email'),
-  emailVerified: boolean('email_verified').default(false),
-  emailVerificationSource: text('email_verification_source'),
-  emailVerificationScore: decimal('email_verification_score', { precision: 5, scale: 2 }),
-
-  // Enrichment data
-  companySize: text('company_size'),
-  yearFounded: text('year_founded'),
-  linkedinUrl: text('linkedin_url'),
-  facebookUrl: text('facebook_url'),
-  googleReviewCount: integer('google_review_count'),
-  googleRating: decimal('google_rating', { precision: 2, scale: 1 }),
-
-  // AI-generated personalization
-  personalizedSubjectLine: text('personalized_subject_line'),
-  personalizedFirstLine: text('personalized_first_line'),
-  personalizationContext: jsonb('personalization_context'),
-
-  // Status tracking
-  status: outreachLeadStatusEnum('status').default('scraped').notNull(),
-
-  // Deduplication
-  dedupeHash: text('dedupe_hash').notNull(),
-
-  // Source tracking
-  sourceUrl: text('source_url'),
-  scrapeJobId: integer('scrape_job_id'),
-
-  // Instantly.ai tracking
-  instantlyLeadId: text('instantly_lead_id'),
-
-  // Spaced sending - when this email should actually be sent
-  scheduledSendAt: timestamp('scheduled_send_at'),
-  actualSentAt: timestamp('actual_sent_at'),
-
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-});
-
-// Outreach attempts (email send tracking)
-export const outreachAttempts = pgTable('outreach_attempts', {
-  companyId: companyId(),
-  id: serial('id').primaryKey(),
-  leadId: integer('lead_id').references(() => outreachLeads.id).notNull(),
-  campaignId: integer('campaign_id').references(() => outreachCampaigns.id).notNull(),
-  userId: integer('user_id').references(() => users.id).notNull(),
-
-  // Email details
-  emailSubject: text('email_subject').notNull(),
-  emailFirstLine: text('email_first_line').notNull(),
-  emailBody: text('email_body'),
-
-  // Instantly.ai tracking
-  instantlyEmailId: text('instantly_email_id'),
-
-  // Status
-  status: outreachAttemptStatusEnum('status').default('pending').notNull(),
-
-  // Engagement tracking timestamps
-  sentAt: timestamp('sent_at'),
-  deliveredAt: timestamp('delivered_at'),
-  openedAt: timestamp('opened_at'),
-  clickedAt: timestamp('clicked_at'),
-  repliedAt: timestamp('replied_at'),
-  bouncedAt: timestamp('bounced_at'),
-
-  // Error handling
-  error: text('error'),
-  attemptNumber: integer('attempt_number').default(1),
-
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-});
-
-// Scrape jobs (BrightData job tracking)
-export const scrapeJobs = pgTable('scrape_jobs', {
-  companyId: companyId(),
-  id: serial('id').primaryKey(),
-  campaignId: integer('campaign_id').references(() => outreachCampaigns.id).notNull(),
-  userId: integer('user_id').references(() => users.id).notNull(),
-
-  // Job configuration
-  industry: text('industry').notNull(),
-  location: text('location'),
-  searchQuery: text('search_query').notNull(),
-  targetCount: integer('target_count').default(50),
-
-  // Status
-  status: scrapeJobStatusEnum('status').default('pending').notNull(),
-
-  // Results
-  leadsFound: integer('leads_found').default(0),
-  leadsProcessed: integer('leads_processed').default(0),
-  duplicatesSkipped: integer('duplicates_skipped').default(0),
-
-  // Error handling
-  error: text('error'),
-
-  startedAt: timestamp('started_at'),
-  completedAt: timestamp('completed_at'),
-  createdAt: timestamp('created_at').defaultNow(),
-});
-
-// Outreach relations
-export const emailTemplatesRelations = relations(emailTemplates, ({ one, many }) => ({
-  user: one(users, {
-    fields: [emailTemplates.userId],
-    references: [users.id],
-  }),
-  campaigns: many(outreachCampaigns),
-}));
-
-export const outreachCampaignsRelations = relations(outreachCampaigns, ({ one, many }) => ({
-  user: one(users, {
-    fields: [outreachCampaigns.userId],
-    references: [users.id],
-  }),
-  emailTemplate: one(emailTemplates, {
-    fields: [outreachCampaigns.emailTemplateId],
-    references: [emailTemplates.id],
-  }),
-  leads: many(outreachLeads),
-  attempts: many(outreachAttempts),
-  scrapeJobs: many(scrapeJobs),
-}));
-
-export const outreachLeadsRelations = relations(outreachLeads, ({ one, many }) => ({
-  campaign: one(outreachCampaigns, {
-    fields: [outreachLeads.campaignId],
-    references: [outreachCampaigns.id],
-  }),
-  user: one(users, {
-    fields: [outreachLeads.userId],
-    references: [users.id],
-  }),
-  attempts: many(outreachAttempts),
-}));
-
-export const outreachAttemptsRelations = relations(outreachAttempts, ({ one }) => ({
-  lead: one(outreachLeads, {
-    fields: [outreachAttempts.leadId],
-    references: [outreachLeads.id],
-  }),
-  campaign: one(outreachCampaigns, {
-    fields: [outreachAttempts.campaignId],
-    references: [outreachCampaigns.id],
-  }),
-  user: one(users, {
-    fields: [outreachAttempts.userId],
-    references: [users.id],
-  }),
-}));
-
-export const scrapeJobsRelations = relations(scrapeJobs, ({ one }) => ({
-  campaign: one(outreachCampaigns, {
-    fields: [scrapeJobs.campaignId],
-    references: [outreachCampaigns.id],
-  }),
-  user: one(users, {
-    fields: [scrapeJobs.userId],
-    references: [users.id],
-  }),
-}));
-
 // Type exports
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
@@ -1523,18 +1187,6 @@ export type InsertKnowledgeDocument = typeof knowledgeDocuments.$inferInsert;
 export type KnowledgeChunk = typeof knowledgeChunks.$inferSelect;
 export type InsertKnowledgeChunk = typeof knowledgeChunks.$inferInsert;
 export type KnowledgeAccessLog = typeof knowledgeAccessLog.$inferSelect;
-
-// Outreach types
-export type EmailTemplate = typeof emailTemplates.$inferSelect;
-export type InsertEmailTemplate = typeof emailTemplates.$inferInsert;
-export type OutreachCampaign = typeof outreachCampaigns.$inferSelect;
-export type InsertOutreachCampaign = typeof outreachCampaigns.$inferInsert;
-export type OutreachLead = typeof outreachLeads.$inferSelect;
-export type InsertOutreachLead = typeof outreachLeads.$inferInsert;
-export type OutreachAttempt = typeof outreachAttempts.$inferSelect;
-export type InsertOutreachAttempt = typeof outreachAttempts.$inferInsert;
-export type ScrapeJob = typeof scrapeJobs.$inferSelect;
-export type InsertScrapeJob = typeof scrapeJobs.$inferInsert;
 
 // ===================
 // Financial Integrations
@@ -2020,8 +1672,8 @@ export type SignatureSigner = typeof signatureSigners.$inferSelect;
 export const meetingWeeks = pgTable('meeting_weeks', {
   companyId: companyId(),
   id: serial('id').primaryKey(),
-  // A calendar day, not an instant: the pack belongs to a Monday in
-  // Charlotte, and `date` keeps it that way through every timezone.
+  // A calendar day, not an instant: the pack belongs to a Monday where the
+  // company is, and `date` keeps it that way through every timezone.
   monday: date('monday').notNull(),
   agendas: jsonb('agendas').$type<Record<string, any>[]>().notNull().default([]),
   weekFrom: date('week_from'),

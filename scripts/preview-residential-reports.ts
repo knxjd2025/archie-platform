@@ -32,7 +32,7 @@ const damage = (id: string, type: string, label: string, severity: string, locat
 
 const report: any = {
   id: 'preview', generatedAt: '2026-09-14T12:00:00.000Z', version: '2.0',
-  property: { address: '7421 Mallard Creek Road', city: 'Charlotte', state: 'NC', zip: '28262', latitude: 35.2, longitude: -80.8 },
+  property: { address: '7421 Mallard Creek Road', city: 'Springfield', state: 'IL', zip: '62701', latitude: 39.8, longitude: -89.6 },
   stormHistory: {
     yearsAnalyzed: 3, searchRadiusMiles: 5, totalEvents: 14, hailEvents: 5, windEvents: 9, tornadoEvents: 0, largestHailInches: 1.75, highestWindMph: 66,
     riskLevel: 'high', riskScore: 72, claimPotential: 'high',
@@ -78,7 +78,7 @@ const priced: any = applyReplacementPricing(report, {
 });
 
 const proposal: any = {
-  customer: 'Linda McMillan', address: '7421 Mallard Creek Road', cityStateZip: 'Charlotte, NC 28262', jobNumber: '1042',
+  customer: 'Linda McMillan', address: '7421 Mallard Creek Road', cityStateZip: 'Springfield, IL 62701', jobNumber: '1042',
   date: 'September 14, 2026', rep: 'Sam Rep', satelliteDataUri: null,
   measuredSquares: 28.4, billableSquares: 32, roofAreaSqFt: 2840, averagePitch: '6/12', wastePct: 12, imageryDate: '2025-04-02',
   segments: [

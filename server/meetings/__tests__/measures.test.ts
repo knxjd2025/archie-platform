@@ -49,9 +49,9 @@ describe('the measure catalogue', () => {
   });
 
   it('reports on the week that finished, not the one in progress', () => {
-    // The windows are Charlotte days whatever timezone the server runs in — a
-    // week that ends at Sunday midnight in Charlotte is already Monday in UTC,
-    // so these are asserted on Charlotte dates rather than on an ISO string.
+    // The windows are company days whatever timezone the server runs in — a
+    // week that ends at Sunday midnight in the company's time zone is already Monday in UTC,
+    // so these are asserted on company dates rather than on an ISO string.
     const local = (d: Date) => etParts(d).date;
     const w = measureWindows('2026-09-21');
     expect(local(w.last.from)).toBe('2026-09-14');
@@ -66,13 +66,13 @@ describe('the measure catalogue', () => {
 
   it('runs Eastern midnight to Eastern midnight, not UTC (8pm Eastern)', () => {
     // On Vercel `new Date('…T00:00:00')` is UTC midnight, which started the
-    // week at 8pm Sunday Charlotte time and dropped Sunday evening's leads.
+    // week at 8pm Sunday company time and dropped Sunday evening's leads.
     const w = measureWindows('2026-09-21');
     expect(w.last.from.toISOString()).toBe('2026-09-14T04:00:00.000Z');
     expect(w.last.to.toISOString()).toBe('2026-09-21T03:59:59.999Z');
   });
 
-  it('keeps a whole Charlotte week across the end of daylight saving', () => {
+  it('keeps a whole company week across the end of daylight saving', () => {
     // DST ends Sunday 1 November 2026: the week starts on EDT and ends on EST.
     const w = measureWindows('2026-11-02');
     expect(w.last.from.toISOString()).toBe('2026-10-26T04:00:00.000Z');

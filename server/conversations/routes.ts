@@ -4,7 +4,6 @@ import { asyncHandler } from '../lib/async-handler';
 import { GoHighLevelClient } from '../integrations/gohighlevel';
 import { JobTreadClient } from '../integrations/jobtread';
 import { fetchGmailInbox } from '../agents/google-tools';
-import { imessageConversations } from '../imessage/routes';
 import { isScoped, repClientIdentifiers } from '../access/rep-scope';
 
 export interface ConversationItem {
@@ -194,10 +193,7 @@ export function registerConversationRoutes(app: Express) {
     const status = (r: PromiseSettledResult<ConversationItem[]>): SourceStatus =>
       r.status === 'fulfilled' ? { ok: true, count: r.value.length } : { ok: false, error: errText(r.reason) };
 
-    // The signed-in person's own iMessage threads (their Mac bridge), last 14 days.
-    let im: ConversationItem[] = [];
-    try { im = await imessageConversations(mailbox, new Date(Date.now() - 14 * 864e5)); } catch { /* no bridge */ }
-    let items = [...val(ghlR), ...val(gmailR), ...val(jtR), ...im].sort((a, b) => b.date - a.date);
+    let items = [...val(ghlR), ...val(gmailR), ...val(jtR)].sort((a, b) => b.date - a.date);
 
     // Sales reps: keep only their own clients' conversations.
     if (isScoped(user)) {
@@ -209,7 +205,7 @@ export function registerConversationRoutes(app: Express) {
 
     res.json({
       conversations: items,
-      sources: { ghl: status(ghlR), gmail: status(gmailR), jobtread: status(jtR), imessage: { ok: true, count: im.length } },
+      sources: { ghl: status(ghlR), gmail: status(gmailR), jobtread: status(jtR) },
     });
   }));
 }

@@ -2,7 +2,7 @@
  * `fetch` that gives up.
  *
  * Node's fetch has no default timeout, so one integration that stopped
- * answering (GHL, CompanyCam, Everee, Vapi, a JobTread upload URL) held the
+ * answering (GHL, CompanyCam, Everee, a JobTread upload URL) held the
  * request open until Vercel killed the whole function at its limit — the
  * user saw a blank failure after a minute, and a webhook caller saw a timeout
  * and retried, doing the work twice. This aborts after `timeoutMs` and throws

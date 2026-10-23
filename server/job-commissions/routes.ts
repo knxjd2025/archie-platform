@@ -193,7 +193,7 @@ export function registerJobCommissionRoutes(app: Express) {
       const [lead] = await db.select().from(leads).where(eq(leads.externalId, req.params.externalId));
       if (!lead?.externalId) return res.status(404).json({ error: 'Client not found' });
       if (!(await ownsLead(user, lead.externalId))) return res.status(404).json({ error: 'Client not found' });
-      // RoofLink and GoHighLevel clients have no JobTread job to read from —
+      // GoHighLevel clients have no JobTread job to read from —
       // an empty list, not an error, so the screen offers manual entry.
       if (lead.source !== 'jobtread') return res.json({ documents: [], reason: 'not-a-jobtread-job' });
       const r = await new JobTreadClient().getJobDocuments(lead.externalId, { limit: 50 });

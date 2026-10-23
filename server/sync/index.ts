@@ -2,7 +2,6 @@ import { runSync, type SyncResult } from './run';
 import { syncJobtread } from './jobtread-sync';
 import { syncCalendar } from './calendar-sync';
 import { syncLeads } from './leads-sync';
-import { syncRoofLink } from './rooflink-sync';
 import { syncClaimsFromJobTread } from '../claims/from-jobtread';
 import { syncSalesRepsFromJobTread } from './jobtread-reps';
 
@@ -31,13 +30,3 @@ export async function runAllSyncs(): Promise<SyncResult[]> {
   return results;
 }
 
-/**
- * RoofLink runs on its own cron (vercel.json: 30 past the hour), not inside
- * runAllSyncs: its API is slow enough (~15s a page, ~19 pages) that sharing
- * the 300s function budget with the JobTread pull risked the whole hourly
- * run being killed. Scheduled after the top-of-the-hour run so it reads the
- * JobTread leads just refreshed and only adds clients the app lacks.
- */
-export async function runRoofLinkSync(): Promise<SyncResult> {
-  return runSync('rooflink', () => syncRoofLink());
-}

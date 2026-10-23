@@ -125,7 +125,7 @@ const STATUS_MAP: Record<string, string> = {
 
 export function parseAddress(addr?: string): { address: string | null; city: string | null; state: string | null; zip: string | null } {
   if (!addr) return { address: null, city: null, state: null, zip: null };
-  // Best-effort: "550 Manning Dr, Charlotte, NC 28209, USA"
+  // Best-effort: "12 Oak St, Springfield, IL 62701, USA"
   const m = addr.match(/,\s*([A-Za-z .'-]+),\s*([A-Z]{2})\s*(\d{5})?/);
   if (m) return { address: addr, city: m[1]?.trim() || null, state: m[2] || null, zip: m[3] || null };
   const parts = addr.split(',').map((s) => s.trim()).filter(Boolean);

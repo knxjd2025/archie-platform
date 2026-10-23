@@ -8,7 +8,6 @@ import { tenantFromSession } from './tenant/middleware';
 import { registerRoutes } from './routes';
 import { recordServerError } from './bugs/routes';
 import { seedAll } from './seed';
-import { initOutreachScheduler } from './outreach/outreach-scheduler';
 import { corsOptions, sessionOptions, JSON_BODY_LIMIT } from './security-config';
 import { createErrorHandler } from './lib/error-response';
 import path from 'path';
@@ -82,13 +81,6 @@ async function start() {
     // Seed default agents and knowledge base on startup
     await seedAll();
 
-    // Initialize outreach scheduler
-    initOutreachScheduler({
-      brightDataApiKey: process.env.BRIGHTDATA_API_KEY,
-      hunterApiKey: process.env.HUNTER_IO_API_KEY,
-      openaiApiKey: process.env.OPENAI_API_KEY,
-    });
-
     // In development, use Vite middleware (dynamic import to avoid bundling)
     if (process.env.NODE_ENV !== 'production') {
       const { createServer: createViteServer } = await import('vite');
@@ -103,7 +95,6 @@ async function start() {
     }
 
     app.listen(PORT, () => {
-      const outreachEnabled = process.env.ENABLE_OUTREACH === 'true';
       console.log(`
 ╔═══════════════════════════════════════════════════════════════╗
 ║                                                               ║
@@ -115,8 +106,6 @@ async function start() {
 ║   • CEO - Chief Executive Officer                             ║
 ║   • CFO - Chief Financial Officer                             ║
 ║   • CMO - Chief Marketing Officer                             ║
-║                                                               ║
-║   Outreach Automation: ${outreachEnabled ? '✅ ENABLED' : '❌ DISABLED'}                        ║
 ║                                                               ║
 ╚═══════════════════════════════════════════════════════════════╝
       `);

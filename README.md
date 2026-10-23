@@ -13,7 +13,10 @@ no keys). The Best Roofing AI app and its repo are separate and are not changed 
 
 1. **Baseline import**: code copied over, data files, one-off scripts and keys left out. ✅
 2. **Multi-company**: every table gets a `company_id`, enforced by row level security in the database. ✅ (docs/archie/01-multi-company.md)
-3. **De-brand**: remove all Best Roofing Now names, facts and people; move them into per-company settings.
+3. **De-brand**: remove all Best Roofing Now names, facts and people; move them into per-company settings
+   (shared/company.ts: name, logo, colors, contact, claims, time zone). ✅ BRN-only parts removed: the ops
+   brain, the iMessage bridge, outreach and lead scraping, RoofLink sync and the Vapi voice agent (each
+   company's AI voice agent is GHL Voice AI in its own sub-account). Monday meetings stay, per company.
 4. **Trade packs**: make inspections and reports work for any trade, with roofing as the first pack.
 5. **New features**: project management, plus the full GHL-backed feature set (CRM, inbox, calendar,
    pipeline, reviews, AI agent, automations, forms, payments, reports).

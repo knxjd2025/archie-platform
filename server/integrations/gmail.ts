@@ -2,6 +2,7 @@
  * Google Workspace Integration (Gmail, Calendar, Drive) using Google OAuth2
  */
 import { google, Auth } from 'googleapis';
+import { boardTz } from '../../shared/schedule-board';
 import { perCompany } from '../tenant/per-company';
 
 export interface GmailTokens {
@@ -301,8 +302,8 @@ export class GmailClient {
       summary: params.summary,
       description: params.description,
       location: params.location,
-      start: { dateTime: params.start, timeZone: 'America/New_York' },
-      end: { dateTime: params.end, timeZone: 'America/New_York' },
+      start: { dateTime: params.start, timeZone: boardTz() },
+      end: { dateTime: params.end, timeZone: boardTz() },
     };
 
     if (params.attendees?.length) {

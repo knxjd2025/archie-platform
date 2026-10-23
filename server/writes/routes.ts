@@ -1,4 +1,5 @@
 import type { Express, Request, Response } from 'express';
+import { boardTz } from '../../shared/schedule-board';
 import { currentProfile } from '../tenant/context';
 import { eq } from 'drizzle-orm';
 import { db } from '../db';
@@ -43,8 +44,8 @@ export function appointmentEvent(slot: AppointmentSlot, opts: { clientName: stri
     summary: `${slot.type} — ${opts.clientName}`,
     location: opts.address || undefined,
     description: `${slot.notes ? slot.notes + '\n\n' : ''}Booked from the Team App by ${opts.bookedBy}.`,
-    start: { dateTime: startWall, timeZone: 'America/New_York' },
-    end: { dateTime: endWall, timeZone: 'America/New_York' },
+    start: { dateTime: startWall, timeZone: boardTz() },
+    end: { dateTime: endWall, timeZone: boardTz() },
   };
 }
 

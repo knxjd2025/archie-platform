@@ -61,9 +61,9 @@ function toRow(c: ClaimRow, ctx: ClaimGateContext, jtStage: string | null = null
 
 /**
  * A next-action due date as the rep picked it. The form sends "2026-10-16";
- * new Date() reads that as UTC midnight — 8pm on the 15th in Charlotte — so
+ * new Date() reads that as UTC midnight — 8pm on the 15th in the company's time zone — so
  * the card said "due Oct 15" and went red the evening before. Store a bare
- * date as noon Charlotte time instead: it is the 16th in every US zone and
+ * date as noon company time instead: it is the 16th in every US zone and
  * its UTC date is still the 16th. Full timestamps pass through unchanged.
  */
 function dueFrom(v: unknown): Date {

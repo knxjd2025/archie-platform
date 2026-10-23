@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { SESSION_EXPIRED_EVENT, resetSessionExpiredNotice } from './api';
 import { applyBrandTheme } from './brand';
+import { setTimeZoneProvider } from '../../../shared/schedule-board';
 import type { TeamRole } from '../../../shared/rbac';
 import type { CompanyProfile } from '../../../shared/company';
 
@@ -185,6 +186,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // The company's colors on every brand-* class; Archie's when signed out.
   useEffect(() => { applyBrandTheme(profile?.colors ?? null); }, [profile]);
+  // Schedules and due dates show in the company's own time zone.
+  useEffect(() => { setTimeZoneProvider(() => profile?.timeZone); }, [profile]);
 
   return <Ctx.Provider value={{ user, profile, loading, expired, offline, signOut }}>{children}</Ctx.Provider>;
 }
