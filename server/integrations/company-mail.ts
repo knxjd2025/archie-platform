@@ -13,7 +13,7 @@
  * so they are uploaded to the contact's GHL conversation first and the email
  * links them; an inline `cid:` image in the HTML is pointed at its upload.
  */
-import { canDelegateMailbox, sendAsMailbox, sendAsMailboxWithAttachments, type MailAttachment } from './google-workspace';
+import { canDelegateMailbox, sendAsMailbox as gmailSend, sendAsMailboxWithAttachments as gmailSendWithAttachments, type MailAttachment } from './google-workspace';
 import { GHL_API_BASE, ghlConnection, ghlHeaders } from './ghl/connection';
 import { getConversationIdByContact, sendGhlEmail, upsertContactByEmail } from './ghl/messaging';
 
@@ -45,8 +45,8 @@ export async function sendCompanyEmail(msg: CompanyEmail): Promise<CompanyEmailR
 
   if (msg.from && canDelegateMailbox(msg.from)) {
     const messageId = msg.attachments?.length
-      ? await sendAsMailboxWithAttachments(msg.from, to, msg.subject, msg.html, msg.attachments, msg.cc)
-      : await sendAsMailbox(msg.from, to, msg.subject, msg.html, msg.cc);
+      ? await gmailSendWithAttachments(msg.from, to, msg.subject, msg.html, msg.attachments, msg.cc)
+      : await gmailSend(msg.from, to, msg.subject, msg.html, msg.cc);
     return { via: 'google', messageId };
   }
 
@@ -114,4 +114,16 @@ async function uploadAttachments(contactId: string, attachments: MailAttachment[
     out.set(a.filename, url);
   }
   return out;
+}
+
+/** sendCompanyEmail in the older (mailbox, to, subject, html, cc) shape. Returns the message id. */
+export async function sendAsMailbox(mailbox: string, to: string, subject: string, html: string, cc?: string): Promise<string> {
+  return (await sendCompanyEmail({ from: mailbox, to, subject, html, cc })).messageId;
+}
+
+/** sendAsMailbox with files. */
+export async function sendAsMailboxWithAttachments(
+  mailbox: string, to: string, subject: string, html: string, attachments: MailAttachment[], cc?: string,
+): Promise<string> {
+  return (await sendCompanyEmail({ from: mailbox, to, subject, html, cc, attachments })).messageId;
 }

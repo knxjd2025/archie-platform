@@ -19,14 +19,6 @@ import { currentProfile } from '../tenant/context';
 
 export const SEE_ALL_KEY = 'calendar.seeAll';
 
-/**
- * @deprecated Kept until the signing routes move to sendingMailboxFor. The
- * company's domain and office mailbox now come from the company itself.
- */
-export const COMPANY_DOMAIN = '@company-domain.invalid';
-/** @deprecated See COMPANY_DOMAIN. Empty: mail without a sender goes out through the company's GHL. */
-export const OFFICE_CALENDAR = '';
-
 /** The company's Google Workspace domain, when the operator delegated one; '' otherwise. */
 export const companyDomain = (): string => delegatedDomainForCurrentCompany() ?? '';
 

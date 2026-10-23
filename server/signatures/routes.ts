@@ -25,9 +25,9 @@ import { ownsLead, type SessionUser } from '../access/rep-scope';
 import { asyncHandler } from '../lib/async-handler';
 import { rateLimit } from '../lib/rate-limit';
 import { logWrite } from '../writes/log';
-import { sendAsMailbox, sendAsMailboxWithAttachments } from '../brain/gmail-delegated';
+import { sendAsMailbox, sendAsMailboxWithAttachments } from '../integrations/company-mail';
 import { memberByEmail } from '../access/team-scope';
-import { COMPANY_DOMAIN, OFFICE_CALENDAR } from '../calendar/access';
+import { officeMailbox, sendingMailboxFor } from '../calendar/access';
 import { GoHighLevelClient } from '../integrations/gohighlevel';
 import { JobTreadClient } from '../integrations/jobtread';
 import {
@@ -95,13 +95,6 @@ export function normalizePhone(raw: unknown): string | null {
   if (d.length === 10) return `+1${d}`;
   if (d.length === 11 && d.startsWith('1')) return `+${d}`;
   return d.length > 11 && d.length <= 15 ? `+${d}` : null;
-}
-
-/** The mailbox this goes out from — the sender's own where they have one. */
-async function sendingMailboxFor(email: string): Promise<string> {
-  const e = (email || '').trim().toLowerCase();
-  const me = await memberByEmail(e).catch(() => null);
-  return me?.active && e.endsWith(COMPANY_DOMAIN) ? e : OFFICE_CALENDAR;
 }
 
 const signerView = (s: typeof signatureSigners.$inferSelect, withToken: boolean): SignerView => ({
@@ -1010,7 +1003,7 @@ async function notifyDecline(
   const to = request.sentBy || request.createdBy;
   if (!to || !EMAIL_RE.test(to)) return;
   await sendAsMailbox(
-    OFFICE_CALENDAR, to, `Not signed — ${request.title}`,
+    officeMailbox(), to, `Not signed — ${request.title}`,
     `<p><b>${escapeHtml(signer.name)}</b> did not sign <b>${escapeHtml(request.title)}</b>${request.propertyAddress ? ` for ${escapeHtml(request.propertyAddress)}` : ''}.</p>`
     + (reason ? `<p>What they said: “${escapeHtml(reason)}”</p>` : '<p>They gave no reason.</p>')
     + `<p><a href="${appBase()}/clients/${encodeURIComponent(request.jobExternalId)}">Open the job</a></p>`,

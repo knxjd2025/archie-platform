@@ -6,7 +6,7 @@ const LIST = 'james@acme.test,admin@acme.test';
 describe('isAllowedLoginEmail', () => {
   it('allows listed emails, case-insensitively', () => {
     expect(isAllowedLoginEmail('james@acme.test', LIST)).toBe(true);
-    expect(isAllowedLoginEmail('Admin@BestRoofingNow.com', LIST)).toBe(true);
+    expect(isAllowedLoginEmail('Admin@Acme.test', LIST)).toBe(true);
   });
   it('rejects unlisted emails', () => {
     expect(isAllowedLoginEmail('banning@acme.test', LIST)).toBe(false);

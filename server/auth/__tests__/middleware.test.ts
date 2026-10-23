@@ -143,8 +143,9 @@ describe('requireAuth', () => {
   });
 
   it('ends a blocked address without reading the roster', async () => {
-    const req = mockReq({ email: 'fred@bestroofingnow.com', name: 'F', role: 'admin' });
-    const { res } = await run(requireAuth, req);
+    process.env.LOGIN_BLOCKLIST = 'fred@acme.test';
+    const req = mockReq({ email: 'fred@acme.test', name: 'F', role: 'admin' });
+    const { res } = await run(requireAuth, req).finally(() => { delete process.env.LOGIN_BLOCKLIST; });
     expect(res.statusCode).toBe(401);
     expect(getTeamMemberByEmail).not.toHaveBeenCalled();
   });

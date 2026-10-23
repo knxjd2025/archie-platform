@@ -3,7 +3,7 @@
  * over this app's own `claims` table. JobTread has no idea of a claim's
  * lifecycle beyond a few coarse statuses, so the board is the authority and
  * every move writes the nearest JobTread status back (best-effort). Backs the
- * ops-brain claim rules (server/brain/claims.ts) too.
+ * claim rules too.
  */
 import type { Express, Request, Response } from 'express';
 import { desc, eq, ne } from 'drizzle-orm';
@@ -138,7 +138,7 @@ export function registerClaimsRoutes(app: Express) {
   };
 
   // Move stage. Gated (409 with the reason), resets the next action to the
-  // new stage's default and the clock the ops-brain's days-in-stage rules
+  // new stage's default and the days-in-stage clock
   // count from, and mirrors the nearest status to JobTread.
   app.patch('/api/claims/:id/stage', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     const c = await loadClaim(req, res); if (!c) return;

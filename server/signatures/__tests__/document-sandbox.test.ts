@@ -19,7 +19,7 @@ const as = inCompany(() => __co);
 beforeAll(async () => { if (process.env.DATABASE_URL) __co = await makeTestCompany('sigdoc'); });
 
 vi.mock('@vercel/functions', () => ({ waitUntil: () => {} }));
-vi.mock('../../brain/gmail-delegated', () => ({ sendAsMailbox: vi.fn(), sendAsMailboxWithAttachments: vi.fn() }));
+vi.mock('../../integrations/company-mail', () => ({ sendAsMailbox: vi.fn(), sendAsMailboxWithAttachments: vi.fn() }));
 vi.mock('../../integrations/jobtread', () => ({ JobTreadClient: class { uploadJobFile = vi.fn(); } }));
 vi.mock('../../integrations/gohighlevel', () => ({ GoHighLevelClient: class { sendSms = vi.fn(); } }));
 vi.mock('../../access/team-scope', () => ({ memberByEmail: async () => null, visibleRepNamesFor: async () => null }));

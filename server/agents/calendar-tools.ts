@@ -10,7 +10,7 @@
  * `appointments` mirror table and is therefore a TEAM-WIDE view (manager+).
  * The mirror is also only as fresh as the last sync; this is live.
  */
-import { getDelegatedCalendar } from '../brain/calendar-brain';
+import { getDelegatedCalendar } from '../integrations/google-workspace';
 
 const DAY_MS = 864e5;
 const DEFAULT_DAYS = 7;

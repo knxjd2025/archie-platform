@@ -1,5 +1,5 @@
 import { google } from 'googleapis';
-import { getDelegatedGmail } from '../brain/gmail-delegated';
+import { getDelegatedGmail } from '../integrations/google-workspace';
 
 export interface EmailItem {
   from: string;

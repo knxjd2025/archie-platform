@@ -16,7 +16,7 @@
  */
 import type { Express, Request, Response } from 'express';
 import { requireAuth } from '../auth/middleware';
-import { getDelegatedCalendar } from '../brain/calendar-brain';
+import { getDelegatedCalendar } from '../integrations/google-workspace';
 import { getDelegatedDrive } from '../agents/google-tools';
 import { sendUpstreamFailure } from '../lib/upstream';
 

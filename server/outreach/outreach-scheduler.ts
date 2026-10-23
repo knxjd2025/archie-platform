@@ -56,7 +56,7 @@ const EMAILS_PER_BATCH = 3; // Send max 3 emails per batch check
  * The hour (0-23) in Charlotte. The send window used `getHours()`, which is
  * the server's zone — UTC on Vercel — so "8 AM to 5 PM" was 4 AM to 1 PM
  * Eastern (3 AM to noon in winter). Same Intl approach as
- * server/brain/escalate.ts isQuietHours.
+ * the old ops brain's quiet hours.
  */
 export function easternHour(d: Date): number {
   return Number(

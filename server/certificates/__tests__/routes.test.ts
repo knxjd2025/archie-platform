@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => ({
   pending: [] as Array<Promise<unknown>>,
 }));
 vi.mock('@vercel/functions', () => ({ waitUntil: (p: Promise<unknown>) => { mocks.pending.push(p); } }));
-vi.mock('../../brain/gmail-delegated', () => ({ sendAsMailbox: mocks.send, sendAsMailboxWithAttachments: vi.fn() }));
+vi.mock('../../integrations/company-mail', () => ({ sendAsMailbox: mocks.send, sendAsMailboxWithAttachments: vi.fn() }));
 vi.mock('../../integrations/jobtread', () => ({ JobTreadClient: class { uploadJobFile = mocks.upload; } }));
 vi.mock('../../access/team-scope', () => ({ memberByEmail: async () => null, visibleRepNamesFor: async () => null }));
 

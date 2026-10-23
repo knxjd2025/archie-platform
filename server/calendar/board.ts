@@ -9,7 +9,7 @@
 import { and, gte, inArray, lte } from 'drizzle-orm';
 import { db } from '../db';
 import { appointments, teamMembers } from '../../shared/schema';
-import { getDelegatedCalendar } from '../brain/calendar-brain';
+import { getDelegatedCalendar } from '../integrations/google-workspace';
 import { GoHighLevelClient } from '../integrations/gohighlevel';
 import { classifyKind } from '../sync/calendar-map';
 import { visibleCalendarsFor, companyDomain } from './access';

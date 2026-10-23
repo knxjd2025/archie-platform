@@ -22,7 +22,7 @@ import {
   type ClaimLetterFields, type InsuranceLetterKind, type LetterImage,
 } from '../../shared/insurance-letters';
 import { JobTreadClient } from '../integrations/jobtread';
-import { sendAsMailboxWithAttachments, type MailAttachment } from '../brain/gmail-delegated';
+import { sendAsMailboxWithAttachments, type MailAttachment } from '../integrations/company-mail';
 import { memberByEmail } from '../access/team-scope';
 import { sendingMailboxFor } from '../calendar/access';
 import { decodeImagePayload, MAX_UPLOAD_BYTES } from '../photos/routes';

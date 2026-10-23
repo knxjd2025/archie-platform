@@ -67,10 +67,12 @@ describe('validateTeamMemberInput with a JobTread mapping', () => {
 describe('blocked addresses', () => {
   it('cannot be added to or set on the roster', async () => {
     const { validateTeamMemberInput, validateTeamMemberPatch } = await import('../team-validate');
-    const r = validateTeamMemberInput({ name: 'Fred', email: 'Fred@BestRoofingNow.com', role: 'sales' });
+    process.env.LOGIN_BLOCKLIST = 'fred@acme.test';
+    const r = validateTeamMemberInput({ name: 'Fred', email: 'Fred@Acme.test', role: 'sales' });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toMatch(/not allowed on the team/);
-    const p = validateTeamMemberPatch({ email: 'fred@bestroofingnow.com' });
+    const p = validateTeamMemberPatch({ email: 'fred@acme.test' });
     expect(p.ok).toBe(false);
+    delete process.env.LOGIN_BLOCKLIST;
   });
 });

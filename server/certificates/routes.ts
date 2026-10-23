@@ -29,7 +29,7 @@ import {
   type CertificateData, type CertificateSignatures, type CertificateStatus,
 } from '../../shared/certificate-of-completion';
 import { certificatePdf } from './pdf';
-import { sendAsMailbox } from '../brain/gmail-delegated';
+import { sendAsMailbox } from '../integrations/company-mail';
 import { memberByEmail } from '../access/team-scope';
 import { sendingMailboxFor } from '../calendar/access';
 import { JobTreadClient } from '../integrations/jobtread';

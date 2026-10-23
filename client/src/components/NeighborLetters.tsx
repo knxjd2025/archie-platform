@@ -4,12 +4,12 @@ import { api } from '../lib/api';
 import { isNativeApp } from '../lib/native';
 import { letterhead, useCompany } from '../lib/company';
 import {
-  LETTER_KINDS, SUBJECT_LINES, defaultFields, renderLetter, unfilledPlaceholders, type LetterFields, type LetterKind,
+  LETTER_KINDS, SUBJECT_LINES, defaultFields, renderLetter, unfilledPlaceholders, type LetterCompany, type LetterFields, type LetterKind,
 } from '../../../shared/neighbor-letters';
 
 interface Ctx {
   repName: string; repCell: string; streetName: string; cityStateZip: string; insuranceJob: boolean; stage: string | null;
-  reviewCount: string; gettingLines: string[]; gettingSource: string | null; estimateUrl: string; bookingUrl: string; officeAddress: string; canEditSettings: boolean;
+  company: LetterCompany; gettingLines: string[]; gettingSource: string | null; estimateUrl: string; bookingUrl: string; officeAddress: string; canEditSettings: boolean;
 }
 
 /**
@@ -36,7 +36,7 @@ export default function NeighborLetters({ externalId }: { externalId: string }) 
       .then((c) => {
         setCtx(c);
         setF(defaultFields({
-          repName: c.repName, repCell: c.repCell, streetName: c.streetName, reviewCount: c.reviewCount, gettingLines: c.gettingLines,
+          repName: c.repName, repCell: c.repCell, streetName: c.streetName, company: c.company, gettingLines: c.gettingLines,
           insuranceJob: c.insuranceJob, estimateUrl: c.estimateUrl, bookingUrl: c.bookingUrl, officeAddress: c.officeAddress,
           mailingCityStateZip: c.cityStateZip,
         }));
@@ -135,7 +135,6 @@ export default function NeighborLetters({ externalId }: { externalId: string }) 
                     <div><label className={label}>Street (no house number)</label><input value={f.streetName} onChange={(e) => set({ streetName: e.target.value })} className={input} /></div>
                     <div><label className={label}>Neighborhood</label><input value={f.neighborhood} onChange={(e) => set({ neighborhood: e.target.value })} placeholder='or "this area"' className={input} /></div>
                     <div><label className={label}>Year homes were built</label><input value={f.yearBuilt} onChange={(e) => set({ yearBuilt: e.target.value })} placeholder='Redfin/Zillow, or "the same time"' className={input} /></div>
-                    <div><label className={label}>Google review count</label><input value={f.reviewCount} onChange={(e) => set({ reviewCount: e.target.value })} className={input} /></div>
                   </div>
                   <label className="flex items-center gap-2 text-sm text-gray-700"><input type="checkbox" checked={f.insuranceJob} onChange={(e) => set({ insuranceJob: e.target.checked })} /> Storm / insurance job (keeps the "didn't wait" paragraph true)</label>
                   {kind !== 'email' && (
@@ -169,8 +168,8 @@ export default function NeighborLetters({ externalId }: { externalId: string }) 
                       <button onClick={() => setSettingsOpen((v) => !v)} className="text-xs text-blue-600 hover:underline">{settingsOpen ? 'Hide' : 'Office settings'} (links &amp; mailing address, admin)</button>
                       {settingsOpen && (
                         <div className="mt-1 space-y-1">
-                          <input value={f.estimateUrl} onChange={(e) => set({ estimateUrl: e.target.value })} placeholder="Instant estimate tool link" className={input} />
-                          <input value={f.bookingUrl} onChange={(e) => set({ bookingUrl: e.target.value })} placeholder="Free inspection booking link" className={input} />
+                          <input value={f.estimateUrl} onChange={(e) => set({ estimateUrl: e.target.value })} placeholder="Online estimate link (optional)" className={input} />
+                          <input value={f.bookingUrl} onChange={(e) => set({ bookingUrl: e.target.value })} placeholder="Booking link (optional)" className={input} />
                           <input value={f.officeAddress} onChange={(e) => set({ officeAddress: e.target.value })} placeholder="Mailing address for the email footer" className={input} />
                           <button onClick={saveSettings} disabled={savingSettings} className="text-xs px-2.5 py-1 rounded-lg bg-gray-900 text-white disabled:opacity-50">{savingSettings ? 'Saving…' : 'Save for every rep'}</button>
                         </div>

@@ -14,8 +14,9 @@
  * from the phone network, and letting one name a mailbox would turn the shared
  * webhook secret into read/send access for any account in the domain.
  */
-import { getDelegatedCalendar } from '../brain/calendar-brain';
-import { getDelegatedGmail, sendAsMailbox, createDraftInMailbox } from '../brain/gmail-delegated';
+import { getDelegatedCalendar } from '../integrations/google-workspace';
+import { sendAsMailbox } from '../integrations/company-mail';
+import { getDelegatedGmail, createDraftInMailbox } from '../integrations/google-workspace';
 
 const DEFAULT_VOICE_MAILBOX = 'james@bestroofingnow.com';
 

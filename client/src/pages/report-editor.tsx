@@ -94,14 +94,9 @@ const TABS: Array<{ key: Tab; label: string; icon: string }> = [
 ];
 const TIER_LABEL = { good: 'Good', better: 'Better', best: 'Best' } as const;
 
-/**
- * Message names between this editor and the preview page's script, which the
- * server writes (server/reports/routes.ts). The server still speaks the
- * legacy "brn:" names; the "archie:" names are accepted and sent too, so the
- * server can rename its side without breaking the editor.
- */
-const PREVIEW_SECTION_MSGS: unknown[] = ['archie:section', 'brn:section'];
-const PREVIEW_SCROLL_MSGS = ['archie:scrollTo', 'brn:scrollTo'];
+/** Message names between this editor and the preview page's script, which the server writes (server/reports/routes.ts). */
+const PREVIEW_SECTION_MSGS: unknown[] = ['report:section'];
+const PREVIEW_SCROLL_MSGS = ['report:scrollTo'];
 
 export default function ReportEditor({
   externalId, reportId, onBack,

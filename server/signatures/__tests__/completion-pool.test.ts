@@ -32,7 +32,7 @@ const mocks = vi.hoisted(() => ({
   pending: [] as Array<Promise<unknown>>,
 }));
 vi.mock('@vercel/functions', () => ({ waitUntil: (p: Promise<unknown>) => { mocks.pending.push(p); } }));
-vi.mock('../../brain/gmail-delegated', () => ({ sendAsMailbox: vi.fn(), sendAsMailboxWithAttachments: mocks.sendWith }));
+vi.mock('../../integrations/company-mail', () => ({ sendAsMailbox: vi.fn(), sendAsMailboxWithAttachments: mocks.sendWith }));
 vi.mock('../../integrations/jobtread', () => ({ JobTreadClient: class { uploadJobFile = mocks.upload; } }));
 vi.mock('../../integrations/gohighlevel', () => ({ GoHighLevelClient: class { sendSms = vi.fn(); } }));
 vi.mock('../../access/team-scope', () => ({ memberByEmail: async () => null, visibleRepNamesFor: async () => null }));

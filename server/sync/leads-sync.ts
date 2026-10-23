@@ -9,7 +9,7 @@ const JOBTREAD_API_URL = 'https://api.jobtread.com/pave';
 
 async function pave<T>(query: Record<string, any>): Promise<T> {
   // A stalled JobTread call with no timeout held the hourly sync until Vercel
-  // killed the whole function at 300s. 20s, as in server/brain/jobtread-brain.ts.
+  // killed the whole function at 300s. 20s.
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 20_000);
   try {

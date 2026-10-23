@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { voiceMailbox, voiceGoogleReady } from '../vapi-google';
-import { buildMimeMessage } from '../../brain/gmail-delegated';
+import { buildMimeMessage } from '../../integrations/google-workspace';
 
 const ENV = ['VOICE_MAILBOX', 'GOOGLE_SA_EMAIL', 'GOOGLE_SA_KEY'];
 const saved: Record<string, string | undefined> = {};

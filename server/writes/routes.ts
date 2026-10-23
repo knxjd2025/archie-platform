@@ -6,7 +6,7 @@ import { leads, teamMembers } from '../../shared/schema';
 import { requireAuth } from '../auth/middleware';
 import { JobTreadClient, isValidJobStatus } from '../integrations/jobtread';
 import { GoHighLevelClient } from '../integrations/gohighlevel';
-import { getDelegatedCalendar } from '../brain/calendar-brain';
+import { getDelegatedCalendar } from '../integrations/google-workspace';
 import { syncCalendar } from '../sync/calendar-sync';
 import { logWrite } from './log';
 import { ownsLead, isScoped, repClientIdentifiers, type SessionUser } from '../access/rep-scope';
