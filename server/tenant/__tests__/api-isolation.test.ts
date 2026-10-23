@@ -37,7 +37,7 @@ describe.skipIf(!local)('company isolation through the API', async () => {
 
   beforeAll(async () => {
     a = (await createCompany({ slug: `${tag}-a`, name: 'Alpha Roofing', status: 'active' })).id;
-    b = (await createCompany({ slug: `${tag}-b`, name: 'Bravo HVAC', status: 'active', trade: 'hvac' })).id;
+    b = (await createCompany({ slug: `${tag}-b`, name: 'Bravo Roofing', status: 'active', trade: 'roofing' })).id;
     await runAsCompany(a, () => db.insert(schema.teamMembers).values([
       { name: 'Admin A', email: emailA, role: 'admin', canLogin: true },
       { name: 'Rep A', email: `${tag}-rep-a@example.test`, role: 'sales', canLogin: true },
@@ -89,7 +89,7 @@ describe.skipIf(!local)('company isolation through the API', async () => {
   it('tells the app which company the person is in', async () => {
     as(emailB, b);
     const me = await (await fetch(`${base}/api/auth/me`)).json();
-    expect(me.company).toMatchObject({ id: b, name: 'Bravo HVAC', trade: 'hvac' });
+    expect(me.company).toMatchObject({ id: b, name: 'Bravo Roofing', trade: 'roofing' });
   });
 
   it('refuses a session that claims another company', async () => {

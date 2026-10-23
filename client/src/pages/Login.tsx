@@ -79,7 +79,7 @@ export default function Login() {
               'Sign in with Google'
             )}
           </a>
-          <p className="mt-5 text-[11px] text-gray-400">{PRODUCT_NAME} · the team app for home service companies</p>
+          <p className="mt-5 text-[11px] text-gray-400">{PRODUCT_NAME} · the team app for roofing companies</p>
         </div>
       </div>
     </div>

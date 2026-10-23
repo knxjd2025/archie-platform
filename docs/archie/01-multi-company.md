@@ -1,6 +1,6 @@
 # Multi-company (tenancy) design
 
-Archie serves many home service companies from one app and one database. Each
+Archie serves many roofing companies from one app and one database. Each
 company must only ever see its own data. This doc is the plan for that.
 
 ## The rule
@@ -19,7 +19,7 @@ a forgotten `where` clause cannot leak one company's customers to another.
 | `id` | uuid, primary key |
 | `slug` | short unique name, e.g. `acme-roofing` |
 | `name` | display name |
-| `trade` | `roofing`, `hvac`, `plumbing`, ... (picks the trade pack) |
+| `trade` | `roofing` (Archie is for roofing companies; kept as a column for residential vs commercial focus later) |
 | `status` | `trial`, `active`, `paused`, `cancelled` |
 | `ghl_location_id` | the company's GHL sub-account (unique) |
 | `branding` | jsonb: logo, colors, legal name, phone, website, license numbers |

@@ -26,7 +26,7 @@ import type { CommissionSources } from './job-commission';
 // ============================================================
 
 /**
- * One row per home service company using Archie. Every other table carries a
+ * One row per roofing company using Archie. Every other table carries a
  * company_id pointing here, and row level security in the database keeps each
  * company's rows invisible to every other company.
  */
@@ -34,7 +34,7 @@ export const companies = pgTable('companies', {
   id: uuid('id').primaryKey().defaultRandom(),
   slug: text('slug').notNull().unique(),
   name: text('name').notNull(),
-  // Picks the trade pack (inspections, report sections, wording).
+  // Always 'roofing' today: Archie is for roofing companies.
   trade: text('trade').notNull().default('roofing'),
   status: text('status', { enum: ['trial', 'active', 'paused', 'cancelled'] }).notNull().default('trial'),
   // The company's GHL sub-account, which holds its contacts, messages,

@@ -1,6 +1,6 @@
 # Archie Platform
 
-Archie is a field and office platform for home service companies (roofing, HVAC, plumbing, electrical and more).
+Archie is a field and office platform for roofing companies.
 It has its own look and feel and uses GoHighLevel (GHL) as a hidden backend for contacts, messaging, calendars,
 pipelines, reviews and automations.
 
@@ -17,7 +17,7 @@ no keys). The Best Roofing AI app and its repo are separate and are not changed 
    (shared/company.ts: name, logo, colors, contact, claims, time zone). ✅ BRN-only parts removed: the ops
    brain, the iMessage bridge, outreach and lead scraping, RoofLink sync and the Vapi voice agent (each
    company's AI voice agent is GHL Voice AI in its own sub-account). Monday meetings stay, per company.
-4. **Trade packs**: make inspections and reports work for any trade, with roofing as the first pack.
+4. **Roofing depth**: each roofing company's own price book, products, warranties and inspection settings.
 5. **New features**: project management, plus the full GHL-backed feature set (CRM, inbox, calendar,
    pipeline, reviews, AI agent, automations, forms, payments, reports).
 6. **New look**: Archie's own design system.

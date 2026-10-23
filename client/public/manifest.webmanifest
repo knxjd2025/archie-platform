@@ -1,7 +1,7 @@
 {
   "name": "Archie",
   "short_name": "Archie",
-  "description": "Archie: the team app for home service companies. Leads, messages, production, and AI help.",
+  "description": "Archie: the team app for roofing companies. Leads, inspections, reports, production, and AI help.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
