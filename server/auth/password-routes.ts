@@ -1,9 +1,12 @@
 import type { Express, Request, Response } from 'express';
+import { waitUntil } from '@vercel/functions';
 import { isAllowedLoginEmail, isBlockedLoginEmail, memberCanLogin } from './allowlist';
 import { startSignedInSession } from './routes';
 import { passwordProblem, hashPassword, verifyPassword } from './password';
-import { mintPasswordLink, passwordLinkUrl, redeemPasswordLink } from './password-links';
+import { deletePasswordLinksFor, mintResetLinkUnlessRecent, passwordLinkUrl, redeemPasswordLink } from './password-links';
 import { sendPasswordLinkEmail } from './password-mail';
+import { endSessionsFor } from './sessions';
+import { PASSWORD_LINK_EXPIRED } from '../../shared/password-messages';
 import { clearFailedLogins, findSignInMember, recordFailedLogin, setPasswordHash, touchLogin, type SignInMember } from '../storage/team';
 import { isLiveCompany } from '../../shared/company';
 import { runAsCompany } from '../tenant/context';
@@ -12,10 +15,45 @@ import { rateLimit } from '../lib/rate-limit';
 const TEN_MINUTES = 10 * 60 * 1000;
 const ONE_HOUR = 60 * 60 * 1000;
 const WRONG = { error: 'Email or password is wrong.' };
-const EXPIRED = { error: 'This link has expired. Ask for a new one.' };
+const EXPIRED = { error: PASSWORD_LINK_EXPIRED };
 const MAX_PASSWORD_TRIED = 1000; // longer than any password we accept; stops a huge body costing a hash
 
 const normalize = (v: unknown): string => (typeof v === 'string' ? v.trim().toLowerCase() : '');
+
+const FORGOT_DEFAULT_MS = 1500;
+
+/**
+ * How long "Forgot password?" takes to answer, every time. PASSWORD_FORGOT_MIN_MS
+ * may change it; anything that is not a finite number of 0 or more (unset,
+ * empty, a typo) means the default, never "no wait at all".
+ */
+export function forgotFloorMs(): number {
+  const raw = process.env.PASSWORD_FORGOT_MIN_MS;
+  if (raw === undefined || raw.trim() === '') return FORGOT_DEFAULT_MS;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : FORGOT_DEFAULT_MS;
+}
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/** Look up, mint and mail a reset link. Never throws: failures are logged and never reach the answer. */
+async function sendResetIfMember(email: string): Promise<void> {
+  try {
+    const found = await passGate(email);
+    if (!found) return;
+    const token = await runAsCompany(found.company.id, () => mintResetLinkUnlessRecent(email));
+    if (!token) return; // a link went to this email in the last 2 minutes
+    await sendPasswordLinkEmail({
+      to: email,
+      name: found.member.name,
+      companyName: found.company.name,
+      purpose: 'reset',
+      url: passwordLinkUrl(token),
+    });
+  } catch (err) {
+    console.error('[auth] password reset email failed', err);
+  }
+}
 
 /**
  * The same gate Google sign-in applies: not blocklisted, on LOGIN_ALLOWLIST
@@ -69,28 +107,13 @@ export function registerPasswordRoutes(app: Express): void {
   });
 
   app.post('/api/auth/password/forgot', rateLimit(5, ONE_HOUR), async (req: Request, res: Response) => {
-    const started = Date.now();
-    try {
-      const email = normalize(req.body?.email);
-      const found = await passGate(email);
-      if (found) {
-        const token = await runAsCompany(found.company.id, () => mintPasswordLink(email, 'reset'));
-        await sendPasswordLinkEmail({
-          to: email,
-          name: found.member.name,
-          companyName: found.company.name,
-          purpose: 'reset',
-          url: passwordLinkUrl(token),
-        });
-      }
-    } catch (err) {
-      // Never surfaced: the answer must not depend on whether this email is on a roster.
-      console.error('[auth] password reset email failed', err);
-    }
-    // Sending mail takes far longer than finding nobody; wait out the difference.
-    const floor = Number(process.env.PASSWORD_FORGOT_MIN_MS ?? 1500);
-    const wait = floor - (Date.now() - started);
-    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    // The answer comes at the same moment whatever happened: on a roster or
+    // not, mail fast, slow or failing. The lookup and the send run on their
+    // own; if they are still going at the mark they finish after the answer
+    // (kept alive on Vercel by waitUntil).
+    const answerAt = Date.now() + forgotFloorMs();
+    waitUntil(sendResetIfMember(normalize(req.body?.email)));
+    await sleep(Math.max(0, answerAt - Date.now()));
     res.json({ ok: true });
   });
 
@@ -113,7 +136,12 @@ export function registerPasswordRoutes(app: Express): void {
       await runAsCompany(found.company.id, async () => {
         await setPasswordHash(email, hash);
         await touchLogin(email);
+        // Whoever else had this password, or another link, is shut out: the
+        // person's other links are cancelled and every session of theirs ends.
+        await deletePasswordLinksFor(email);
       });
+      // Before the new session is saved, so the new one is the one that survives.
+      await endSessionsFor(email);
       await startSession(req, found, email);
       res.json({ ok: true });
     } catch (err) {

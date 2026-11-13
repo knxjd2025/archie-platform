@@ -11,11 +11,14 @@ import type { Server } from 'node:http';
  * is what is under test.
  */
 const CO = '11111111-1111-4111-8111-111111111111';
-const { state, mint, redeem, sendMail } = vi.hoisted(() => ({
+const { state, mintReset, redeem, sendMail, dropLinks, endSessions, pending } = vi.hoisted(() => ({
   state: { row: null as null | Record<string, unknown>, company: {} as Record<string, unknown>, calls: [] as string[] },
-  mint: vi.fn(),
+  mintReset: vi.fn(),
   redeem: vi.fn(),
   sendMail: vi.fn(),
+  dropLinks: vi.fn(),
+  endSessions: vi.fn(),
+  pending: [] as Promise<unknown>[],
 }));
 
 vi.mock('../../storage/team', () => ({
@@ -44,11 +47,16 @@ vi.mock('../../tenant/companies', () => ({
 vi.mock('../password-mail', () => ({ sendPasswordLinkEmail: (...a: unknown[]) => sendMail(...a) }));
 vi.mock('../password-links', async (orig) => ({
   ...(await orig<typeof import('../password-links')>()),
-  mintPasswordLink: (...a: unknown[]) => mint(...a),
+  mintResetLinkUnlessRecent: (...a: unknown[]) => mintReset(...a),
   redeemPasswordLink: (...a: unknown[]) => redeem(...a),
+  deletePasswordLinksFor: (...a: unknown[]) => dropLinks(...a),
 }));
+vi.mock('../sessions', () => ({ endSessionsFor: (...a: unknown[]) => endSessions(...a) }));
+// Work the forgot route finishes after answering; collected so tests can wait for it.
+vi.mock('@vercel/functions', () => ({ waitUntil: (p: Promise<unknown>) => { pending.push(p); } }));
+const settle = async () => { await Promise.all(pending.splice(0)); };
 
-const { registerPasswordRoutes } = await import('../password-routes');
+const { registerPasswordRoutes, forgotFloorMs } = await import('../password-routes');
 const { registerAuthRoutes } = await import('../routes');
 const { hashPassword } = await import('../password');
 const { tenantFromSession } = await import('../../tenant/middleware');
@@ -86,9 +94,12 @@ beforeEach(() => {
   state.calls = [];
   state.company = { id: CO, status: 'active', name: 'Test Co' };
   state.row = { email: EMAIL, name: 'Thomas Reed', role: 'sales', active: true, canLogin: true, passwordHash: HASH, failedLogins: 0, lockedUntil: null };
-  mint.mockReset().mockResolvedValue('minted-token');
+  mintReset.mockReset().mockResolvedValue('minted-token');
   redeem.mockReset();
   sendMail.mockReset().mockResolvedValue(true);
+  dropLinks.mockReset().mockImplementation(async () => { state.calls.push('drop-links'); });
+  endSessions.mockReset().mockImplementation(async () => { state.calls.push('end-sessions'); });
+  pending.length = 0;
 });
 
 const cookieOf = (res: Response): string | null => {
@@ -184,11 +195,12 @@ describe('POST /api/auth/password/forgot', () => {
     const ok = await forgot(' Thomas@BestRoofingNow.com ');
     expect(ok.status).toBe(200);
     expect(await ok.json()).toEqual({ ok: true });
-    expect(mint).toHaveBeenCalledWith(EMAIL, 'reset');
+    await settle();
+    expect(mintReset).toHaveBeenCalledWith(EMAIL);
     expect(sendMail).toHaveBeenCalledTimes(1);
     expect(sendMail.mock.calls[0][0]).toMatchObject({ to: EMAIL, name: 'Thomas Reed', companyName: 'Test Co', purpose: 'reset' });
 
-    mint.mockClear(); sendMail.mockClear();
+    mintReset.mockClear(); sendMail.mockClear();
     __resetRateLimits(); // the limiter is 5 an hour; this test makes more calls than that
     const responses = [await forgot('nobody@example.com'), await forgot(undefined)];
     state.row!.canLogin = false;
@@ -201,16 +213,77 @@ describe('POST /api/auth/password/forgot', () => {
       expect(r.status).toBe(200);
       expect(await r.json()).toEqual({ ok: true });
     }
-    expect(mint).not.toHaveBeenCalled();
+    await settle();
+    expect(mintReset).not.toHaveBeenCalled();
     expect(sendMail).not.toHaveBeenCalled();
   });
 
-  it('answers the same when minting or sending fails', async () => {
-    mint.mockRejectedValue(new Error('db down'));
-    const a = await forgot(EMAIL);
-    mint.mockResolvedValue('t'); sendMail.mockRejectedValue(new Error('resend down'));
-    const b = await forgot(EMAIL);
-    for (const r of [a, b]) { expect(r.status).toBe(200); expect(await r.json()).toEqual({ ok: true }); }
+  it('answers the same when minting or sending fails, and logs it', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      mintReset.mockRejectedValue(new Error('db down'));
+      const a = await forgot(EMAIL);
+      await settle();
+      mintReset.mockResolvedValue('t'); sendMail.mockRejectedValue(new Error('resend down'));
+      const b = await forgot(EMAIL);
+      await settle();
+      for (const r of [a, b]) { expect(r.status).toBe(200); expect(await r.json()).toEqual({ ok: true }); }
+      expect(logged).toHaveBeenCalledTimes(2);
+    } finally {
+      logged.mockRestore();
+    }
+  });
+
+  it('sends nothing when a link went to this email in the last 2 minutes, and answers the same', async () => {
+    mintReset.mockResolvedValue(null);
+    const res = await forgot(EMAIL);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    await settle();
+    expect(sendMail).not.toHaveBeenCalled();
+  });
+
+  it('answers at the same fixed time whether or not the email is on a roster, however slow the mail', async () => {
+    process.env.PASSWORD_FORGOT_MIN_MS = '200';
+    try {
+      sendMail.mockImplementation(() => new Promise((r) => setTimeout(() => r(true), 1200)));
+      const timed = async (email: string) => {
+        const t = Date.now();
+        const res = await forgot(email);
+        expect(res.status).toBe(200);
+        expect(await res.json()).toEqual({ ok: true });
+        return Date.now() - t;
+      };
+      const member = await timed(EMAIL);
+      const stranger = await timed('nobody@example.com');
+      for (const ms of [member, stranger]) {
+        expect(ms).toBeGreaterThanOrEqual(190);
+        expect(ms).toBeLessThan(700);
+      }
+      // The slow send was not dropped: it finishes after the answer.
+      expect(sendMail).toHaveBeenCalledTimes(1);
+      await settle();
+    } finally {
+      process.env.PASSWORD_FORGOT_MIN_MS = '0';
+    }
+  });
+
+  it('the answer time falls back to the default when PASSWORD_FORGOT_MIN_MS is not a usable number', () => {
+    const prev = process.env.PASSWORD_FORGOT_MIN_MS;
+    try {
+      for (const bad of ['', '  ', 'abc', '-5', 'NaN', 'Infinity']) {
+        process.env.PASSWORD_FORGOT_MIN_MS = bad;
+        expect(forgotFloorMs()).toBe(1500);
+      }
+      delete process.env.PASSWORD_FORGOT_MIN_MS;
+      expect(forgotFloorMs()).toBe(1500);
+      process.env.PASSWORD_FORGOT_MIN_MS = '250';
+      expect(forgotFloorMs()).toBe(250);
+      process.env.PASSWORD_FORGOT_MIN_MS = '0';
+      expect(forgotFloorMs()).toBe(0);
+    } finally {
+      process.env.PASSWORD_FORGOT_MIN_MS = prev;
+    }
   });
 });
 
@@ -242,6 +315,15 @@ describe('POST /api/auth/password/set', () => {
     expect(cookieOf(res)).toBeNull();
   });
 
+  it('ends nobody\'s sessions when the link is spent or the person no longer passes', async () => {
+    redeem.mockResolvedValue(null);
+    await set('a perfectly fine password');
+    redeem.mockResolvedValue({ email: EMAIL, companyId: CO, purpose: 'reset' });
+    state.row!.canLogin = false;
+    await set('a perfectly fine password');
+    expect(endSessions).not.toHaveBeenCalled();
+  });
+
   it('for a link minted by another company returns the expired message', async () => {
     redeem.mockResolvedValue({ email: EMAIL, companyId: '22222222-2222-4222-8222-222222222222', purpose: 'reset' });
     const res = await set('a perfectly fine password');
@@ -262,6 +344,9 @@ describe('POST /api/auth/password/set', () => {
     expect(state.row!.passwordHash).not.toBe(HASH);
     expect(state.row!.failedLogins).toBe(0);
     expect(state.calls).toContain('touch:1');
+    // The person's other sessions and other links end, before the new session starts.
+    expect(endSessions).toHaveBeenCalledWith(EMAIL);
+    expect(dropLinks).toHaveBeenCalledWith(EMAIL);
     const me = await fetch(`${base}/api/auth/me`, { headers: { cookie: after! } });
     expect(me.status).toBe(200);
     // And the new password signs in.
