@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ArchieMark, PRODUCT_NAME } from '../lib/company';
 import { postAuth } from '../lib/auth-post';
+import { isExpiredLinkError } from '../lib/password-pages';
 
 // Read once and cached: the hash is cleared right away, and React may run a
 // state initializer twice in development.
@@ -54,7 +55,14 @@ export default function SetPassword() {
               <label htmlFor="confirm-password" className="block text-xs font-medium text-gray-600 mb-1">Confirm password</label>
               <input id="confirm-password" type="password" autoComplete="new-password" required value={confirm}
                 onChange={(e) => setConfirm(e.target.value)} className={`${input} mb-4`} />
-              {error && <p role="alert" className="mb-3 text-sm text-red-600 font-medium">{error}</p>}
+              {error && (
+                <p role="alert" className="mb-3 text-sm text-red-600 font-medium">
+                  {error}
+                  {isExpiredLinkError(error) && (
+                    <> <a href="/login" className="text-ink underline">Go to sign in</a> and choose "Forgot password?" for a new link.</>
+                  )}
+                </p>
+              )}
               <button type="submit" disabled={busy}
                 className="w-full rounded-lg bg-ink px-4 py-3 text-sm font-medium text-white hover:bg-ink-dark transition-colors disabled:opacity-70">
                 {busy ? 'Saving…' : 'Save and sign in'}

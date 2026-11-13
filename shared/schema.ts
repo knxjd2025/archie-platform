@@ -15,6 +15,7 @@ import {
   uniqueIndex,
   index,
   primaryKey,
+  check,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
@@ -83,7 +84,11 @@ export const passwordLinks = pgTable('password_links', {
   email: text('email').notNull(),
   purpose: text('purpose').notNull(),
   expiresAt: timestamp('expires_at').notNull(),
-});
+}, (t) => ({
+  // Created by migrations/0004 and recorded in its snapshot; declared here so
+  // drizzle-kit does not see it as extra and drop it.
+  purposeCheck: check('password_links_purpose_check', sql`${t.purpose} IN ('welcome','reset')`),
+}));
 
 export const companyIntegrations = pgTable('company_integrations', {
   id: serial('id').primaryKey(),

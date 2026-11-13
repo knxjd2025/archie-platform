@@ -20,6 +20,14 @@
     {
       "source": "/login",
       "destination": "/index.html"
+    },
+    {
+      "source": "/set-password",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/set-password/",
+      "destination": "/index.html"
     }
   ],
   "crons": [

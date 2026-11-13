@@ -106,12 +106,29 @@ describe('POST /api/team welcome email', () => {
     expect(sendMail).not.toHaveBeenCalled();
   });
 
-  it('mail not configured: no link is minted, still 201 with welcomeEmailSent false', async () => {
+  it('mail not configured: no link is minted, still 201 with welcomeEmailSent false, and a warning is logged', async () => {
     mailReady.mockReturnValue(false);
-    const res = await add(BODY);
-    expect(res.status).toBe(201);
-    expect((await res.json()).welcomeEmailSent).toBe(false);
-    expect(mint).not.toHaveBeenCalled();
-    expect(sendMail).not.toHaveBeenCalled();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const res = await add(BODY);
+      expect(res.status).toBe(201);
+      expect((await res.json()).welcomeEmailSent).toBe(false);
+      expect(mint).not.toHaveBeenCalled();
+      expect(sendMail).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('welcome email not sent'));
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('a member without login logs no warning about mail', async () => {
+    mailReady.mockReturnValue(false);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      await add({ ...BODY, canLogin: false });
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

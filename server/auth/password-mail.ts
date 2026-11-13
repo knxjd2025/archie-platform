@@ -11,6 +11,9 @@ export interface PasswordLinkEmail {
   url: string;
 }
 
+/** The sign-in page, where "Forgot password?" lives. */
+const signInUrl = () => `${(process.env.APP_BASE_URL || '').replace(/\/$/, '')}/login`;
+
 const esc = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
@@ -45,7 +48,7 @@ export async function sendPasswordLinkEmail(input: PasswordLinkEmail): Promise<b
 <p>Hi ${first},</p>
 <p>${line}</p>
 <p><a href="${esc(input.url)}" style="display:inline-block;background:#1d4ed8;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none">${button}</a></p>
-<p style="color:#666;font-size:13px">This link works once and expires in 1 hour.</p>
+<p style="color:#666;font-size:13px">This link works once and expires in 1 hour.${welcome ? ` If it has expired, use "Forgot password?" on the <a href="${esc(signInUrl())}" style="color:#666">sign-in page</a> to get a new one.` : ''}</p>
 </div>`;
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',

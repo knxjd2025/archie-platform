@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api';
 import { ALL_ROLES, ROLE_LABEL, type TeamRole } from '../../../shared/rbac';
 import JobTreadArchivePanel from '../components/JobTreadArchivePanel';
+import { addedMemberMessage } from '../lib/password-pages';
 
 interface Member {
   id: number; name: string; email: string; phone?: string | null; role: TeamRole; active: boolean; canLogin: boolean; seesAllCalendars?: boolean;
@@ -64,7 +65,7 @@ export default function Team() {
   const [submitting, setSubmitting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const flash = (m: string) => { setToast(m); setTimeout(() => setToast(null), 5000); };
+  const flash = (m: string, ms = 5000) => { setToast(m); setTimeout(() => setToast(null), ms); };
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -92,9 +93,11 @@ export default function Team() {
     e.preventDefault();
     setError(null); setSubmitting(true);
     try {
-      await api.post('/api/team', { ...form, jobtreadSalesRep: form.jobtreadSalesRep || null });
+      const added = await api.post<Member & { welcomeEmailSent?: boolean }>('/api/team', { ...form, jobtreadSalesRep: form.jobtreadSalesRep || null });
       setForm({ name: '', email: '', phone: '', role: 'sales', jobtreadSalesRep: '' });
-      flash('Added'); await Promise.all([load(), loadJt()]);
+      // Long enough to read when the welcome email did not go out.
+      flash(addedMemberMessage(added), added.canLogin && !added.welcomeEmailSent ? 15000 : 5000);
+      await Promise.all([load(), loadJt()]);
     } catch (e: any) { setError(e?.message || 'Something went wrong'); }
     finally { setSubmitting(false); }
   }

@@ -9,6 +9,7 @@ import { CompanyMark, PRODUCT_NAME, useCompany } from './lib/company';
 import { canSeeMoney, type TeamRole } from '../../shared/rbac';
 import Login from './pages/Login';
 import SetPassword from './pages/SetPassword';
+import { isSetPasswordPath } from './lib/password-pages';
 import Team from './pages/Team';
 import AccountPage from './pages/account';
 import Archie from './pages/archie';
@@ -173,8 +174,12 @@ function App() {
     document.title = titles[currentPage] ? `${titles[currentPage]} · ${PRODUCT_NAME}` : PRODUCT_NAME;
   }, [currentPage]);
 
+  // An emailed set-password link opens its page whoever is signed in here, and
+  // before anything else renders, so the token leaves the address bar at once.
+  // A successful set reloads to / and picks up the new session.
+  if (isSetPasswordPath(window.location.pathname)) return <SetPassword />;
   if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-500">Loading…</div>;
-  if (!user) return window.location.pathname === '/set-password' ? <SetPassword /> : <Login />;
+  if (!user) return <Login />;
 
   // Role-based menu: each person only sees tabs that fit their job.
   // admin ▸ manager ▸ sales ▸ production (higher roles are a superset).
