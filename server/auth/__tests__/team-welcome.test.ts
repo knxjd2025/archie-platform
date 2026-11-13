@@ -7,8 +7,10 @@ import type { Server } from 'node:http';
  * POST /api/team and the welcome email. Storage, the company lookup, the link
  * minting and the mailer are faked; the route's decisions are what is tested.
  */
-const { createMember, mint, sendMail, mailReady } = vi.hoisted(() => ({
+const { createMember, updateMember, getMember, mint, sendMail, mailReady } = vi.hoisted(() => ({
   createMember: vi.fn(),
+  updateMember: vi.fn(),
+  getMember: vi.fn(),
   mint: vi.fn(),
   sendMail: vi.fn(),
   mailReady: vi.fn(),
@@ -24,9 +26,9 @@ vi.mock('../../sync/jobtread-roles', () => ({ pushRoleToJobTread: vi.fn() }));
 vi.mock('../../storage/team', () => ({
   listTeamMembers: vi.fn(async () => []),
   createTeamMember: (...a: unknown[]) => createMember(...a),
-  updateTeamMember: vi.fn(),
+  updateTeamMember: (...a: unknown[]) => updateMember(...a),
   memberByJobtreadRep: vi.fn(async () => undefined),
-  getTeamMemberById: vi.fn(),
+  getTeamMemberById: (...a: unknown[]) => getMember(...a),
 }));
 vi.mock('../../tenant/companies', () => ({
   getCurrentCompany: async () => ({ id: 'co-1', name: 'Test Co' }),
@@ -127,6 +129,81 @@ describe('POST /api/team welcome email', () => {
     try {
       await add({ ...BODY, canLogin: false });
       expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});
+
+describe('PATCH /api/team/:id welcome email', () => {
+  const MEMBER = { id: 7, name: 'Dana Fox', email: 'dana@example.com', role: 'sales', active: true, canLogin: false, hasPassword: false };
+  const patch = (body: unknown) =>
+    fetch(`${base}/api/team/7`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const given = (before: Partial<typeof MEMBER>) => {
+    getMember.mockReset().mockResolvedValue({ ...MEMBER, ...before });
+    updateMember.mockReset().mockImplementation(async (_id: number, v: any) => ({ ...MEMBER, ...before, ...v }));
+  };
+
+  it('turning login on sends the welcome link once', async () => {
+    given({});
+    const res = await patch({ canLogin: true });
+    expect(res.status).toBe(200);
+    expect((await res.json()).welcomeEmailSent).toBe(true);
+    expect(mint).toHaveBeenCalledTimes(1);
+    expect(mint).toHaveBeenCalledWith('dana@example.com', 'welcome');
+    expect(sendMail).toHaveBeenCalledTimes(1);
+    expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({ to: 'dana@example.com', purpose: 'welcome', companyName: 'Test Co' }));
+  });
+
+  it('login already on: nothing is sent and the response has no welcomeEmailSent', async () => {
+    given({ canLogin: true });
+    const res = await patch({ canLogin: true, phone: '555-0101' });
+    expect(res.status).toBe(200);
+    expect(await res.json()).not.toHaveProperty('welcomeEmailSent');
+    expect(mint).not.toHaveBeenCalled();
+    expect(sendMail).not.toHaveBeenCalled();
+  });
+
+  it('a member who already has a password gets nothing', async () => {
+    given({ hasPassword: true });
+    const res = await patch({ canLogin: true });
+    expect(res.status).toBe(200);
+    expect(await res.json()).not.toHaveProperty('welcomeEmailSent');
+    expect(sendMail).not.toHaveBeenCalled();
+  });
+
+  it('an inactive member gets nothing', async () => {
+    given({ active: false });
+    await patch({ canLogin: true });
+    expect(sendMail).not.toHaveBeenCalled();
+  });
+
+  it('other edits send nothing', async () => {
+    given({});
+    const res = await patch({ phone: '555-0199' });
+    expect(await res.json()).not.toHaveProperty('welcomeEmailSent');
+    expect(sendMail).not.toHaveBeenCalled();
+  });
+
+  it('a mail failure still returns 200 with welcomeEmailSent false', async () => {
+    given({});
+    sendMail.mockRejectedValue(new Error('send refused'));
+    const res = await patch({ canLogin: true });
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.welcomeEmailSent).toBe(false);
+    expect(json.canLogin).toBe(true);
+  });
+
+  it('mail not configured: still 200, welcomeEmailSent false, nothing minted', async () => {
+    given({});
+    mailReady.mockReturnValue(false);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const res = await patch({ canLogin: true });
+      expect(res.status).toBe(200);
+      expect((await res.json()).welcomeEmailSent).toBe(false);
+      expect(mint).not.toHaveBeenCalled();
     } finally {
       warn.mockRestore();
     }

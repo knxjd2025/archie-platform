@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isSetPasswordPath, isExpiredLinkError, addedMemberMessage } from '../password-pages';
+import { isSetPasswordPath, isExpiredLinkError, addedMemberMessage, loginTurnedOnMessage } from '../password-pages';
 import { PASSWORD_LINK_EXPIRED } from '../../../../shared/password-messages';
 
 describe('isSetPasswordPath', () => {
@@ -36,5 +36,21 @@ describe('addedMemberMessage', () => {
   });
   it('never uses an em dash', () => {
     for (const sent of [true, false]) expect(addedMemberMessage({ name: 'A', canLogin: true, welcomeEmailSent: sent })).not.toMatch(/—/);
+  });
+});
+
+describe('loginTurnedOnMessage', () => {
+  it('says the email went out', () => {
+    expect(loginTurnedOnMessage({ name: 'Dana Fox', welcomeEmailSent: true }))
+      .toBe('Login turned on for Dana Fox. We emailed them a link to set a password.');
+  });
+  it('says plainly when the email was not sent, and what they can do instead', () => {
+    const msg = loginTurnedOnMessage({ name: 'Dana Fox', welcomeEmailSent: false });
+    expect(msg).toContain('Login turned on for Dana Fox');
+    expect(msg).toContain('not sent');
+    expect(msg).toContain('Forgot password?');
+  });
+  it('never uses an em dash', () => {
+    for (const sent of [true, false]) expect(loginTurnedOnMessage({ name: 'A', welcomeEmailSent: sent })).not.toMatch(/—/);
   });
 });

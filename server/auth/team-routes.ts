@@ -14,6 +14,33 @@ import { getCurrentCompany } from '../tenant/companies';
 /** Postgres unique_violation. team_members.email is NOT NULL UNIQUE. */
 const DUPLICATE_KEY = '23505';
 
+/**
+ * Email a member a link to choose their password. Returns whether it went.
+ * Never throws: adding a member or turning their login on must not fail over
+ * an email, and they can always get a new link from "Forgot password?".
+ */
+async function sendWelcomeEmail(member: { email: string; name: string }): Promise<boolean> {
+  if (!(await passwordMailConfigured())) {
+    console.warn(`[team] welcome email not sent to ${member.email}: the company's email is not connected or APP_BASE_URL is not set`);
+    return false;
+  }
+  try {
+    const company = await getCurrentCompany();
+    if (!company) throw new Error('no current company');
+    const token = await mintPasswordLink(member.email, 'welcome');
+    return await sendPasswordLinkEmail({
+      to: member.email,
+      name: member.name,
+      companyName: company.name,
+      purpose: 'welcome',
+      url: passwordLinkUrl(token),
+    });
+  } catch (err) {
+    console.error('[team] welcome email failed', err);
+    return false;
+  }
+}
+
 export function registerTeamRoutes(app: Express) {
   app.get('/api/team', requireRole('admin'), asyncHandler(async (_req: Request, res: Response) => {
     const [members, seeAll] = await Promise.all([listTeamMembers(), calendarSeeAllEmails().catch((): string[] => [])]);
@@ -56,25 +83,7 @@ export function registerTeamRoutes(app: Express) {
       const created = await createTeamMember(parsed.value, req.session.user!.email);
       // A member who can sign in gets a link to choose their password. Never
       // fails the add: the admin can resend from Forgot password.
-      let welcomeEmailSent = false;
-      if (created.canLogin && !(await passwordMailConfigured())) {
-        console.warn(`[team] welcome email not sent to ${created.email}: the company's email is not connected or APP_BASE_URL is not set`);
-      } else if (created.canLogin) {
-        try {
-          const company = await getCurrentCompany();
-          if (!company) throw new Error('no current company');
-          const token = await mintPasswordLink(created.email, 'welcome');
-          welcomeEmailSent = await sendPasswordLinkEmail({
-            to: created.email,
-            name: created.name,
-            companyName: company.name,
-            purpose: 'welcome',
-            url: passwordLinkUrl(token),
-          });
-        } catch (err) {
-          console.error('[team] welcome email failed', err);
-        }
-      }
+      const welcomeEmailSent = created.canLogin ? await sendWelcomeEmail(created) : false;
       res.status(201).json({ ...created, welcomeEmailSent });
     } catch (e: any) {
       // Re-adding someone already on the roster is the ordinary way to hit
@@ -126,6 +135,14 @@ export function registerTeamRoutes(app: Express) {
     if (parsed.value.role && parsed.value.role !== before.role) {
       jobtreadRole = await pushRoleToJobTread(id).catch((e: any) => ({ ok: false, reason: e?.message || 'failed' }));
     }
-    res.json({ ...updated, ...(jobtreadRole ? { jobtreadRole } : {}), roleChangeNote: parsed.value.role && parsed.value.role !== before.role ? 'Takes effect within a minute.' : undefined });
+
+    // Login just switched on for someone with no password yet: send them the
+    // same welcome link as a new member gets. Not when login was already on
+    // or they already have a password (they sign in, or use Forgot password).
+    let welcomeEmailSent: boolean | undefined;
+    if (!before.canLogin && updated.canLogin && updated.active && !updated.hasPassword) {
+      welcomeEmailSent = await sendWelcomeEmail(updated);
+    }
+    res.json({ ...updated, ...(jobtreadRole ? { jobtreadRole } : {}), ...(welcomeEmailSent !== undefined ? { welcomeEmailSent } : {}), roleChangeNote: parsed.value.role && parsed.value.role !== before.role ? 'Takes effect within a minute.' : undefined });
   }));
 }

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api';
 import { ALL_ROLES, ROLE_LABEL, type TeamRole } from '../../../shared/rbac';
 import JobTreadArchivePanel from '../components/JobTreadArchivePanel';
-import { addedMemberMessage } from '../lib/password-pages';
+import { addedMemberMessage, loginTurnedOnMessage } from '../lib/password-pages';
 
 interface Member {
   id: number; name: string; email: string; phone?: string | null; role: TeamRole; active: boolean; canLogin: boolean; seesAllCalendars?: boolean;
@@ -59,7 +59,7 @@ function RepSelect({ value, onChange, options, allowCustom }: { value: string; o
  */
 export default function Team() {
   const [members, setMembers] = useState<Member[]>([]);
-  const [form, setForm] = useState({ name: '', email: '', phone: '', role: 'sales' as TeamRole, jobtreadSalesRep: '' });
+  const [form, setForm] = useState({ name: '', email: '', phone: '', role: 'sales' as TeamRole, jobtreadSalesRep: '', canLogin: true });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -94,7 +94,7 @@ export default function Team() {
     setError(null); setSubmitting(true);
     try {
       const added = await api.post<Member & { welcomeEmailSent?: boolean }>('/api/team', { ...form, jobtreadSalesRep: form.jobtreadSalesRep || null });
-      setForm({ name: '', email: '', phone: '', role: 'sales', jobtreadSalesRep: '' });
+      setForm({ name: '', email: '', phone: '', role: 'sales', jobtreadSalesRep: '', canLogin: true });
       // Long enough to read when the welcome email did not go out.
       flash(addedMemberMessage(added), added.canLogin && !added.welcomeEmailSent ? 15000 : 5000);
       await Promise.all([load(), loadJt()]);
@@ -123,11 +123,14 @@ export default function Team() {
       if (draft.seesAllCalendars !== !!m.seesAllCalendars) {
         await api.patch(`/api/team/${m.id}/calendar-access`, { seesAllCalendars: draft.seesAllCalendars });
       }
-      const r = await api.patch<Member & { jobtreadRole?: { ok: boolean; reason?: string }; roleChangeNote?: string }>(`/api/team/${m.id}`, patch);
-      let msg = `Saved ${r.name}`;
-      if (r.roleChangeNote) msg += ` — ${r.roleChangeNote}`;
+      const r = await api.patch<Member & { jobtreadRole?: { ok: boolean; reason?: string }; roleChangeNote?: string; welcomeEmailSent?: boolean }>(`/api/team/${m.id}`, patch);
+      // Present only when this edit turned login on for someone with no password yet.
+      const loginOn = typeof r.welcomeEmailSent === 'boolean';
+      let msg = loginOn ? loginTurnedOnMessage({ name: r.name, welcomeEmailSent: r.welcomeEmailSent! }) : `Saved ${r.name}.`;
+      if (r.roleChangeNote) msg += ` ${r.roleChangeNote}`;
       if (r.jobtreadRole && !r.jobtreadRole.ok) msg += ` (JobTread role not updated: ${r.jobtreadRole.reason})`;
-      flash(msg); cancelEdit(); await Promise.all([load(), loadJt()]);
+      // Long enough to read when the welcome email did not go out.
+      flash(msg, loginOn && !r.welcomeEmailSent ? 15000 : undefined); cancelEdit(); await Promise.all([load(), loadJt()]);
     } catch (e: any) { setEditError(e?.message || "Couldn't save"); }
     finally { setSaving(false); }
   }
@@ -168,6 +171,7 @@ export default function Team() {
           {ALL_ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
         </select>
         <div className="w-56"><RepSelect options={repOptions} value={form.jobtreadSalesRep} onChange={(v) => setForm({ ...form, jobtreadSalesRep: v })} /></div>
+        <label className="flex items-center gap-1 text-sm py-2"><input type="checkbox" checked={form.canLogin} onChange={(e) => setForm({ ...form, canLogin: e.target.checked })} /> Can sign in</label>
         <button disabled={submitting} className="bg-brand text-on-brand rounded-lg px-4 py-2 text-sm font-medium hover:bg-brand-dark transition-colors disabled:opacity-50">{submitting ? 'Adding…' : 'Add'}</button>
         {error && <span className="text-sm text-red-600">{error}</span>}
       </form>
