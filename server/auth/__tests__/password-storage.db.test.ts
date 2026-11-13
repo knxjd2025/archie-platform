@@ -9,6 +9,9 @@ const local = /@(localhost|127\.0\.0\.1)(:\d+)?\//.test(url);
 
 describe.skipIf(!local)('password storage helpers', async () => {
   const team = await import('../../storage/team');
+  const { db } = await import('../../db');
+  const { teamMembers } = await import('../../../shared/schema');
+  const { eq } = await import('drizzle-orm');
   const { makeTestCompany, asCompany } = await import('../../__tests__/helpers/tenant');
   const email = `pwstore-${Date.now()}@example.test`;
   let company = '';
@@ -36,6 +39,23 @@ describe.skipIf(!local)('password storage helpers', async () => {
     await asCompany(company, () => team.setPasswordHash(email, 'h'));
     const cleared = (await row())!;
     expect(cleared).toMatchObject({ passwordHash: 'h', failedLogins: 0, lockedUntil: null });
+  });
+
+  it('parallel wrong guesses plus a correct one: the lock holds, the count does not restart, the success is refused', async () => {
+    await asCompany(company, () => team.setPasswordHash(email, 'h'));
+    await Promise.all(Array.from({ length: 12 }, () => asCompany(company, () => team.recordFailedLogin(email))));
+    const locked = (await row())!;
+    expect(locked.lockedUntil!.getTime()).toBeGreaterThan(Date.now());
+    expect(locked.failedLogins).toBe(0);              // 5 counted, then the rest skipped the locked row
+    const until = locked.lockedUntil!.getTime();
+    expect(await asCompany(company, () => team.clearFailedLogins(email))).toBe(false);
+    await asCompany(company, () => team.recordFailedLogin(email));
+    const after = (await row())!;
+    expect(after.failedLogins).toBe(0);
+    expect(after.lockedUntil!.getTime()).toBe(until); // not extended or restarted
+    // An expired lock lets the clear through again.
+    await asCompany(company, () => db.update(teamMembers).set({ lockedUntil: new Date(Date.now() - 1000) }).where(eq(teamMembers.email, email)));
+    expect(await asCompany(company, () => team.clearFailedLogins(email))).toBe(true);
   });
 
   it('clearFailedLogins zeroes the count; an unknown email is a no-op', async () => {

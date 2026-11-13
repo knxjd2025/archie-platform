@@ -26,9 +26,13 @@ vi.mock('../../storage/team', () => ({
   setPasswordHash: vi.fn(async (_e: string, hash: string) => {
     if (state.row) Object.assign(state.row, { passwordHash: hash, failedLogins: 0, lockedUntil: null });
   }),
-  clearFailedLogins: vi.fn(async () => { if (state.row) state.row.failedLogins = 0; }),
+  clearFailedLogins: vi.fn(async () => {
+    if (!state.row || (state.row.lockedUntil as Date | null)?.getTime()! > Date.now()) return false;
+    state.row.failedLogins = 0;
+    return true;
+  }),
   recordFailedLogin: vi.fn(async () => {
-    if (!state.row) return;
+    if (!state.row || (state.row.lockedUntil as Date | null)?.getTime()! > Date.now()) return;
     const n = (state.row.failedLogins as number) + 1;
     if (n >= 5) Object.assign(state.row, { failedLogins: 0, lockedUntil: new Date(Date.now() + 15 * 60_000) });
     else state.row.failedLogins = n;
@@ -131,14 +135,24 @@ describe('POST /api/auth/login/password', () => {
     expect(state.row!.failedLogins).toBe(1);
   });
 
-  it('fifth wrong try locks; the right password then gets 429', async () => {
+  it('fifth wrong try locks; the right password then gets the same 401 as a wrong one', async () => {
     for (let i = 0; i < 5; i++) expect((await login(EMAIL, 'wrong password!')).status).toBe(401);
     const locked = await login(EMAIL, PASSWORD);
-    expect(locked.status).toBe(429);
-    expect(await locked.json()).toEqual({ error: 'Too many tries. Wait 15 minutes and try again.' });
+    expect(locked.status).toBe(401);
+    expect(await locked.json()).toEqual(WRONG);
+    expect(cookieOf(locked)).toBeNull();
     // Once the lock runs out the right password works again.
     state.row!.lockedUntil = new Date(Date.now() - 1000);
     expect((await login(EMAIL, PASSWORD)).status).toBe(200);
+  });
+
+  it('a lock set after the lock check but before the clear still refuses the sign-in', async () => {
+    // The route read "not locked", then a parallel guess locked the account.
+    const { clearFailedLogins } = await import('../../storage/team');
+    vi.mocked(clearFailedLogins).mockImplementationOnce(async () => false);
+    const res = await login(EMAIL, PASSWORD);
+    expect(res.status).toBe(401);
+    expect(cookieOf(res)).toBeNull();
   });
 
   it('a successful sign-in clears earlier failed tries', async () => {

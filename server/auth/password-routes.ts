@@ -12,7 +12,6 @@ import { rateLimit } from '../lib/rate-limit';
 const TEN_MINUTES = 10 * 60 * 1000;
 const ONE_HOUR = 60 * 60 * 1000;
 const WRONG = { error: 'Email or password is wrong.' };
-const LOCKED = { error: 'Too many tries. Wait 15 minutes and try again.' };
 const EXPIRED = { error: 'This link has expired. Ask for a new one.' };
 const MAX_PASSWORD_TRIED = 1000; // longer than any password we accept; stops a huge body costing a hash
 
@@ -41,22 +40,26 @@ export function registerPasswordRoutes(app: Express): void {
       const password = typeof req.body?.password === 'string' ? req.body.password : '';
       const found = await passGate(email);
 
-      if (found?.member.lockedUntil && found.member.lockedUntil.getTime() > Date.now()) {
-        return res.status(429).json(LOCKED);
-      }
+      // A locked account answers exactly like a wrong password (a distinct answer
+      // would tell a stranger the email is on a roster), and still pays for a verify.
+      const locked = !!found?.member.lockedUntil && found.member.lockedUntil.getTime() > Date.now();
 
       // Always hash-compare, even with nobody to compare against, so an unknown
       // email takes as long as a wrong password.
       const ok = password.length <= MAX_PASSWORD_TRIED && await verifyPassword(password, found?.member.passwordHash ?? null);
-      if (!found || !ok) {
-        if (found) await runAsCompany(found.company.id, () => recordFailedLogin(email));
+      if (!found || locked || !ok) {
+        if (found && !locked) await runAsCompany(found.company.id, () => recordFailedLogin(email));
         return res.status(401).json(WRONG);
       }
 
-      await runAsCompany(found.company.id, async () => {
-        await clearFailedLogins(email);
+      // The lock was read before the slow verify; a parallel wrong guess may have
+      // set it since. The database decides, in the same statement that clears the count.
+      const cleared = await runAsCompany(found.company.id, async () => {
+        if (!(await clearFailedLogins(email))) return false;
         await touchLogin(email);
+        return true;
       });
+      if (!cleared) return res.status(401).json(WRONG);
       await startSession(req, found, email);
       res.json({ ok: true });
     } catch (err) {

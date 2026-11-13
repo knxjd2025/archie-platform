@@ -69,7 +69,10 @@ export async function touchLogin(email: string, googleSub?: string): Promise<voi
 }
 
 export const MAX_FAILED_LOGINS = 5;
-export const LOGIN_LOCK_MS = 15 * 60 * 1000;
+export const LOGIN_LOCK_MINUTES = 15;
+
+// Not locked right now, by the database clock. Every lockout statement uses this one test.
+const notLocked = sql`(${teamMembers.lockedUntil} IS NULL OR ${teamMembers.lockedUntil} <= now())`;
 
 /** Store a new password hash and forget earlier failed tries and any lock. Runs in the current company. */
 export async function setPasswordHash(email: string, hash: string): Promise<void> {
@@ -80,22 +83,30 @@ export async function setPasswordHash(email: string, hash: string): Promise<void
 
 /**
  * Count a wrong password. The fifth locks the account for 15 minutes and starts
- * the count over. One UPDATE, so simultaneous guesses cannot read the same count.
- * No such member: nothing happens. Runs in the current company.
+ * the count over. One UPDATE, so simultaneous guesses cannot read the same count,
+ * and it skips a row that is already locked, so the count cannot restart during a
+ * lock. Times come from the database clock. No such member: nothing happens.
+ * Runs in the current company.
  */
 export async function recordFailedLogin(email: string): Promise<void> {
-  const lockedUntil = new Date(Date.now() + LOGIN_LOCK_MS);
   await db.update(teamMembers)
     .set({
       failedLogins: sql`CASE WHEN ${teamMembers.failedLogins} + 1 >= ${MAX_FAILED_LOGINS} THEN 0 ELSE ${teamMembers.failedLogins} + 1 END`,
-      lockedUntil: sql`CASE WHEN ${teamMembers.failedLogins} + 1 >= ${MAX_FAILED_LOGINS} THEN ${lockedUntil.toISOString()}::timestamp ELSE ${teamMembers.lockedUntil} END`,
+      lockedUntil: sql`CASE WHEN ${teamMembers.failedLogins} + 1 >= ${MAX_FAILED_LOGINS} THEN now() + make_interval(mins => ${LOGIN_LOCK_MINUTES}) ELSE ${teamMembers.lockedUntil} END`,
     })
-    .where(eq(teamMembers.email, email.trim().toLowerCase()));
+    .where(sql`${eq(teamMembers.email, email.trim().toLowerCase())} AND ${notLocked}`);
 }
 
-/** Forget failed tries after a good sign-in. Runs in the current company. */
-export async function clearFailedLogins(email: string): Promise<void> {
-  await db.update(teamMembers)
+/**
+ * Forget failed tries after a good password. Returns false when the account is
+ * locked (or missing): the caller must then refuse the sign-in, because a
+ * parallel wrong guess may have set the lock after this request checked it.
+ * Runs in the current company.
+ */
+export async function clearFailedLogins(email: string): Promise<boolean> {
+  const rows = await db.update(teamMembers)
     .set({ failedLogins: 0 })
-    .where(eq(teamMembers.email, email.trim().toLowerCase()));
+    .where(sql`${eq(teamMembers.email, email.trim().toLowerCase())} AND ${notLocked}`)
+    .returning({ id: teamMembers.id });
+  return rows.length > 0;
 }
