@@ -7,6 +7,9 @@ import { listTeamMembers, createTeamMember, updateTeamMember, memberByJobtreadRe
 import { syncSalesRepsFromJobTread } from '../sync/jobtread-reps';
 import { pushRoleToJobTread } from '../sync/jobtread-roles';
 import { sendUpstreamFailure } from '../lib/upstream';
+import { mintPasswordLink, passwordLinkUrl } from './password-links';
+import { passwordMailConfigured, sendPasswordLinkEmail } from './password-mail';
+import { getCurrentCompany } from '../tenant/companies';
 
 /** Postgres unique_violation. team_members.email is NOT NULL UNIQUE. */
 const DUPLICATE_KEY = '23505';
@@ -51,7 +54,26 @@ export function registerTeamRoutes(app: Express) {
     }
     try {
       const created = await createTeamMember(parsed.value, req.session.user!.email);
-      res.status(201).json(created);
+      // A member who can sign in gets a link to choose their password. Never
+      // fails the add: the admin can resend from Forgot password.
+      let welcomeEmailSent = false;
+      if (created.canLogin && passwordMailConfigured()) {
+        try {
+          const company = await getCurrentCompany();
+          if (!company) throw new Error('no current company');
+          const token = await mintPasswordLink(created.email, 'welcome');
+          welcomeEmailSent = await sendPasswordLinkEmail({
+            to: created.email,
+            name: created.name,
+            companyName: company.name,
+            purpose: 'welcome',
+            url: passwordLinkUrl(token),
+          });
+        } catch (err) {
+          console.error('[team] welcome email failed', err);
+        }
+      }
+      res.status(201).json({ ...created, welcomeEmailSent });
     } catch (e: any) {
       // Re-adding someone already on the roster is the ordinary way to hit
       // this; say so instead of surfacing a Postgres constraint name.

@@ -14,6 +14,11 @@ export interface PasswordLinkEmail {
 const esc = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
+/** True when a password email could actually be sent (mail keys and a base URL for the link). */
+export function passwordMailConfigured(): boolean {
+  return Boolean(process.env.RESEND_API_KEY && process.env.ARCHIE_MAIL_FROM && process.env.APP_BASE_URL);
+}
+
 /**
  * Returns true when the email was accepted. False (and a log line) when mail
  * is not set up or APP_BASE_URL is missing, since the link would be relative.
