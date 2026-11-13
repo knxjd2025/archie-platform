@@ -43,13 +43,14 @@ async function sendResetIfMember(email: string): Promise<void> {
     if (!found) return;
     const token = await runAsCompany(found.company.id, () => mintResetLinkUnlessRecent(email));
     if (!token) return; // a link went to this email in the last 2 minutes
-    await sendPasswordLinkEmail({
+    // In the company's context: the email goes out through that company's own sender.
+    await runAsCompany(found.company.id, () => sendPasswordLinkEmail({
       to: email,
       name: found.member.name,
       companyName: found.company.name,
       purpose: 'reset',
       url: passwordLinkUrl(token),
-    });
+    }));
   } catch (err) {
     console.error('[auth] password reset email failed', err);
   }

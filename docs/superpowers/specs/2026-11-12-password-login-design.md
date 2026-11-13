@@ -20,7 +20,9 @@ sign-in stays. It also lets James test the live app without Google.
 - Passwords stored as salted scrypt hashes (Node's built-in crypto, no new
   dependency, no new cost).
 - After 5 wrong passwords, that account waits 15 minutes.
-- Emails go through Resend, which the app already uses.
+- Emails go out through each company's own email (its GoHighLevel sub-account,
+  via the app's existing company email function). No Resend. Changed Nov 13,
+  2026 at James's request.
 - Tests for wrong password, unknown email, expired or reused link, lockout,
   people not on the roster, paused company.
 

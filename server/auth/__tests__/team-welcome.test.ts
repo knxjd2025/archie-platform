@@ -90,7 +90,7 @@ describe('POST /api/team welcome email', () => {
   });
 
   it('a mail failure still returns 201 with welcomeEmailSent false', async () => {
-    sendMail.mockRejectedValue(new Error('Resend 500'));
+    sendMail.mockRejectedValue(new Error('send refused'));
     const res = await add(BODY);
     expect(res.status).toBe(201);
     const json = await res.json();

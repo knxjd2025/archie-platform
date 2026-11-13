@@ -142,6 +142,6 @@
 
 - [ ] **Step 1:** Full suite: `SESSION_SECRET=test npx vitest run` and `npm run check`. Expected: PASS.
 - [ ] **Step 2:** Push to `main` (Vercel deploys `archie-roof-with`). Confirm the deployment is READY.
-- [ ] **Step 3:** Confirm `RESEND_API_KEY`, `ARCHIE_MAIL_FROM` and `APP_BASE_URL` are set on the Vercel project. List any that are missing for James.
+- [ ] **Step 3:** Confirm `APP_BASE_URL` is set on the Vercel project and the company's GoHighLevel email is connected (password emails go through it; Resend is not used).
 - [ ] **Step 4:** Run `0004_password_login.sql` on the live database with `scripts/migrate.ts` against the owner connection. Ask James before running it.
 - [ ] **Step 5:** Mint a reset link for james@bestroofingnow.com and send it, so James can set his password and sign in.

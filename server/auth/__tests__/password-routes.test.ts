@@ -192,6 +192,16 @@ describe('POST /api/auth/login/password', () => {
 describe('POST /api/auth/password/forgot', () => {
   const forgot = (email: unknown) => post('/api/auth/password/forgot', { email });
 
+  it('sends the reset email inside the member company context, so it goes out through that company', async () => {
+    const { currentCompanyId } = await import('../../tenant/context');
+    let sentAs: string | null = null;
+    sendMail.mockImplementation(async () => { sentAs = currentCompanyId(); return true; });
+    await forgot(EMAIL);
+    await settle();
+    expect(sendMail).toHaveBeenCalledTimes(1);
+    expect(sentAs).toBe(state.company.id);
+  });
+
   it('always returns 200 and only sends mail for a member who passes the gate', async () => {
     const ok = await forgot(' Thomas@BestRoofingNow.com ');
     expect(ok.status).toBe(200);

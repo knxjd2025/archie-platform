@@ -57,8 +57,8 @@ export function registerTeamRoutes(app: Express) {
       // A member who can sign in gets a link to choose their password. Never
       // fails the add: the admin can resend from Forgot password.
       let welcomeEmailSent = false;
-      if (created.canLogin && !passwordMailConfigured()) {
-        console.warn(`[team] welcome email not sent to ${created.email}: mail is not configured (RESEND_API_KEY, ARCHIE_MAIL_FROM and APP_BASE_URL are all needed)`);
+      if (created.canLogin && !(await passwordMailConfigured())) {
+        console.warn(`[team] welcome email not sent to ${created.email}: the company's email is not connected or APP_BASE_URL is not set`);
       } else if (created.canLogin) {
         try {
           const company = await getCurrentCompany();
