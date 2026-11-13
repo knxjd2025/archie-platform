@@ -40,3 +40,22 @@ describe('conversationMessages', () => {
     expect(fetchPage).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('conversationMessages and set-password emails', () => {
+  it('never returns a set-password email, so the mirror never stores one', async () => {
+    const at = new Date(Date.parse('2026-10-14T00:00:00Z')).toISOString();
+    const fetchPage = vi.fn(async () => ({
+      messages: {
+        messages: [
+          { id: 'ok1', messageType: 'TYPE_SMS', body: 'See you at 3', dateAdded: at },
+          { id: 'pw1', messageType: 'TYPE_EMAIL', subject: 'Reset your Archie password', body: '<a href="https://app.example.com/set-password#t=abcdefghijklmnopqrstuv">Reset</a>', dateAdded: at },
+          { id: 'pw2', messageType: 'TYPE_EMAIL', body: 'https%3A%2F%2Fapp.example.com%2Fset-password%23t%3Dabc', dateAdded: at },
+          { id: 'ok2', messageType: 'TYPE_EMAIL', subject: 'Gate code', body: 'The lockbox password is 1234', dateAdded: at },
+        ],
+        nextPage: false,
+      },
+    }));
+    const list = await conversationMessages('c1', SINCE, fetchPage);
+    expect(list.map((m) => m.id)).toEqual(['ok1', 'ok2']);
+  });
+});

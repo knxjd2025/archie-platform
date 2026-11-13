@@ -72,6 +72,7 @@ import { registerGhlConnectionRoutes } from './integrations/ghl/routes';
 import { currentGhlLocationId, ghlAppBase } from './integrations/ghl/connection';
 import { getCompanyByGhlLocation } from './tenant/companies';
 import { runAsCompany } from './tenant/context';
+import { redactGhlConversation, withoutPasswordLinkMessages, withoutPasswordLinkMessagesIn } from './auth/password-link-filter';
 
 // A few of these `?limit=` query params were forwarded straight to the
 // JobTread/GHL client with only an `|| default` fallback and no upper bound
@@ -425,7 +426,8 @@ export function registerRoutes(app: Express) {
       const ghl = new GoHighLevelClient();
       const contactId = req.query.contactId as string | undefined;
       const result = await ghl.getConversations(contactId);
-      res.json(result);
+      // A set-password email's snippet is replaced, so its link is never shown.
+      res.json(Array.isArray(result?.conversations) ? { ...result, conversations: result.conversations.map(redactGhlConversation) } : result);
     } catch (error: any) {
       return sendUpstreamFailure(res, error, 'GoHighLevel', 'GET /api/integrations/ghl/conversations');
     }
@@ -436,7 +438,7 @@ export function registerRoutes(app: Express) {
     try {
       const ghl = new GoHighLevelClient();
       const result = await ghl.getMessages(req.params.conversationId);
-      res.json(result);
+      res.json(withoutPasswordLinkMessagesIn(result));
     } catch (error: any) {
       return sendUpstreamFailure(res, error, 'GoHighLevel', 'GET /api/integrations/ghl/conversations/:conversationId/messages');
     }
@@ -829,7 +831,7 @@ export function registerRoutes(app: Express) {
               const convId = convs?.conversations?.[0]?.id;
               if (convId) {
                 const m: any = await ghl.getMessages(convId);
-                for (const x of (m?.messages || []).slice(-25)) {
+                for (const x of withoutPasswordLinkMessages<any>(m?.messages || []).slice(-25)) {
                   out.push({
                     source: 'ghl', channel: chan(x.messageType || x.type),
                     direction: String(x.direction || '').toLowerCase(),

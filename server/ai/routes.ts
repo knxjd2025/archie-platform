@@ -3,6 +3,7 @@ import { requireAuth } from '../auth/middleware';
 import { asyncHandler } from '../lib/async-handler';
 import { rateLimit } from '../lib/rate-limit';
 import { GoHighLevelClient } from '../integrations/gohighlevel';
+import { withoutPasswordLinkMessages } from '../auth/password-link-filter';
 import {
   assistConfigured, WRITING_MODEL,
   draftReply, fromInstruction, polish, adjustTone, rateEmailSecurity, classifyLead,
@@ -20,7 +21,8 @@ async function recentThreadText(contactId?: string): Promise<string> {
     const convId = convs?.conversations?.[0]?.id;
     if (!convId) return '';
     const msgs: any = await ghl.getMessages(convId);
-    const list = (msgs?.messages || []).slice(-10);
+    // Set-password emails never reach the AI.
+    const list = withoutPasswordLinkMessages(msgs?.messages || []).slice(-10);
     return list
       .map((m: any) => {
         const who = (m.direction || '').toLowerCase() === 'outbound' ? 'Us' : 'Them';

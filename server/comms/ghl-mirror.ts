@@ -20,6 +20,7 @@ import { calls, commMessages, phoneNumbers } from '../../shared/schema';
 import { ghlCallToRow, ghlMessageToRow, callOutcome, type GhlMessage } from '../../shared/comms';
 import { fetchWithTimeout } from '../lib/fetch-timeout';
 import { GHL_API_BASE, GhlNotConnectedError, ghlConnection, ghlHeaders } from '../integrations/ghl/connection';
+import { withoutPasswordLinkMessages } from '../auth/password-link-filter';
 
 /**
  * Pages of 100 messages to read from one conversation. A long-running
@@ -135,6 +136,7 @@ export async function mirrorFromGhl(opts: {
  * messages in the window — a busy customer thread, the office line — lost
  * the rest from the call history and the KPI counts without a trace. Follows
  * GHL's `lastMessageId` cursor until a page reaches past the window.
+ * Set-password emails are left out.
  */
 export async function conversationMessages(
   conversationId: string,
@@ -149,7 +151,10 @@ export async function conversationMessages(
         + (lastMessageId ? `&lastMessageId=${encodeURIComponent(lastMessageId)}` : ''),
     );
     const list: GhlMessage[] = m?.messages?.messages || (Array.isArray(m?.messages) ? m.messages : []);
-    all.push(...list);
+    // Set-password emails are never copied into our tables (their link would
+    // let anyone who can read the history choose that person's password).
+    // Paging below still follows the unfiltered page.
+    all.push(...withoutPasswordLinkMessages(list));
 
     const oldest = list[list.length - 1];
     const oldestAt = oldest?.dateAdded ? new Date(oldest.dateAdded).getTime() : 0;

@@ -5,6 +5,7 @@ import { GoHighLevelClient } from '../integrations/gohighlevel';
 import { JobTreadClient } from '../integrations/jobtread';
 import { fetchGmailInbox } from '../agents/google-tools';
 import { isScoped, repClientIdentifiers } from '../access/rep-scope';
+import { redactPasswordLinkSnippet } from '../auth/password-link-filter';
 
 export interface ConversationItem {
   id: string;
@@ -44,7 +45,8 @@ export function normalizeGhlConversation(c: any): ConversationItem {
     channel: CHANNEL[c.lastMessageType] || (c.type ? String(c.type).toLowerCase() : 'other'),
     contact: c.fullName || c.contactName || c.name || 'Unknown',
     contactId: c.contactId || '',
-    lastMessage: c.lastMessageBody || '',
+    // A set-password email's snippet is replaced, so its link is never shown.
+    lastMessage: redactPasswordLinkSnippet(c.lastMessageBody || '', c.lastMessageSubject),
     direction: (c.lastMessageDirection || '').toLowerCase(),
     date: Number(c.lastMessageDate || c.dateUpdated || c.dateAdded || 0),
     unread: Number(c.unreadCount || 0),

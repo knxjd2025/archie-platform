@@ -141,3 +141,22 @@ describe('filterConversationsForRep', () => {
     expect(out[0].contact).toBe('brian freeman');
   });
 });
+
+describe('normalizeGhlConversation and set-password emails', () => {
+  it('shows a neutral snippet, without the link, when the last message is a set-password email', () => {
+    for (const lastMessageBody of [
+      'Hi Dana, https://app.example.com/set-password#t=abcdefghijklmnopqrstuv',
+      'Reset your Archie password',
+      'Hi Dana, You have been added to Test Co on Archie. Choose a password to sign in. Set my password',
+    ]) {
+      const out = normalizeGhlConversation({ id: 'pw', lastMessageType: 'TYPE_EMAIL', fullName: 'Dana Fox', lastMessageBody });
+      expect(out.lastMessage).toBe('Sign-in email');
+      expect(out.lastMessage).not.toContain('set-password');
+      expect(out.contact).toBe('Dana Fox');
+    }
+  });
+  it('keeps an ordinary snippet that mentions a password', () => {
+    expect(normalizeGhlConversation({ id: 'x', lastMessageBody: 'What is the lockbox password?' }).lastMessage)
+      .toBe('What is the lockbox password?');
+  });
+});
