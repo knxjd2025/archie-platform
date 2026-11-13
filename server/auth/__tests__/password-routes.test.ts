@@ -27,6 +27,7 @@ vi.mock('../../storage/team', () => ({
     state.row && state.row.email === email ? { member: state.row, company: state.company } : undefined,
   touchLogin: vi.fn(async (...a: unknown[]) => { state.calls.push(`touch:${a.length}`); }),
   setPasswordHash: vi.fn(async (_e: string, hash: string) => {
+    state.calls.push('set-hash');
     if (state.row) Object.assign(state.row, { passwordHash: hash, failedLogins: 0, lockedUntil: null });
   }),
   clearFailedLogins: vi.fn(async () => {
@@ -324,6 +325,22 @@ describe('POST /api/auth/password/set', () => {
     expect(endSessions).not.toHaveBeenCalled();
   });
 
+  it('when ending the other sessions fails, the password is left unchanged and the error says so', async () => {
+    redeem.mockResolvedValue({ email: EMAIL, companyId: CO, purpose: 'reset' });
+    endSessions.mockRejectedValue(new Error('db down'));
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const res = await set('a perfectly fine password');
+      expect(res.status).toBe(500);
+      expect(await res.json()).toEqual({ error: 'Could not save your password. Try again.' });
+      expect(cookieOf(res)).toBeNull();
+      expect(state.row!.passwordHash).toBe(HASH);
+      expect(state.calls).not.toContain('set-hash');
+    } finally {
+      logged.mockRestore();
+    }
+  });
+
   it('for a link minted by another company returns the expired message', async () => {
     redeem.mockResolvedValue({ email: EMAIL, companyId: '22222222-2222-4222-8222-222222222222', purpose: 'reset' });
     const res = await set('a perfectly fine password');
@@ -347,6 +364,8 @@ describe('POST /api/auth/password/set', () => {
     // The person's other sessions and other links end, before the new session starts.
     expect(endSessions).toHaveBeenCalledWith(EMAIL);
     expect(dropLinks).toHaveBeenCalledWith(EMAIL);
+    // Sessions end before the password changes, so a failure there leaves it unchanged.
+    expect(state.calls.indexOf('end-sessions')).toBeLessThan(state.calls.indexOf('set-hash'));
     const me = await fetch(`${base}/api/auth/me`, { headers: { cookie: after! } });
     expect(me.status).toBe(200);
     // And the new password signs in.

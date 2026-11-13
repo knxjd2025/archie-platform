@@ -133,15 +133,17 @@ export function registerPasswordRoutes(app: Express): void {
       if (!found || found.company.id !== grant.companyId) return res.status(400).json(EXPIRED);
 
       const hash = await hashPassword(password);
+      // Whoever else had this password, or another link, is shut out: every
+      // session of theirs ends, then their other links are cancelled. Sessions
+      // end first, so if that fails the password is left as it was and the
+      // error below is true. Both happen before the new session is saved, so
+      // the new one is the one that survives.
+      await endSessionsFor(email);
       await runAsCompany(found.company.id, async () => {
         await setPasswordHash(email, hash);
         await touchLogin(email);
-        // Whoever else had this password, or another link, is shut out: the
-        // person's other links are cancelled and every session of theirs ends.
         await deletePasswordLinksFor(email);
       });
-      // Before the new session is saved, so the new one is the one that survives.
-      await endSessionsFor(email);
       await startSession(req, found, email);
       res.json({ ok: true });
     } catch (err) {

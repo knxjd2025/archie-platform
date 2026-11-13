@@ -60,13 +60,16 @@ describe.skipIf(!local)('password links', async () => {
     const age = (who: string, ago: number) => asCompany(company, () =>
       db.update(passwordLinks).set({ expiresAt: new Date(Date.now() + PASSWORD_LINK_TTL_MS - ago) }).where(eq(passwordLinks.email, who)));
 
-    it('minting replaces the older links for that email', async () => {
-      const who = `replace-${Date.now()}@example.test`;
-      const first = await asCompany(company, () => mintPasswordLink(who, 'welcome'));
-      const second = await asCompany(company, () => mintPasswordLink(who, 'reset'));
-      expect(await rowsFor(who)).toHaveLength(1);
-      expect(await redeemPasswordLink(first)).toBeNull();
-      expect(await redeemPasswordLink(second)).toMatchObject({ email: who, purpose: 'reset' });
+    it('a later link leaves an earlier unexpired one working', async () => {
+      // Otherwise a stranger asking for resets could keep cancelling a member's link.
+      const who = `keep-${Date.now()}@example.test`;
+      const welcome = await asCompany(company, () => mintPasswordLink(who, 'welcome'));
+      await age(who, RESET_LINK_GAP_MS + 5_000);
+      const reset = await asCompany(company, () => mintResetLinkUnlessRecent(who));
+      expect(reset).toBeTruthy();
+      expect(await rowsFor(who)).toHaveLength(2);
+      expect(await redeemPasswordLink(welcome)).toMatchObject({ email: who, purpose: 'welcome' });
+      expect(await redeemPasswordLink(reset!)).toMatchObject({ email: who, purpose: 'reset' });
     });
 
     it('minting sweeps this company\'s expired links, and only this company\'s', async () => {
@@ -92,7 +95,7 @@ describe.skipIf(!local)('password links', async () => {
       await age(who, RESET_LINK_GAP_MS + 5_000);
       const again = await asCompany(company, () => mintResetLinkUnlessRecent(who));
       expect(again).toBeTruthy();
-      expect(await rowsFor(who)).toHaveLength(1);
+      expect(await rowsFor(who)).toHaveLength(2);
     });
 
     it('simultaneous resets for one email mint one link', async () => {

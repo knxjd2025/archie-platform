@@ -24,9 +24,10 @@ const hash = (token: string) => crypto.createHash('sha256').update(token).digest
 
 /**
  * Mint in one transaction, holding a lock on this email in this company so two
- * requests for the same person cannot both pass the gap check. The newest link
- * replaces any older one for the email, and the company's expired links are
- * swept. Mint time is not stored: it is expiresAt minus the TTL, which every
+ * requests for the same person cannot both pass the gap check. Older unexpired
+ * links for the email are kept (otherwise anyone could cancel a member's link
+ * by asking for a reset); the company's expired links are swept. Setting a
+ * password cancels all of the email's links (deletePasswordLinksFor). Mint time is not stored: it is expiresAt minus the TTL, which every
  * row shares. With `gapMs`, returns null instead when a link for this email
  * was minted less than gapMs ago.
  */
@@ -42,7 +43,6 @@ async function mint(email: string, purpose: PasswordLinkPurpose, gapMs?: number)
         .limit(1);
       if (recent.length) return null;
     }
-    await tx.delete(passwordLinks).where(eq(passwordLinks.email, who));
     await tx.delete(passwordLinks).where(lt(passwordLinks.expiresAt, new Date(now)));
     const token = crypto.randomBytes(32).toString('base64url');
     await tx.insert(passwordLinks).values({
@@ -55,7 +55,7 @@ async function mint(email: string, purpose: PasswordLinkPurpose, gapMs?: number)
   });
 }
 
-/** A one-time token for `email` in the current company. Replaces that email's older links. */
+/** A one-time token for `email` in the current company. */
 export async function mintPasswordLink(email: string, purpose: PasswordLinkPurpose): Promise<string> {
   return (await mint(email, purpose))!;
 }
