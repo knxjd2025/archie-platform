@@ -2,12 +2,42 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../lib/auth';
 import { isNativeApp, startNativeSignIn } from '../lib/native';
 import { ArchieMark, PRODUCT_NAME } from '../lib/company';
+import { postAuth } from '../lib/auth-post';
 
 export default function Login() {
   const { expired } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [clicking, setClicking] = useState(false);
   const native = isNativeApp();
+  const [mode, setMode] = useState<'signin' | 'forgot'>('signin');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [sent, setSent] = useState(false);
+
+  const onPasswordSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    setFormError(null);
+    setBusy(true);
+    const err = await postAuth('/api/auth/login/password', { email, password });
+    if (err) { setFormError(err); setBusy(false); return; }
+    window.location.assign('/');   // reload so useAuth picks up the session
+  };
+
+  const onForgot = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    setFormError(null);
+    setBusy(true);
+    const err = await postAuth('/api/auth/password/forgot', { email });
+    setBusy(false);
+    if (err) setFormError(err); else setSent(true);
+  };
+
+  const field = 'w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand-accent';
+  const primary = 'w-full rounded-lg bg-ink px-4 py-3 text-sm font-medium text-white hover:bg-ink-dark transition-colors disabled:opacity-70';
 
   /**
    * In the app the consent screen opens in the real browser — Google will not
@@ -64,6 +94,38 @@ export default function Login() {
               Your session timed out — sign in again to pick up where you left off.
             </p>
           )}
+          {mode === 'signin' ? (
+            <form onSubmit={onPasswordSignIn} className="text-left mb-4">
+              <label htmlFor="login-email" className="block text-xs font-medium text-gray-600 mb-1">Email</label>
+              <input id="login-email" type="email" autoComplete="username" required value={email}
+                onChange={(e) => setEmail(e.target.value)} className={`${field} mb-3`} />
+              <label htmlFor="login-password" className="block text-xs font-medium text-gray-600 mb-1">Password</label>
+              <input id="login-password" type="password" autoComplete="current-password" required value={password}
+                onChange={(e) => setPassword(e.target.value)} className={`${field} mb-3`} />
+              {formError && <p role="alert" className="mb-3 text-sm text-red-600 font-medium">{formError}</p>}
+              <button type="submit" disabled={busy} className={primary}>{busy ? 'Signing in…' : 'Sign in'}</button>
+              <button type="button" onClick={() => { setMode('forgot'); setFormError(null); setSent(false); }}
+                className="mt-3 block mx-auto text-xs text-gray-500 hover:text-ink underline">
+                Forgot password?
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={onForgot} className="text-left mb-4">
+              <label htmlFor="forgot-email" className="block text-xs font-medium text-gray-600 mb-1">Email</label>
+              <input id="forgot-email" type="email" autoComplete="username" required value={email}
+                onChange={(e) => setEmail(e.target.value)} className={`${field} mb-3`} />
+              {sent && <p role="status" className="mb-3 text-sm text-green-700">If that email is on a team, we sent a link. Check your inbox.</p>}
+              {formError && <p role="alert" className="mb-3 text-sm text-red-600 font-medium">{formError}</p>}
+              <button type="submit" disabled={busy} className={primary}>{busy ? 'Sending…' : 'Email me a link'}</button>
+              <button type="button" onClick={() => { setMode('signin'); setFormError(null); }}
+                className="mt-3 block mx-auto text-xs text-gray-500 hover:text-ink underline">
+                Back to sign in
+              </button>
+            </form>
+          )}
+          <div className="flex items-center gap-3 mb-4 text-xs text-gray-400">
+            <span className="h-px flex-1 bg-gray-200" />or<span className="h-px flex-1 bg-gray-200" />
+          </div>
           <a
             href="/api/auth/login/google"
             onClick={onSignIn}

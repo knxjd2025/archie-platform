@@ -8,6 +8,7 @@ import { useAuth } from './lib/auth';
 import { CompanyMark, PRODUCT_NAME, useCompany } from './lib/company';
 import { canSeeMoney, type TeamRole } from '../../shared/rbac';
 import Login from './pages/Login';
+import SetPassword from './pages/SetPassword';
 import Team from './pages/Team';
 import AccountPage from './pages/account';
 import Archie from './pages/archie';
@@ -173,7 +174,7 @@ function App() {
   }, [currentPage]);
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-500">Loading…</div>;
-  if (!user) return <Login />;
+  if (!user) return window.location.pathname === '/set-password' ? <SetPassword /> : <Login />;
 
   // Role-based menu: each person only sees tabs that fit their job.
   // admin ▸ manager ▸ sales ▸ production (higher roles are a superset).
