@@ -72,6 +72,19 @@ export const nativeHandoffs = pgTable('native_handoffs', {
   expiresAt: timestamp('expires_at').notNull(),
 });
 
+/**
+ * One-time links for setting a password ('welcome' for a new person, 'reset'
+ * for a forgotten one). Like native_handoffs: only the hash of the token is
+ * stored, and the row names the company and person it was minted for.
+ */
+export const passwordLinks = pgTable('password_links', {
+  companyId: companyId(),
+  tokenHash: text('token_hash').primaryKey(),
+  email: text('email').notNull(),
+  purpose: text('purpose').notNull(),
+  expiresAt: timestamp('expires_at').notNull(),
+});
+
 export const companyIntegrations = pgTable('company_integrations', {
   id: serial('id').primaryKey(),
   companyId: companyId(),
@@ -150,6 +163,10 @@ export const teamMembers = pgTable('team_members', {
   notifyEmail: boolean('notify_email').notNull().default(true),
   notifySms: boolean('notify_sms').notNull().default(false),
   googleSub: text('google_sub'),
+  // Email + password sign-in. The hash is null until the person sets a password.
+  passwordHash: text('password_hash'),
+  failedLogins: integer('failed_logins').notNull().default(0),
+  lockedUntil: timestamp('locked_until'),
   lastLoginAt: timestamp('last_login_at'),
   createdBy: text('created_by'),
   // The exact JobTread "Sales Rep" dropdown value for this person (e.g.
