@@ -15,7 +15,8 @@ describe.skipIf(!local)('password storage helpers', async () => {
   const { makeTestCompany, asCompany } = await import('../../__tests__/helpers/tenant');
   const email = `pwstore-${Date.now()}@example.test`;
   let company = '';
-  const row = () => asCompany(company, () => team.getTeamMemberByEmail(email));
+  // The sign-in lookup is the one read that still carries the password fields.
+  const row = async () => (await team.findSignInMember(email))?.member;
 
   beforeAll(async () => {
     company = await makeTestCompany('pwstore');

@@ -4,11 +4,27 @@ import { companies, teamMembers, type Company, type TeamMember } from '../../sha
 import { runAsSystem } from '../tenant/context';
 import type { TeamMemberInput } from './team-validate';
 
-export async function getTeamMemberByEmail(email: string): Promise<TeamMember | undefined> {
-  const rows = await db.select().from(teamMembers).where(eq(teamMembers.email, email.toLowerCase()));
-  return rows[0];
+/**
+ * A roster row as the rest of the app sees it: no password hash and no
+ * lockout counters, plus whether a password has been set. Every read and
+ * write here except the sign-in lookup returns this, so a route that sends a
+ * member to the browser cannot send a hash by forgetting to strip it.
+ */
+export type PublicTeamMember = Omit<TeamMember, 'passwordHash' | 'failedLogins' | 'lockedUntil'> & { hasPassword: boolean };
+
+export function toPublicMember(row: TeamMember): PublicTeamMember {
+  const { passwordHash, failedLogins: _failed, lockedUntil: _locked, ...rest } = row;
+  return { ...rest, hasPassword: passwordHash != null };
 }
 
+const publicRows = (rows: TeamMember[]): PublicTeamMember[] => rows.map(toPublicMember);
+const firstPublic = (rows: TeamMember[]): PublicTeamMember | undefined => (rows[0] ? toPublicMember(rows[0]) : undefined);
+
+export async function getTeamMemberByEmail(email: string): Promise<PublicTeamMember | undefined> {
+  return firstPublic(await db.select().from(teamMembers).where(eq(teamMembers.email, email.toLowerCase())));
+}
+
+/** The only read that carries the password hash and lockout fields. Never send it to a browser. */
 export interface SignInMember { member: TeamMember; company: Company }
 
 /**
@@ -26,11 +42,11 @@ export function findSignInMember(email: string): Promise<SignInMember | undefine
   });
 }
 
-export async function listTeamMembers(): Promise<TeamMember[]> {
-  return db.select().from(teamMembers).orderBy(teamMembers.role, teamMembers.name);
+export async function listTeamMembers(): Promise<PublicTeamMember[]> {
+  return publicRows(await db.select().from(teamMembers).orderBy(teamMembers.role, teamMembers.name));
 }
 
-export async function createTeamMember(input: TeamMemberInput, createdBy: string): Promise<TeamMember> {
+export async function createTeamMember(input: TeamMemberInput, createdBy: string): Promise<PublicTeamMember> {
   const rows = await db.insert(teamMembers).values({
     name: input.name,
     email: input.email,
@@ -42,23 +58,22 @@ export async function createTeamMember(input: TeamMemberInput, createdBy: string
     jobtreadSalesRep: input.jobtreadSalesRep ?? null,
     createdBy,
   }).returning();
-  return rows[0];
+  return toPublicMember(rows[0]);
 }
 
 /** The member (if any) already mapped to this JobTread Sales Rep name, case-insensitively. */
-export async function memberByJobtreadRep(repName: string, excludeId?: number): Promise<TeamMember | undefined> {
+export async function memberByJobtreadRep(repName: string, excludeId?: number): Promise<PublicTeamMember | undefined> {
   const rows = await db.select().from(teamMembers).where(sql`lower(${teamMembers.jobtreadSalesRep}) = ${repName.toLowerCase()}`);
-  return rows.find((r) => r.id !== excludeId);
+  const row = rows.find((r) => r.id !== excludeId);
+  return row && toPublicMember(row);
 }
 
-export async function getTeamMemberById(id: number): Promise<TeamMember | undefined> {
-  const rows = await db.select().from(teamMembers).where(eq(teamMembers.id, id));
-  return rows[0];
+export async function getTeamMemberById(id: number): Promise<PublicTeamMember | undefined> {
+  return firstPublic(await db.select().from(teamMembers).where(eq(teamMembers.id, id)));
 }
 
-export async function updateTeamMember(id: number, patch: Partial<TeamMemberInput> & { active?: boolean; reportsTo?: number | null }): Promise<TeamMember | undefined> {
-  const rows = await db.update(teamMembers).set(patch).where(eq(teamMembers.id, id)).returning();
-  return rows[0];
+export async function updateTeamMember(id: number, patch: Partial<TeamMemberInput> & { active?: boolean; reportsTo?: number | null }): Promise<PublicTeamMember | undefined> {
+  return firstPublic(await db.update(teamMembers).set(patch).where(eq(teamMembers.id, id)).returning());
 }
 
 /** Record a sign-in. `googleSub` is only written when given, so a password sign-in leaves it alone. */
