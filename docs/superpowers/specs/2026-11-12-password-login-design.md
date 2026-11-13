@@ -16,7 +16,9 @@ sign-in stays. It also lets James test the live app without Google.
   active, with login enabled, and the company must be live. Blocklist and the
   optional allowlist apply too.
 - Set-password links: sent when an admin adds a team member (welcome email) and
-  from "Forgot password?". One use, expire after 1 hour.
+  from "Forgot password?". One use. Welcome links expire after 72 hours, reset
+  links after 1 hour (changed Nov 13, 2026 at James's request; was 1 hour for
+  both).
 - Passwords stored as salted scrypt hashes (Node's built-in crypto, no new
   dependency, no new cost).
 - After 5 wrong passwords, that account waits 15 minutes.

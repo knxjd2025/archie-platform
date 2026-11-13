@@ -51,6 +51,15 @@ describe('password link email', () => {
     expect(html).not.toMatch(/—/);
   });
 
+  it('the welcome email says the link expires in 3 days; the reset email says 1 hour', async () => {
+    await sendPasswordLinkEmail({ ...base, purpose: 'welcome' });
+    await sendPasswordLinkEmail({ ...base, purpose: 'reset' });
+    expect(sent[0].html).toContain('This link works once and expires in 3 days.');
+    expect(sent[0].html).not.toContain('1 hour');
+    expect(sent[1].html).toContain('This link works once and expires in 1 hour.');
+    expect(sent[1].html).not.toContain('3 days');
+  });
+
   it('escapes the name and company name', async () => {
     await sendPasswordLinkEmail({ ...base, purpose: 'welcome' });
     const html = sent[0].html;

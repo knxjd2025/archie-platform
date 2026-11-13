@@ -3,7 +3,7 @@
  * Redeeming is one DELETE ... RETURNING, so racing redeemers get it once;
  * the grant names the company and purpose that minted it.
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
 
 const url = process.env.DATABASE_URL || '';
 const local = /@(localhost|127\.0\.0\.1)(:\d+)?\//.test(url);
@@ -56,9 +56,15 @@ describe.skipIf(!local)('password links', async () => {
     const { mintResetLinkUnlessRecent, deletePasswordLinksFor, RESET_LINK_GAP_MS } = await import('../password-links');
     const { eq } = await import('drizzle-orm');
     const rowsFor = (who: string, co = company) => asCompany(co, () => db.select().from(passwordLinks).where(eq(passwordLinks.email, who)));
-    // Pretend the link for `who` was minted `ago` ms ago.
-    const age = (who: string, ago: number) => asCompany(company, () =>
-      db.update(passwordLinks).set({ expiresAt: new Date(Date.now() + PASSWORD_LINK_TTL_MS - ago) }).where(eq(passwordLinks.email, who)));
+    const { and } = await import('drizzle-orm');
+    // Pretend the links for `who` were minted `ago` ms ago (each by its own purpose's lifetime).
+    const age = async (who: string, ago: number) => {
+      for (const purpose of ['welcome', 'reset'] as const) {
+        await asCompany(company, () => db.update(passwordLinks)
+          .set({ expiresAt: new Date(Date.now() + PASSWORD_LINK_TTL_MS[purpose] - ago) })
+          .where(and(eq(passwordLinks.email, who), eq(passwordLinks.purpose, purpose))));
+      }
+    };
 
     it('a later link leaves an earlier unexpired one working', async () => {
       // Otherwise a stranger asking for resets could keep cancelling a member's link.
@@ -98,6 +104,16 @@ describe.skipIf(!local)('password links', async () => {
       expect(await rowsFor(who)).toHaveLength(2);
     });
 
+    it('a welcome link minted a few minutes ago does not hold back a reset; one minted just now does', async () => {
+      // With one shared lifetime, a 72-hour welcome link looked minted in the
+      // future and would have blocked reset mail for days.
+      const who = `welcome-brake-${Date.now()}@example.test`;
+      await asCompany(company, () => mintPasswordLink(who, 'welcome'));
+      expect(await asCompany(company, () => mintResetLinkUnlessRecent(who))).toBeNull();
+      await age(who, RESET_LINK_GAP_MS + 5_000);
+      expect(await asCompany(company, () => mintResetLinkUnlessRecent(who))).toBeTruthy();
+    });
+
     it('simultaneous resets for one email mint one link', async () => {
       const who = `race-${Date.now()}@example.test`;
       const tokens = await Promise.all(Array.from({ length: 8 }, () => asCompany(company, () => mintResetLinkUnlessRecent(who))));
@@ -113,8 +129,32 @@ describe.skipIf(!local)('password links', async () => {
     });
   });
 
-  it('puts the token in the fragment, never the query, and expires in an hour', () => {
-    expect(PASSWORD_LINK_TTL_MS).toBe(3_600_000);
+  describe('lifetimes', () => {
+    afterEach(() => { vi.useRealTimers(); });
+    const HOUR = 3_600_000;
+    const later = (ms: number) => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(Date.now() + ms); };
+
+    it('a welcome link still works after 2 hours', async () => {
+      const token = await asCompany(company, () => mintPasswordLink(`life-w2-${Date.now()}@example.test`, 'welcome'));
+      later(2 * HOUR);
+      expect(await redeemPasswordLink(token)).toMatchObject({ purpose: 'welcome' });
+    });
+
+    it('a welcome link does not work after 73 hours', async () => {
+      const token = await asCompany(company, () => mintPasswordLink(`life-w73-${Date.now()}@example.test`, 'welcome'));
+      later(73 * HOUR);
+      expect(await redeemPasswordLink(token)).toBeNull();
+    });
+
+    it('a reset link does not work after 61 minutes', async () => {
+      const token = await asCompany(company, () => mintPasswordLink(`life-r61-${Date.now()}@example.test`, 'reset'));
+      later(61 * 60_000);
+      expect(await redeemPasswordLink(token)).toBeNull();
+    });
+  });
+
+  it('puts the token in the fragment, never the query; welcome links last 72 hours, resets 1 hour', () => {
+    expect(PASSWORD_LINK_TTL_MS).toEqual({ welcome: 72 * 3_600_000, reset: 3_600_000 });
     const prev = process.env.APP_BASE_URL;
     process.env.APP_BASE_URL = 'https://app.example.test/';
     try {

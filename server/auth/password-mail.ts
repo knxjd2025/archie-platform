@@ -50,7 +50,7 @@ export async function sendPasswordLinkEmail(input: PasswordLinkEmail): Promise<b
 <p>Hi ${first},</p>
 <p>${line}</p>
 <p><a href="${esc(input.url)}" style="display:inline-block;background:#1d4ed8;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none">${button}</a></p>
-<p style="color:#666;font-size:13px">This link works once and expires in 1 hour.${welcome ? ` If it has expired, use "Forgot password?" on the <a href="${esc(signInUrl())}" style="color:#666">sign-in page</a> to get a new one.` : ''}</p>
+<p style="color:#666;font-size:13px">This link works once and expires in ${welcome ? '3 days' : '1 hour'}.${welcome ? ` If it has expired, use "Forgot password?" on the <a href="${esc(signInUrl())}" style="color:#666">sign-in page</a> to get a new one.` : ''}</p>
 </div>`;
   try {
     await sendCompanyEmail({ to: input.to, toName: input.name, subject: subject.replace(/[\r\n]+/g, ' '), html });
