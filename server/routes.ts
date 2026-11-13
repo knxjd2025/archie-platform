@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from 'express';
 import { registerAuthRoutes } from './auth/routes';
+import { getTeamMemberByEmail } from './storage/team';
 import { registerPasswordRoutes } from './auth/password-routes';
 import { registerGoogleRoutes } from './integrations/google-routes';
 import { registerAssignmentRoutes } from './access/assignment-routes';
@@ -1157,7 +1158,13 @@ export function registerRoutes(app: Express) {
           .from(agents)
           .where(eq(agents.role, 'cmo'));
 
-        if (agentRow) {
+        // The company's own people become GHL contacts when Archie emails
+        // them (a set-password link, a reminder). They are not leads.
+        const contactEmail = String(data?.email || '').trim().toLowerCase();
+        const isTeamMember = !!contactEmail && !!(await getTeamMemberByEmail(contactEmail));
+        if (isTeamMember) {
+          console.log('[webhook] new GHL contact is a team member; not treated as a lead');
+        } else if (agentRow) {
           const cmo = new CMOAgent(toAgentConfig(agentRow));
           const leadData = ghl.contactToLead(data);
 
