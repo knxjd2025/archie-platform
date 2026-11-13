@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from 'express';
 import { registerAuthRoutes } from './auth/routes';
+import { registerPasswordRoutes } from './auth/password-routes';
 import { registerGoogleRoutes } from './integrations/google-routes';
 import { registerAssignmentRoutes } from './access/assignment-routes';
 import { registerTeamRoutes } from './auth/team-routes';
@@ -120,6 +121,7 @@ export function registerRoutes(app: Express) {
   // First, so every route registered after it reports its failures to the bug log.
   registerBugRoutes(app);
   registerAuthRoutes(app);
+  registerPasswordRoutes(app);
   registerGoogleRoutes(app);
   registerAssignmentRoutes(app);
   registerTeamRoutes(app);

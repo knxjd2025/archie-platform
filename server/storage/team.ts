@@ -61,8 +61,41 @@ export async function updateTeamMember(id: number, patch: Partial<TeamMemberInpu
   return rows[0];
 }
 
-export async function touchLogin(email: string, googleSub: string): Promise<void> {
+/** Record a sign-in. `googleSub` is only written when given, so a password sign-in leaves it alone. */
+export async function touchLogin(email: string, googleSub?: string): Promise<void> {
   await db.update(teamMembers)
-    .set({ googleSub, lastLoginAt: new Date() })
+    .set({ ...(googleSub ? { googleSub } : {}), lastLoginAt: new Date() })
     .where(eq(teamMembers.email, email.toLowerCase()));
+}
+
+export const MAX_FAILED_LOGINS = 5;
+export const LOGIN_LOCK_MS = 15 * 60 * 1000;
+
+/** Store a new password hash and forget earlier failed tries and any lock. Runs in the current company. */
+export async function setPasswordHash(email: string, hash: string): Promise<void> {
+  await db.update(teamMembers)
+    .set({ passwordHash: hash, failedLogins: 0, lockedUntil: null })
+    .where(eq(teamMembers.email, email.trim().toLowerCase()));
+}
+
+/**
+ * Count a wrong password. The fifth locks the account for 15 minutes and starts
+ * the count over. One UPDATE, so simultaneous guesses cannot read the same count.
+ * No such member: nothing happens. Runs in the current company.
+ */
+export async function recordFailedLogin(email: string): Promise<void> {
+  const lockedUntil = new Date(Date.now() + LOGIN_LOCK_MS);
+  await db.update(teamMembers)
+    .set({
+      failedLogins: sql`CASE WHEN ${teamMembers.failedLogins} + 1 >= ${MAX_FAILED_LOGINS} THEN 0 ELSE ${teamMembers.failedLogins} + 1 END`,
+      lockedUntil: sql`CASE WHEN ${teamMembers.failedLogins} + 1 >= ${MAX_FAILED_LOGINS} THEN ${lockedUntil.toISOString()}::timestamp ELSE ${teamMembers.lockedUntil} END`,
+    })
+    .where(eq(teamMembers.email, email.trim().toLowerCase()));
+}
+
+/** Forget failed tries after a good sign-in. Runs in the current company. */
+export async function clearFailedLogins(email: string): Promise<void> {
+  await db.update(teamMembers)
+    .set({ failedLogins: 0 })
+    .where(eq(teamMembers.email, email.trim().toLowerCase()));
 }
