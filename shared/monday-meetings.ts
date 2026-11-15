@@ -1,7 +1,7 @@
 /**
  * Monday morning, prepared on Sunday.
  *
- * Four meetings run back to back and each one wants different numbers in front
+ * Three meetings run back to back and each one wants different numbers in front
  * of it. The app already holds all of them — leads, the three pipelines,
  * commission, follow-ups — so the pack assembles itself on Sunday evening and
  * is on screen when the room sits down.
@@ -13,7 +13,7 @@
  */
 import { boardTz } from './schedule-board';
 
-export type MeetingKey = 'leadership' | 'claims' | 'sales' | 'payroll';
+export type MeetingKey = 'leadership' | 'claims' | 'sales';
 
 /** Who is in the room, and therefore who may open its page. */
 export type MeetingAudience = 'admin' | 'sales_plus' | 'everyone';
@@ -85,20 +85,6 @@ export const MEETINGS: readonly MeetingDef[] = [
       { title: 'To-dos', minutes: 5, note: 'Last week\'s seven-day commitments. The bar is 90% done' },
       { title: 'IDS — identify, discuss, solve', minutes: 55, note: 'Empty diaries, overdue follow-ups, customers waiting — top three, one at a time. Sharpening lives here too' },
       { title: 'Conclude', minutes: 5, note: 'Recap the to-dos, agree what cascades, rate the meeting 1–10' },
-    ],
-  },
-  {
-    key: 'payroll',
-    label: 'Payroll',
-    startMin: at(12), endMin: at(13),
-    audience: 'admin',
-    purpose: 'What is owed, what is approved and unpaid, and what is waiting on a number.',
-    runningOrder: [
-      { title: 'Approved and unpaid', minutes: 10, note: 'What goes out today' },
-      { title: 'Ready to approve', minutes: 15 },
-      { title: 'Missing a number', minutes: 15, note: 'No revenue filed, or no lead source — chase the rep' },
-      { title: 'Questions from the team', minutes: 15 },
-      { title: 'Actions and close', minutes: 5 },
     ],
   },
 ];
@@ -258,7 +244,7 @@ export interface MeetingPack {
   actions: MeetingAction[];
   /** Still-open items from previous weeks, so nothing quietly drops. */
   carriedOver: MeetingAction[];
-  /** Scorecard, rocks, issues and rating per room. Absent for payroll. */
+  /** Scorecard, rocks, issues and rating per room. */
   spine: Partial<Record<MeetingKey, MeetingSpine>>;
 }
 

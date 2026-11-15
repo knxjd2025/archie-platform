@@ -1715,7 +1715,7 @@ export const meetingNotes = pgTable('meeting_notes', {
   companyId: companyId(),
   id: serial('id').primaryKey(),
   weekId: integer('week_id').references(() => meetingWeeks.id, { onDelete: 'cascade' }).notNull(),
-  meeting: text('meeting').notNull(),                 // leadership | claims | sales | payroll
+  meeting: text('meeting').notNull(),                 // leadership | claims | sales (old rows may say payroll; reads ignore them)
   notes: text('notes').notNull().default(''),
   updatedBy: text('updated_by'),
   updatedAt: timestamp('updated_at').defaultNow(),

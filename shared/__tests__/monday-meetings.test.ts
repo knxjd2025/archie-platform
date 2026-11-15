@@ -1,31 +1,31 @@
 import { describe, it, expect } from 'vitest';
 import {
-  MEETINGS, agendaFits, agendaMinutes, canOpenMeeting, meetingDayLabel, meetingMinutes,
+  MEETINGS, agendaFits, agendaMinutes, canOpenMeeting, isMeetingKey, meetingDayLabel, meetingMinutes,
   meetingTime, mondayFor, visibleMeetings, weekBefore, ymd,
 } from '../monday-meetings';
 
 describe('the Monday schedule', () => {
-  it('is the four meetings, back to back, in order', () => {
-    expect(MEETINGS.map((m) => m.key)).toEqual(['leadership', 'claims', 'sales', 'payroll']);
+  it('is exactly leadership, claims and sales, back to back, in order', () => {
+    expect(MEETINGS.map((m) => m.key)).toEqual(['leadership', 'claims', 'sales']);
+    expect(MEETINGS).toHaveLength(3);
     for (let i = 1; i < MEETINGS.length; i++) {
       expect(MEETINGS[i].startMin).toBe(MEETINGS[i - 1].endMin);   // no gaps, no overlaps
     }
   });
 
-  it('runs 8am to 1pm', () => {
+  it('runs 8am to noon', () => {
     expect(MEETINGS[0].startMin).toBe(8 * 60);
-    expect(MEETINGS[MEETINGS.length - 1].endMin).toBe(13 * 60);
+    expect(MEETINGS[MEETINGS.length - 1].endMin).toBe(12 * 60);
   });
 
   it('reads the times the way an agenda does', () => {
     expect(meetingTime(MEETINGS[0])).toBe('8:00 – 9:30 am');
     expect(meetingTime(MEETINGS[1])).toBe('9:30 – 10:30 am');
     expect(meetingTime(MEETINGS[2])).toBe('10:30 am – 12:00 pm');
-    expect(meetingTime(MEETINGS[3])).toBe('12:00 – 1:00 pm');
   });
 
   it('knows how long each one is', () => {
-    expect(MEETINGS.map(meetingMinutes)).toEqual([90, 60, 90, 60]);
+    expect(MEETINGS.map(meetingMinutes)).toEqual([90, 60, 90]);
   });
 });
 
@@ -70,13 +70,20 @@ describe('which Monday a pack belongs to', () => {
   });
 });
 
+describe('the retired payroll room', () => {
+  it('is not a meeting any more, so an old stored row is ignored rather than opened', () => {
+    expect(isMeetingKey('payroll')).toBe(false);
+    for (const role of ['admin', 'sales_director', 'sales', 'production']) {
+      expect(canOpenMeeting(role, 'payroll' as any)).toBe(false);
+    }
+  });
+});
+
 describe('who is in the room', () => {
-  it('keeps payroll and leadership to admins', () => {
+  it('keeps leadership to admins', () => {
     for (const role of ['sales', 'production', 'customer_service', 'manager']) {
-      expect(canOpenMeeting(role, 'payroll')).toBe(false);
       expect(canOpenMeeting(role, 'leadership')).toBe(false);
     }
-    expect(canOpenMeeting('admin', 'payroll')).toBe(true);
     expect(canOpenMeeting('sales_director', 'leadership')).toBe(true);
   });
 
@@ -91,8 +98,8 @@ describe('who is in the room', () => {
     expect(canOpenMeeting('production', 'claims')).toBe(false);
   });
 
-  it('gives an admin all four and a production user one', () => {
-    expect(visibleMeetings('admin')).toHaveLength(4);
+  it('gives an admin all three and a production user one', () => {
+    expect(visibleMeetings('admin')).toHaveLength(3);
     expect(visibleMeetings('production').map((m) => m.key)).toEqual(['sales']);
   });
 });
@@ -132,7 +139,7 @@ describe('the running order', () => {
   });
 
   it('gives every L10 room a scorecard, an issues list and a rating', () => {
-    for (const m of MEETINGS.filter((x) => x.key !== 'payroll')) {
+    for (const m of MEETINGS) {
       const titles = m.runningOrder.map((i) => i.title.toLowerCase()).join(' | ');
       expect(titles, `${m.key} has no scorecard`).toContain('scorecard');
       expect(titles, `${m.key} has no IDS`).toContain('ids');
@@ -144,7 +151,7 @@ describe('the running order', () => {
   it('gives IDS most of the room in every L10 meeting', () => {
     // The whole point of the merge: solving outweighs reporting. If a future
     // edit quietly grows the report sections, this is what catches it.
-    for (const m of MEETINGS.filter((x) => x.key !== 'payroll')) {
+    for (const m of MEETINGS) {
       const ids = m.runningOrder.find((i) => i.title.toLowerCase().includes('ids'))!;
       const rest = agendaMinutes(m) - ids.minutes;
       expect(ids.minutes, `${m.key}: ${ids.minutes} min solving vs ${rest} min reporting`).toBeGreaterThan(rest);

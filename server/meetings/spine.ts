@@ -262,7 +262,7 @@ export async function ratingsFor(meeting: MeetingKey, monday: string): Promise<n
 
 // ---------------------------------------------------------------- auto-filing
 
-/** The rooms that run an L10. Payroll is a processing meeting and stays as it was. */
+/** The rooms that run an L10. */
 export const L10_MEETINGS: MeetingKey[] = ['leadership', 'claims', 'sales'];
 
 export interface AutoFileResult { raised: number; alreadyOpen: number }
