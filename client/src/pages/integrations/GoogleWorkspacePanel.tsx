@@ -4,7 +4,6 @@
  */
 import { useEffect, useState } from 'react';
 import { api } from '../../lib/api';
-import { useCompany } from '../../lib/company';
 
 interface GoogleStatus {
   connected: boolean;
@@ -57,9 +56,6 @@ function formatDateTime(iso?: string): string {
 }
 
 export default function GoogleWorkspacePanel() {
-  const company = useCompany();
-  // The company's email domain, when its profile has an email, to name the Workspace domain.
-  const workspaceDomain = company.email.includes('@') ? company.email.split('@').pop() : '';
   const [googleStatus, setGoogleStatus] = useState<GoogleStatus | null>(null);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [driveFiles, setDriveFiles] = useState<DriveFile[]>([]);
@@ -117,12 +113,7 @@ export default function GoogleWorkspacePanel() {
                     <p className="text-xs text-gray-500">{googleStatus.email}</p>
                   </>
                 ) : (
-                  <>
-                    <p className="text-sm font-medium text-amber-600">Unavailable</p>
-                    <p className="text-xs text-gray-500 max-w-xs">
-                      {googleStatus?.error || 'Checking...'}
-                    </p>
-                  </>
+                  <p className="text-sm font-medium text-amber-600">{googleStatus ? 'Not set up' : 'Checking...'}</p>
                 )}
               </div>
             </div>
@@ -207,18 +198,8 @@ export default function GoogleWorkspacePanel() {
           )}
 
           {!googleStatus?.connected && (
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 sm:p-6 text-sm text-blue-800 space-y-2">
-              <p className="font-semibold">Workspace isn't reachable for your account</p>
-              <p className="text-blue-700">
-                There's nothing to connect here. The app reads your Gmail, Calendar and Drive
-                through the company service account, which signs in as you. If this says
-                unavailable, an admin needs to check one of:
-              </p>
-              <ol className="list-decimal list-inside space-y-1 text-blue-700">
-                <li>Your mailbox is on the company's Google Workspace domain{workspaceDomain && <> (<strong>@{workspaceDomain}</strong>)</>}</li>
-                <li>The service account's <strong>domain-wide delegation</strong> in Workspace admin lists the Calendar, Gmail and Drive scopes</li>
-                <li><code className="bg-blue-100 px-1 rounded">GOOGLE_SA_EMAIL</code> and <code className="bg-blue-100 px-1 rounded">GOOGLE_SA_KEY</code> are set on the server</li>
-              </ol>
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 sm:p-6 text-sm text-blue-800">
+              <p>Google Workspace is set up by Archie support for your company's email domain. Contact support to turn it on.</p>
             </div>
           )}
         </>
