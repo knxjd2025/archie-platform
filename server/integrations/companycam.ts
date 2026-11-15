@@ -5,9 +5,7 @@
  */
 
 import { fetchWithTimeout } from '../lib/fetch-timeout';
-import { assertEnvCredentials } from '../tenant/per-company';
-
-const BASE_URL = 'https://api.companycam.com/v2';
+import { COMPANYCAM_API_BASE as BASE_URL, resolveCompanyCamCredentials } from './companycam-connection';
 
 /** One spelling for the street-type words people abbreviate inconsistently. */
 const STREET_WORDS: Record<string, string> = {
@@ -102,15 +100,25 @@ interface CompanyCamUser {
 }
 
 export class CompanyCamClient {
-  private apiToken: string;
+  /** Only set when a caller hands a token in (checking one before it is saved). */
+  private explicitToken?: string;
 
+  /**
+   * With no token, every call uses the current company's own CompanyCam
+   * token, resolved per call (server/integrations/companycam-connection.ts),
+   * so an instance never carries one company's token into another's request.
+   */
   constructor(apiToken?: string) {
-    this.apiToken = apiToken || process.env.COMPANYCAM_API_TOKEN || '';
+    this.explicitToken = apiToken || undefined;
+  }
+
+  private async token(): Promise<string> {
+    if (this.explicitToken) return this.explicitToken;
+    return (await resolveCompanyCamCredentials()).token;
   }
 
   private async request<T>(method: string, path: string, body?: any, params?: Record<string, string>): Promise<T> {
-    assertEnvCredentials('CompanyCam');
-    if (!this.apiToken) throw new Error('CompanyCam API token not configured');
+    const apiToken = await this.token();
 
     const url = new URL(`${BASE_URL}${path}`);
     if (params) {
@@ -120,7 +128,7 @@ export class CompanyCamClient {
     const response = await fetchWithTimeout(url.toString(), {
       method,
       headers: {
-        'Authorization': `Bearer ${this.apiToken}`,
+        'Authorization': `Bearer ${apiToken}`,
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },

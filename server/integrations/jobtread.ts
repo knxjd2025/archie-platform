@@ -15,9 +15,8 @@
  */
 
 import { fetchWithTimeout } from '../lib/fetch-timeout';
-import { assertEnvCredentials } from '../tenant/per-company';
-
-const JOBTREAD_API_URL = 'https://api.jobtread.com/pave';
+import { currentCompanyId } from '../tenant/context';
+import { JOBTREAD_API_URL, resolveJobTreadCredentials } from './jobtread-connection';
 
 /** A file PUT to JobTread's upload URL; photos from a phone are slow. */
 const UPLOAD_TIMEOUT_MS = 60_000;
@@ -301,19 +300,21 @@ export interface JobTreadLeadKpis {
   }>;
 }
 
+/**
+ * The organization the shared env key resolved to, per company. A company's
+ * own connection stores its organization id; only the env key (which names
+ * none) has to look it up, and that answer is never shared across companies.
+ */
+const envOrganizationIds = new Map<string, string>();
+
 export class JobTreadClient {
-  private apiKey: string;
-  private companyId: string;
-  private organizationId?: string;
-
-  constructor() {
-    this.apiKey = process.env.JOBTREAD_API_KEY || '';
-    this.companyId = process.env.JOBTREAD_COMPANY_ID || '';
-
-    if (!this.apiKey) {
-      console.warn('JOBTREAD_API_KEY not set - JobTread integration will be limited');
-    }
-  }
+  /**
+   * Holds no credentials. Every call resolves the current company's own
+   * JobTread grant key and organization (server/integrations/jobtread-connection.ts),
+   * so an instance kept across requests can never run one company's call
+   * with another company's key.
+   */
+  constructor() {}
 
   /**
    * Execute a Pave query against the JobTread API
@@ -334,7 +335,7 @@ export class JobTreadClient {
   }
 
   private async pave<T>(query: Record<string, any>): Promise<T> {
-    assertEnvCredentials('JobTread');
+    const { grantKey } = await resolveJobTreadCredentials();
     // This backs virtually the entire JobTread integration (leads, stage
     // changes, notes, documents, reports) and had no timeout — a stalled
     // call blocked that request indefinitely.
@@ -345,7 +346,7 @@ export class JobTreadClient {
       response = await fetch(JOBTREAD_API_URL, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
+          'Authorization': `Bearer ${grantKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ query }),
@@ -1475,10 +1476,13 @@ export class JobTreadClient {
     if (whereClauses.length === 1) jtQuery.where = whereClauses[0];
     if (whereClauses.length > 1) jtQuery.where = { and: whereClauses };
 
+    // Scoped to the company's own organization: a grant key can open more
+    // than one, and the plural organizations.nodes form searched them all.
+    const orgId = await this.getOrganizationId();
     const result = await this.pave<any>({
-      organizations: {
-        nodes: {
-          jobs: {
+      organization: {
+        $: { id: orgId },
+        jobs: {
             $: jtQuery,
             nodes: {
               id: {},
@@ -1496,7 +1500,6 @@ export class JobTreadClient {
               customFieldValues: { $: { size: 40 }, nodes: { value: {}, customField: { id: {} } } },
             },
           },
-        },
       },
     });
 
@@ -1511,7 +1514,7 @@ export class JobTreadClient {
       closedOn?: string | null;
       salesRep?: string | null;
     }> = [];
-    for (const org of result?.organizations?.nodes || []) {
+    for (const org of [result?.organization].filter(Boolean)) {
       for (const j of org?.jobs?.nodes || []) {
         const repCfv = (j?.customFieldValues?.nodes || [])
           .find((n: any) => n?.customField?.id === JT_SALES_REP_FIELD);
@@ -1882,7 +1885,11 @@ export class JobTreadClient {
   }
 
   async getOrganizationId(): Promise<string> {
-    if (this.organizationId) return this.organizationId;
+    const creds = await resolveJobTreadCredentials();
+    if (creds.organizationId) return creds.organizationId;
+    const companyId = currentCompanyId() ?? '';
+    const known = envOrganizationIds.get(companyId);
+    if (known) return known;
 
     const result = await this.pave<any>({
       organizations: {
@@ -1897,7 +1904,7 @@ export class JobTreadClient {
       throw new Error('Unable to determine JobTread organization id for lead KPIs.');
     }
 
-    this.organizationId = organizationId;
+    envOrganizationIds.set(companyId, organizationId);
     return organizationId;
   }
 
@@ -2453,13 +2460,6 @@ export class JobTreadClient {
    * - Arguments via $ key: {job: {$: {id: "xxx"}, name: {}}}
    */
   async healthCheck(): Promise<{ ok: boolean; error?: string; data?: { organizations: number; jobs: number; contacts: number } }> {
-    if (!this.apiKey) {
-      return {
-        ok: false,
-        error: 'Missing JOBTREAD_API_KEY',
-      };
-    }
-
     try {
       // Query organizations with jobs and contacts count to verify data access
       const result = await this.pave<any>({

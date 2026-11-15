@@ -7,7 +7,7 @@
  *     hasn't synced yet
  *   • push photos the other way — app/JobTread photos into the CompanyCam project
  *   • tag photos
- * Dormant until COMPANYCAM_API_TOKEN is set.
+ * Dormant until the company connects its CompanyCam account (Integrations).
  */
 import type { Express, Request, Response } from 'express';
 import { eq } from 'drizzle-orm';
@@ -16,14 +16,14 @@ import { leads, settings } from '../../shared/schema';
 import { requireAuth } from '../auth/middleware';
 import { ownsLead, type SessionUser } from '../access/rep-scope';
 import { CompanyCamClient } from '../integrations/companycam';
+import { companyCamConnected } from '../integrations/companycam-connection';
 import { JobTreadClient } from '../integrations/jobtread';
 import { isImage } from '../reports/job-context';
 import { logWrite } from '../writes/log';
 import { sendFailure } from '../lib/failure';
 
-export function companyCamConfigured(): boolean {
-  return !!process.env.COMPANYCAM_API_TOKEN;
-}
+/** True when the current company has CompanyCam connected (its own token, or the env one it owns). */
+export const companyCamConfigured = companyCamConnected;
 
 /** Max photos pushed in one request — each is a separate CompanyCam call. */
 export const MAX_PUSH = 25;
@@ -56,7 +56,11 @@ const addressHints = (lead: { city?: string | null; zip?: string | null }) => ({
 
 export function registerCompanyCamRoutes(app: Express) {
   app.get('/api/integrations/companycam/status', requireAuth, async (_req: Request, res: Response) => {
-    if (!companyCamConfigured()) return res.json({ configured: false, missing: ['COMPANYCAM_API_TOKEN'] });
+    try {
+      if (!(await companyCamConfigured())) return res.json({ configured: false });
+    } catch (e) {
+      return sendFailure(res, e, 'GET /api/integrations/companycam/status');
+    }
     try {
       const health = await new CompanyCamClient().healthCheck();
       res.json({ configured: true, ...health });
@@ -72,7 +76,7 @@ export function registerCompanyCamRoutes(app: Express) {
       const [lead] = await db.select().from(leads).where(eq(leads.externalId, req.params.externalId));
       if (!lead) return res.status(404).json({ error: 'not found' });
       if (!(await ownsLead(user, lead.externalId))) return res.status(404).json({ error: 'not found' });
-      if (!companyCamConfigured()) return res.json({ configured: false, project: null, photos: [] });
+      if (!(await companyCamConfigured())) return res.json({ configured: false, project: null, photos: [] });
       if (!lead.address) return res.json({ configured: true, project: null, photos: [], note: 'This client has no address to match on.' });
 
       const cc = new CompanyCamClient();
@@ -104,7 +108,7 @@ export function registerCompanyCamRoutes(app: Express) {
       const [lead] = await db.select().from(leads).where(eq(leads.externalId, req.params.externalId));
       if (!lead) return res.status(404).json({ error: 'not found' });
       if (!(await ownsLead(user, lead.externalId))) return res.status(404).json({ error: 'not found' });
-      if (!companyCamConfigured()) return res.status(503).json({ error: 'CompanyCam is not connected (COMPANYCAM_API_TOKEN).' });
+      if (!(await companyCamConfigured())) return res.status(503).json({ error: 'CompanyCam is not connected. An admin can connect it on the Integrations page.' });
       if (!lead.address) return res.status(400).json({ error: 'This client needs an address to match a CompanyCam project.' });
 
       const cc = new CompanyCamClient();
