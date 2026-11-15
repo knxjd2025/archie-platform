@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ARCHIE_PRIMARY, applyBrandTheme, brandThemeVars, hexToRgb, mix, textOn } from '../brand';
+import { ARCHIE_INK, ARCHIE_PRIMARY, applyBrandTheme, brandThemeVars, hexToRgb, inkShades, mix, textOn } from '../brand';
 import { NEUTRAL_PROFILE, letterhead } from '../company';
 import { resolveCompanyProfile } from '../../../../shared/company';
 
@@ -48,6 +48,34 @@ describe('brandThemeVars', () => {
     const root = { style: { setProperty: (k: string, v: string) => { set[k] = v; } } } as unknown as HTMLElement;
     applyBrandTheme({ primary: '#B91C1C' }, root);
     expect(set['--brand']).toBe('185 28 28');
+  });
+});
+
+describe('ink (the app chrome)', () => {
+  it("is Archie's navy, exactly, when the company has not picked a main color", () => {
+    expect(inkShades(undefined)).toEqual(ARCHIE_INK);
+    expect(inkShades('')).toEqual(ARCHIE_INK);
+    const v = brandThemeVars({ primary: '#1F3A5F', accent: '#1F2937' });
+    expect([v['--ink'], v['--ink-dark'], v['--ink-deep']]).toEqual(['31 58 95', '22 41 63', '15 28 44']);
+  });
+
+  it('keeps the tailwind fallbacks in step with Archie\'s values', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const tw = readFileSync(join(__dirname, '../../../../tailwind.config.js'), 'utf8');
+    expect(tw).toContain("var(--ink, 31 58 95)");
+    expect(tw).toContain("var(--ink-dark, 22 41 63)");
+    expect(tw).toContain("var(--ink-deep, 15 28 44)");
+  });
+
+  it("uses the company's main color and two darker shades of it", () => {
+    const ink = inkShades('#14532d');
+    expect(ink.DEFAULT).toBe('#14532D');
+    const lum = (h: string) => hexToRgb(h)!.reduce((a, b) => a + b, 0);
+    expect(lum(ink.dark)).toBeLessThan(lum(ink.DEFAULT));
+    expect(lum(ink.deep)).toBeLessThan(lum(ink.dark));
+    const v = brandThemeVars({ primary: '#14532D', ink: '#14532D' });
+    expect(v['--ink']).toBe('20 83 45');
   });
 });
 

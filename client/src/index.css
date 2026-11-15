@@ -32,6 +32,11 @@
   --brand-dark: 23 44 71;
   --brand-accent: 201 160 75;
   --on-brand: 255 255 255;
+  /* App chrome (tailwind `ink-*`): Archie's navy and its two darker shades
+     until a company picks a main color. Keep in step with brandThemeVars(null). */
+  --ink: 31 58 95;
+  --ink-dark: 22 41 63;
+  --ink-deep: 15 28 44;
 }
 
 .dark {

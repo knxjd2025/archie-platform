@@ -22,8 +22,15 @@ export default {
           900: '#0d1929',
           950: '#0a131f',
         },
-        // App chrome (header, sign-in screen): Archie's own, not the company's.
-        ink: { DEFAULT: '#1f3a5f', dark: '#16293f', deep: '#0f1c2c' },
+        // App chrome (header, primary surfaces). Archie's navy by default; a
+        // company that picks a main color on the Company page gets it here
+        // (CSS variables set by client/src/lib/brand.ts). The fallbacks are
+        // Archie's own values, so with nothing set the app looks as it always has.
+        ink: {
+          DEFAULT: 'rgb(var(--ink, 31 58 95) / <alpha-value>)',
+          dark: 'rgb(var(--ink-dark, 22 41 63) / <alpha-value>)',
+          deep: 'rgb(var(--ink-deep, 15 28 44) / <alpha-value>)',
+        },
         // The signed-in company's colors, set at runtime on :root from its
         // profile (client/src/lib/brand.ts). Archie navy until then.
         brand: {

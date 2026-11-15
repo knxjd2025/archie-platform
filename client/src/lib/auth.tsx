@@ -1,11 +1,17 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { SESSION_EXPIRED_EVENT, resetSessionExpiredNotice } from './api';
 import { applyBrandTheme } from './brand';
+import { isSetPasswordPath } from './password-pages';
 import { setTimeZoneProvider } from '../../../shared/schedule-board';
 import type { TeamRole } from '../../../shared/rbac';
 import type { CompanyProfile } from '../../../shared/company';
 
 export interface AuthUser { email: string; name: string; role: TeamRole }
+/**
+ * The company profile /api/auth/me sends, plus the menu pages the company's
+ * admin hid from this person's level (Company page, shared/menu.ts).
+ */
+export type SessionProfile = CompanyProfile & { hiddenPages?: string[] };
 interface AuthState {
   user: AuthUser | null;
   /**
@@ -13,15 +19,17 @@ interface AuthState {
    * contact details, colors). Null before sign-in. Read it through
    * useCompany() (lib/company.tsx), which fills in a neutral profile.
    */
-  profile: CompanyProfile | null;
+  profile: SessionProfile | null;
   loading: boolean;
   expired: boolean;
   /** The last session check couldn't reach the server — we are offline, not signed out. */
   offline: boolean;
   signOut: () => Promise<void>;
+  /** Ask the server again for the person and their company, e.g. after the Company page saves. */
+  refresh: () => Promise<void>;
 }
 
-const Ctx = createContext<AuthState>({ user: null, profile: null, loading: true, expired: false, offline: false, signOut: async () => {} });
+const Ctx = createContext<AuthState>({ user: null, profile: null, loading: true, expired: false, offline: false, signOut: async () => {}, refresh: async () => {} });
 
 /**
  * Who was signed in last time the server answered.
@@ -52,16 +60,16 @@ function writeCachedUser(u: AuthUser | null): void {
   } catch { /* private window or blocked storage — the app still works online */ }
 }
 
-function readCachedProfile(): CompanyProfile | null {
+function readCachedProfile(): SessionProfile | null {
   try {
     const raw = localStorage.getItem(COMPANY_CACHE_KEY);
     if (!raw) return null;
     const p = JSON.parse(raw);
-    return p && typeof p.displayName === 'string' && p.colors && typeof p.colors.primary === 'string' ? (p as CompanyProfile) : null;
+    return p && typeof p.displayName === 'string' && p.colors && typeof p.colors.primary === 'string' ? (p as SessionProfile) : null;
   } catch { return null; }
 }
 
-function writeCachedProfile(p: CompanyProfile | null): void {
+function writeCachedProfile(p: SessionProfile | null): void {
   try {
     if (p) localStorage.setItem(COMPANY_CACHE_KEY, JSON.stringify(p));
     else localStorage.removeItem(COMPANY_CACHE_KEY);
@@ -96,10 +104,11 @@ export function offlineRetry(run: () => void, ms = OFFLINE_RETRY_MS): { schedule
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [profile, setProfile] = useState<CompanyProfile | null>(null);
+  const [profile, setProfile] = useState<SessionProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [expired, setExpired] = useState(false);
   const [offline, setOffline] = useState(false);
+  const checkRef = useRef<(() => Promise<void>) | null>(null);
 
   // When the session goes, drop to the sign-in screen rather than leaving a
   // shell where every panel fails differently.
@@ -120,7 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (r.ok) {
           const d = await r.json().catch(() => null);
           const u = (d?.user ?? null) as AuthUser | null;
-          const p = (u && d?.profile ? d.profile : null) as CompanyProfile | null;
+          const p = (u && d?.profile ? d.profile : null) as SessionProfile | null;
           retry.cancel();
           setUser(u);
           setProfile(p);
@@ -164,6 +173,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
 
+    checkRef.current = check;
     check();
 
     // Coming back into signal re-checks, so a genuinely expired session is
@@ -184,12 +194,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     resetSessionExpiredNotice();
   }
 
-  // The company's colors on every brand-* class; Archie's when signed out.
-  useEffect(() => { applyBrandTheme(profile?.colors ?? null); }, [profile]);
+  // The company's colors on every brand-* class, and its chosen main color on
+  // the app chrome (ink-*); Archie's when signed out. The set-password page is
+  // Archie's own whoever is signed in, like the sign-in page.
+  useEffect(() => {
+    const archie = !profile || isSetPasswordPath(window.location.pathname);
+    applyBrandTheme(archie ? null : { ...profile.colors, ink: profile.brandPrimary || undefined });
+  }, [profile]);
   // Schedules and due dates show in the company's own time zone.
   useEffect(() => { setTimeZoneProvider(() => profile?.timeZone); }, [profile]);
 
-  return <Ctx.Provider value={{ user, profile, loading, expired, offline, signOut }}>{children}</Ctx.Provider>;
+  const refresh = async () => { await checkRef.current?.(); };
+
+  return <Ctx.Provider value={{ user, profile, loading, expired, offline, signOut, refresh }}>{children}</Ctx.Provider>;
 }
 
 export function useAuth() { return useContext(Ctx); }
