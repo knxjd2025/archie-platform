@@ -4,6 +4,7 @@ import SearchOverlay from './components/SearchOverlay';
 import Dashboard from './pages/dashboard';
 import Leads from './pages/leads';
 import Integrations from './pages/integrations';
+import KynexProBanner from './components/KynexProBanner';
 import { useAuth } from './lib/auth';
 import { CompanyMark, PRODUCT_NAME, useCompany } from './lib/company';
 import { canSeeMoney, type TeamRole } from '../../shared/rbac';
@@ -436,6 +437,9 @@ function App() {
           </div>
         </div>
       </header>
+
+      {/* Admins only, until the company connects KynexPro. Blocks nothing. */}
+      <KynexProBanner isAdmin={isAdmin} onConnect={() => go('integrations')} />
 
       {/* Main Content */}
       <main id="main" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 md:pb-8">
