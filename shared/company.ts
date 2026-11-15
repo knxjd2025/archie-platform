@@ -83,6 +83,11 @@ export interface CompanySettings {
   modules?: Partial<Record<ArchieModule, boolean>>;
   /** IANA time zone for schedules and digests. Defaults to America/New_York. */
   timeZone?: string;
+  /**
+   * Menu pages hidden from each user level, set on the Company page
+   * (shared/menu.ts). Hiding only narrows a menu; it never grants a page.
+   */
+  menuHidden?: Partial<Record<import('./rbac').TeamRole, string[]>>;
 }
 
 export const ARCHIE_MODULES = [
@@ -152,6 +157,13 @@ export interface CompanyProfile {
   links: CompanyLink[];
   awards: CompanyImage[];
   colors: CompanyColors;
+  /**
+   * The main and accent colors exactly as the company chose them on the
+   * Company page, or '' when it has not. The app's chrome uses Archie's own
+   * colors until one is chosen; `colors` above always has a value.
+   */
+  brandPrimary: string;
+  brandAccent: string;
   credentials: string[];
   trustStats: string[];
   certifications: string[];
@@ -257,6 +269,8 @@ export function resolveCompanyProfile(company: {
       warning: '#D97706',
       danger: '#DC2626',
     },
+    brandPrimary: HEX_RE.test(clean(b.primaryColor)) ? clean(b.primaryColor) : '',
+    brandAccent: HEX_RE.test(clean(b.accentColor)) ? clean(b.accentColor) : '',
     credentials: cleanList(s.credentials),
     trustStats: cleanList(s.trustStats),
     certifications: cleanList(s.certifications),

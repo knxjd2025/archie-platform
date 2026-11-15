@@ -71,6 +71,7 @@ import { blockDisabledJobs } from './tenant/cron';
 import { verifyGhlWebhookSecret } from './integrations/ghl/webhook-secret';
 import { registerGhlConnectionRoutes } from './integrations/ghl/routes';
 import { registerConnectionRoutes } from './integrations/connection-routes';
+import { registerCompanyRoutes } from './company/routes';
 import { currentGhlLocationId, ghlAppBase } from './integrations/ghl/connection';
 import { getCompanyByGhlLocation } from './tenant/companies';
 import { runAsCompany } from './tenant/context';
@@ -159,6 +160,7 @@ export function registerRoutes(app: Express) {
   registerNeighborLetterRoutes(app);
   registerGhlConnectionRoutes(app);
   registerConnectionRoutes(app);
+  registerCompanyRoutes(app);
   registerInsuranceLetterRoutes(app);
   registerCertificateRoutes(app);
   registerSignatureRoutes(app);
