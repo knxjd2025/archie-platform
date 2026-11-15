@@ -4,7 +4,7 @@ import { useAuth } from '../lib/auth';
 import { useCompany, PRODUCT_NAME } from '../lib/company';
 import { ALL_ROLES, ROLE_LABEL, type TeamRole } from '../../../shared/rbac';
 import { MENU_ITEMS, menuCell, type MenuHidden, type MenuPage } from '../../../shared/menu';
-import { isHexColor, readableWithWhite } from '../../../shared/contrast';
+import { MIN_ACCENT_CONTRAST, isHexColor, readableWithWhite } from '../../../shared/contrast';
 
 /**
  * The Company page (admins): the company's logo and colors, and which menu
@@ -159,19 +159,23 @@ function BrandSection({ data, onSaved }: { data: Customization; onSaved: (c: Cus
   useEffect(() => { setPrimary(data.primaryColor); setAccent(data.accentColor); }, [data.primaryColor, data.accentColor]);
 
   const readable = primary ? readableWithWhite(primary) : null;
+  const readableAccent = accent ? readableWithWhite(accent, MIN_ACCENT_CONTRAST) : null;
   const previewPrimary = readable ? readable.color : DEFAULT_PRIMARY;
-  const previewAccent = accent ?? DEFAULT_ACCENT;
+  const previewAccent = readableAccent ? readableAccent.color : DEFAULT_ACCENT;
   const dirty = primary !== data.primaryColor || accent !== data.accentColor;
 
   async function save(e: FormEvent) {
     e.preventDefault();
     setSaving(true); setError(null); setNote(null);
     try {
-      const r = await api.put<Customization & { adjusted: { from: string; to: string } | null }>('/api/company/settings', { primaryColor: primary, accentColor: accent });
+      type Adj = { from: string; to: string };
+      const r = await api.put<Customization & { adjusted: { primaryColor?: Adj; accentColor?: Adj } | null }>('/api/company/settings', { primaryColor: primary, accentColor: accent });
       onSaved(r);
-      setNote(r.adjusted
-        ? `Your main color was darkened from ${r.adjusted.from} to ${r.adjusted.to} so white text on it stays readable.`
-        : 'Colors saved.');
+      const changed = [
+        r.adjusted?.primaryColor && `main color from ${r.adjusted.primaryColor.from} to ${r.adjusted.primaryColor.to}`,
+        r.adjusted?.accentColor && `accent color from ${r.adjusted.accentColor.from} to ${r.adjusted.accentColor.to}`,
+      ].filter(Boolean);
+      setNote(changed.length ? `Saved. We darkened your ${changed.join(' and your ')} so text stays readable.` : 'Colors saved.');
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save the colors.');
@@ -275,6 +279,9 @@ function BrandSection({ data, onSaved }: { data: Customization; onSaved: (c: Cus
           {readable?.adjusted && (
             <p className="mt-2 text-sm text-amber-800">White text is hard to read on {primary}, so it will be saved a little darker, as {readable.color}.</p>
           )}
+          {readableAccent?.adjusted && (
+            <p className="mt-2 text-sm text-amber-800">Small text in {accent} is hard to read on white, so it will be saved a little darker, as {readableAccent.color}.</p>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <button type="submit" className={primaryBtn} disabled={saving || !dirty}>{saving ? 'Saving…' : 'Save colors'}</button>
@@ -372,6 +379,9 @@ function MenuSection({ data, onSaved }: { data: Customization; onSaved: (c: Cust
         <p className="text-sm text-gray-500">
           Choose which menu items each user level sees. You can only hide items, never add ones a level is not allowed to open.
           A lock means the item cannot be changed for that level.
+        </p>
+        <p className="mt-1 text-sm text-gray-500">
+          Hiding an item tidies the menu for that level. What each level is allowed to open is set by {PRODUCT_NAME} and does not change here.
         </p>
       </div>
       {/* Phones: one level at a time. Six columns of switches do not fit at 390px. */}

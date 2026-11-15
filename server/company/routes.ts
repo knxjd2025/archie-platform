@@ -75,7 +75,9 @@ export function registerCompanyRoutes(app: Express) {
   app.get('/api/public/company/:companyId/logo', async (req: Request, res: Response) => {
     try {
       const logo = await readLogo(String(req.params.companyId));
-      if (!logo) return res.status(404).type('text/plain').send('Not found');
+      // A short cache on a miss too, so repeated requests for a company
+      // with no logo do not each reach the database.
+      if (!logo) return res.status(404).set('Cache-Control', 'public, max-age=60, s-maxage=60').type('text/plain').send('Not found');
       const current = req.query.v === logo.sha256.slice(0, 16);
       res.set({
         'Content-Type': logo.contentType,
@@ -83,8 +85,10 @@ export function registerCompanyRoutes(app: Express) {
         'Content-Security-Policy': "default-src 'none'",
         'Cross-Origin-Resource-Policy': 'cross-origin',
         'Content-Disposition': 'inline',
-        // The address changes with the image, so a matching one never goes stale.
-        'Cache-Control': current ? 'public, max-age=31536000, immutable' : 'public, max-age=300',
+        // The address changes with the image, so a matching one never goes
+        // stale; s-maxage lets the CDN (Vercel's edge) answer it too. Any
+        // other `v` gets the current logo for a short while.
+        'Cache-Control': current ? 'public, max-age=31536000, s-maxage=31536000, immutable' : 'public, max-age=300, s-maxage=300',
         ETag: `"${logo.sha256.slice(0, 32)}"`,
       });
       if (req.headers['if-none-match'] === `"${logo.sha256.slice(0, 32)}"`) return res.status(304).end();

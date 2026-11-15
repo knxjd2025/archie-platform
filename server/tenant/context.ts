@@ -56,14 +56,16 @@ export function requireCompanyId(): string {
  * `db.select()...` from fn and awaiting it outside would run the query with no
  * company. Awaiting it here runs it as the company.
  */
-export function runAsCompany<T>(companyId: string, fn: () => T | PromiseLike<T>): Promise<T> {
+export function runAsCompany<T>(companyId: string, fn: () => T | PromiseLike<T>, opts: { loadProfile?: boolean } = {}): Promise<T> {
   if (!UUID_RE.test(companyId)) return Promise.reject(new Error(`runAsCompany: not a company id: ${String(companyId)}`));
   const ctx: TenantContext = { companyId, system: false };
   return storage.run(ctx, async () => {
     // The company's profile, so documents rendered in here know whose they
     // are (currentProfile). Loaded once and cached per company; a failure to
     // load is not a failure of the work, which may never render anything.
-    if (profileLoader) {
+    // `loadProfile: false` skips it for work that renders nothing (the public
+    // logo route), saving a query per request; currentProfile() then throws.
+    if (profileLoader && opts.loadProfile !== false) {
       try { ctx.profile = (await profileLoader(companyId)) ?? undefined; }
       catch (err) { console.warn(`[tenant] could not load the profile for ${companyId}:`, err instanceof Error ? err.message : err); }
     }

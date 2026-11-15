@@ -158,9 +158,11 @@ export interface CompanyProfile {
   awards: CompanyImage[];
   colors: CompanyColors;
   /**
-   * The main and accent colors exactly as the company chose them on the
-   * Company page, or '' when it has not. The app's chrome uses Archie's own
-   * colors until one is chosen; `colors` above always has a value.
+   * The colors for the app's chrome (top bar, ink surfaces), or '' when the
+   * company has none. `brandPrimary` is the stored main color made readable
+   * under white text (shared/contrast.ts), whatever wrote it: the key is older
+   * than the Company page and reports may have stored a light color in it.
+   * Reports keep the stored value through `colors`. `colors` always has a value.
    */
   brandPrimary: string;
   brandAccent: string;
@@ -181,6 +183,8 @@ export interface CompanyProfile {
   serviceArea: string;
   timeZone: string;
 }
+
+import { readableWithWhite } from './contrast';
 
 const DEFAULT_PRIMARY = '#1F3A5F';
 
@@ -269,7 +273,7 @@ export function resolveCompanyProfile(company: {
       warning: '#D97706',
       danger: '#DC2626',
     },
-    brandPrimary: HEX_RE.test(clean(b.primaryColor)) ? clean(b.primaryColor) : '',
+    brandPrimary: HEX_RE.test(clean(b.primaryColor)) ? readableWithWhite(clean(b.primaryColor)).color : '',
     brandAccent: HEX_RE.test(clean(b.accentColor)) ? clean(b.accentColor) : '',
     credentials: cleanList(s.credentials),
     trustStats: cleanList(s.trustStats),

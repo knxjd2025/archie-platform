@@ -11,6 +11,8 @@
  * import cycle, and so they can be tested on their own.
  */
 
+import { isHexColor, readableWithWhite } from '../../../shared/contrast';
+
 /** Archie's own default primary, used when there is no company yet. */
 export const ARCHIE_PRIMARY = '#1F3A5F';
 /** Archie's own default accent (thin rules, small labels). */
@@ -90,8 +92,11 @@ function shade(hex: string, amount: number): string {
  * the same steps Archie's own navy takes. No color: Archie's exact values.
  */
 export function inkShades(main?: string | null): { DEFAULT: string; dark: string; deep: string } {
-  if (!hexToRgb(main)) return { ...ARCHIE_INK };
-  const m = `#${hexToRgb(main)!.map((c) => c.toString(16).padStart(2, '0')).join('')}`.toUpperCase();
+  // Only a real #RRGGBB counts; anything else is "no color".
+  if (!isHexColor(main)) return { ...ARCHIE_INK };
+  // White text sits on ink, so the color is made readable here too: a cached
+  // profile from before the server did this must not paint an unreadable bar.
+  const m = readableWithWhite(main).color;
   return { DEFAULT: m, dark: shade(m, 0.3).toUpperCase(), deep: shade(m, 0.52).toUpperCase() };
 }
 

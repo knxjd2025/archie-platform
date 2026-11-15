@@ -41,6 +41,9 @@ export function contrastRatio(a: string, b: string): number {
 /** The contrast normal-size text needs (WCAG AA). */
 export const MIN_TEXT_CONTRAST = 4.5;
 
+/** The accent: thin strips and small labels on white must reach at least this. */
+export const MIN_ACCENT_CONTRAST = 3;
+
 /**
  * The color itself when white text reads on it at `min`:1 or better;
  * otherwise the same hue darkened in small steps until it does. Black always

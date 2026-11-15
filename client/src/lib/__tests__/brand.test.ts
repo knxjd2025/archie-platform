@@ -77,6 +77,17 @@ describe('ink (the app chrome)', () => {
     const v = brandThemeVars({ primary: '#14532D', ink: '#14532D' });
     expect(v['--ink']).toBe('20 83 45');
   });
+
+  it('never puts white text on a light ink, even from an older cached profile', async () => {
+    const { contrastRatio } = await import('../../../../shared/contrast');
+    const ink = inkShades('#FFD200');
+    expect(ink.DEFAULT).not.toBe('#FFD200');
+    expect(contrastRatio(ink.DEFAULT, '#FFFFFF')).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('treats anything but #RRGGBB as no color', () => {
+    for (const bad of ['yellow', '#FFF', '14532D', '#14532', 'rgb(0,0,0)', null]) expect(inkShades(bad)).toEqual(ARCHIE_INK);
+  });
 });
 
 describe('letterhead', () => {
