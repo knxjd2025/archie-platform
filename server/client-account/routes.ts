@@ -14,6 +14,7 @@ import { logWrite } from '../writes/log';
 import { sendFailure } from '../lib/failure';
 import { parseAddress } from '../sync/leads-sync';
 import { ACCOUNT_JOB_FIELDS, jobFieldWrites, parseAccountEdit, type AccountEdit } from '../../shared/client-account';
+import { jobTreadWriteFailStatus } from '../integrations/jobtread-connection';
 
 /** The local lead columns an account edit changes. */
 export function leadMirror(edit: AccountEdit): Partial<typeof leads.$inferInsert> {
@@ -64,7 +65,7 @@ export function registerClientAccountRoutes(app: Express) {
         actor, system: 'jobtread', action: 'update_account', targetId: externalId,
         summary: JSON.stringify(edit).slice(0, 500), ok: result.ok, error: result.error || null,
       });
-      if (!result.ok) return res.status(502).json({ error: result.error || 'JobTread update failed' });
+      if (!result.ok) return res.status(jobTreadWriteFailStatus(result.error)).json({ error: result.error || 'JobTread update failed' });
 
       const set = leadMirror(edit);
       if (Object.keys(set).length) await db.update(leads).set(set).where(eq(leads.externalId, externalId));

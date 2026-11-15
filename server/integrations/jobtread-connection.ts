@@ -66,3 +66,33 @@ export async function verifyJobTreadCredentials(
   if (orgs.length > 1) return { ok: false, error: 'That grant key opens more than one organization. Enter the Organization ID to pick one.' };
   return { ok: true, organizationId: orgs[0].id, name: String(orgs[0].name ?? '') };
 }
+
+export const JOBTREAD_WRITE_BACK_UNAVAILABLE =
+  'Sending changes to JobTread is not available for your account yet. Reading jobs, contacts and invoices works.';
+
+/** A write-back that needs one organization's custom field ids, refused for any other organization. */
+export class JobTreadWriteBackUnavailableError extends Error {
+  readonly status = 409;
+  constructor() {
+    super(JOBTREAD_WRITE_BACK_UNAVAILABLE);
+    this.name = 'JobTreadWriteBackUnavailableError';
+  }
+}
+
+/**
+ * Throw unless this company may send changes to JobTread. The stage, sales
+ * rep and contact writes use custom field ids (and stage names) that exist
+ * only in the env account's JobTread organization (jobtread.ts JT_*). A
+ * company on its own key has different ids: its writes fail half way and
+ * createLead leaves orphan accounts behind. So only the company using the
+ * env credentials may write until those ids are looked up per organization.
+ * Throws EnvCredentialsUnavailableError when JobTread is not connected at all.
+ * Runs before any request leaves the server.
+ */
+export async function assertJobTreadWriteBack(): Promise<void> {
+  const { source } = await resolveJobTreadCredentials();
+  if (source !== 'shared') throw new JobTreadWriteBackUnavailableError();
+}
+
+/** The HTTP status for a failed JobTread write: 409 for "not available", else 502. */
+export const jobTreadWriteFailStatus = (error?: string | null): number => (error === JOBTREAD_WRITE_BACK_UNAVAILABLE ? 409 : 502);

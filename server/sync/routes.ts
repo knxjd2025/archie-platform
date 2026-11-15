@@ -37,7 +37,7 @@ export function registerSyncRoutes(app: Express) {
       const { syncSalesRepsFromJobTread } = await import('./jobtread-reps');
       res.json(await syncSalesRepsFromJobTread());
     } catch (e: any) {
-      return sendFailure(res, e, 'POST /api/sync/jobtread-reps', 502, 'JobTread sales-rep sync failed');
+      return sendFailure(res, e, 'POST /api/sync/jobtread-reps', e?.status === 409 ? 409 : 502, 'JobTread sales-rep sync failed');
     }
   });
 

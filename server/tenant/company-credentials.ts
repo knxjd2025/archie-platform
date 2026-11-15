@@ -37,7 +37,18 @@ export async function loadCompanyCredentials<T>(provider: string): Promise<Saved
   if (hit && Date.now() - hit.at < TTL_MS) return hit.value as SavedCredentials<T> | null;
   const [row] = await db.select().from(companyIntegrations)
     .where(and(eq(companyIntegrations.companyId, companyId), eq(companyIntegrations.provider, provider)));
-  const value = row ? { creds: openSecret<T>(row.credentials), meta: (row.meta ?? {}) as Record<string, unknown> } : null;
+  let value: SavedCredentials<T> | null = null;
+  if (row) {
+    try {
+      value = { creds: openSecret<T>(row.credentials), meta: (row.meta ?? {}) as Record<string, unknown> };
+    } catch (e) {
+      // A row sealed under another ARCHIE_SECRETS_KEY (rotated, wrong or
+      // missing) reads as not connected, so the admin sees "Not connected"
+      // and can reconnect or disconnect, instead of every call failing with
+      // a 500. The sealed value is never logged.
+      console.warn(`[credentials] the saved ${provider} credentials for company ${companyId} cannot be read (${e instanceof Error ? e.message : 'unknown error'}); treating as not connected.`);
+    }
+  }
   cache.set(key, { value, at: Date.now() });
   return value;
 }

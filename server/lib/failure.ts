@@ -63,7 +63,7 @@ export function safeMessage(error: unknown): string | null {
 }
 
 /** Errors that mean an integration is not connected for the current company. */
-const NOT_CONNECTED = new Set(['EnvCredentialsUnavailableError', 'GhlNotConnectedError', 'GoogleWorkspaceUnavailableError']);
+const NOT_CONNECTED = new Set(['EnvCredentialsUnavailableError', 'GhlNotConnectedError', 'GoogleWorkspaceUnavailableError', 'JobTreadWriteBackUnavailableError']);
 
 /**
  * Answer a failed request. `what` names the route for the log, so a log line

@@ -28,6 +28,7 @@ import { logWrite } from '../writes/log';
 import { googleMapsKey } from '../lib/reports/google-key.js';
 import { sendFailure } from '../lib/failure';
 import { etToday } from '../../shared/schedule-board';
+import { jobTreadWriteFailStatus } from '../integrations/jobtread-connection';
 
 /** Plain `fetch()` has no timeout — a hung Google response would otherwise block the request indefinitely. */
 async function fetchWithTimeout(url: string, ms = 15000): Promise<globalThis.Response> {
@@ -556,7 +557,7 @@ export function registerCanvassRoutes(app: Express) {
         summary: `Canvass door → lead: ${row.address}`, ok: jt.ok, error: jt.error || null,
       });
 
-      if (!jt.ok) return res.status(502).json({ error: jt.error || 'Could not create the lead.' });
+      if (!jt.ok) return res.status(jobTreadWriteFailStatus(jt.error)).json({ error: jt.error || 'Could not create the lead.' });
       res.json({ ok: true, externalId: jt.jobId });
     } catch (error: any) {
       return sendFailure(res, error, 'POST /api/canvass/:id/convert');

@@ -16,7 +16,7 @@
 
 import { fetchWithTimeout } from '../lib/fetch-timeout';
 import { currentCompanyId } from '../tenant/context';
-import { JOBTREAD_API_URL, resolveJobTreadCredentials } from './jobtread-connection';
+import { assertJobTreadWriteBack, JOBTREAD_API_URL, resolveJobTreadCredentials } from './jobtread-connection';
 
 /** A file PUT to JobTread's upload URL; photos from a phone are slow. */
 const UPLOAD_TIMEOUT_MS = 60_000;
@@ -1031,6 +1031,7 @@ export class JobTreadClient {
   async setJobStage(jobId: string, stage: string): Promise<{ ok: boolean; stage?: string; error?: string }> {
     if (!isValidJobStatus(stage)) return { ok: false, error: `Invalid stage "${stage}"` };
     try {
+      await assertJobTreadWriteBack();
       const data = await this.pave<any>({
         updateJob: {
           $: { id: jobId, customFieldValues: { [JT_STATUS_FIELD]: stage } },
@@ -1056,6 +1057,7 @@ export class JobTreadClient {
    * JobTread already has.
    */
   async getSalesRepOptions(): Promise<string[]> {
+    await assertJobTreadWriteBack();
     const r = await this.pave<any>({ customField: { $: { id: JT_SALES_REP_FIELD }, id: {}, name: {}, options: {} } });
     const opts = r?.customField?.options;
     return Array.isArray(opts) ? opts.map((o: unknown) => String(o).trim()).filter(Boolean) : [];
@@ -1064,6 +1066,7 @@ export class JobTreadClient {
   /** Push a Sales Rep assignment back to JobTread's "Sales Rep" custom field. */
   async setJobSalesRep(jobId: string, repName: string): Promise<{ ok: boolean; error?: string }> {
     try {
+      await assertJobTreadWriteBack();
       await this.pave<any>({
         updateJob: { $: { id: jobId, customFieldValues: { [JT_SALES_REP_FIELD]: repName } }, job: { $: { id: jobId }, id: {} } },
       });
@@ -1108,6 +1111,7 @@ export class JobTreadClient {
     edit: { customer?: string; jobName?: string; address?: string; customFields?: Record<string, string | boolean | null> },
   ): Promise<{ ok: boolean; error?: string }> {
     try {
+      await assertJobTreadWriteBack();
       const cfv: Record<string, string | boolean | null> = {};
       const wanted = Object.entries(edit.customFields || {});
       if (wanted.length) {
@@ -1181,6 +1185,7 @@ export class JobTreadClient {
     if (fields.phone !== undefined) cfv[JT_CONTACT_MOBILE_FIELD] = fields.phone;
     if (Object.keys(cfv).length === 0) return { ok: false, error: 'Nothing to update' };
     try {
+      await assertJobTreadWriteBack();
       // Resolve the primary contact id for this job.
       const r = await this.pave<any>({
         job: { $: { id: jobId }, location: { account: { primaryContact: { id: {} } } } },
@@ -1210,6 +1215,7 @@ export class JobTreadClient {
   }): Promise<{ ok: boolean; jobId?: string; accountId?: string; error?: string }> {
     const displayName = (lead.name || `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || 'New Lead').slice(0, 128);
     try {
+      await assertJobTreadWriteBack();
       const org = await this.getOrganizationId();
 
       const a = await this.pave<any>({

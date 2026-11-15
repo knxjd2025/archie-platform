@@ -19,6 +19,7 @@ import { canBookOn } from '../calendar/board';
 import { applyAssignment } from '../access/assignment-service';
 import { sendFailure } from '../lib/failure';
 import { dataScope } from '../../shared/rbac';
+import { jobTreadWriteFailStatus } from '../integrations/jobtread-connection';
 
 
 export interface AppointmentSlot { date: string; time: string; durationMins: number; type: string; notes: string }
@@ -119,7 +120,7 @@ export function registerWriteRoutes(app: Express) {
       summary: `${before?.stage || '?'} → ${stage}`, ok: result.ok, error: result.error || null,
     });
 
-    if (!result.ok) return res.status(502).json({ error: result.error || 'JobTread write failed' });
+    if (!result.ok) return res.status(jobTreadWriteFailStatus(result.error)).json({ error: result.error || 'JobTread write failed' });
 
     // Optimistic local update so the board reflects immediately (sync reconciles).
     await db.update(leads).set({ stage }).where(eq(leads.externalId, externalId));
@@ -220,7 +221,7 @@ export function registerWriteRoutes(app: Express) {
       ok: result.ok, error: result.error || null,
     });
 
-    if (!result.ok) return res.status(502).json({ error: result.error || 'JobTread contact update failed' });
+    if (!result.ok) return res.status(jobTreadWriteFailStatus(result.error)).json({ error: result.error || 'JobTread contact update failed' });
 
     // Mirror locally so the app reflects immediately (sync reconciles).
     const patch: Record<string, string> = {};

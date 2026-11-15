@@ -29,6 +29,8 @@ describe.skipIf(!local)('integration connections (Current CRM, CompanyCam)', asy
   const { registerConnectionRoutes } = await import('../connection-routes');
   const { JobTreadClient } = await import('../jobtread');
   const { CompanyCamClient } = await import('../companycam');
+  const { JOBTREAD_WRITE_BACK_UNAVAILABLE, JobTreadWriteBackUnavailableError } = await import('../jobtread-connection');
+  const { __resetRateLimits } = await import('../../lib/rate-limit');
 
   const tag = `conn-${process.pid}-${Date.now()}`;
   const adminA = `${tag}-admin-a@example.test`;
@@ -99,6 +101,7 @@ describe.skipIf(!local)('integration connections (Current CRM, CompanyCam)', asy
   });
 
   beforeEach(() => {
+    __resetRateLimits();
     providerCalls.length = 0;
     clearCompanyCredentialsCache();
     delete process.env.ARCHIE_ENV_CREDENTIALS_COMPANY_ID;
@@ -172,6 +175,45 @@ describe.skipIf(!local)('integration connections (Current CRM, CompanyCam)', asy
     expect(providerCalls.map((c) => c.auth)).toEqual([`Bearer ${GOOD_JT_KEY}`]);
   });
 
+  // The write-backs use custom field ids from the env account's organization.
+  const writeBacks = (jt: InstanceType<typeof JobTreadClient>) => ({
+    createLead: () => jt.createLead({ firstName: 'Pat', lastName: 'Lee', address: '1 Main St' }),
+    setJobStage: () => jt.setJobStage('job-1', 'New Lead'),
+    setJobSalesRep: () => jt.setJobSalesRep('job-1', 'Rep Name'),
+    updateJobAccount: () => jt.updateJobAccount('job-1', { jobName: 'New name' }),
+    updateJobContact: () => jt.updateJobContact('job-1', { email: 'x@example.test' }),
+  });
+
+  it('refuses JobTread write-backs for a company on its own key, before anything is sent', async () => {
+    await runAsCompany(a, async () => {
+      const jt = new JobTreadClient();
+      for (const [name, run] of Object.entries(writeBacks(jt))) {
+        expect(await run(), name).toEqual({ ok: false, error: JOBTREAD_WRITE_BACK_UNAVAILABLE });
+      }
+      await expect(jt.getSalesRepOptions()).rejects.toBeInstanceOf(JobTreadWriteBackUnavailableError);
+      // Reads still work.
+      expect(await jt.getOrganizationId()).toBe('org-a');
+    });
+    expect(providerCalls).toHaveLength(0);
+  });
+
+  it('still sends write-backs for the company that owns the env credentials', async () => {
+    process.env.ARCHIE_ENV_CREDENTIALS_COMPANY_ID = b;
+    process.env.JOBTREAD_API_KEY = GOOD_JT_KEY;
+    await runAsCompany(b, async () => {
+      const jt = new JobTreadClient();
+      for (const [name, run] of Object.entries(writeBacks(jt))) {
+        const before = providerCalls.length;
+        const r = await run();
+        expect(r.error, name).not.toBe(JOBTREAD_WRITE_BACK_UNAVAILABLE);
+        expect(providerCalls.length, name).toBeGreaterThan(before);
+      }
+      const before = providerCalls.length;
+      await jt.getSalesRepOptions();
+      expect(providerCalls.length).toBeGreaterThan(before);
+    });
+  });
+
   it('leaves company B not connected, and refuses B\'s calls instead of using A\'s key', async () => {
     as(adminB, b);
     expect(await (await call('GET', '/api/integrations/crm/connection')).json()).toEqual({ connected: false, source: null });
@@ -208,6 +250,40 @@ describe.skipIf(!local)('integration connections (Current CRM, CompanyCam)', asy
     const { syncJobtread } = await import('../../sync/jobtread-sync');
     await expect(runAsCompany(b, () => syncJobtread())).rejects.toBeInstanceOf(EnvCredentialsUnavailableError);
     expect(providerCalls).toHaveLength(0);
+  });
+
+  it('the leads sync refuses a company that does not own the env key', async () => {
+    process.env.ARCHIE_ENV_CREDENTIALS_COMPANY_ID = a;
+    process.env.JOBTREAD_API_KEY = 'env-key-owned-by-a';
+    const { syncLeads } = await import('../../sync/leads-sync');
+    await expect(runAsCompany(b, () => syncLeads())).rejects.toBeInstanceOf(EnvCredentialsUnavailableError);
+    expect(providerCalls).toHaveLength(0);
+  });
+
+  it('caps input length and rate-limits saves', async () => {
+    as(adminB, b);
+    const long = await call('PUT', '/api/integrations/crm/connection', { grantKey: 'k'.repeat(513) });
+    expect(long.status).toBe(400);
+    expect((await call('PUT', '/api/integrations/crm/connection', { grantKey: 'k', organizationId: 'bad id; drop' })).status).toBe(400);
+    expect((await call('PUT', '/api/integrations/companycam/connection', { token: 't'.repeat(513) })).status).toBe(400);
+    expect(providerCalls).toHaveLength(0);
+    // Three saves so far; seven more are allowed, the eleventh is refused.
+    for (let i = 0; i < 7; i++) expect((await call('PUT', '/api/integrations/companycam/connection', { token: 'wrong' })).status).toBe(400);
+    const limited = await call('PUT', '/api/integrations/crm/connection', { grantKey: 'wrong' });
+    expect(limited.status).toBe(429);
+  });
+
+  it('reads a row it cannot decrypt as not connected, and can still disconnect it', async () => {
+    await runAsCompany(b, () => db.insert(schema.companyIntegrations).values({ provider: 'companycam', credentials: 'v1:AAAA:BBBB:CCCC', meta: {} }));
+    as(adminB, b);
+    const get = await call('GET', '/api/integrations/companycam/connection');
+    expect(get.status).toBe(200);
+    expect(await get.json()).toEqual({ connected: false, source: null });
+    const del = await call('DELETE', '/api/integrations/companycam/connection');
+    expect(del.status).toBe(200);
+    const rows = await runAsSystem('test check', () => db.select().from(schema.companyIntegrations)
+      .where(and(eq(schema.companyIntegrations.companyId, b), eq(schema.companyIntegrations.provider, 'companycam'))));
+    expect(rows).toHaveLength(0);
   });
 
   it('disconnects: DELETE removes only the company\'s saved credentials', async () => {
