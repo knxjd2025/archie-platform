@@ -69,7 +69,7 @@ export function decideSync(
   liveStatus?: string | null,
 ): SyncVerdict {
   if (!state.documentId) {
-    return { action: 'create', reason: 'No proposal in JobTread for this report yet.' };
+    return { action: 'create', reason: 'No proposal in your CRM for this report yet.' };
   }
   const status = (liveStatus ?? state.docStatus ?? '').toLowerCase();
 
@@ -89,13 +89,13 @@ export function decideSync(
   // unreadable. Creating a fresh one is the safe answer — never silently
   // rewrite something whose state we could not confirm.
   if (!status) {
-    return { action: 'create', reason: 'The previous proposal could not be found in JobTread — a new one will be created.' };
+    return { action: 'create', reason: 'The previous proposal could not be found in your CRM, a new one will be created.' };
   }
 
   if (state.pushedHash && state.pushedHash === currentHash) {
-    return { action: 'up_to_date', documentId: state.documentId, reason: 'JobTread already matches this report.' };
+    return { action: 'up_to_date', documentId: state.documentId, reason: 'Your CRM already matches this report.' };
   }
-  return { action: 'update', documentId: state.documentId, reason: 'The proposal in JobTread is still a draft and will be updated to match.' };
+  return { action: 'update', documentId: state.documentId, reason: 'The proposal in your CRM is still a draft and will be updated to match.' };
 }
 
 /**
@@ -134,7 +134,7 @@ export function staleFlag(state: SyncState, currentHash: string): StaleFlag {
       : !stale
         ? null
         : locked
-          ? 'This report changed after the proposal was sent. JobTread still has the old numbers — send a new version if the customer should see these.'
-          : 'This report changed after it was pushed. The JobTread proposal is out of date.',
+          ? 'This report changed after the proposal was sent. Your CRM still has the old numbers, send a new version if the customer should see these.'
+          : 'This report changed after it was pushed. The proposal in your CRM is out of date.',
   };
 }

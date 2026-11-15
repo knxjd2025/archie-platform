@@ -10,6 +10,7 @@ import { sendUpstreamFailure } from '../lib/upstream';
 import { mintPasswordLink, passwordLinkUrl } from './password-links';
 import { passwordMailConfigured, sendPasswordLinkEmail } from './password-mail';
 import { getCurrentCompany } from '../tenant/companies';
+import { CRM_LABEL } from '../../shared/product-names';
 
 /** Postgres unique_violation. team_members.email is NOT NULL UNIQUE. */
 const DUPLICATE_KEY = '23505';
@@ -68,7 +69,7 @@ export function registerTeamRoutes(app: Express) {
     try {
       res.json(await syncSalesRepsFromJobTread({ dryRun: true }));
     } catch (e) {
-      return sendUpstreamFailure(res, e, 'JobTread', 'GET /api/team/jobtread-reps');
+      return sendUpstreamFailure(res, e, CRM_LABEL, 'GET /api/team/jobtread-reps');
     }
   });
 

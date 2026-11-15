@@ -25,7 +25,7 @@ export type GhlCredentials =
 export interface GhlConnection { locationId: string; token: string }
 
 export class GhlNotConnectedError extends Error {
-  constructor(detail = 'This company has not connected its GHL sub-account yet.') {
+  constructor(detail = 'This company has not connected its KynexPro sub-account yet.') {
     super(detail);
     this.name = 'GhlNotConnectedError';
   }
@@ -67,7 +67,7 @@ const cache = new Map<string, { conn: GhlConnection; at: number }>();
 /** The current company's GHL connection. Throws GhlNotConnectedError when it has none. */
 export async function ghlConnection(): Promise<GhlConnection> {
   const companyId = currentCompanyId();
-  if (!companyId) throw new GhlNotConnectedError('GHL was called with no company in context.');
+  if (!companyId) throw new GhlNotConnectedError('KynexPro was called with no company in context.');
   const hit = cache.get(companyId);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.conn;
 
@@ -80,7 +80,7 @@ export async function ghlConnection(): Promise<GhlConnection> {
   let token: string;
   if (creds.kind === 'pit') token = creds.token;
   else {
-    if (creds.expiresAt <= Date.now() + 60_000) throw new GhlNotConnectedError('The GHL connection has expired; reconnect the Archie app in GHL.');
+    if (creds.expiresAt <= Date.now() + 60_000) throw new GhlNotConnectedError('The KynexPro connection has expired; reconnect the Archie app in KynexPro.');
     token = creds.accessToken;
   }
   if (!token) throw new GhlNotConnectedError();

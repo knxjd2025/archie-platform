@@ -23,9 +23,9 @@ async function pave<T>(query: Record<string, any>): Promise<T> {
       body: JSON.stringify({ query }),
       signal: controller.signal,
     });
-    if (!res.ok) throw new Error(`JobTread ${res.status}: ${await res.text()}`);
+    if (!res.ok) throw new Error(`Current CRM ${res.status}: ${await res.text()}`);
     const json: any = await res.json();
-    if (json.errors?.length) throw new Error(`JobTread Pave: ${json.errors.map((e: any) => e.message).join(', ')}`);
+    if (json.errors?.length) throw new Error(`Current CRM Pave: ${json.errors.map((e: any) => e.message).join(', ')}`);
     return json;
   } finally {
     clearTimeout(timer);
@@ -37,7 +37,7 @@ async function orgId(): Promise<string> {
   if (saved) return saved;
   const r = await pave<any>({ organizations: { nodes: { id: {} } } });
   const id = r?.organizations?.nodes?.[0]?.id;
-  if (!id) throw new Error('JobTread: could not resolve organization id');
+  if (!id) throw new Error('Could not resolve your CRM organization id');
   return id;
 }
 
@@ -179,7 +179,7 @@ export function mapJobToLead(job: JtJob) {
   const status = STATUS_MAP[(job.status || '').toLowerCase()] || 'new';
   const note = [
     job.name || null,
-    job.status ? `JobTread status: ${job.status}` : null,
+    job.status ? `Current CRM status: ${job.status}` : null,
     job.projectedPriceWithTax ? `Projected: $${Number(job.projectedPriceWithTax).toLocaleString()}` : null,
   ]
     .filter(Boolean)

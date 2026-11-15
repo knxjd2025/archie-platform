@@ -220,10 +220,10 @@ async function deliver(
     } else {
       const r: { success: boolean; error?: string } = await new GoHighLevelClient()
         .sendSms(to, smsBody(req.title, link, opts.reminder))
-        .catch((e: any) => ({ success: false, error: str(e?.message || 'GoHighLevel is not responding', 300) }));
+        .catch((e: any) => ({ success: false, error: str(e?.message || 'KynexPro is not responding', 300) }));
       if (r.success) { patch.textedAt = new Date(); patch.textError = null; }
       else {
-        const raw = str(r.error || 'GoHighLevel refused the message', 300);
+        const raw = str(r.error || 'KynexPro refused the message', 300);
         console.error('[signatures] text to', signer.phone, 'failed:', raw);
         rawErrors.push(`text ${signer.phone}: ${raw}`);
         patch.textError = `The text to ${signer.phone} didn't go out.`;

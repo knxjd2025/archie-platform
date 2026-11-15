@@ -97,7 +97,7 @@ export default function Leads({ onOpenClient, initialStatus, initialNew, initial
   const startEdit = (l: Lead) => { setEditingId(l.id); setEditPhone(l.phone || ''); setEditEmail(l.email || ''); };
 
   const saveEdit = async (l: Lead) => {
-    if (!l.externalId) { flash('This lead has no JobTread job to update.'); return; }
+    if (!l.externalId) { flash('This lead has no CRM job to update.'); return; }
     setBusy(true);
     try {
       await api.patch(`/api/leads/${l.externalId}/contact`, { phone: editPhone.trim(), email: editEmail.trim() });
@@ -396,13 +396,13 @@ export default function Leads({ onOpenClient, initialStatus, initialNew, initial
           {created && (
             <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
               <div className="font-medium">✅ {created.name} added</div>
-              <div className="text-xs text-emerald-800 mt-1">JobTread: {created.jobtread} · GoHighLevel: {created.ghl}{created.appointment ? ` · Appointment: ${created.appointment.ok ? `booked on ${created.appointment.bookedOn}` : `failed (${created.appointment.error || 'calendar'})`}` : ''}</div>
+              <div className="text-xs text-emerald-800 mt-1">Current CRM: {created.jobtread} · KynexPro: {created.ghl}{created.appointment ? ` · Appointment: ${created.appointment.ok ? `booked on ${created.appointment.bookedOn}` : `failed (${created.appointment.error || 'calendar'})`}` : ''}</div>
               {created.jobId && onOpenClient && (
                 <button onClick={() => onOpenClient(created.jobId!)} className="mt-2 text-xs px-3 py-1.5 rounded-lg bg-white border border-emerald-300 text-emerald-800 font-medium">Open {created.name} → call / text / inspection</button>
               )}
             </div>
           )}
-          <p className="text-xs text-gray-400 mt-2">Creates a JobTread job (Status “New Lead”) + a GoHighLevel contact + a lead here — all in sync. The lead is yours: it shows under your name.</p>
+          <p className="text-xs text-gray-400 mt-2">Creates a job in your CRM (Status “New Lead”) + a KynexPro contact + a lead here, all in sync. The lead is yours: it shows under your name.</p>
         </div>
       )}
 
@@ -428,7 +428,7 @@ export default function Leads({ onOpenClient, initialStatus, initialNew, initial
                     {q.trim() ? (
                       <>No leads match "{q}".</>
                     ) : (
-                      <>📭 No leads yet. New leads from GoHighLevel and JobTread show up here automatically.</>
+                      <>📭 No leads yet. New leads from KynexPro and your CRM show up here automatically.</>
                     )}
                   </td>
                 </tr>

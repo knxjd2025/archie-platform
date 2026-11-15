@@ -19,7 +19,7 @@ export type LetterKind = 'leave_behind' | 'email' | 'mailer';
 
 export const LETTER_KINDS: Array<{ kind: LetterKind; label: string; use: string }> = [
   { kind: 'leave_behind', label: 'Door-knock leave-behind', use: 'Leave at neighbor doors while the roof is going on.' },
-  { kind: 'email', label: 'Neighbor email', use: 'Send from GHL so the unsubscribe link works. Shorter — people skim email.' },
+  { kind: 'email', label: 'Neighbor email', use: 'Send from KynexPro so the unsubscribe link works. Shorter, people skim email.' },
   { kind: 'mailer', label: 'Mailed letter', use: 'Mail within 1–2 weeks of the install, including homes you could not reach.' },
 ];
 

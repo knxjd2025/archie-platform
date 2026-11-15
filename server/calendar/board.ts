@@ -104,7 +104,7 @@ export function fromGhlEvent(ev: any, person: string): BoardEvent | null {
   const start = new Date(ev.startTime); const end = ev.endTime ? new Date(ev.endTime) : new Date(start.getTime() + 3600e3);
   if (isNaN(start.getTime())) return null;
   return {
-    id: `ghl:${ev.id}`, person, source: 'ghl', title: ev.title || 'GHL appointment',
+    id: `ghl:${ev.id}`, person, source: 'ghl', title: ev.title || 'KynexPro appointment',
     start: start.toISOString(), end: end.toISOString(), allDay: false,
     address: ev.address || null, kind: classifyKind(ev.title || ''), status: ev.appointmentStatus || null,
   };
@@ -172,7 +172,7 @@ export async function loadBoard(user: SessionUser, from: Date, to: Date, everyon
   ghlResults.forEach((r, i) => {
     const p = people.filter((x) => x.ghl)[i];
     if (r.status === 'fulfilled') events.push(...r.value.evs);
-    else warnings.push({ person: p.email, source: 'ghl', message: 'GoHighLevel appointments unavailable right now.' });
+    else warnings.push({ person: p.email, source: 'ghl', message: 'KynexPro appointments unavailable right now.' });
   });
 
   const merged = mergeDuplicates(events.filter((e) => overlaps(e, from, to)));

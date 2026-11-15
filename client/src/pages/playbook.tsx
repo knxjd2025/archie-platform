@@ -152,7 +152,7 @@ function DocView({ doc, ctx, ctxCurrent, onBack, onPickCustomer, flash, onOpenDo
     try {
       const html = renderPlaybookDocument(doc, { mode: 'email', text, ctx });
       await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([email ? email.body : text], { type: 'text/plain' }) })]);
-      flash('Copied as formatted email — paste into GHL or Gmail'); used('copied_html');
+      flash('Copied as formatted email, paste into KynexPro or Gmail'); used('copied_html');
     } catch { await copy(); }
   };
   const print = () => {
@@ -168,10 +168,10 @@ function DocView({ doc, ctx, ctxCurrent, onBack, onPickCustomer, flash, onOpenDo
     setSending(true);
     try {
       const m = await api.get<{ contactId: string | null }>(`/api/clients/${ctx.customerExternalId}/messages`);
-      if (!m.contactId) { flash('This customer is not in GoHighLevel yet, so there is no email thread to send from. Copy it instead.'); return; }
+      if (!m.contactId) { flash('This customer is not in KynexPro yet, so there is no email thread to send from. Copy it instead.'); return; }
       if (!window.confirm(`Send "${email.subject}" to ${ctx.customerLabel} by email now?`)) return;
       await api.post(`/api/conversations/${m.contactId}/reply`, { channel: 'email', subject: email.subject, message: email.body, html: renderPlaybookDocument(doc, { mode: 'email', text, ctx }) });
-      flash('Sent through GoHighLevel'); used('emailed');
+      flash('Sent through KynexPro'); used('emailed');
     } catch (e: any) { flash(`Couldn't send: ${e?.message || 'failed'}`); }
     finally { setSending(false); }
   };
@@ -242,7 +242,7 @@ function DocView({ doc, ctx, ctxCurrent, onBack, onPickCustomer, flash, onOpenDo
           {/* The app's WebView has no print dialog and a blank window.open page is
               a dead end with no way back, so Print only shows on the website. */}
           {!isNativeApp() && <button className={btn} onClick={print}>{doc.kind === 'letter' ? 'Print on letterhead' : 'Print / Save PDF'}</button>}
-          {doc.kind === 'email' && ctx?.customerExternalId && <button className="text-xs px-3 py-1.5 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark disabled:opacity-50" disabled={sending || !ctxCurrent} title={ctxCurrent ? undefined : 'Loading this customer…'} onClick={sendEmail}>{sending ? 'Sending…' : `Email ${ctx.customerLabel?.split(' ')[0] || 'customer'} via GHL`}</button>}
+          {doc.kind === 'email' && ctx?.customerExternalId && <button className="text-xs px-3 py-1.5 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark disabled:opacity-50" disabled={sending || !ctxCurrent} title={ctxCurrent ? undefined : 'Loading this customer…'} onClick={sendEmail}>{sending ? 'Sending…' : `Email ${ctx.customerLabel?.split(' ')[0] || 'customer'} via KynexPro`}</button>}
           {relatedChecklist && <button className={btn} onClick={() => onOpenDoc(relatedChecklist.id)}>Open the {relatedChecklist.title} →</button>}
         </div>
 

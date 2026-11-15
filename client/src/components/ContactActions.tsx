@@ -79,7 +79,7 @@ export default function ContactActions({ externalId, phone, email, size = 'sm', 
   // Nothing opened: say so, and point at the phone's own dialer, which
   // always works. Before, a blocked window.open did nothing at all and the
   // call was still logged on the contact as if it had happened.
-  const blocked = () => say('Couldn\'t open GoHighLevel here — use "from my phone" to dial.');
+  const blocked = () => say('Couldn\'t open KynexPro here, use "from my phone" to dial.');
   const logCall = (via: string) => {
     // Fire-and-forget: the call is what matters, the note is bookkeeping.
     api.post(`/api/clients/${externalId}/call-log`, { via }).catch(() => {});
@@ -117,7 +117,7 @@ export default function ContactActions({ externalId, phone, email, size = 'sm', 
         blocked();
       }
     } catch {
-      say('GoHighLevel isn\'t reachable right now — use "from my phone".');
+      say('KynexPro isn\'t reachable right now, use "from my phone".');
     } finally {
       setBusy(false);
     }
@@ -133,7 +133,7 @@ export default function ContactActions({ externalId, phone, email, size = 'sm', 
     setSending(true);
     try {
       await api.post(`/api/clients/${externalId}/message`, { channel: composer, message: message.trim(), ...(composer === 'email' ? { subject: subject.trim() } : {}) });
-      say(composer === 'sms' ? '💬 Text sent from the business number' : '✉️ Email sent through GoHighLevel');
+      say(composer === 'sms' ? '💬 Text sent from the business number' : '✉️ Email sent through KynexPro');
       setMessage(''); setSubject(''); setComposer(null);
     } catch (e: any) {
       say(`Couldn't send: ${e?.message || 'failed'}`);
@@ -146,20 +146,20 @@ export default function ContactActions({ externalId, phone, email, size = 'sm', 
     <span className="inline-flex flex-col gap-1.5 max-w-full">
       <span className="inline-flex flex-wrap items-center gap-1.5">
         {phone && (
-          <button type="button" onClick={call} disabled={busy} title="Opens this contact in GoHighLevel — call from the business number"
+          <button type="button" onClick={call} disabled={busy} title="Opens this contact in KynexPro, call from the business number"
             className={`${s.btn} ${s.primary} disabled:opacity-50`}>📞 {busy ? 'Opening…' : 'Call'}</button>
         )}
         {phone && (
-          <button type="button" onClick={() => openComposer('sms')} title="Text from the business number, logged in GoHighLevel"
+          <button type="button" onClick={() => openComposer('sms')} title="Text from the business number, logged in KynexPro"
             className={`${s.btn} ${s.secondary}`}>💬 Text</button>
         )}
         {showEmail && email && (
-          <button type="button" onClick={() => openComposer('email')} title="Email through GoHighLevel, logged on the contact"
+          <button type="button" onClick={() => openComposer('email')} title="Email through KynexPro, logged on the contact"
             className={`${s.btn} ${s.secondary}`}>✉️ Email</button>
         )}
         {phone && (
           <a href={`tel:${phone}`} className={`${s.fallback} text-gray-400 hover:text-gray-600 underline decoration-dotted`}
-            title="Dial from this device's own phone app instead of GoHighLevel"
+            title="Dial from this device's own phone app instead of KynexPro"
             onClick={() => api.post(`/api/clients/${externalId}/call-log`, { via: 'phone' }).catch(() => {})}>from my phone</a>
         )}
       </span>
@@ -170,10 +170,10 @@ export default function ContactActions({ externalId, phone, email, size = 'sm', 
               className="w-full text-xs border border-gray-200 rounded-md px-2 py-1.5" />
           )}
           <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={3} autoFocus
-            placeholder={composer === 'sms' ? 'Text from the business number…' : 'Email through GoHighLevel…'}
+            placeholder={composer === 'sms' ? 'Text from the business number…' : 'Email through KynexPro…'}
             className="w-full text-xs border border-gray-200 rounded-md px-2 py-1.5" />
           <span className="flex items-center justify-between gap-2">
-            <span className="text-[11px] text-gray-400">{composer === 'sms' ? 'Sent from the business number; replies land in GHL and here.' : 'Sent from the business mailbox via GHL.'}</span>
+            <span className="text-[11px] text-gray-400">{composer === 'sms' ? 'Sent from the business number; replies land in KynexPro and here.' : 'Sent from the business mailbox via KynexPro.'}</span>
             <span className="flex gap-1.5">
               <button type="button" onClick={() => setComposer(null)} className="text-xs px-2 py-1 rounded-md bg-gray-100 text-gray-600">Cancel</button>
               <button type="button" onClick={send} disabled={!message.trim() || sending} className="text-xs px-2.5 py-1 rounded-md bg-blue-600 text-white disabled:opacity-50">{sending ? 'Sending…' : 'Send'}</button>

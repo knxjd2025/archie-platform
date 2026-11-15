@@ -36,7 +36,7 @@ export function validateTeamMemberInput(
   if (isBlockedLoginEmail(o.email)) return { ok: false, error: `${o.email.trim().toLowerCase()} is not allowed on the team.` };
   if (typeof o.role !== 'string' || !ROLES.includes(o.role as TeamRole)) return { ok: false, error: `role must be ${ROLE_LIST}` };
   const rep = 'jobtreadSalesRep' in o ? parseRepName(o.jobtreadSalesRep) : { ok: true as const, value: undefined };
-  if (!rep.ok) return { ok: false, error: `jobtreadSalesRep must be a name of at most ${MAX_REP_NAME} characters, or null` };
+  if (!rep.ok) return { ok: false, error: `Current CRM Sales Rep must be a name of at most ${MAX_REP_NAME} characters, or null` };
   const value: TeamMemberInput = {
     name: o.name.trim(),
     email: o.email.trim().toLowerCase(),
@@ -84,7 +84,7 @@ export function validateTeamMemberPatch(
   }
   if ('jobtreadSalesRep' in o) {
     const rep = parseRepName(o.jobtreadSalesRep);
-    if (!rep.ok) return { ok: false, error: `jobtreadSalesRep must be a name of at most ${MAX_REP_NAME} characters, or null` };
+    if (!rep.ok) return { ok: false, error: `Current CRM Sales Rep must be a name of at most ${MAX_REP_NAME} characters, or null` };
     value.jobtreadSalesRep = rep.value;
   }
   if ('reportsTo' in o) {

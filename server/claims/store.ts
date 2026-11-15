@@ -57,10 +57,10 @@ export async function mirrorClaimToJobTread(c: ClaimRow, stage: string, actor: s
   if (before?.stage === target) return { ok: true };
   let result: { ok: boolean; error?: string };
   try { result = await new JobTreadClient().setJobStage(c.jobtreadJobId, target); }
-  catch (e: any) { result = { ok: false, error: e?.message || 'JobTread stage update failed' }; }
+  catch (e: any) { result = { ok: false, error: e?.message || 'Current CRM stage update failed' }; }
   await logWrite({
     actor, system: 'jobtread', action: 'set_stage', targetId: c.jobtreadJobId,
-    summary: `${summary} · JobTread ${before?.stage || '?'} → ${target}`, ok: result.ok, error: result.error || null,
+    summary: `${summary} · Current CRM ${before?.stage || '?'} → ${target}`, ok: result.ok, error: result.error || null,
   }).catch(() => {});
   if (result.ok) await db.update(leads).set({ stage: target }).where(eq(leads.externalId, c.jobtreadJobId));
   return result;

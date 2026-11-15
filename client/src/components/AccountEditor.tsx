@@ -77,7 +77,7 @@ export default function AccountEditor({ externalId, values, onSaved, flash }: Pr
     try {
       await api.patch(`/api/clients/${externalId}/account`, edit);
       onSaved(edit);
-      flash('Account saved to JobTread ✅');
+      flash('Account saved to your CRM ✅');
       setOpen(false);
     } catch (e: any) { flash(`Couldn't save: ${e?.message || 'failed'}`); }
     finally { setSaving(false); }
@@ -133,10 +133,10 @@ export default function AccountEditor({ externalId, values, onSaved, flash }: Pr
         })}
       </div>
       <div className="flex gap-2">
-        <button onClick={save} disabled={saving} className="text-sm px-3 py-1.5 rounded-lg bg-blue-600 text-white font-medium disabled:opacity-50">{saving ? 'Saving…' : 'Save to JobTread'}</button>
+        <button onClick={save} disabled={saving} className="text-sm px-3 py-1.5 rounded-lg bg-blue-600 text-white font-medium disabled:opacity-50">{saving ? 'Saving…' : 'Save to Current CRM'}</button>
         <button onClick={() => setOpen(false)} disabled={saving} className="text-sm px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600">Cancel</button>
       </div>
-      <p className="text-[11px] text-gray-400">Projected value and the schedule come from the estimate and tasks in JobTread, so they're changed there. Reps, stage, phone/email and commission each have their own edit on this page.</p>
+      <p className="text-[11px] text-gray-400">Projected value and the schedule come from the estimate and tasks in your CRM, so they're changed there. Reps, stage, phone/email and commission each have their own edit on this page.</p>
     </div>
   );
 }

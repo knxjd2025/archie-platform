@@ -33,7 +33,7 @@ const MAX_MESSAGE_PAGES = 20;
 async function ghl<T>(path: string): Promise<T> {
   const conn = await ghlConnection();
   const r = await fetchWithTimeout(`${GHL_API_BASE}${path}`, { headers: ghlHeaders(conn, '2021-04-15') });
-  if (!r.ok) throw new Error(`GHL ${r.status} on ${path.split('?')[0]}`);
+  if (!r.ok) throw new Error(`KynexPro ${r.status} on ${path.split('?')[0]}`);
   return r.json() as Promise<T>;
 }
 

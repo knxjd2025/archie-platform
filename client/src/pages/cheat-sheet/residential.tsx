@@ -20,9 +20,9 @@ const STEPS = [
   { n: 1, title: 'Lead Intake', body: 'Qualify, get name/address/phone/email.' },
   { n: 2, title: 'Inspection', body: 'Photos, drone, document everything, ID job type.' },
   { n: 3, title: 'Education', body: 'Explain process, roof system, insurance basics.' },
-  { n: 4, title: 'Proposal', body: 'Good/Better/Best in JobTread, warranty, timeline.' },
+  { n: 4, title: 'Proposal', body: 'Good/Better/Best in your CRM, warranty, timeline.' },
   { n: 5, title: 'Contract', body: 'Sign, collect payment/first check, file claim, explain portal access.' },
-  { n: 6, title: 'Handoff', body: 'Finalize JobTread, submit to production.' },
+  { n: 6, title: 'Handoff', body: 'Finalize the job in your CRM, submit to production.' },
 ];
 
 const QUALIFYING_QUESTIONS = [
@@ -52,7 +52,7 @@ const FILING_STEPS = [
   'Sign service agreement, scan into file.',
   'Tell homeowner: call us the second the adjuster reaches out.',
   'Mark up damage photos in CompanyCam.',
-  'Walk them through their JobTread portal: photos, docs, messaging.',
+  'Walk them through their portal: photos, docs, messaging.',
 ];
 
 const ADJUSTER_CHECKLIST = [

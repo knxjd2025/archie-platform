@@ -252,10 +252,10 @@ export default function Canvass() {
   };
 
   const convert = async (p: Property) => {
-    if (!window.confirm(`Create a JobTread lead for ${p.address}?`)) return;
+    if (!window.confirm(`Create a lead in your CRM for ${p.address}?`)) return;
     try {
       await api.post(`/api/canvass/${p.id}/convert`, {});
-      flash('Lead created in JobTread ✅');
+      flash('Lead created in your CRM ✅');
       await load();
     } catch (e: any) { flash(`Couldn't create the lead: ${e?.message || 'failed'}`); }
   };
@@ -482,7 +482,7 @@ export default function Canvass() {
                       {[p.ownerName, p.city].filter(Boolean).join(' · ') || 'No contact yet'}
                       {p.stormSummary?.totalEvents ? ` · ⛈ ${p.stormSummary.totalEvents} storms` : ''}
                       {p.measurements ? ` · 📐 ${p.measurements.measuredSquares} sq` : ''}
-                      {p.leadExternalId ? ' · ✅ in JobTread' : ''}
+                      {p.leadExternalId ? ' · ✅ in Current CRM' : ''}
                       {due ? ' · 🔁 follow up today' : ''}
                       {canManage && p.ownerRepName ? ` · 👤 ${p.ownerRepName}` : ''}
                     </p>

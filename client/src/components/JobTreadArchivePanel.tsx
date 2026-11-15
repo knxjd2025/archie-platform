@@ -79,8 +79,8 @@ export default function JobTreadArchivePanel() {
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="text-sm font-semibold text-gray-800">JobTread backup</h2>
-          <p className="text-xs text-gray-500">A full copy of everything in JobTread, kept in this app. Runs by itself every 10 minutes until done.</p>
+          <h2 className="text-sm font-semibold text-gray-800">Current CRM backup</h2>
+          <p className="text-xs text-gray-500">A full copy of everything in your CRM, kept in this app. Runs by itself every 10 minutes until done.</p>
         </div>
         <div className="flex gap-2">
           <button onClick={load} disabled={!!busy} className="text-xs px-3 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-600 disabled:opacity-50">Refresh</button>

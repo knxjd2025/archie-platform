@@ -139,7 +139,7 @@ export default function JobPhotos({ externalId, onChanged }: { externalId: strin
           <button onClick={load} className="mt-2 text-sm text-blue-600 hover:underline">Retry</button>
         </div>
       ) : photos.length === 0 ? (
-        <p className="px-4 py-6 text-center text-sm text-gray-400">No photos on this job yet — add some from your phone and they'll go straight into JobTread.</p>
+        <p className="px-4 py-6 text-center text-sm text-gray-400">No photos on this job yet, add some from your phone and they'll go straight into your CRM.</p>
       ) : (
         <div className="p-3 grid grid-cols-3 sm:grid-cols-5 gap-2">
           {photos.slice(0, 15).map((p) => (

@@ -101,7 +101,7 @@ export function commissionStatementLines(row: JobCommission): PdfLine[] {
     for (const line of itemised) {
       lines.push({ kind: 'text', text: COMMISSION_LINE_LABEL[line] });
       for (const src of sourcesFor(sources, line)) {
-        lines.push({ kind: 'row', label: `    ${src.kind === 'doc' ? 'JobTread' : 'Entered'} — ${src.label}`, value: usd(src.amount) });
+        lines.push({ kind: 'row', label: `    ${src.kind === 'doc' ? 'Current CRM' : 'Entered'}: ${src.label}`, value: usd(src.amount) });
         // A figure typed over a document's own must not read as the document's.
         if (isAdjusted(src)) {
           lines.push({ kind: 'row', label: `        changed by hand; the document says`, value: usd(src.docAmount as number) });

@@ -39,7 +39,7 @@ describe('the commission statement', () => {
 
   it('records who ticked each box and what is still outstanding', () => {
     const out = rows(record());
-    expect(out['[x] Sold — signed contract / approved estimate is in JobTread']).toContain('joven');
+    expect(out['[x] Sold: signed contract / approved estimate is in your CRM']).toContain('joven');
     expect(out['[ ] Revenue is the final contract price']).toBe('not yet');
   });
 
@@ -92,8 +92,8 @@ describe('the commission statement', () => {
         ],
       },
     } as Partial<JobCommission>));
-    expect(out['    JobTread — ABC Supply PO #221']).toBe('$4,210.55');
-    expect(out['    Entered — Ridge vent — picked up']).toBe('$1,130.10');
+    expect(out['    Current CRM: ABC Supply PO #221']).toBe('$4,210.55');
+    expect(out['    Entered: Ridge vent — picked up']).toBe('$1,130.10');
     // And the line itself is the sum of them, not the stored column.
     expect(out['Material']).toBe('$5,340.65');
   });

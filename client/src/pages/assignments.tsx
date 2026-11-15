@@ -131,7 +131,7 @@ export default function Assignments({ onOpenClient }: { onOpenClient?: (external
         <div className="bg-white rounded-xl border border-gray-200 p-6 text-sm text-gray-600">
           <p className="font-medium text-gray-900">How this works</p>
           <p className="mt-1 text-gray-500">
-            We read who has tasks on each JobTread job, who commented on it, and whose calendar the
+            We read who has tasks on each CRM job, who commented on it, and whose calendar the
             appointment landed on. A field rep on the job is the rep; if you're on it alone it's yours.
             Nothing is assigned until you accept it.
           </p>
@@ -204,7 +204,7 @@ export default function Assignments({ onOpenClient }: { onOpenClient?: (external
               </button>
               <a href={`https://app.jobtread.com/jobs/${j.externalId}`} target="_blank" rel="noopener noreferrer"
                 className="text-sm px-3 py-2 rounded-lg bg-gray-100 text-gray-700 font-medium hover:bg-gray-200">
-                JobTread ↗
+                Current CRM ↗
               </a>
             </div>
           </div>

@@ -195,7 +195,7 @@ export const MEASURES: readonly MeasureDef[] = [
   },
   {
     key: 'unassigned_jobs', label: 'Live jobs with no rep', meeting: 'leadership', unit: 'count', direction: 'at_most',
-    hint: 'JobTread jobs with neither a Sales Rep field nor an in-app assignment. The target is zero.',
+    hint: 'Your CRM jobs with neither a Sales Rep field nor an in-app assignment. The target is zero.',
     compute: () => db.select({ n: sql<number>`count(*)` }).from(leads)
       .leftJoin(repAssignments, eq(repAssignments.jobExternalId, leads.externalId))
       .where(and(isNull(leads.jtSalesRep), isNull(leads.closedOn), isNull(repAssignments.id), eq(leads.source, 'jobtread')))

@@ -71,7 +71,7 @@ export default function Schedule({ onOpenClient }: { onOpenClient?: (externalId:
       <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Schedule</h2>
-          <p className="text-sm text-gray-500 mt-1">{view === 'board' ? 'Every connected calendar, Google and GoHighLevel, side by side. Click an open time to book.' : 'Inspections and appointments coming up.'}</p>
+          <p className="text-sm text-gray-500 mt-1">{view === 'board' ? 'Every connected calendar, Google and KynexPro, side by side. Click an open time to book.' : 'Inspections and appointments coming up.'}</p>
         </div>
         <div className="flex rounded-lg border border-gray-200 bg-white overflow-hidden text-sm" role="tablist">
           <button role="tab" aria-selected={view === 'board'} onClick={() => pick('board')} className={`px-3 py-1.5 ${view === 'board' ? 'bg-ink text-white' : 'text-gray-600 hover:bg-gray-50'}`}>Availability</button>
@@ -218,7 +218,7 @@ function Agenda({ onOpenClient }: { onOpenClient?: (externalId: string) => void 
                             <a href={`https://app.jobtread.com/jobs/${a.client.externalId}`}
                                target="_blank" rel="noopener noreferrer"
                                className="text-xs px-2 py-1 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200">
-                              JobTread ↗
+                              Current CRM ↗
                             </a>
                           </div>
                         )}

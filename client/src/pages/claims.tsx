@@ -116,7 +116,7 @@ export default function Claims({ onOpenClient }: { onOpenClient?: (externalId: s
     try {
       const r = await req();
       patchClaim(r.claim);
-      flash(r.jobtread && !r.jobtread.ok ? `${done} — but JobTread didn't take the status: ${r.jobtread.error || 'write failed'}` : done);
+      flash(r.jobtread && !r.jobtread.ok ? `${done}, but your CRM didn't take the status: ${r.jobtread.error || 'write failed'}` : done);
     } catch (e: any) {
       flash(`${claim.customerName}: ${e?.message || 'failed'}`);
     } finally { setBusyId(null); }
@@ -214,7 +214,7 @@ export default function Claims({ onOpenClient }: { onOpenClient?: (externalId: s
       {showNew && (
         <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
           <p className="text-sm font-semibold text-gray-800">Open a new claim</p>
-          <p className="text-xs text-gray-500">Starts at Inspect. Jobs already in a claim status in JobTread land here on their own every hour.</p>
+          <p className="text-xs text-gray-500">Starts at Inspect. Jobs already in a claim status in your CRM land here on their own every hour.</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <input value={nf.customerName} onChange={(e) => setNf({ ...nf, customerName: e.target.value })} placeholder="Customer name *" className={input} />
             <input value={nf.phone} onChange={(e) => setNf({ ...nf, phone: e.target.value })} placeholder="(555) 555-5555" className={input} />
@@ -226,7 +226,7 @@ export default function Claims({ onOpenClient }: { onOpenClient?: (externalId: s
               <label className="block text-[11px] text-gray-500 mb-0.5">Date of loss</label>
               <input type="date" value={nf.dateOfLoss} onChange={(e) => setNf({ ...nf, dateOfLoss: e.target.value })} className={`w-full ${input}`} />
             </div>
-            <input value={nf.jobtreadJobId} onChange={(e) => setNf({ ...nf, jobtreadJobId: e.target.value })} placeholder="JobTread job ID (optional)" className={input} />
+            <input value={nf.jobtreadJobId} onChange={(e) => setNf({ ...nf, jobtreadJobId: e.target.value })} placeholder="Current CRM job ID (optional)" className={input} />
             <select value={nf.nextActionOwner} onChange={(e) => setNf({ ...nf, nextActionOwner: e.target.value })} className={input} aria-label="Next action owner">
               {OWNERS.map((o) => <option key={o} value={o}>{ownerLabel(o)}</option>)}
             </select>
@@ -297,7 +297,7 @@ export default function Claims({ onOpenClient }: { onOpenClient?: (externalId: s
                 {(c.stage === 'inspection_report' || c.stage === 'adjuster_appt') && (
                   <button type="button" onClick={() => c.jobtreadJobId && onOpenClient?.(c.jobtreadJobId)}
                     className={`mt-1.5 text-[11px] px-1.5 py-0.5 rounded font-medium ${c.gates.inspectionReport ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}>
-                    {c.gates.inspectionReport ? '✓ Inspection report generated' : c.jobtreadJobId ? '📄 Inspection report needed' : '📄 Link the JobTread job to generate the report'}
+                    {c.gates.inspectionReport ? '✓ Inspection report generated' : c.jobtreadJobId ? '📄 Inspection report needed' : '📄 Link the CRM job to generate the report'}
                   </button>
                 )}
 
@@ -335,7 +335,7 @@ export default function Claims({ onOpenClient }: { onOpenClient?: (externalId: s
                   onBack={() => { const prev = stages[colIdx - 1]; if (prev) moveTo(claim, prev.key); }}
                   onAdvance={() => { const next = stages[colIdx + 1]; if (next) moveTo(claim, next.key); }}
                   lastLabel="Closed" />
-                {c.jtStage && <p className="mt-1 text-[10px] text-gray-300 truncate" title="JobTread status">JT: {c.jtStage}</p>}
+                {c.jtStage && <p className="mt-1 text-[10px] text-gray-300 truncate" title="Current CRM status">CRM: {c.jtStage}</p>}
 
                 {editId === c.claimId ? (
                   <div className="mt-2 space-y-1.5 border-t border-gray-100 pt-2">
@@ -346,7 +346,7 @@ export default function Claims({ onOpenClient }: { onOpenClient?: (externalId: s
                       <input type="date" value={edit.dateOfLoss} onChange={(e) => setEdit({ ...edit, dateOfLoss: e.target.value })} className={small} />
                       <input value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} placeholder="Phone" className={small} />
                       <input value={edit.email} onChange={(e) => setEdit({ ...edit, email: e.target.value })} placeholder="Email" className={small} />
-                      <input value={edit.jobtreadJobId} onChange={(e) => setEdit({ ...edit, jobtreadJobId: e.target.value })} placeholder="JobTread job ID" className={`${small} col-span-2`} />
+                      <input value={edit.jobtreadJobId} onChange={(e) => setEdit({ ...edit, jobtreadJobId: e.target.value })} placeholder="Current CRM job ID" className={`${small} col-span-2`} />
                     </div>
                     <p className="text-[10px] text-gray-400 pt-1">Adjuster</p>
                     <div className="grid grid-cols-3 gap-1.5">

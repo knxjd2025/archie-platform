@@ -358,14 +358,14 @@ export class JobTreadClient {
 
     if (!response.ok) {
       const error = await response.text();
-      throw new Error(`JobTread API Error (${response.status}): ${error}`);
+      throw new Error(`Current CRM API Error (${response.status}): ${error}`);
     }
 
     const result = await response.json();
 
     // Pave returns errors in the response body
     if (result.errors && result.errors.length > 0) {
-      throw new Error(`JobTread Pave Error: ${result.errors.map((e: any) => e.message).join(', ')}`);
+      throw new Error(`Current CRM Pave Error: ${result.errors.map((e: any) => e.message).join(', ')}`);
     }
 
     return result;
@@ -423,7 +423,7 @@ export class JobTreadClient {
       };
     } catch (error: any) {
       console.warn('JobTread: Cannot list contacts -', error.message);
-      throw new Error(`JobTread API error: ${error.message}`);
+      throw new Error(`Current CRM API error: ${error.message}`);
     }
   }
 
@@ -471,7 +471,7 @@ export class JobTreadClient {
       };
     } catch (error: any) {
       console.warn('JobTread: Cannot list comments -', error.message);
-      throw new Error(`JobTread API error: ${error.message}`);
+      throw new Error(`Current CRM API error: ${error.message}`);
     }
   }
 
@@ -740,9 +740,9 @@ export class JobTreadClient {
         },
       });
       const doc = data?.createDocument?.createdDocument;
-      return doc?.id ? { ok: true, documentId: doc.id } : { ok: false, error: 'JobTread did not return a document id' };
+      return doc?.id ? { ok: true, documentId: doc.id } : { ok: false, error: 'Your CRM did not return a document id' };
     } catch (error: any) {
-      return { ok: false, error: error?.message || 'JobTread document creation failed' };
+      return { ok: false, error: error?.message || 'Current CRM document creation failed' };
     }
   }
 
@@ -837,7 +837,7 @@ export class JobTreadClient {
       });
       return { ok: true };
     } catch (error: any) {
-      return { ok: false, error: error?.message || 'JobTread document update failed' };
+      return { ok: false, error: error?.message || 'Current CRM document update failed' };
     }
   }
 
@@ -864,7 +864,7 @@ export class JobTreadClient {
       }
       return { ok: true, created };
     } catch (error: any) {
-      return { ok: created > 0, created, error: error?.message || 'JobTread budget write failed' };
+      return { ok: created > 0, created, error: error?.message || 'Current CRM budget write failed' };
     }
   }
 
@@ -892,7 +892,7 @@ export class JobTreadClient {
       });
       return { ok: true };
     } catch (error: any) {
-      return { ok: false, error: error?.message || 'JobTread status update failed' };
+      return { ok: false, error: error?.message || 'Current CRM status update failed' };
     }
   }
 
@@ -917,7 +917,7 @@ export class JobTreadClient {
         },
       });
       const recipientId = rec?.createDocumentRecipient?.createdDocumentRecipient?.id;
-      if (!recipientId) return { ok: false, error: 'JobTread did not return a recipient id' };
+      if (!recipientId) return { ok: false, error: 'Your CRM did not return a recipient id' };
 
       await this.pave<any>({
         sendDocument: {
@@ -927,7 +927,7 @@ export class JobTreadClient {
       });
       return { ok: true };
     } catch (error: any) {
-      return { ok: false, error: error?.message || 'JobTread send failed' };
+      return { ok: false, error: error?.message || 'Current CRM send failed' };
     }
   }
 
@@ -956,7 +956,7 @@ export class JobTreadClient {
         },
       });
       const ur = reqData?.createUploadRequest?.createdUploadRequest;
-      if (!ur?.url || !ur?.id) return { ok: false, error: 'JobTread did not return an upload URL' };
+      if (!ur?.url || !ur?.id) return { ok: false, error: 'Your CRM did not return an upload URL' };
 
       // A photo upload from a phone on a weak signal is the slow case, so it
       // gets longer than an API call — but not forever: a stalled PUT held the
@@ -987,7 +987,7 @@ export class JobTreadClient {
       return { ok: true, fileId: created?.createFile?.createdFile?.id };
     } catch (error: any) {
       console.warn('JobTread: file upload failed -', error.message);
-      return { ok: false, error: error?.message || 'JobTread upload failed' };
+      return { ok: false, error: error?.message || 'Current CRM upload failed' };
     }
   }
 
@@ -1046,7 +1046,7 @@ export class JobTreadClient {
       const after = nodes.find((n: any) => n.customField?.id === JT_STATUS_FIELD)?.value;
       return { ok: true, stage: typeof after === 'string' ? after : stage };
     } catch (error: any) {
-      return { ok: false, error: error?.message || 'JobTread stage update failed' };
+      return { ok: false, error: error?.message || 'Current CRM stage update failed' };
     }
   }
 
@@ -1072,7 +1072,7 @@ export class JobTreadClient {
       });
       return { ok: true };
     } catch (error: any) {
-      return { ok: false, error: error?.message || 'JobTread sales-rep update failed' };
+      return { ok: false, error: error?.message || 'Current CRM sales-rep update failed' };
     }
   }
 
@@ -1130,7 +1130,7 @@ export class JobTreadClient {
         }
         for (const [name, value] of wanted) {
           const def = find(name);
-          if (!def) return { ok: false, error: `JobTread has no job field called "${name}".` };
+          if (!def) return { ok: false, error: `Your CRM has no job field called "${name}".` };
           if (typeof value === 'string' && def.options.length && !def.options.includes(value)) {
             return { ok: false, error: `"${value}" isn't a choice for ${def.name}. Pick one of: ${def.options.join(', ')}.` };
           }
@@ -1144,11 +1144,11 @@ export class JobTreadClient {
         const locationId = r?.job?.location?.id;
         const accountId = r?.job?.location?.account?.id;
         if (edit.customer !== undefined) {
-          if (!accountId) return { ok: false, error: 'This job has no customer account in JobTread.' };
+          if (!accountId) return { ok: false, error: 'This job has no customer account in your CRM.' };
           await this.pave<any>({ updateAccount: { $: { id: accountId, name: edit.customer }, account: { $: { id: accountId }, id: {} } } });
         }
         if (edit.address !== undefined) {
-          if (!locationId) return { ok: false, error: 'This job has no location in JobTread.' };
+          if (!locationId) return { ok: false, error: 'This job has no location in your CRM.' };
           await this.pave<any>({ updateLocation: { $: { id: locationId, address: edit.address }, location: { $: { id: locationId }, id: {} } } });
         }
       }
@@ -1167,7 +1167,7 @@ export class JobTreadClient {
       }
       return { ok: true };
     } catch (error: any) {
-      return { ok: false, error: error?.message || 'JobTread account update failed' };
+      return { ok: false, error: error?.message || 'Current CRM account update failed' };
     }
   }
 
@@ -1200,7 +1200,7 @@ export class JobTreadClient {
       });
       return { ok: true, contactId };
     } catch (error: any) {
-      return { ok: false, error: error?.message || 'JobTread contact update failed' };
+      return { ok: false, error: error?.message || 'Current CRM contact update failed' };
     }
   }
 
@@ -1225,7 +1225,7 @@ export class JobTreadClient {
         },
       });
       const accountId = a?.createAccount?.createdAccount?.id;
-      if (!accountId) return { ok: false, error: 'JobTread: account not created' };
+      if (!accountId) return { ok: false, error: 'Current CRM: account not created' };
 
       const contactFields: Record<string, string> = {};
       if (lead.email) contactFields[JT_CONTACT_EMAIL_FIELD] = lead.email;
@@ -1245,7 +1245,7 @@ export class JobTreadClient {
         },
       });
       const locationId = l?.createLocation?.createdLocation?.id;
-      if (!locationId) return { ok: false, accountId, error: 'JobTread: location not created' };
+      if (!locationId) return { ok: false, accountId, error: 'Current CRM: location not created' };
 
       const jobCfv: Record<string, string> = { [JT_STATUS_FIELD]: 'New Lead' };
       if (lead.salesRep) jobCfv[JT_SALES_REP_FIELD] = lead.salesRep;
@@ -1256,11 +1256,11 @@ export class JobTreadClient {
         },
       });
       const jobId = j?.createJob?.createdJob?.id;
-      if (!jobId) return { ok: false, accountId, error: 'JobTread: job not created' };
+      if (!jobId) return { ok: false, accountId, error: 'Current CRM: job not created' };
 
       return { ok: true, jobId, accountId };
     } catch (error: any) {
-      return { ok: false, error: error?.message || 'JobTread createLead failed' };
+      return { ok: false, error: error?.message || 'Current CRM createLead failed' };
     }
   }
 
@@ -1283,7 +1283,7 @@ export class JobTreadClient {
       });
       return { ok: true, id: data?.createComment?.createdComment?.id };
     } catch (error: any) {
-      return { ok: false, error: error?.message || 'JobTread comment failed' };
+      return { ok: false, error: error?.message || 'Current CRM comment failed' };
     }
   }
 
@@ -1433,7 +1433,7 @@ export class JobTreadClient {
       };
     } catch (error: any) {
       console.warn('JobTread: Cannot list jobs -', error.message);
-      throw new Error(`JobTread API error: ${error.message}`);
+      throw new Error(`Current CRM API error: ${error.message}`);
     }
   }
 
@@ -1907,7 +1907,7 @@ export class JobTreadClient {
 
     const organizationId = result?.organizations?.nodes?.[0]?.id;
     if (!organizationId) {
-      throw new Error('Unable to determine JobTread organization id for lead KPIs.');
+      throw new Error('Unable to determine your CRM organization id for lead KPIs.');
     }
 
     envOrganizationIds.set(companyId, organizationId);
@@ -1942,7 +1942,7 @@ export class JobTreadClient {
       },
     });
 
-    if (!data?.job) throw new Error(`JobTread has no job ${jobId}`);
+    if (!data?.job) throw new Error(`Your CRM has no job ${jobId}`);
 
     // Flatten into the shape mapJob already expects, so the one caller (the
     // CFO agent) keeps the fields it reads.
@@ -2078,7 +2078,7 @@ export class JobTreadClient {
       };
     } catch (error: any) {
       console.warn('JobTread: Cannot list invoices -', error.message);
-      throw new Error(`JobTread API error: ${error.message}`);
+      throw new Error(`Current CRM API error: ${error.message}`);
     }
   }
 

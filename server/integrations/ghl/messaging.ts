@@ -21,7 +21,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 20_000): Pr
 /** GHL answered a send with an error status. 4xx: it certainly did not go. 5xx: it might have. */
 export class GhlSendError extends Error {
   constructor(readonly status: number, detail: string) {
-    super(`GHL send ${status}: ${detail}`);
+    super(`KynexPro send ${status}: ${detail}`);
     this.name = 'GhlSendError';
   }
 }

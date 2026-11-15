@@ -106,7 +106,7 @@ router.post('/twilio', async (req, res) => {
           await db.insert(messages).values({
             conversationId: conversation.id,
             role: 'assistant',
-            content: `Lead qualified (score ${result.score}/10) — welcome SMS sent via GHL.`,
+            content: `Lead qualified (score ${result.score}/10), welcome SMS sent via KynexPro.`,
           });
         }
       } else {

@@ -56,8 +56,8 @@ export default function CommsVersionToggle() {
       const r = await api.put<State>('/api/comms/version', { version: next });
       setState((s) => (s ? { ...s, ...r } : s));
       setNote(next === 'v2'
-        ? 'On V2. Texts and calls now go out on our own numbers — GoHighLevel is still connected and still receiving.'
-        : 'Back on V1. Everything is going through GoHighLevel again.');
+        ? 'On V2. Texts and calls now go out on our own numbers, KynexPro is still connected and still receiving.'
+        : 'Back on V1. Everything is going through KynexPro again.');
       load();
     } catch (e: any) {
       setNote(e?.message || 'That did not go through.');

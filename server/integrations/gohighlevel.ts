@@ -136,7 +136,7 @@ export class GoHighLevelClient {
 
     if (!response.ok) {
       const error = await response.text();
-      throw new Error(`GHL API Error (${response.status}): ${error}`);
+      throw new Error(`KynexPro API Error (${response.status}): ${error}`);
     }
 
     return response.json();
@@ -485,7 +485,7 @@ export class GoHighLevelClient {
     } catch (error: any) {
       if (error instanceof GhlNotConnectedError) return { ok: false, error: error.message };
       if (String(error?.message).includes('Invalid JWT')) {
-        return { ok: false, error: 'GHL rejected the token. Reconnect GHL for this company.' };
+        return { ok: false, error: 'KynexPro rejected the token. Reconnect KynexPro for this company.' };
       }
       return { ok: false, error: error.message };
     }

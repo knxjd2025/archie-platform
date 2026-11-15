@@ -268,8 +268,8 @@ export default function SignatureRequests({ externalId }: { externalId: string }
               </div>
 
               <p className="text-[11px] text-gray-500">
-                The text goes from the business number through GoHighLevel; the email from your own mailbox. Each signer gets their
-                own link, and the page asks for their location before they sign — they can say no and still sign.
+                The text goes from the business number through KynexPro; the email from your own mailbox. Each signer gets their
+                own link, and the page asks for their location before they sign, they can say no and still sign.
               </p>
 
               <div className="flex gap-2">

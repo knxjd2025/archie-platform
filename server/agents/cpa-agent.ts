@@ -207,7 +207,7 @@ export class CPAAgent extends BaseAgent {
     // Tool: Reconcile accounts (enhanced with Plaid + QBO, PDF fallback)
     this.registerTool({
       name: 'reconcile_accounts',
-      description: 'Compare bank transactions (Plaid or PDF statements) with JobTread invoices and QBO records to identify discrepancies',
+      description: 'Compare bank transactions (Plaid or PDF statements) with the company\'s CRM invoices and QBO records to identify discrepancies',
       parameters: {
         type: 'object',
         properties: {
@@ -278,9 +278,9 @@ export class CPAAgent extends BaseAgent {
           result.jobtreadInvoices = {
             count: invoiceData.invoices?.length || 0,
           };
-          result.sources.push('JobTread');
+          result.sources.push('Current CRM');
         } catch {
-          result.jobtreadInvoices = { note: 'JobTread data unavailable' };
+          result.jobtreadInvoices = { note: 'Current CRM data unavailable' };
         }
 
         // 3. QBO expenses for cross-reference
@@ -326,7 +326,7 @@ export class CPAAgent extends BaseAgent {
             totalOutstanding: invoices.totalDue || 0,
           };
         } catch (e) {
-          jobtreadSummary = { note: 'JobTread data unavailable' };
+          jobtreadSummary = { note: 'Current CRM data unavailable' };
         }
 
         return {
