@@ -33,30 +33,31 @@ export class GhlNotConnectedError extends Error {
 
 export class GhlLocationTakenError extends Error {
   constructor() {
-    super('That GHL sub-account is already connected to another company.');
+    super('That KynexPro account is already connected to another company.');
     this.name = 'GhlLocationTakenError';
   }
 }
 
 /**
- * Do these credentials open this location? Checked before saving, so a
+ * Do these credentials open this location? The messages are shown to people,
+ * who know GHL as KynexPro, so they say KynexPro. Checked before saving, so a
  * company can only claim a sub-account it really controls.
  */
 export async function verifyGhlCredentials(locationId: string, token: string): Promise<{ ok: true; name: string } | { ok: false; error: string }> {
-  if (!/^[A-Za-z0-9]{10,40}$/.test(locationId)) return { ok: false, error: 'That does not look like a GHL location id.' };
+  if (!/^[A-Za-z0-9]{10,40}$/.test(locationId)) return { ok: false, error: 'That does not look like a KynexPro Location ID.' };
   try {
     const res = await fetch(`${GHL_API_BASE}/locations/${encodeURIComponent(locationId)}`, {
       headers: ghlHeaders({ locationId, token }, '2021-07-28'),
       signal: AbortSignal.timeout(15_000),
     });
-    if (res.status === 401 || res.status === 403) return { ok: false, error: 'GHL refused that token for this location. Check the token and its scopes.' };
-    if (!res.ok) return { ok: false, error: `GHL answered ${res.status} for that location.` };
+    if (res.status === 401 || res.status === 403) return { ok: false, error: 'KynexPro refused that token for this location. Check the token and its scopes.' };
+    if (!res.ok) return { ok: false, error: `KynexPro answered ${res.status} for that location.` };
     const data = await res.json();
     const loc = data.location ?? data;
-    if (loc?.id && loc.id !== locationId) return { ok: false, error: 'That token belongs to a different GHL location.' };
+    if (loc?.id && loc.id !== locationId) return { ok: false, error: 'That token belongs to a different KynexPro location.' };
     return { ok: true, name: String(loc?.name ?? '') };
   } catch {
-    return { ok: false, error: 'Could not reach GHL. Try again in a minute.' };
+    return { ok: false, error: 'Could not reach KynexPro. Try again in a minute.' };
   }
 }
 

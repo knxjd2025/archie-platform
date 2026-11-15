@@ -35,7 +35,7 @@ export function registerGhlConnectionRoutes(app: Express) {
     try {
       const locationId = String(req.body?.locationId ?? '').trim();
       const token = String(req.body?.token ?? '').trim();
-      if (!locationId || !token) return res.status(400).json({ error: 'Both the location id and the token are needed.' });
+      if (!locationId || !token) return res.status(400).json({ error: 'Both the Location ID and the Private Integration Token are needed.' });
       const check = await verifyGhlCredentials(locationId, token);
       if (!check.ok) return res.status(400).json({ error: check.error });
       await saveGhlConnection(locationId, { kind: 'pit', token });
