@@ -20,6 +20,12 @@ function arg(name: string): string | undefined {
 async function main() {
   const { pool } = await import('../server/db');
   const { seedAll, seedCompany } = await import('../server/seed');
+  const { requireAppRole } = await import('./lib/require-app-role');
+  try { await requireAppRole(pool); } catch (e) {
+    console.error((e as Error).message);
+    await pool.end();
+    process.exit(1);
+  }
   const only = arg('company')?.trim().toLowerCase();
   try {
     const results = await seedAll(async (company) => {

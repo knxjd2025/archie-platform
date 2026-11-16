@@ -30,6 +30,12 @@ async function main() {
   const { eq } = await import('drizzle-orm');
   const { runAsCompany, runAsSystem } = await import('../server/tenant/context');
   const { provisionCompany, seedCompany } = await import('../server/seed');
+  const { requireAppRole } = await import('./lib/require-app-role');
+  try { await requireAppRole(pool); } catch (e) {
+    console.error((e as Error).message);
+    await pool.end();
+    process.exit(1);
+  }
 
   try {
     const existing = await runAsSystem('create-company script: check slug', () =>
