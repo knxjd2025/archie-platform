@@ -64,6 +64,13 @@
       "when": 1792714990000,
       "tag": "0008_rls_system_role",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792715000000,
+      "tag": "0009_company_leading_indexes",
+      "breakpoints": true
     }
   ]
 }

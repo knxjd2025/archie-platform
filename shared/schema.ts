@@ -865,7 +865,11 @@ export const calls = pgTable('calls', {
   costCents: integer('cost_cents'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+}, (t) => ({
+  // The company's newest calls first (/api/calls, the comms summary).
+  // Created by migrations/0009.
+  companyStartedIdx: index('calls_company_started_at_idx').on(t.companyId, t.startedAt),
+}));
 
 /** Texts and emails to customers through our own numbers and mailboxes. */
 export const commMessages = pgTable('comm_messages', {
@@ -890,7 +894,11 @@ export const commMessages = pgTable('comm_messages', {
   errorDetail: text('error_detail'),
   sentAt: timestamp('sent_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+}, (t) => ({
+  // The company's messages by time (the comms summary, newest first).
+  // Created by migrations/0009.
+  companySentIdx: index('comm_messages_company_sent_at_idx').on(t.companyId, t.sentAt),
+}));
 
 /** The numbers we own and what each one is for. */
 export const phoneNumbers = pgTable('phone_numbers', {
@@ -968,6 +976,9 @@ export const leads = pgTable('leads', {
   // reports, webhooks). Company first: every query runs as one company.
   // Created by migrations/0007.
   companyExternalIdx: index('leads_company_external_id_idx').on(t.companyId, t.externalId),
+  // The company's newest leads first (/api/leads, dashboard, agents).
+  // Created by migrations/0009.
+  companyCreatedIdx: index('leads_company_created_at_idx').on(t.companyId, t.createdAt),
 }));
 
 // Agent Tasks - work items for agents
