@@ -5,6 +5,7 @@ import { attachDatabasePool } from '@vercel/functions/db-connections';
 import * as schema from '../shared/schema';
 import { registerUtcTimestampParser } from './lib/pg-timestamps';
 import { currentTenant } from './tenant/context';
+import { DatabaseBusyError, isConnectionCapacityError } from './lib/db-busy';
 
 // Before any pool is created: naive timestamps must read back as the instant
 // they were written, not as local time. See lib/pg-timestamps.ts.
@@ -49,18 +50,15 @@ export const DB_LIMITS = {
   idleInTransactionTimeoutMs: envInt('DB_IDLE_IN_TXN_TIMEOUT_MS', 60_000),
 };
 
-/** Thrown when no pooled client frees up in time: the database is saturated, not broken. */
-export class DatabaseBusyError extends Error {
-  readonly status = 503;
-  constructor(cause: unknown) {
-    super(`Database busy: no connection became free within ${DB_LIMITS.acquireTimeoutMs}ms `
-      + `(this instance holds at most ${DB_LIMITS.max}). Try again shortly.`, { cause });
-    this.name = 'DatabaseBusyError';
-  }
-}
+export { DatabaseBusyError };
 
-const isAcquireTimeout = (err: unknown): boolean =>
-  err instanceof Error && /timeout exceeded when trying to connect|terminated due to connection timeout/i.test(err.message);
+/** Wrap a refused or timed-out connection attempt as "busy" (503), anything else unchanged. */
+function asBusy(err: unknown): unknown {
+  if (!isConnectionCapacityError(err)) return err;
+  return new DatabaseBusyError(
+    `no connection became free within ${DB_LIMITS.acquireTimeoutMs}ms (this instance holds at most ${DB_LIMITS.max}), `
+    + `or the database refused a new one. Try again shortly.`, err);
+}
 
 // Supabase's transaction pooler (port 6543) hands each statement to whichever
 // server connection is free, so the per-connection company setting below would
@@ -73,9 +71,11 @@ if (/pooler\.supabase\.com:6543/.test(databaseUrl) && process.env.ARCHIE_ALLOW_T
 const APPLIED = Symbol('archieTenantApplied');
 /** Set once a physical connection has had its session timeouts applied. */
 const INITIALISED = Symbol('archieSessionInitialised');
+/** Set once a physical connection has its own persistent 'error' listener. */
+const LISTENING = Symbol('archieErrorListener');
 /** The connection's transaction status from its last ReadyForQuery: 'I' idle, 'T' in a transaction, 'E' failed transaction. */
 const TX_STATUS = Symbol('archieTxStatus');
-type TaggedClient = PoolClient & { [APPLIED]?: string; [INITIALISED]?: boolean; [TX_STATUS]?: string };
+type TaggedClient = PoolClient & { [APPLIED]?: string; [INITIALISED]?: boolean; [TX_STATUS]?: string; [LISTENING]?: boolean };
 
 /**
  * The database role for deliberate cross-company work (runAsSystem). Row level
@@ -134,10 +134,11 @@ class TenantPool extends Pool {
     const system = ctx?.system === true;
     const key = `${company}|${system ? 'on' : ''}`;
     const acquired = (super.connect() as Promise<PoolClient>).catch((err) => {
-      throw isAcquireTimeout(err) ? new DatabaseBusyError(err) : err;
+      throw asBusy(err);
     });
     const ready = acquired.then(async (raw) => {
       const client = raw as TaggedClient;
+      listenForErrors(client);
       watchTxStatus(client);
       if (client[APPLIED] !== key) {
         try {
@@ -167,14 +168,38 @@ class TenantPool extends Pool {
   }
 }
 
+/**
+ * A connection can die while it is checked out: the server ends a session
+ * left idle inside a transaction (idle_in_transaction_session_timeout), the
+ * pooler drops it, an operator terminates it. pg then emits 'error' on the
+ * client, and pg-pool only listens while the client sits idle in the pool, so
+ * with no listener of ours Node treats it as an uncaught exception and the
+ * whole instance (and every request it is serving) goes down. One persistent
+ * listener per physical connection: log it. The query in flight still rejects,
+ * pg marks the client not queryable, and pg-pool discards it on release.
+ */
+function listenForErrors(client: TaggedClient): void {
+  if (client[LISTENING]) return;
+  client[LISTENING] = true;
+  client.on('error', (err: Error) => {
+    client[APPLIED] = undefined;
+    console.error('[DB] connection lost while in use (it will be discarded):', err.message);
+  });
+}
+
 /** Track the transaction status the server reports after every statement. */
 function watchTxStatus(client: TaggedClient): void {
   if (client[TX_STATUS] !== undefined) return;
-  client[TX_STATUS] = 'I';
   const connection = (client as unknown as { connection?: { prependListener?: Function } }).connection;
+  if (typeof connection?.prependListener !== 'function') {
+    // Cannot tell (a pg change): fail closed, every release discards the connection.
+    client[TX_STATUS] = 'unknown';
+    return;
+  }
+  client[TX_STATUS] = 'I';
   // Prepended, so the status is current before pg runs the query's callback
   // (which may release the client) for the same message.
-  connection?.prependListener?.('readyForQuery', (msg: { status?: string }) => { client[TX_STATUS] = msg?.status; });
+  connection.prependListener('readyForQuery', (msg: { status?: string }) => { client[TX_STATUS] = msg?.status; });
 }
 
 /**
