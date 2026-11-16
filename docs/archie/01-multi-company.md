@@ -113,6 +113,39 @@ failure does not stop the others and no job ever runs without a company.
   advisor wording to all of them: `npx tsx scripts/seed-companies.ts
   [--company <slug>]`. Idempotent; one company's failure does not stop the rest.
 
+## Capacity: database connections
+
+Each Vercel instance has one pool (`server/db.ts`), shared with the session
+store. On the Supabase session pooler every pooled client holds one Postgres
+connection, and instances multiply under load, so the limit that matters is
+roughly: busy instances x `DB_POOL_MAX` <= the pooler's pool size <= Postgres
+`max_connections` (minus what Supabase reserves for itself).
+
+App settings (env vars, defaults in brackets):
+
+| var | default | what it does |
+|---|---|---|
+| `DB_POOL_MAX` | 5 | clients per instance |
+| `DB_IDLE_TIMEOUT_MS` | 5000 | idle clients close, so a frozen instance holds none (with `attachDatabasePool`) |
+| `DB_CONNECT_TIMEOUT_MS` | 5000 | a query waiting longer for a client fails with "Database busy" (503) |
+| `DB_STATEMENT_TIMEOUT_MS` | 30000 | `statement_timeout` on every app connection |
+| `DB_IDLE_IN_TXN_TIMEOUT_MS` | 60000 | `idle_in_transaction_session_timeout` on every app connection |
+
+What the operator must check as the number of companies grows. These are
+things to verify on the project's own dashboards, not known values:
+
+- **Supabase pool size** (Database > Settings > Connection pooling). Compare it
+  with the peak number of concurrent Vercel instances (Vercel > Observability)
+  times `DB_POOL_MAX`. If "Database busy" errors or pooler "max clients" errors
+  appear, raise the pool size before raising `DB_POOL_MAX`.
+- **Compute size.** The pool size can only go as high as the compute's
+  `max_connections` allows; a larger compute raises both. Check the current
+  values for the plan in use.
+- **Region.** Vercel functions should run in the same region as the database;
+  every query is a round trip.
+- Do **not** switch to the transaction pooler (port 6543): company isolation
+  depends on per-connection settings, and `server/db.ts` refuses to start on it.
+
 ## Pitfalls
 
 - `runAsCompany` / `runAsSystem` are async and await their result inside the
