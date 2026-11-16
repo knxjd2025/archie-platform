@@ -6,9 +6,8 @@ import session from 'express-session';
 import { tenantFromSession } from '../server/tenant/middleware';
 import { registerRoutes } from '../server/routes';
 import { recordServerError } from '../server/bugs/routes';
-import { createSeedOnce, seedAll } from '../server/seed';
 import { corsOptions, sessionOptions, JSON_BODY_LIMIT } from '../server/security-config';
-import { clientErrorMessage, createErrorHandler, isProduction } from '../server/lib/error-response';
+import { createErrorHandler } from '../server/lib/error-response';
 
 const app = express();
 
@@ -71,23 +70,14 @@ registerRoutes(app);
 // server/lib/error-response.ts.
 app.use(createErrorHandler(recordServerError));
 
-// Seed on cold start. One shared run per instance: requests that arrive while
-// it is going wait on that run instead of each starting their own, and once it
-// has succeeded no request waits at all. See createSeedOnce in server/seed.ts.
-const ensureSeeded = createSeedOnce(seedAll);
+// No seeding here. This used to set up every company's advisors and
+// knowledge base before a new instance answered its first request: about 17
+// queries per company, one company after another, rerun every 60s while any
+// company failed. A company is seeded when it is created (provisionCompany in
+// server/seed.ts) and backfilled by an explicit, idempotent operator job
+// (scripts/seed-companies.ts), never on the request path.
 
 // Export for Vercel serverless
-export default async function handler(req: Request, res: Response) {
-  try {
-    await ensureSeeded();
-    return app(req, res);
-  } catch (error: any) {
-    console.error('Handler error:', error);
-    // A failed seed is a database error, and its message is the query that failed.
-    res.status(500).json({
-      error: 'Internal Server Error',
-      message: clientErrorMessage(error, 500, isProduction()),
-      stack: !isProduction() ? error?.stack : undefined
-    });
-  }
+export default function handler(req: Request, res: Response) {
+  return app(req, res);
 }

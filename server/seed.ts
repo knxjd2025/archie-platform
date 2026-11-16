@@ -10,7 +10,9 @@ import { syncTeamAdvisors, pruneUnavailableToolNotes } from './agents/team-advis
  * service area and facts from its profile each time a chat starts, so a
  * profile edit takes effect without re-seeding.
  */
-import { forEachLiveCompany } from './tenant/companies';
+import { createCompany, forEachLiveCompany, type FanOutResult, type NewCompany } from './tenant/companies';
+import { runAsCompany } from './tenant/context';
+import type { Company } from '../shared/schema';
 
 export const defaultAgents = [
   {
@@ -247,7 +249,8 @@ export async function seedKnowledge() {
   // (Transaction-scoped, so it also holds through Supabase's transaction-mode
   // pooler, where a session lock could land on a different connection.)
   await db.transaction(async (tx) => {
-    const lock = await tx.execute(sql`select pg_try_advisory_xact_lock(${KNOWLEDGE_SEED_LOCK}) as locked`);
+    // Keyed by company too: one company's seed must not make another skip its own.
+    const lock = await tx.execute(sql`select pg_try_advisory_xact_lock(${KNOWLEDGE_SEED_LOCK}, hashtext(coalesce(archie_current_company()::text, ''))) as locked`);
     const locked = (lock as unknown as { rows: Array<{ locked: boolean }> }).rows[0]?.locked;
     if (!locked) {
       console.log('Knowledge base is being seeded by another process, skipping');
@@ -263,61 +266,42 @@ export async function seedKnowledge() {
 }
 
 // Combined seed function
-/** Seed one company's advisors and knowledge base. Runs as the current company. */
+/** Seed one company's advisors and knowledge base. Runs as the current company. Idempotent. */
 export async function seedCompany() {
   await seedAgents();
   await seedKnowledge();
 }
 
 /**
- * Seed every live company. Each company has its own advisors and knowledge
- * base, so this runs once per company, as that company. Idempotent: it only
- * fills in what is missing.
+ * Seed every live company (or the given ones), each as that company. For the
+ * operator backfill (scripts/seed-companies.ts) and local development, never
+ * the request path. Idempotent: it only fills in what is missing and brings
+ * advisor wording up to date. One company's failure is reported in the
+ * results and never stops the others; nothing is thrown or retried here.
  */
-export async function seedAll() {
-  const results = await forEachLiveCompany(() => seedCompany());
+export async function seedAll(seed: (company: Company) => Promise<unknown> = () => seedCompany()): Promise<FanOutResult<unknown>[]> {
+  const results = await forEachLiveCompany((company) => seed(company));
   const failed = results.filter((r) => !r.ok);
-  if (failed.length) throw new Error(`seed failed for ${failed.length} of ${results.length} companies: ${failed.map((f) => f.error).join('; ')}`);
+  if (failed.length) console.error(`[seed] failed for ${failed.length} of ${results.length} companies: ${failed.map((f) => `${f.companyId}: ${f.error}`).join('; ')}`);
+  return results;
 }
 
 /**
- * Wrap a seed function so it runs at most once at a time per process and
- * never again after it succeeds.
- *
- * api/index.ts used a `seeded` boolean that only flipped after the seed
- * finished, so every request that arrived during a cold start's seed started
- * its own full seed run in parallel. Now concurrent callers share the one
- * in-flight run. A failure is logged, not thrown (a request must not fail
- * because seeding did), and the next call after `retryAfterMs` tries again;
- * calls inside that window return at once instead of each re-running a seed
- * that is likely to fail the same way.
+ * Create a company and seed it. Sign-up and admin tools call this instead of
+ * createCompany. The company exists even if seeding fails: the failure is
+ * returned (not thrown), and the backfill seeds it later.
  */
-export function createSeedOnce(
-  run: () => Promise<unknown>,
-  opts: { retryAfterMs?: number; now?: () => number; onError?: (e: unknown) => void } = {},
-): () => Promise<void> {
-  const retryAfterMs = opts.retryAfterMs ?? 60_000;
-  const now = opts.now ?? Date.now;
-  const onError = opts.onError ?? ((e: unknown) => console.error('Seed error:', e));
-  let done = false;
-  let inFlight: Promise<void> | null = null;
-  let failedAt = -Infinity;
-
-  return () => {
-    if (done) return Promise.resolve();
-    if (inFlight) return inFlight;
-    if (now() - failedAt < retryAfterMs) return Promise.resolve();
-    inFlight = (async () => {
-      try {
-        await run();
-        done = true;
-      } catch (e) {
-        failedAt = now();
-        onError(e);
-      } finally {
-        inFlight = null;
-      }
-    })();
-    return inFlight;
-  };
+export async function provisionCompany(
+  input: NewCompany,
+  seed: () => Promise<unknown> = seedCompany,
+): Promise<{ company: Company; seeded: boolean; error?: string }> {
+  const company = await createCompany(input);
+  try {
+    await runAsCompany(company.id, () => seed());
+    return { company, seeded: true };
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    console.error(`[seed] company ${company.slug} was created but not seeded:`, error);
+    return { company, seeded: false, error };
+  }
 }

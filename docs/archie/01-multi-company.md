@@ -107,6 +107,11 @@ failure does not stop the others and no job ever runs without a company.
 - **Migrations** run as the database owner: `DATABASE_URL=<owner url> npx tsx scripts/migrate.ts`.
   Then give the app role a password: `ALTER ROLE archie_app WITH LOGIN PASSWORD '...'`.
 - **A new company:** `npx tsx scripts/create-company.ts --slug acme --name "Acme Roofing" --admin-email owner@acme.com --admin-name "Pat Owner" [--ghl-location <id>]`.
+  It is seeded (advisors, knowledge base) as it is created (`provisionCompany`).
+- **Seeding is never on the request path.** A new server instance does no
+  per-company work before answering. To backfill companies or push edited
+  advisor wording to all of them: `npx tsx scripts/seed-companies.ts
+  [--company <slug>]`. Idempotent; one company's failure does not stop the rest.
 
 ## Pitfalls
 
