@@ -31,10 +31,10 @@ describe.skipIf(!local)('database pool', async () => {
 
   it('keeps the timeouts when a connection is reused for another company', async () => {
     const seen = await runAsSystem('pool test', async () => {
-      const { rows } = await pool.query("select current_setting('statement_timeout') as st, current_setting('app.system') as sys");
+      const { rows } = await pool.query("select current_setting('statement_timeout') as st, current_user as role");
       return rows[0];
     });
-    expect(seen).toEqual({ st: '30s', sys: 'on' });
+    expect(seen).toEqual({ st: '30s', role: 'archie_system' });
   });
 
   it('fails fast with a clear error when every client is busy', async () => {

@@ -38,22 +38,90 @@ Global tables (no `company_id`): `companies`, `session`, `_migrations`,
 
 ### 3. Row Level Security (the backstop)
 
-For each company table:
+Two database roles, two policies per company table (migrations/0008):
 
 ```sql
 alter table t enable row level security;
 alter table t force row level security;
+-- Everyone: the current company's rows only.
 create policy company_isolation on t
-  using (company_id = archie_current_company() or archie_is_system())
-  with check (company_id = archie_current_company() or archie_is_system());
+  using (company_id = (select archie_current_company()))
+  with check (company_id = (select archie_current_company()));
+-- The system role only: every row.
+create policy company_system on t to archie_system using (true) with check (true);
 ```
 
 - `archie_current_company()` reads `current_setting('app.company_id', true)`.
-- `archie_is_system()` reads `current_setting('app.system', true) = 'on'`.
-- With neither set, every query sees **zero rows** and every insert **fails**.
-  Missing context fails closed, never open.
-- The app connects as a dedicated role `archie_app` that is not a superuser and
-  has `NOBYPASSRLS`, so the policies apply to it. Migrations run as the owner.
+  With no company set it is null, so every query sees **zero rows** and every
+  insert **fails**. Missing context fails closed, never open.
+- The app connects as `archie_app`: not a superuser, `NOBYPASSRLS`, so the
+  policies apply to it. As itself it gets only `company_isolation`.
+- Deliberate cross-company work (`runAsSystem`) switches its connection to the
+  role `archie_system` (`set_config('role', 'archie_system', false)`, the same
+  as `SET ROLE`). For that role the two policies combine to
+  `company_id = ... OR true`, which Postgres folds to `true`.
+- Migrations run as the owner.
+
+**Why this shape (performance).** Postgres can only use an index on
+`company_id` when the policy's company condition stands alone. The old policy,
+`company_id = archie_current_company() OR archie_is_system()`, could not be
+turned into an index condition, so a query with no other selective filter (and
+almost no query filters by company itself) scanned every company's rows. Now
+every query carries `company_id = $0` as an index condition. Wrapping the
+function in `(select ...)` makes it an initplan, computed once per query
+instead of once per row. Measured on 200 companies (1.7M rows), with
+`scripts/rls-explain.sh`: the leads list went from a 156 ms sequential scan of
+400,000 rows to a 0.7 ms index scan of the company's own rows.
+
+Do not put an `OR` into a company policy (for example `OR archie_is_system()`):
+it brings the full scans back. System access is the `company_system` policy.
+
+**The two roles.**
+
+| | `archie_app` | `archie_system` |
+|---|---|---|
+| logs in | yes (the app's `DATABASE_URL`) | no (`NOLOGIN`): only `SET ROLE` from `archie_app` |
+| superuser, `BYPASSRLS`, `CREATEROLE`, `CREATEDB` | no | no |
+| table grants | `SELECT, INSERT, UPDATE, DELETE` (not `_migrations`) | the same |
+| rows | its company's (`company_isolation`) | every company's (`company_system`) |
+| membership | in `archie_system` with `SET` only: no `INHERIT`, no `ADMIN` | in nothing |
+
+This is not weaker than the old `app.system = 'on'` setting: before, any SQL
+the app role could run could turn system access on with `set_config`; now it
+takes `SET ROLE archie_system`, which needs the same (arbitrary SQL as the app
+role) and grants exactly what `app.system` did. Neither role can grant itself
+more: no `ADMIN` on any role, no `CREATEROLE`, and it owns no table, so it
+cannot alter, disable or drop a policy. `app.system` no longer grants anything,
+and `archie_is_system()` now reports the role. The tests check all of this.
+
+**On a pooled connection** (`server/db.ts`): the role is set on every checkout
+together with the company, in one statement (or confirmed unchanged), so it
+never carries over; a connection leaving system work is reset to no role and no
+company as it is released (and thrown away if the reset fails); and a
+connection released in the middle of a transaction is thrown away, because a
+later rollback would undo settings made inside it. The role comes only from
+`runAsSystem`, never from anything in a request.
+
+**A new company table** gets its protection with one call in its migration,
+after `CREATE TABLE`:
+
+```sql
+SELECT archie_protect_company_table('my_new_table');
+```
+
+It turns row level security on and forces it, creates both policies, grants
+both roles, and adds a `(company_id)` index when no index starts with
+`company_id`. `isolation.test.ts` fails for any table with a `company_id` that
+lacks exactly these two policies, and `system-role.test.ts` proves the
+behaviour on every such table.
+
+**Indexes.** Every company table has an index that starts with `company_id`.
+For a hot query that also filters or sorts on another column, use a composite
+index with `company_id` first, for example `(company_id, external_id)` (0007)
+or `(company_id, created_at)` (0009, scanned backward for newest first).
+Measure with `scripts/rls-explain.sh` before adding one. On a live database,
+build large indexes with `CREATE INDEX CONCURRENTLY` by hand first; the
+migration's `CREATE INDEX IF NOT EXISTS` then does nothing.
 
 ### 4. Request context
 
@@ -69,9 +137,10 @@ create policy company_isolation on t
   `runAsCompany`.
 
 `server/db.ts` gives drizzle a pool wrapper. Every time a connection is checked out
-it runs `select set_config('app.company_id', $1, false), set_config('app.system', $2, false)`
-for the current context (or clears both when there is none), so the setting can
-never leak from one request to the next on a pooled connection.
+it sets `app.company_id` and the role (`archie_system` inside `runAsSystem`,
+otherwise back to `archie_app`) for the current context in one statement (or
+clears both when there is none), so neither can leak from one request to the
+next on a pooled connection. See "On a pooled connection" above.
 
 ### 5. Sessions and sign-in
 
@@ -127,6 +196,18 @@ request path.
   setting would not stick; `server/db.ts` refuses to start on it.
 - **Migrations** run as the database owner: `DATABASE_URL=<owner url> npx tsx scripts/migrate.ts`.
   Then give the app role a password: `ALTER ROLE archie_app WITH LOGIN PASSWORD '...'`.
+  `archie_system` needs no password: it cannot log in. On Supabase the owner is
+  `postgres`, which has what the migrations need (`CREATEROLE`, ownership of the
+  tables); nothing needs a superuser.
+- **Operator scripts** (`create-company.ts`, `seed-companies.ts`) use the app's
+  `DATABASE_URL` (`archie_app`), like the app. Run as the owner, system work
+  inside them is refused ("permission denied to set role"): the owner is not a
+  member of `archie_system`.
+- **Rolling out 0008 on a live database:** deploy the code first, then run the
+  migration. The code works with both: before 0008 it falls back to the old
+  `app.system` setting (the role does not exist yet), after it uses the role.
+  The other order is safe for isolation but, until the code is deployed, the
+  old code's system work (sign-in, webhooks, crons) sees nothing.
 - **A new company:** `npx tsx scripts/create-company.ts --slug acme --name "Acme Roofing" --admin-email owner@acme.com --admin-name "Pat Owner" [--ghl-location <id>]`.
   It is seeded (advisors, knowledge base) as it is created (`provisionCompany`).
 - **Seeding is never on the request path.** A new server instance does no
@@ -186,6 +267,15 @@ things to verify on the project's own dashboards, not known values:
   company sees nothing, pooled connections never leak a company.
 - `server/tenant/__tests__/api-isolation.test.ts`: the same through the real
   request path (session, middleware, roster re-check, routes).
+- `server/tenant/__tests__/system-role.test.ts`: on every company table (found
+  in the database, not a list), with a row for two companies: no context sees
+  and writes nothing, one company never sees or writes the other's, system work
+  sees both; system access never survives on a pooled connection (after
+  success, an error, a statement timeout, or a release mid-transaction); neither
+  role can widen its access.
+- `scripts/rls-explain.sh`: loads 200 companies of data into a throwaway
+  database and prints `EXPLAIN (ANALYZE, BUFFERS)` for the hot queries as the
+  app role. Rerun it before adding an index or changing a policy.
 - Cross-company tests: create two companies, write data as A, prove B sees none of
   it through the API and through direct queries, and that writes without a company
   fail.

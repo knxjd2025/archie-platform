@@ -57,6 +57,13 @@
       "when": 1792714980000,
       "tag": "0007_leads_external_id_index",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792714990000,
+      "tag": "0008_rls_system_role",
+      "breakpoints": true
     }
   ]
 }
