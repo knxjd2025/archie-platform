@@ -963,7 +963,12 @@ export const leads = pgTable('leads', {
   scheduleEnd: timestamp('schedule_end'),
   closedOn: timestamp('closed_on'),
   insuranceClaim: boolean('insurance_claim'),
-});
+}, (t) => ({
+  // Leads are looked up by their source system's id all over (client pages,
+  // reports, webhooks). Company first: every query runs as one company.
+  // Created by migrations/0007.
+  companyExternalIdx: index('leads_company_external_id_idx').on(t.companyId, t.externalId),
+}));
 
 // Agent Tasks - work items for agents
 export const agentTasks = pgTable('agent_tasks', {
