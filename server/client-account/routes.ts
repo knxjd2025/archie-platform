@@ -14,6 +14,7 @@ import { logWrite } from '../writes/log';
 import { sendFailure } from '../lib/failure';
 import { parseAddress } from '../sync/leads-sync';
 import { ACCOUNT_JOB_FIELDS, jobFieldWrites, parseAccountEdit, type AccountEdit } from '../../shared/client-account';
+import { jobTreadWriteFailStatus } from '../integrations/jobtread-connection';
 
 /** The local lead columns an account edit changes. */
 export function leadMirror(edit: AccountEdit): Partial<typeof leads.$inferInsert> {
@@ -51,7 +52,7 @@ export function registerClientAccountRoutes(app: Express) {
       const actor = req.session.user!.email;
       const [lead] = await db.select({ source: leads.source }).from(leads).where(eq(leads.externalId, externalId));
       if (!lead) return res.status(404).json({ error: 'Client not found' });
-      if (lead.source !== 'jobtread') return res.status(400).json({ error: 'Only a JobTread job can be edited here.' });
+      if (lead.source !== 'jobtread') return res.status(400).json({ error: 'Only a CRM job can be edited here.' });
 
       const parsed = parseAccountEdit(req.body);
       if (!parsed.ok) return res.status(400).json({ error: parsed.error });
@@ -64,7 +65,7 @@ export function registerClientAccountRoutes(app: Express) {
         actor, system: 'jobtread', action: 'update_account', targetId: externalId,
         summary: JSON.stringify(edit).slice(0, 500), ok: result.ok, error: result.error || null,
       });
-      if (!result.ok) return res.status(502).json({ error: result.error || 'JobTread update failed' });
+      if (!result.ok) return res.status(jobTreadWriteFailStatus(result.error)).json({ error: result.error || 'Current CRM update failed' });
 
       const set = leadMirror(edit);
       if (Object.keys(set).length) await db.update(leads).set(set).where(eq(leads.externalId, externalId));

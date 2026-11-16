@@ -11,6 +11,8 @@
  * import cycle, and so they can be tested on their own.
  */
 
+import { isHexColor, readableWithWhite } from '../../../shared/contrast';
+
 /** Archie's own default primary, used when there is no company yet. */
 export const ARCHIE_PRIMARY = '#1F3A5F';
 /** Archie's own default accent (thin rules, small labels). */
@@ -64,7 +66,39 @@ export function textOn(hex: string): string {
 
 const triplet = (hex: string) => (hexToRgb(hex) ?? hexToRgb(ARCHIE_PRIMARY)!).join(' ');
 
-export interface BrandColors { primary: string; primaryDark?: string; accent?: string }
+export interface BrandColors {
+  primary: string;
+  primaryDark?: string;
+  accent?: string;
+  /**
+   * The main color the company picked on the Company page, for the app's
+   * chrome (tailwind `ink-*`: the top bar and other navy surfaces). Unset
+   * keeps Archie's own navy, exactly as before companies could choose.
+   */
+  ink?: string;
+}
+
+/** Archie's chrome navy and its two darker shades (tailwind `ink`, `ink-dark`, `ink-deep`). */
+export const ARCHIE_INK = { DEFAULT: '#1F3A5F', dark: '#16293F', deep: '#0F1C2C' } as const;
+
+/** Scale each channel toward black: `amount` 0 keeps the color, 1 is black. */
+function shade(hex: string, amount: number): string {
+  const rgb = hexToRgb(hex)!;
+  return toHex(rgb.map((c) => c * (1 - amount)) as [number, number, number]);
+}
+
+/**
+ * The ink shades for a main color: the color itself, and two darker ones in
+ * the same steps Archie's own navy takes. No color: Archie's exact values.
+ */
+export function inkShades(main?: string | null): { DEFAULT: string; dark: string; deep: string } {
+  // Only a real #RRGGBB counts; anything else is "no color".
+  if (!isHexColor(main)) return { ...ARCHIE_INK };
+  // White text sits on ink, so the color is made readable here too: a cached
+  // profile from before the server did this must not paint an unreadable bar.
+  const m = readableWithWhite(main).color;
+  return { DEFAULT: m, dark: shade(m, 0.3).toUpperCase(), deep: shade(m, 0.52).toUpperCase() };
+}
 
 /**
  * The CSS variables for a set of brand colors, as "r g b" triplets so
@@ -80,14 +114,22 @@ export function brandThemeVars(colors?: BrandColors | null): Record<string, stri
     '--brand-dark': triplet(dark),
     '--brand-accent': triplet(accent),
     '--on-brand': triplet(textOn(primary)),
+    ...inkVars(colors?.ink),
   };
+}
+
+function inkVars(main?: string | null): Record<string, string> {
+  const ink = inkShades(main);
+  return { '--ink': triplet(ink.DEFAULT), '--ink-dark': triplet(ink.dark), '--ink-deep': triplet(ink.deep) };
 }
 
 /**
  * Put the company's colors on :root (or Archie's when `colors` is null). The
- * header stays Archie's neutral ink, so the browser theme color does not change.
+ * header is ink, so the browser's theme color follows ink too.
  */
 export function applyBrandTheme(colors: BrandColors | null | undefined, root: HTMLElement | null = typeof document !== 'undefined' ? document.documentElement : null): void {
   if (!root) return;
   for (const [k, v] of Object.entries(brandThemeVars(colors))) root.style.setProperty(k, v);
+  const meta = typeof document !== 'undefined' ? document.querySelector('meta[name="theme-color"]') : null;
+  if (meta) meta.setAttribute('content', inkShades(colors?.ink).DEFAULT.toLowerCase());
 }

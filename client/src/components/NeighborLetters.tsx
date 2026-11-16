@@ -58,7 +58,7 @@ export default function NeighborLetters({ externalId }: { externalId: string }) 
       const blob = new Blob([letter.html], { type: 'text/html' });
       const plain = new Blob([letter.text], { type: 'text/plain' });
       await navigator.clipboard.write([new ClipboardItem({ 'text/html': blob, 'text/plain': plain })]);
-      flash('Copied as email — paste into GHL'); used('copied_html');
+      flash('Copied as email, paste into KynexPro'); used('copied_html');
     } catch { await copyText(); }
   };
   const print = async () => {
@@ -185,7 +185,7 @@ export default function NeighborLetters({ externalId }: { externalId: string }) 
                   <div className="border border-gray-200 rounded-lg p-3 text-[13px] leading-relaxed text-gray-800 max-h-[28rem] overflow-y-auto [&_p]:mb-2 [&_ul]:list-disc [&_ul]:ml-5 [&_ul]:mb-2 [&_li]:mb-0.5" dangerouslySetInnerHTML={{ __html: letter.html }} />
                   <div className="flex flex-wrap gap-2 mt-2">
                     <button onClick={copyText} className="text-sm px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 font-medium hover:bg-gray-200">Copy text</button>
-                    {kind === 'email' && <button onClick={copyHtml} className="text-sm px-3 py-1.5 rounded-lg bg-ink text-white font-medium">Copy for GHL email</button>}
+                    {kind === 'email' && <button onClick={copyHtml} className="text-sm px-3 py-1.5 rounded-lg bg-ink text-white font-medium">Copy for KynexPro email</button>}
                     {/* The app's WebView has no print dialog and a blank window.open page is a dead end there, so Print only shows on the website; Copy works everywhere. */}
                     {kind !== 'email' && !isNativeApp() && <button onClick={print} className="text-sm px-3 py-1.5 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark">Print on letterhead{kind === 'mailer' ? ' + QR' : ''}</button>}
                   </div>

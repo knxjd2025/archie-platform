@@ -59,7 +59,7 @@ async function gettingLinesFor(jobExternalId: string): Promise<{ lines: string[]
     const lines = [w.certainteed ? `A complete CertainTeed Integrity Roof System with ${product.name} shingles` : `A complete new ${product.name} roof system`];
     if (w.manufacturerYears) lines.push(`A ${w.manufacturerYears}-year ${w.manufacturer} product warranty`);
     lines.push('Properly sized attic ventilation to help the roof last longer');
-    return { lines, source: r.docStatus === 'approved' ? `approved ${r.type}` : `latest ${r.type} (not yet approved in JobTread — check before using)` };
+    return { lines, source: r.docStatus === 'approved' ? `approved ${r.type}` : `latest ${r.type} (not yet approved in your CRM, check before using)` };
   }
   return { lines: [], source: null };
 }

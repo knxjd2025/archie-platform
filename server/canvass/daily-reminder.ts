@@ -302,7 +302,7 @@ async function deliver(rep: Rep, msg: ReminderMessage, mode: 'on' | 'dry_run', a
     else {
       try {
         const contactId = await upsertContactByPhone(`${rep.name} (team)`, rep.phone);
-        if (!contactId) throw new Error('no GoHighLevel contact for that number');
+        if (!contactId) throw new Error('no KynexPro contact for that number');
         await sendGhlSms(contactId, msg.sms);
         smsStatus = 'sent';
       } catch (e: any) { smsStatus = 'failed'; errors.push(`sms: ${String(e?.message || e).slice(0, 200)}`); }

@@ -14,13 +14,13 @@
 export type CommsVersion = 'v1' | 'v2';
 
 export const COMMS_VERSION_LABEL: Record<CommsVersion, string> = {
-  v1: 'V1 — GoHighLevel',
+  v1: 'V1, KynexPro',
   v2: 'V2 — our own tools',
 };
 
 export const COMMS_VERSION_BLURB: Record<CommsVersion, string> = {
-  v1: 'Texts, calls and the AI answer service all run through GoHighLevel, exactly as they do today.',
-  v2: 'Texts and calls go out on our own Twilio numbers and land in our own call history. GoHighLevel stays connected and keeps receiving — nothing there is switched off.',
+  v1: 'Texts, calls and the AI answer service all run through KynexPro, exactly as they do today.',
+  v2: 'Texts and calls go out on our own Twilio numbers and land in our own call history. KynexPro stays connected and keeps receiving, nothing there is switched off.',
 };
 
 export function isCommsVersion(v: unknown): v is CommsVersion {

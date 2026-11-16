@@ -180,7 +180,7 @@ export default function Meetings({ onNavigate }: { onNavigate?: (page: string) =
         </p>
       )}
 
-      {/* The four rooms, in the order they happen */}
+      {/* The three rooms, in the order they happen */}
       <div className="flex flex-wrap gap-1.5 border-b border-gray-200 pb-2">
         {state?.meetings.map((m) => (
           <button

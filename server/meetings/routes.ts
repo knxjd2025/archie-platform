@@ -6,7 +6,7 @@
  * (just after the syncs) so no room works from a week-old picture, with a
  * Refresh for when the 8am meeting can't wait for the next hour.
  *
- * Access follows the room: leadership and payroll carry pay figures and are
+ * Access follows the room: leadership carries pay figures and is
  * admin-only; claims is sales and up; the sales meeting is open to everyone,
  * so a rep can see their own week before they walk in.
  */
@@ -94,10 +94,6 @@ const actionView = (a: typeof meetingActions.$inferSelect, names: Map<string, st
 
 /**
  * Scorecard, rocks, issues and rating for each room this person may open.
- *
- * Payroll is skipped on purpose: it is a processing meeting, not a leadership
- * room, and giving it an issues list would add ceremony to the one meeting
- * whose job is simply to get money out of the door.
  */
 async function loadSpine(
   mondayIso: string,

@@ -16,6 +16,7 @@ import {
   index,
   primaryKey,
   check,
+  customType,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
@@ -88,6 +89,29 @@ export const passwordLinks = pgTable('password_links', {
   // Created by migrations/0004 and recorded in its snapshot; declared here so
   // drizzle-kit does not see it as extra and drop it.
   purposeCheck: check('password_links_purpose_check', sql`${t.purpose} IN ('welcome','reset')`),
+}));
+
+/** Raw bytes (Postgres bytea). node-postgres reads and writes these as Buffers. */
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => 'bytea' });
+
+/**
+ * Images a company uploads for its branding, one per kind (the logo today).
+ * Kept in the database so Archie needs no file storage service. Served by the
+ * public logo route (server/company/routes.ts), which runs as the company, so
+ * it can only ever find that company's own row. Created by migrations/0005.
+ */
+export const companyAssets = pgTable('company_assets', {
+  companyId: companyId(),
+  kind: text('kind').notNull(),
+  // Sniffed from the bytes on upload, never taken from the browser's claim.
+  contentType: text('content_type').notNull(),
+  bytes: bytea('bytes').notNull(),
+  sha256: text('sha256').notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (t) => ({
+  pk: primaryKey({ columns: [t.companyId, t.kind] }),
+  kindCheck: check('company_assets_kind_check', sql`${t.kind} IN ('logo')`),
+  contentTypeCheck: check('company_assets_content_type_check', sql`${t.contentType} IN ('image/png','image/jpeg','image/webp')`),
 }));
 
 export const companyIntegrations = pgTable('company_integrations', {
@@ -1715,7 +1739,7 @@ export const meetingNotes = pgTable('meeting_notes', {
   companyId: companyId(),
   id: serial('id').primaryKey(),
   weekId: integer('week_id').references(() => meetingWeeks.id, { onDelete: 'cascade' }).notNull(),
-  meeting: text('meeting').notNull(),                 // leadership | claims | sales | payroll
+  meeting: text('meeting').notNull(),                 // leadership | claims | sales (old rows may say payroll; reads ignore them)
   notes: text('notes').notNull().default(''),
   updatedBy: text('updated_by'),
   updatedAt: timestamp('updated_at').defaultNow(),

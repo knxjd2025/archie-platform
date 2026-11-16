@@ -299,24 +299,24 @@ export default function RoofReports({ externalId }: { externalId: string; defaul
         { proposal: true, budget: true, materialOrder: true },
       );
       if (r.upToDate) {
-        flash('JobTread already matches this report — nothing to change.');
+        flash('Your CRM already matches this report, nothing to change.');
       } else if (r.updated) {
         // The draft was rewritten rather than duplicated, which is the whole
         // point: one job, one proposal, one price.
-        flash(`Updated the existing JobTread proposal — ${r.lineCount} line${r.lineCount === 1 ? '' : 's'}, still a draft.`);
+        flash(`Updated the existing proposal in your CRM, ${r.lineCount} line${r.lineCount === 1 ? '' : 's'}, still a draft.`);
       } else {
         const made = [
           r.proposal?.ok ? 'proposal' : null,
           r.budget?.ok ? `budget (${r.budget.created} items)` : null,
           r.materialOrder?.ok ? 'material order' : null,
         ].filter(Boolean).join(', ');
-        flash(made ? `Created in JobTread as drafts: ${made}. Review there, then send for signature.` : "Nothing created — that report has no pricing yet.");
+        flash(made ? `Created in your CRM as drafts: ${made}. Review there, then send for signature.` : "Nothing created — that report has no pricing yet.");
       }
       await load();
     } catch (e: any) {
       // A 409 is a deliberate refusal (the proposal is already with the
       // customer), not a failure — say what it is, and what to do instead.
-      flash(e?.message || "Couldn't create in JobTread.");
+      flash(e?.message || "Couldn't create in your CRM.");
     } finally { setPushing(null); }
   };
 
@@ -470,7 +470,7 @@ export default function RoofReports({ externalId }: { externalId: string; defaul
               <label className="flex items-start gap-2 text-sm text-gray-700 bg-gray-50 rounded-lg p-2.5 cursor-pointer">
                 <input type="checkbox" checked={useJobFiles} onChange={(e) => setUseJobFiles(e.target.checked)} className="mt-0.5" />
                 <span className="min-w-0">
-                  <span className="font-medium">Use this job's JobTread file</span>
+                  <span className="font-medium">Use this job's Current CRM file</span>
                   <span className="block text-xs text-gray-500">
                     {ctxLoading ? 'Checking what\'s on the job…'
                       : ctx ? [
@@ -799,7 +799,7 @@ export default function RoofReports({ externalId }: { externalId: string; defaul
                           </select>
                         </div>
                       </div>
-                      <p className="text-[11px] text-gray-500">All three show on the document as a comparison; the tier you pick here is the one priced and pushed to JobTread.</p>
+                      <p className="text-[11px] text-gray-500">All three show on the document as a comparison; the tier you pick here is the one priced and pushed to your CRM.</p>
 
                       {/* Specialty scope on top of the roof system — skylights,
                           chimney work, decking, ventilation, gutters, a low-slope
@@ -882,7 +882,7 @@ export default function RoofReports({ externalId }: { externalId: string; defaul
               </div>
               <p className="text-xs text-gray-400">{reusesPrior
                 ? 'Builds from this job\u2019s most recent report, so the findings and pricing match what the customer has already seen. Ready in a few seconds.'
-                : 'Pulls the job\u2019s photos, notes and documents from JobTread, analyses the photos for damage, and builds the report here. Takes 2\u20135 minutes \u2014 you can leave this page and come back.'}</p>
+                : 'Pulls the job\u2019s photos, notes and documents from your CRM, analyses the photos for damage, and builds the report here. Takes 2\u20135 minutes \u2014 you can leave this page and come back.'}</p>
             </div>
           )}
 
@@ -928,10 +928,10 @@ export default function RoofReports({ externalId }: { externalId: string; defaul
                             r.jobtread?.locked
                               ? r.jobtread.message || 'That proposal is already with the customer.'
                               : r.jobtread?.stale
-                                ? 'Update the JobTread proposal to match this report'
+                                ? 'Update the proposal in your CRM to match this report'
                                 : r.jobtread?.pushed
-                                  ? 'JobTread already has this report'
-                                  : 'Create a signature-ready proposal, the job budget, and a material/work order in JobTread (all drafts)'
+                                  ? 'Your CRM already has this report'
+                                  : 'Create a signature-ready proposal, the job budget, and a material/work order in your CRM (all drafts)'
                           }
                           className={`text-xs disabled:opacity-50 ${
                             r.jobtread?.stale && !r.jobtread?.locked
@@ -942,10 +942,10 @@ export default function RoofReports({ externalId }: { externalId: string; defaul
                           {pushing === r.reportId
                             ? 'Sending…'
                             : r.jobtread?.stale && !r.jobtread?.locked
-                              ? '↻ Update JobTread'
+                              ? '↻ Update Current CRM'
                               : r.jobtread?.pushed
-                                ? '✓ In JobTread'
-                                : '→ JobTread'}
+                                ? '✓ In Current CRM'
+                                : '→ Current CRM'}
                         </button>
                         <button
                           onClick={() => setBuilding(r.reportId)}

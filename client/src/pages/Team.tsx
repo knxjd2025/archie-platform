@@ -39,13 +39,13 @@ function RepSelect({ value, onChange, options, allowCustom }: { value: string; o
   const [custom, setCustom] = useState(!!value && !known);
   return (
     <div className="flex flex-col gap-1">
-      <select aria-label="JobTread Sales Rep" value={custom ? CUSTOM : value} className={small}
+      <select aria-label="Current CRM Sales Rep" value={custom ? CUSTOM : value} className={small}
         onChange={(e) => { if (e.target.value === CUSTOM) { setCustom(true); onChange(''); } else { setCustom(false); onChange(e.target.value); } }}>
-        <option value="">— not a JobTread sales rep —</option>
+        <option value="">Not a CRM sales rep</option>
         {options.map((o) => <option key={o} value={o}>{o}</option>)}
         {allowCustom !== false && <option value={CUSTOM}>Type a name…</option>}
       </select>
-      {custom && <input aria-label="Custom JobTread Sales Rep name" placeholder="Exact JobTread dropdown value" value={value} onChange={(e) => onChange(e.target.value)} className={small} />}
+      {custom && <input aria-label="Custom Current CRM Sales Rep name" placeholder="Exact Current CRM dropdown value" value={value} onChange={(e) => onChange(e.target.value)} className={small} />}
     </div>
   );
 }
@@ -85,7 +85,7 @@ export default function Team() {
   async function loadJt() {
     setJtError(null);
     try { setJt(await api.get<RepSync>('/api/team/jobtread-reps')); }
-    catch (e: any) { setJtError(e?.message || "Couldn't read JobTread's sales reps"); }
+    catch (e: any) { setJtError(e?.message || "Couldn't read your CRM's sales reps"); }
   }
   useEffect(() => { load(); loadJt(); }, []);
 
@@ -128,7 +128,7 @@ export default function Team() {
       const loginOn = typeof r.welcomeEmailSent === 'boolean';
       let msg = loginOn ? loginTurnedOnMessage({ name: r.name, welcomeEmailSent: r.welcomeEmailSent! }) : `Saved ${r.name}.`;
       if (r.roleChangeNote) msg += ` ${r.roleChangeNote}`;
-      if (r.jobtreadRole && !r.jobtreadRole.ok) msg += ` (JobTread role not updated: ${r.jobtreadRole.reason})`;
+      if (r.jobtreadRole && !r.jobtreadRole.ok) msg += ` (CRM role not updated: ${r.jobtreadRole.reason})`;
       // Long enough to read when the welcome email did not go out.
       flash(msg, loginOn && !r.welcomeEmailSent ? 15000 : undefined); cancelEdit(); await Promise.all([load(), loadJt()]);
     } catch (e: any) { setEditError(e?.message || "Couldn't save"); }
@@ -140,7 +140,7 @@ export default function Team() {
     try {
       const r = await api.post<RepSync>('/api/sync/jobtread-reps', {});
       setJt(r);
-      flash(r.linked ? `Linked ${r.linked} by name from JobTread` : r.unmapped.length ? `JobTread has ${r.unmapped.length} rep${r.unmapped.length === 1 ? '' : 's'} not in the app yet` : 'Roster matches JobTread');
+      flash(r.linked ? `Linked ${r.linked} by name from your CRM` : r.unmapped.length ? `Your CRM has ${r.unmapped.length} rep${r.unmapped.length === 1 ? '' : 's'} not in the app yet` : 'Roster matches your CRM');
       await load();
     } catch (e: any) { setJtError(e?.message || 'Sync failed'); }
     finally { setSyncing(false); }
@@ -178,7 +178,7 @@ export default function Team() {
 
       <p className="text-xs text-gray-400 -mt-2">
         Admin sees everything · Sales Director sees every record · Sales Leader sees their own reps · Customer Service sees every customer but no money · Sales Rep sees their own book · Production sees the board and schedule.
-        The <b>JobTread Sales Rep</b> mapping is what puts a job in someone's book — it must be the exact dropdown value.
+        The <b>Current CRM Sales Rep</b> mapping is what puts a job in someone's book, so it must be the exact dropdown value.
       </p>
 
       {loadError && (
@@ -190,7 +190,7 @@ export default function Team() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-100"><tr className="text-left text-gray-500">
               <th className="px-4 py-3 font-medium">Name</th><th className="px-4 py-3 font-medium">Email</th><th className="px-4 py-3 font-medium">Phone</th><th className="px-4 py-3 font-medium">Role</th>
-              <th className="px-4 py-3 font-medium">JobTread Sales Rep</th><th className="px-4 py-3 font-medium">Reports to</th><th className="px-4 py-3 font-medium">Login</th><th className="px-4 py-3 font-medium">Active</th><th className="px-4 py-3" />
+              <th className="px-4 py-3 font-medium">Current CRM Sales Rep</th><th className="px-4 py-3 font-medium">Reports to</th><th className="px-4 py-3 font-medium">Login</th><th className="px-4 py-3 font-medium">Active</th><th className="px-4 py-3" />
             </tr></thead>
             <tbody className="divide-y divide-gray-50">
               {loading ? (
@@ -237,7 +237,7 @@ export default function Team() {
                     <td className="px-4 py-3 text-gray-600">{ROLE_LABEL[m.role] || m.role}</td>
                     <td className="px-4 py-3 text-gray-600">
                       {m.jobtreadSalesRep || <span className="text-gray-300">—</span>}
-                      {jtMissing && <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700" title="JobTread's Sales Rep dropdown no longer has this value — jobs can't be attributed to it">not in JobTread</span>}
+                      {jtMissing && <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700" title="Your CRM's Sales Rep dropdown no longer has this value, jobs can't be attributed to it">not in Current CRM</span>}
                     </td>
                     <td className="px-4 py-3 text-gray-600">{leader?.name || '—'}</td>
                     <td className="px-4 py-3"><YesNo on={m.canLogin} />{m.seesAllCalendars && <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700" title="Sees every calendar">📅 all</span>}</td>
@@ -255,23 +255,23 @@ export default function Team() {
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h2 className="text-sm font-semibold text-gray-800">Sales reps in JobTread</h2>
-            <p className="text-xs text-gray-400">The job "Sales Rep" dropdown as JobTread has it right now. Each name should be one person here. Runs on its own every hour; names that match a team member exactly are linked automatically.</p>
+            <h2 className="text-sm font-semibold text-gray-800">Sales reps in Current CRM</h2>
+            <p className="text-xs text-gray-400">The job "Sales Rep" dropdown as your CRM has it right now. Each name should be one person here. Runs on its own every hour; names that match a team member exactly are linked automatically.</p>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={loadJt} className="text-xs px-2.5 py-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200">Refresh</button>
-            <button onClick={syncFromJobTread} disabled={syncing} className="text-xs px-3 py-1.5 rounded-lg bg-ink text-white font-medium disabled:opacity-50">{syncing ? 'Syncing…' : 'Sync from JobTread'}</button>
+            <button onClick={syncFromJobTread} disabled={syncing} className="text-xs px-3 py-1.5 rounded-lg bg-ink text-white font-medium disabled:opacity-50">{syncing ? 'Syncing…' : 'Sync from Current CRM'}</button>
           </div>
         </div>
         {jtError ? (
           <div className="px-4 py-4 flex items-center gap-2 text-sm text-red-600"><span>{jtError}</span><button onClick={loadJt} className="underline">Retry</button></div>
         ) : !jt ? (
-          <p className="px-4 py-4 text-sm text-gray-400">Reading JobTread…</p>
+          <p className="px-4 py-4 text-sm text-gray-400">Reading your CRM…</p>
         ) : (
           <div className="divide-y divide-gray-50">
             {jt.unmapped.length > 0 && (
               <div className="px-4 py-3 bg-amber-50/60">
-                <p className="text-xs font-semibold text-amber-800 mb-1.5">In JobTread, not in the app ({jt.unmapped.length}) — their jobs are in nobody's book until they're added</p>
+                <p className="text-xs font-semibold text-amber-800 mb-1.5">In your CRM, not in the app ({jt.unmapped.length}): their jobs are in nobody's book until they're added</p>
                 <div className="flex flex-wrap gap-2">
                   {jt.unmapped.map((n) => (
                     <button key={n} onClick={() => prefillFromJt(n)} className="text-xs px-2.5 py-1 rounded-lg bg-white border border-amber-300 text-amber-900 hover:bg-amber-100">＋ Add {n}</button>
@@ -281,7 +281,7 @@ export default function Team() {
             )}
             {jt.stale.length > 0 && (
               <div className="px-4 py-3">
-                <p className="text-xs font-semibold text-gray-700 mb-1">Mapped here, but JobTread's dropdown no longer has the name</p>
+                <p className="text-xs font-semibold text-gray-700 mb-1">Mapped here, but your CRM's dropdown no longer has the name</p>
                 <ul className="text-xs text-gray-600 space-y-0.5">{jt.stale.map((s) => <li key={s.id}>{s.name} → "{s.repName}"</li>)}</ul>
               </div>
             )}

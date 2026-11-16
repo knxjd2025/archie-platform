@@ -47,6 +47,7 @@ import { timingSafeEqualStr } from './security-config';
 import { rateLimit } from './lib/rate-limit';
 import { repLeadWhere, ownsLead } from './access/rep-scope';
 import { canUseAdvisor } from '../shared/advisors';
+import { CRM_LABEL, MESSAGING_LABEL } from '../shared/product-names';
 import { canSeeMoney } from '../shared/rbac';
 import { buildAgentViewer } from './agents/viewer';
 import { logWrite } from './writes/log';
@@ -70,6 +71,8 @@ import { registerCommsRoutes } from './comms/routes';
 import { blockDisabledJobs } from './tenant/cron';
 import { verifyGhlWebhookSecret } from './integrations/ghl/webhook-secret';
 import { registerGhlConnectionRoutes } from './integrations/ghl/routes';
+import { registerConnectionRoutes } from './integrations/connection-routes';
+import { registerCompanyRoutes } from './company/routes';
 import { currentGhlLocationId, ghlAppBase } from './integrations/ghl/connection';
 import { getCompanyByGhlLocation } from './tenant/companies';
 import { runAsCompany } from './tenant/context';
@@ -157,6 +160,8 @@ export function registerRoutes(app: Express) {
   registerJobCommissionRoutes(app);
   registerNeighborLetterRoutes(app);
   registerGhlConnectionRoutes(app);
+  registerConnectionRoutes(app);
+  registerCompanyRoutes(app);
   registerInsuranceLetterRoutes(app);
   registerCertificateRoutes(app);
   registerSignatureRoutes(app);
@@ -339,7 +344,7 @@ export function registerRoutes(app: Express) {
       const result = await ghl.getContacts({ limit });
       res.json(result);
     } catch (error: any) {
-      return sendUpstreamFailure(res, error, 'GoHighLevel', 'GET /api/integrations/ghl/contacts');
+      return sendUpstreamFailure(res, error, MESSAGING_LABEL, 'GET /api/integrations/ghl/contacts');
     }
   });
 
@@ -351,7 +356,7 @@ export function registerRoutes(app: Express) {
       const result = await jobtread.getContacts({ limit });
       res.json(result);
     } catch (error: any) {
-      return sendUpstreamFailure(res, error, 'JobTread', 'GET /api/integrations/jobtread/contacts');
+      return sendUpstreamFailure(res, error, CRM_LABEL, 'GET /api/integrations/jobtread/contacts');
     }
   });
 
@@ -363,7 +368,7 @@ export function registerRoutes(app: Express) {
       const result = await jobtread.getJobs({ limit });
       res.json(result);
     } catch (error: any) {
-      return sendUpstreamFailure(res, error, 'JobTread', 'GET /api/integrations/jobtread/jobs');
+      return sendUpstreamFailure(res, error, CRM_LABEL, 'GET /api/integrations/jobtread/jobs');
     }
   });
 
@@ -375,7 +380,7 @@ export function registerRoutes(app: Express) {
       const result = await jobtread.getInvoices({ limit });
       res.json(result);
     } catch (error: any) {
-      return sendUpstreamFailure(res, error, 'JobTread', 'GET /api/integrations/jobtread/invoices');
+      return sendUpstreamFailure(res, error, CRM_LABEL, 'GET /api/integrations/jobtread/invoices');
     }
   });
 
@@ -386,7 +391,7 @@ export function registerRoutes(app: Express) {
       const result = await jobtread.getJob(req.params.jobId);
       res.json(result);
     } catch (error: any) {
-      return sendUpstreamFailure(res, error, 'JobTread', 'GET /api/integrations/jobtread/jobs/:jobId');
+      return sendUpstreamFailure(res, error, CRM_LABEL, 'GET /api/integrations/jobtread/jobs/:jobId');
     }
   });
 
@@ -405,7 +410,7 @@ export function registerRoutes(app: Express) {
       const result = await jobtread.getOutstandingInvoices();
       res.json(result);
     } catch (error: any) {
-      return sendUpstreamFailure(res, error, 'JobTread', 'GET /api/integrations/jobtread/invoices/outstanding');
+      return sendUpstreamFailure(res, error, CRM_LABEL, 'GET /api/integrations/jobtread/invoices/outstanding');
     }
   });
 
@@ -417,7 +422,7 @@ export function registerRoutes(app: Express) {
       const result = await ghl.getOpportunities({ limit });
       res.json(result);
     } catch (error: any) {
-      return sendUpstreamFailure(res, error, 'GoHighLevel', 'GET /api/integrations/ghl/opportunities');
+      return sendUpstreamFailure(res, error, MESSAGING_LABEL, 'GET /api/integrations/ghl/opportunities');
     }
   });
 
@@ -430,7 +435,7 @@ export function registerRoutes(app: Express) {
       // A set-password email's snippet is replaced, so its link is never shown.
       res.json(Array.isArray(result?.conversations) ? { ...result, conversations: result.conversations.map(redactGhlConversation) } : result);
     } catch (error: any) {
-      return sendUpstreamFailure(res, error, 'GoHighLevel', 'GET /api/integrations/ghl/conversations');
+      return sendUpstreamFailure(res, error, MESSAGING_LABEL, 'GET /api/integrations/ghl/conversations');
     }
   });
 
@@ -441,7 +446,7 @@ export function registerRoutes(app: Express) {
       const result = await ghl.getMessages(req.params.conversationId);
       res.json(withoutPasswordLinkMessagesIn(result));
     } catch (error: any) {
-      return sendUpstreamFailure(res, error, 'GoHighLevel', 'GET /api/integrations/ghl/conversations/:conversationId/messages');
+      return sendUpstreamFailure(res, error, MESSAGING_LABEL, 'GET /api/integrations/ghl/conversations/:conversationId/messages');
     }
   });
 
@@ -452,7 +457,7 @@ export function registerRoutes(app: Express) {
       const result = await ghl.getCalendars();
       res.json(result);
     } catch (error: any) {
-      return sendUpstreamFailure(res, error, 'GoHighLevel', 'GET /api/integrations/ghl/calendars');
+      return sendUpstreamFailure(res, error, MESSAGING_LABEL, 'GET /api/integrations/ghl/calendars');
     }
   });
 
@@ -471,7 +476,7 @@ export function registerRoutes(app: Express) {
       const result = await ghl.getAppointments({ calendarId, startTime, endTime });
       res.json(result);
     } catch (error: any) {
-      return sendUpstreamFailure(res, error, 'GoHighLevel', 'GET /api/integrations/ghl/appointments');
+      return sendUpstreamFailure(res, error, MESSAGING_LABEL, 'GET /api/integrations/ghl/appointments');
     }
   });
 
@@ -490,7 +495,7 @@ export function registerRoutes(app: Express) {
       const result = await ghl.sendSms(phone, message, contactId);
       res.json(result);
     } catch (error: any) {
-      return sendUpstreamFailure(res, error, 'GoHighLevel', 'POST /api/integrations/ghl/sms');
+      return sendUpstreamFailure(res, error, MESSAGING_LABEL, 'POST /api/integrations/ghl/sms');
     }
   });
 
@@ -501,7 +506,7 @@ export function registerRoutes(app: Express) {
       const result = await ghl.getContact(req.params.contactId);
       res.json(result);
     } catch (error: any) {
-      return sendUpstreamFailure(res, error, 'GoHighLevel', 'GET /api/integrations/ghl/contacts/:contactId');
+      return sendUpstreamFailure(res, error, MESSAGING_LABEL, 'GET /api/integrations/ghl/contacts/:contactId');
     }
   });
 

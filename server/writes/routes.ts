@@ -19,6 +19,7 @@ import { canBookOn } from '../calendar/board';
 import { applyAssignment } from '../access/assignment-service';
 import { sendFailure } from '../lib/failure';
 import { dataScope } from '../../shared/rbac';
+import { jobTreadWriteFailStatus } from '../integrations/jobtread-connection';
 
 
 export interface AppointmentSlot { date: string; time: string; durationMins: number; type: string; notes: string }
@@ -119,7 +120,7 @@ export function registerWriteRoutes(app: Express) {
       summary: `${before?.stage || '?'} → ${stage}`, ok: result.ok, error: result.error || null,
     });
 
-    if (!result.ok) return res.status(502).json({ error: result.error || 'JobTread write failed' });
+    if (!result.ok) return res.status(jobTreadWriteFailStatus(result.error)).json({ error: result.error || 'Current CRM write failed' });
 
     // Optimistic local update so the board reflects immediately (sync reconciles).
     await db.update(leads).set({ stage }).where(eq(leads.externalId, externalId));
@@ -150,7 +151,7 @@ export function registerWriteRoutes(app: Express) {
       summary: message.slice(0, 120), ok: result.ok, error: result.error || null,
     });
 
-    if (!result.ok) return res.status(502).json({ error: result.error || 'JobTread note failed' });
+    if (!result.ok) return res.status(502).json({ error: result.error || 'Current CRM note failed' });
     res.json({ ok: true });
   }));
 
@@ -194,7 +195,7 @@ export function registerWriteRoutes(app: Express) {
       summary: message.slice(0, 120), ok: result.success, error: result.error || null,
     });
 
-    if (!result.success) return res.status(502).json({ error: result.error || 'GoHighLevel send failed' });
+    if (!result.success) return res.status(502).json({ error: result.error || 'KynexPro send failed' });
     res.json({ ok: true });
   }));
 
@@ -220,7 +221,7 @@ export function registerWriteRoutes(app: Express) {
       ok: result.ok, error: result.error || null,
     });
 
-    if (!result.ok) return res.status(502).json({ error: result.error || 'JobTread contact update failed' });
+    if (!result.ok) return res.status(jobTreadWriteFailStatus(result.error)).json({ error: result.error || 'Current CRM contact update failed' });
 
     // Mirror locally so the app reflects immediately (sync reconciles).
     const patch: Record<string, string> = {};
@@ -240,7 +241,7 @@ export function registerWriteRoutes(app: Express) {
     if (!(await ownsLead(req.session.user! as SessionUser, externalId))) return res.status(404).json({ error: 'not found' });
 
     const [lead] = await db.select({ phone: leads.phone }).from(leads).where(eq(leads.externalId, externalId));
-    if (!lead?.phone) return res.status(400).json({ error: 'This lead has no phone to match a GoHighLevel contact.' });
+    if (!lead?.phone) return res.status(400).json({ error: 'This lead has no phone to match a KynexPro contact.' });
 
     const ghl = new GoHighLevelClient();
     let contactId: string | null = null;
@@ -248,15 +249,15 @@ export function registerWriteRoutes(app: Express) {
       const cs: any = await ghl.getContacts({ query: lead.phone, limit: 1 });
       contactId = cs?.contacts?.[0]?.id || null;
     } catch { /* fall through to 404 below */ }
-    if (!contactId) return res.status(404).json({ error: 'No matching GoHighLevel contact for this lead.' });
+    if (!contactId) return res.status(404).json({ error: 'No matching KynexPro contact for this lead.' });
 
     let ok = true; let error: string | null = null;
     try {
       await ghl.addTagToContact(contactId, [tag]);
-    } catch (e: any) { ok = false; error = e?.message || 'GoHighLevel tag failed'; }
+    } catch (e: any) { ok = false; error = e?.message || 'KynexPro tag failed'; }
 
     await logWrite({ actor, system: 'ghl', action: 'add_tag', targetId: contactId, summary: tag, ok, error });
-    if (!ok) return sendFailure(res, error, 'POST /api/leads/:externalId/tag', 502, 'GoHighLevel tag failed');
+    if (!ok) return sendFailure(res, error, 'POST /api/leads/:externalId/tag', 502, 'KynexPro tag failed');
     res.json({ ok: true, tag });
   }));
 
@@ -323,7 +324,7 @@ export function registerWriteRoutes(app: Express) {
     try {
       const ghl = new GoHighLevelClient();
       await ghl.createContact({ firstName, lastName, email: email || undefined, phone: phone || undefined } as any);
-    } catch (e: any) { ghlOk = false; ghlErr = e?.message || 'GHL createContact failed'; }
+    } catch (e: any) { ghlOk = false; ghlErr = e?.message || 'KynexPro createContact failed'; }
 
     // 3) Local lead row — linked to the JobTread job when created (sync reconciles),
     //    else a standalone manual row so the lead is never lost. The rep's name

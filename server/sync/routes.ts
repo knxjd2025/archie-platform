@@ -26,7 +26,7 @@ export function registerSyncRoutes(app: Express) {
       const { pullFromJobTread } = await import('./jobtread-roles');
       res.json(await pullFromJobTread());
     } catch (e: any) {
-      return sendFailure(res, e, 'POST /api/sync/jobtread-roles', 502, 'JobTread role sync failed');
+      return sendFailure(res, e, 'POST /api/sync/jobtread-roles', 502, 'Current CRM role sync failed');
     }
   });
 
@@ -37,7 +37,7 @@ export function registerSyncRoutes(app: Express) {
       const { syncSalesRepsFromJobTread } = await import('./jobtread-reps');
       res.json(await syncSalesRepsFromJobTread());
     } catch (e: any) {
-      return sendFailure(res, e, 'POST /api/sync/jobtread-reps', 502, 'JobTread sales-rep sync failed');
+      return sendFailure(res, e, 'POST /api/sync/jobtread-reps', e?.status === 409 ? 409 : 502, 'Current CRM sales-rep sync failed');
     }
   });
 

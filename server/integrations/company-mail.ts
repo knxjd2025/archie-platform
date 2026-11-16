@@ -52,7 +52,7 @@ export async function sendCompanyEmail(msg: CompanyEmail): Promise<CompanyEmailR
 
   const recipient = splitAddresses(to)[0];
   const contactId = await upsertContactByEmail(msg.toName ?? '', recipient);
-  if (!contactId) throw new Error(`Could not find or create a GHL contact for ${recipient}.`);
+  if (!contactId) throw new Error(`Could not find or create a KynexPro contact for ${recipient}.`);
 
   let html = msg.html;
   let attachmentUrls: string[] = [];
@@ -69,7 +69,7 @@ export async function sendCompanyEmail(msg: CompanyEmail): Promise<CompanyEmailR
     emailCc: [...splitAddresses(to).slice(1), ...splitAddresses(msg.cc)],
     attachments: attachmentUrls,
   });
-  if (!messageId) throw new Error('GHL send returned no message id');
+  if (!messageId) throw new Error('KynexPro send returned no message id');
   return { via: 'ghl', messageId };
 }
 
@@ -84,10 +84,10 @@ async function conversationFor(contactId: string): Promise<string> {
     body: JSON.stringify({ locationId: conn.locationId, contactId }),
     signal: AbortSignal.timeout(20_000),
   });
-  if (!res.ok) throw new Error(`GHL create conversation ${res.status}: ${await res.text().catch(() => '')}`);
+  if (!res.ok) throw new Error(`KynexPro create conversation ${res.status}: ${await res.text().catch(() => '')}`);
   const data = await res.json();
   const id = data.conversation?.id ?? data.id;
-  if (!id) throw new Error('GHL create conversation returned no id');
+  if (!id) throw new Error('KynexPro create conversation returned no id');
   return id;
 }
 
@@ -106,11 +106,11 @@ async function uploadAttachments(contactId: string, attachments: MailAttachment[
     const res = await fetch(`${GHL_API_BASE}/conversations/messages/upload`, {
       method: 'POST', headers, body: form, signal: AbortSignal.timeout(60_000),
     });
-    if (!res.ok) throw new Error(`GHL upload ${res.status}: ${await res.text().catch(() => '')}`);
+    if (!res.ok) throw new Error(`KynexPro upload ${res.status}: ${await res.text().catch(() => '')}`);
     const data = await res.json();
     const files = data.uploadedFiles ?? {};
     const url = files[a.filename] ?? Object.values(files)[0];
-    if (typeof url !== 'string' || !url) throw new Error(`GHL upload of ${a.filename} returned no URL`);
+    if (typeof url !== 'string' || !url) throw new Error(`KynexPro upload of ${a.filename} returned no URL`);
     out.set(a.filename, url);
   }
   return out;

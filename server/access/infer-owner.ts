@@ -118,7 +118,7 @@ export function inferOwner(ev: JobEvidence, reps: RepIdentity[]): Suggestion {
     if (r) {
       return {
         primary: pick(r), secondary: [], confidence: 'high', source: 'jt_sales_rep',
-        reason: `JobTread Sales Rep is set to ${r.repName}.`,
+        reason: `Current CRM Sales Rep is set to ${r.repName}.`,
       };
     }
   }

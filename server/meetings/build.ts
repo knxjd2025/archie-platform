@@ -1,5 +1,5 @@
 /**
- * Assembling Monday's four agendas from what the app already knows.
+ * Assembling Monday's three agendas from what the app already knows.
  *
  * Each meeting gets the numbers its room actually argues about, and — more
  * usefully — the short list of things that need a decision. A page of figures
@@ -433,64 +433,11 @@ async function salesAgenda(mondayIso: string): Promise<MeetingAgenda> {
   return { key: 'sales', sections };
 }
 
-// ------------------------------------------------------------------- payroll
-
-async function payrollAgenda(mondayIso: string): Promise<MeetingAgenda> {
-  const sections: MeetingSection[] = [];
-  const rows = await db.select().from(jobCommissions);
-
-  // "Due" is approved and unpaid — the same definition the Payouts board uses.
-  const due = rows.filter((r) => r.status === 'approved' && !r.paidAt);
-  const byRep = new Map<string, { n: number; total: number }>();
-  for (const r of due) {
-    const k = r.repName || 'Unassigned';
-    const cur = byRep.get(k) ?? { n: 0, total: 0 };
-    byRep.set(k, { n: cur.n + 1, total: cur.total + num(r.commissionAmount) });
-  }
-  const dueTotal = due.reduce((s, r) => s + num(r.commissionAmount), 0);
-
-  sections.push({
-    heading: `Owed now · ${money(dueTotal)} across ${due.length} job${due.length === 1 ? '' : 's'}`,
-    rows: [...byRep.entries()]
-      .sort((a, b) => b[1].total - a[1].total)
-      .map(([rep, v]) => ({ label: rep, value: money(v.total), note: `${v.n} job${v.n === 1 ? '' : 's'}` })),
-    empty: 'Nothing is approved and unpaid.',
-  });
-
-  // Ready means the numbers are in: revenue filed and the rep has said where
-  // the lead came from. Anything else cannot be approved yet, and is below.
-  const ready = rows.filter((r) => r.status === 'open' && num(r.revenue) > 0 && !!r.leadSource);
-  sections.push({
-    heading: 'Ready to approve',
-    rows: ready.map((r) => ({
-      label: r.jobName || r.jobExternalId,
-      value: money(num(r.commissionAmount)),
-      note: r.repName ?? '',
-    })),
-    empty: 'Nothing is waiting to be approved.',
-  });
-
-  // A record with no revenue cannot be paid, and it is always somebody waiting.
-  const incomplete = rows.filter((r) => r.status === 'open' && (num(r.revenue) === 0 || !r.leadSource));
-  sections.push({
-    heading: 'Cannot be worked out yet',
-    rows: incomplete.slice(0, 20).map((r) => ({
-      label: r.jobName || r.jobExternalId,
-      value: num(r.revenue) === 0 ? 'no revenue filed' : 'no lead source',
-      note: r.repName ?? '',
-    })),
-    empty: 'Every open record has what it needs.',
-  });
-
-  return { key: 'payroll', sections };
-}
-
-/** All four, assembled together. */
+/** All three, assembled together. */
 export async function buildAgendas(mondayIso: string): Promise<MeetingAgenda[]> {
   return Promise.all([
     leadershipAgenda(mondayIso),
     claimsAgenda(mondayIso),
     salesAgenda(mondayIso),
-    payrollAgenda(mondayIso),
   ]);
 }

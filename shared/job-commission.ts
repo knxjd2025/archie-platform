@@ -40,7 +40,7 @@ export interface JobCommissionCheck {
 }
 
 export const JOB_COMMISSION_CHECKS: readonly JobCommissionCheck[] = [
-  { key: 'sold_confirmed', who: 'rep', label: 'Sold — signed contract / approved estimate is in JobTread' },
+  { key: 'sold_confirmed', who: 'rep', label: 'Sold: signed contract / approved estimate is in your CRM' },
   { key: 'lead_source_confirmed', who: 'rep', label: 'Lead source and job type above are correct', hint: 'This sets the overhead rate, so it has to be right.' },
   { key: 'revenue_final', who: 'admin', label: 'Revenue is the final contract price', hint: 'Change orders and supplements included.' },
   { key: 'material_final', who: 'admin', label: 'Material cost is final', hint: 'Every supplier invoice is in.' },
@@ -208,7 +208,7 @@ export function sanitizeSource(raw: unknown, by: string, at: string, seq: number
   const docId = typeof r.docId === 'string' && r.docId.trim() ? r.docId.trim().slice(0, 64) : undefined;
   if (kind === 'doc' && !docId) return null;
   const label = String(r.label ?? '').trim().slice(0, 200)
-    || (kind === 'doc' ? 'JobTread document' : 'Manual amount');
+    || (kind === 'doc' ? 'Current CRM document' : 'Manual amount');
   const id = typeof r.id === 'string' && r.id.trim() ? r.id.trim().slice(0, 64) : `s${seq}-${Date.now().toString(36)}`;
   const docAmount = Number(r.docAmount);
   return {

@@ -110,7 +110,7 @@ export class CMOAgent extends BaseAgent {
     // Tool: Send SMS to lead
     this.registerTool({
       name: 'send_sms_to_lead',
-      description: 'Send an SMS message to a lead via GoHighLevel',
+      description: 'Send an SMS message to a lead via KynexPro',
       parameters: {
         type: 'object',
         properties: {
@@ -135,7 +135,7 @@ export class CMOAgent extends BaseAgent {
     // Tool: Create follow-up task
     this.registerTool({
       name: 'create_followup_task',
-      description: 'Create a follow-up task in JobTread for a lead',
+      description: 'Create a follow-up task in the company\'s CRM for a lead',
       parameters: {
         type: 'object',
         properties: {
@@ -185,18 +185,18 @@ export class CMOAgent extends BaseAgent {
 
     this.registerTool({
       name: 'get_jobtread_lead_kpis',
-      description: 'Get JobTread lead KPIs for this month or year, including totals, status mix, win rate, projected value, and recent leads.',
+      description: 'Get the company\'s CRM lead KPIs for this month or year, including totals, status mix, win rate, projected value, and recent leads.',
       parameters: {
         type: 'object',
         properties: {
           period: {
             type: 'string',
-            description: 'Which JobTread reporting window to analyze.',
+            description: 'Which reporting window to analyze.',
             enum: ['month', 'year'],
           },
           limit: {
             type: 'number',
-            description: 'How many recent JobTread leads to include in the response.',
+            description: 'How many recent leads to include in the response.',
           },
         },
       },
@@ -304,7 +304,7 @@ export class CMOAgent extends BaseAgent {
       return await this.jobtread.getLeadKpis({ period, limit });
     } catch (error: any) {
       return {
-        error: 'Unable to fetch JobTread lead KPIs',
+        error: 'Unable to fetch the company\'s CRM lead KPIs',
         details: error.message,
       };
     }
@@ -609,7 +609,7 @@ export class CMOAgent extends BaseAgent {
           `QUALIFIED LEAD (Score: ${qualification.score}/10)\n\n${qualification.reason}\n\nRecommendation: ${qualification.recommendation}`,
           1
         );
-        actionsTaken.push('Created 1-hour follow-up task in JobTread');
+        actionsTaken.push('Created 1-hour follow-up task in the company\'s CRM');
       } catch (error: any) {
         actionsTaken.push(`Task creation failed: ${error.message}`);
       }

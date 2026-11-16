@@ -104,7 +104,7 @@ describe('isShellResponse', () => {
     expect(sw.context.isShellResponse(nav('/nope'), response('404', { status: 404 }))).toBe(false);
     expect(sw.context.isShellResponse(nav('/'), response('{}', { contentType: 'application/json' }))).toBe(false);
     expect(sw.context.isShellResponse(nav('/', 'iframe'), response('<app>'))).toBe(false);
-    for (const p of ['/r/abc', '/r/s/tok', '/r/sign/tok', '/sales-journey/', '/commercial-training/', '/roof-systems/gaf/', '/api/x']) {
+    for (const p of ['/r/abc', '/r/s/tok', '/r/sign/tok', '/roof-systems/', '/roof-systems/gaf/', '/api/x']) {
       expect(sw.context.isShellResponse(nav(p), response('<page>'))).toBe(false);
     }
   });
@@ -144,12 +144,12 @@ describe('navigations', () => {
   });
 
   it('keeps a training page under its own URL, never as the shell', async () => {
-    sw.online(async (req) => response(req.url.includes('sales-journey') ? '<journey>' : '<app>'));
+    sw.online(async (req) => response(req.url.includes('roof-systems') ? '<static page>' : '<app>'));
     await sw.navigate('/');
-    await sw.navigate('/sales-journey/');
+    await sw.navigate('/roof-systems/');
     sw.offline();
     expect((await sw.navigate('/')).body).toBe('<app>');
-    expect((await sw.navigate('/sales-journey/')).body).toBe('<journey>');
+    expect((await sw.navigate('/roof-systems/')).body).toBe('<static page>');
   });
 });
 

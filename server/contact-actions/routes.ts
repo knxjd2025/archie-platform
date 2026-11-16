@@ -45,7 +45,7 @@ export function ghlContactLinks(contactId: string | null, locationId: string, te
 
 /** The note GHL's timeline shows for a call started from the app. */
 export function callLogNote(via: CallVia, actor: string, when = new Date()): string {
-  const how = via === 'ghl-app' ? 'LeadConnector app' : via === 'ghl-web' ? 'GHL web dialer' : "rep's own phone";
+  const how = via === 'ghl-app' ? 'KynexPro app' : via === 'ghl-web' ? 'KynexPro web dialer' : "rep's own phone";
   const stamp = when.toLocaleString('en-US', { timeZone: boardTz(), month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
   return `📞 Call started from the Team App via ${how} by ${actor} — ${stamp}`;
 }
@@ -145,7 +145,7 @@ export async function findOrCreateContact(ghl: GoHighLevelClient, lead: { phone:
     // The upstream text can carry tokens and internal detail; it belongs in the
     // log, not in a toast on a rep's phone.
     console.error('[contact-actions] GoHighLevel lookup failed:', e?.message || e);
-    return { ok: false, error: 'GoHighLevel is not responding right now.' };
+    return { ok: false, error: 'KynexPro is not responding right now.' };
   }
 }
 
@@ -186,11 +186,11 @@ export function registerContactActionRoutes(app: Express) {
     const ghl = new GoHighLevelClient();
     const found = await findOrCreateContact(ghl, lead);
     if (!found.ok) return res.status(502).json({ error: `Couldn't send it — ${found.error}` });
-    if (!found.contactId) return res.status(502).json({ error: 'GoHighLevel has no contact for this client and one could not be created.' });
+    if (!found.contactId) return res.status(502).json({ error: 'KynexPro has no contact for this client and one could not be created.' });
     const result = channel === 'sms'
       ? await ghl.sendSms(lead.phone!, message, found.contactId)
       : await ghl.sendEmail(found.contactId, subject || currentProfile().displayName, message);
-    if (!result.success) return res.status(502).json({ error: result.error || 'GoHighLevel did not accept the message.' });
+    if (!result.success) return res.status(502).json({ error: result.error || 'KynexPro did not accept the message.' });
     res.json({ ok: true, contactId: found.contactId, messageId: result.messageId ?? null });
   }));
 
@@ -203,12 +203,12 @@ export function registerContactActionRoutes(app: Express) {
     const ghl = new GoHighLevelClient();
     const found = await findOrCreateContact(ghl, lead);
     if (!found.ok) return res.status(502).json({ error: `Couldn't log the call — ${found.error}` });
-    if (!found.contactId) return res.status(502).json({ error: 'GoHighLevel has no contact for this client.' });
+    if (!found.contactId) return res.status(502).json({ error: 'KynexPro has no contact for this client.' });
     try {
       await ghl.addContactNote(found.contactId, callLogNote(via, (req.session.user as SessionUser).email));
     } catch (e: any) {
       console.error('[contact-actions] GoHighLevel note failed:', e?.message || e);
-      return res.status(502).json({ error: "The call was placed, but GoHighLevel wouldn't take the note." });
+      return res.status(502).json({ error: "The call was placed, but KynexPro wouldn't take the note." });
     }
     res.json({ ok: true, contactId: found.contactId });
   }));

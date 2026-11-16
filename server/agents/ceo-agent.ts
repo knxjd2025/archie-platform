@@ -74,18 +74,18 @@ export class CEOAgent extends BaseAgent {
 
     this.registerTool({
       name: 'get_jobtread_lead_kpis',
-      description: 'Get JobTread lead KPIs for this month or year, including totals, status mix, win rate, projected value, and recent leads.',
+      description: 'Get the company\'s CRM lead KPIs for this month or year, including totals, status mix, win rate, projected value, and recent leads.',
       parameters: {
         type: 'object',
         properties: {
           period: {
             type: 'string',
-            description: 'Which JobTread reporting window to analyze.',
+            description: 'Which reporting window to analyze.',
             enum: ['month', 'year'],
           },
           limit: {
             type: 'number',
-            description: 'How many recent JobTread leads to include in the response.',
+            description: 'How many recent leads to include in the response.',
           },
         },
       },
@@ -164,7 +164,7 @@ export class CEOAgent extends BaseAgent {
 Please generate my daily briefing for ${currentProfile().displayName}. Include:
 1. Today's key metrics (use get_daily_metrics with comparison)
 2. Recent agent activity (use get_agent_activity)
-3. JobTread lead KPIs for this month (use get_jobtread_lead_kpis)
+3. The company's CRM lead KPIs for this month (use get_jobtread_lead_kpis)
 4. Internal lead pipeline status (use get_lead_summary)
 5. Any items needing my attention (use get_attention_items)
 6. Active jobs overview (use get_job_overview)
@@ -340,7 +340,7 @@ End with 2-3 recommended priorities for the day.
       return await this.jobtread.getLeadKpis({ period, limit });
     } catch (error: any) {
       return {
-        error: 'Unable to fetch JobTread lead KPIs',
+        error: 'Unable to fetch the company\'s CRM lead KPIs',
         details: error.message,
       };
     }
@@ -483,7 +483,7 @@ End with 2-3 recommended priorities for the day.
       };
     } catch (error) {
       return {
-        error: 'Unable to fetch jobs from JobTread',
+        error: 'Unable to fetch jobs from the company\'s CRM',
         totalActive: 0,
         jobs: [],
       };

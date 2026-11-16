@@ -18,14 +18,14 @@ const CHANNEL_META: Record<string, { icon: string; label: string; color: string 
   call: { icon: '📞', label: 'Call', color: 'bg-blue-100 text-blue-700' },
   email: { icon: '✉️', label: 'Email', color: 'bg-purple-100 text-purple-700' },
   chat: { icon: '💬', label: 'Chat', color: 'bg-amber-100 text-amber-700' },
-  note: { icon: '📝', label: 'JobTread', color: 'bg-indigo-100 text-indigo-700' },
+  note: { icon: '📝', label: 'Current CRM', color: 'bg-indigo-100 text-indigo-700' },
   other: { icon: '🗨️', label: 'Other', color: 'bg-gray-100 text-gray-600' },
 };
 
 const SOURCE_LABEL: Record<string, string> = {
   ghl: 'Texts & calls',
   gmail: 'Email',
-  jobtread: 'JobTread',
+  jobtread: 'Current CRM',
 };
 
 function timeAgo(ms: number): string {
@@ -214,7 +214,7 @@ export default function Conversations() {
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Conversations</h2>
           <p className="text-sm text-gray-500 mt-1">
-            Texts, calls, email, and JobTread — all in one place{unreadTotal > 0 ? ` · ${unreadTotal} unread` : ''}
+            Texts, calls, email, and your CRM, all in one place{unreadTotal > 0 ? ` · ${unreadTotal} unread` : ''}
           </p>
         </div>
         <div className="flex items-center gap-2">

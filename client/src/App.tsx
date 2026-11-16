@@ -4,13 +4,16 @@ import SearchOverlay from './components/SearchOverlay';
 import Dashboard from './pages/dashboard';
 import Leads from './pages/leads';
 import Integrations from './pages/integrations';
+import KynexProBanner from './components/KynexProBanner';
 import { useAuth } from './lib/auth';
 import { CompanyMark, PRODUCT_NAME, useCompany } from './lib/company';
-import { canSeeMoney, type TeamRole } from '../../shared/rbac';
+import { ROLE_LABEL, type TeamRole } from '../../shared/rbac';
+import { MENU_GROUPS, MENU_ITEMS, pageVisible, type MenuPage } from '../../shared/menu';
 import Login from './pages/Login';
 import SetPassword from './pages/SetPassword';
 import { isSetPasswordPath } from './lib/password-pages';
 import Team from './pages/Team';
+import CompanyPage from './pages/company';
 import AccountPage from './pages/account';
 import Archie from './pages/archie';
 import Canvass from './pages/canvass';
@@ -34,78 +37,21 @@ import CallBar from './components/CallBar';
 import BugReportButton from './components/BugReportButton';
 import Bugs from './pages/bugs';
 import { setBugPage } from './lib/bug-monitor';
-import { FEATURES } from '../../shared/features';
 
-type Page = 'meetings' | 'dashboard' | 'inbox' | 'leads' | 'sales' | 'client' | 'canvass' | 'kpis' | 'commission' | 'payouts' | 'cheat-sheet' | 'playbook' | 'sales-journey' | 'commercial-training' | 'chat' | 'conversations' | 'production' | 'claims' | 'documents' | 'schedule' | 'calls' | 'integrations' | 'team' | 'account' | 'assignments' | 'bugs';
+type Page = MenuPage | 'client';
 
 /**
- * One source of truth for navigation — it drives the desktop top bar, the
- * desktop "More" panel and the mobile bottom bar and sheet.
+ * One source of truth for navigation: shared/menu.ts. It drives the desktop
+ * top bar, the desktop "More" panel, the mobile bottom bar and sheet, and the
+ * Company page's menu grid, and the server checks saved menu choices against it.
  *
  * `primary` items are the five a person touches all day; they sit inline on
  * desktop and take the mobile bottom-bar slots. Everything else is filed under
- * a `group`, because a flat list of seventeen is a list nobody reads — grouped,
+ * a `group`, because a flat list of seventeen is a list nobody reads; grouped,
  * the same seventeen are four short columns you can scan in one look.
- *
- * `short` is the bottom-bar label: a two-word label wrapped onto two lines at
- * 390px and pushed the row out of alignment.
  */
-type NavGroup = 'sell' | 'deliver' | 'money' | 'learn' | 'setup';
-
-const GROUPS: { key: NavGroup; label: string }[] = [
-  { key: 'sell', label: 'Sell' },
-  { key: 'deliver', label: 'Deliver' },
-  { key: 'money', label: 'Money' },
-  { key: 'learn', label: 'Learn' },
-  { key: 'setup', label: 'Setup' },
-];
-
-const NAV: {
-  page: Page; label: string; icon: string;
-  primary?: boolean; soon?: boolean; group?: NavGroup; short?: string; external?: boolean;
-}[] = [
-  { page: 'dashboard', label: 'Home', icon: '🏠', primary: true },
-  { page: 'leads', label: 'Leads', icon: '👥', primary: true },
-  { page: 'conversations', label: 'Messages', icon: '✉️', primary: true },
-  // Shown only while the Advisor feature flag is on (canSeePage filters it out otherwise).
-  { page: 'chat', label: 'Archie Advisor', icon: '✨', primary: true, short: 'Advisor' },
-  { page: 'schedule', label: 'Schedule', icon: '📅', primary: true },
-
-  { page: 'calls', label: 'Calls', icon: '📞', group: 'sell' },
-  { page: 'meetings', label: 'Meetings', icon: '🗓️', group: 'sell' },
-  { page: 'inbox', label: 'Inbox Leads', icon: '📬', group: 'sell' },
-  { page: 'canvass', label: 'Canvass', icon: '🚪', group: 'sell' },
-  { page: 'sales', label: 'Sales Pipeline', icon: '📈', group: 'sell' },
-
-  { page: 'production', label: 'Production', icon: '🏗️', group: 'deliver' },
-  { page: 'claims', label: 'Claims', icon: '🧾', group: 'deliver' },
-  { page: 'documents', label: 'Documents', icon: '📄', group: 'deliver' },
-
-  { page: 'commission', label: 'Commission', icon: '💰', group: 'money' },
-  { page: 'payouts', label: 'Payouts', icon: '💵', group: 'money' },
-  { page: 'kpis', label: 'KPIs', icon: '📊', group: 'money' },
-
-  { page: 'cheat-sheet', label: 'Cheat Sheet', icon: '📋', group: 'learn' },
-  { page: 'playbook', label: 'Playbook', icon: '📚', group: 'learn' },
-  { page: 'sales-journey', label: 'Sales Journey', icon: '🧭', group: 'learn', external: true },
-  { page: 'commercial-training', label: 'Commercial Training', icon: '🏢', group: 'learn', external: true },
-
-  { page: 'assignments', label: 'Unassigned', icon: '🏷️', group: 'setup' },
-  { page: 'team', label: 'Team', icon: '👤', group: 'setup' },
-  { page: 'integrations', label: 'Integrations', icon: '🔌', group: 'setup' },
-  { page: 'bugs', label: 'Bugs', icon: '🐞', group: 'setup' },
-  { page: 'account', label: 'My Account', icon: '🗂️', group: 'setup' },
-];
-
-/** The role a person actually is, said the way a person would say it. */
-const ROLE_LABEL: Record<string, string> = {
-  admin: 'Admin',
-  sales_director: 'Sales Director',
-  manager: 'Sales Leader',
-  customer_service: 'Customer Service',
-  sales: 'Sales Rep',
-  production: 'Production',
-};
+const GROUPS = MENU_GROUPS;
+const NAV = MENU_ITEMS;
 
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>(() => {
@@ -129,7 +75,7 @@ function App() {
   // remembers whichever page you actually came from.
   const [clientOrigin, setClientOrigin] = useState<Page>('leads');
 
-  const { user, loading, offline, signOut } = useAuth();
+  const { user, profile, loading, offline, signOut } = useAuth();
   const company = useCompany();
 
   useEffect(() => {
@@ -181,37 +127,14 @@ function App() {
   if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-500">Loading…</div>;
   if (!user) return <Login />;
 
-  // Role-based menu: each person only sees tabs that fit their job.
-  // admin ▸ manager ▸ sales ▸ production (higher roles are a superset).
+  // Role-based menu: each person only sees tabs that fit their job
+  // (shared/menu.ts), less any the company's admin hid from their level on
+  // the Company page. Hiding only narrows: a page the role may not see stays
+  // out whatever is saved, and a hidden page is not reachable from a stored
+  // "last page" either, because activePage falls back to Home.
   const isAdmin = user.role === 'admin';
-  const isManagerPlus = user.role === 'admin' || user.role === 'manager';
-  const isSalesPlus = user.role !== 'production'; // admin, manager, sales
-  const canSeePage = (page: Page): boolean => {
-    if (page === 'team' || page === 'integrations' || page === 'bugs') return isAdmin;
-    // Payouts is no longer admin-only: a rep opens it to see what they are
-    // owed. The server returns only their own rows and refuses every paying
-    // action, so this is about whether the page is worth showing, not about
-    // holding anything back. Customer service and production are excluded by
-    // canSeeMoney — money must not leak sideways to a higher rank.
-    // Commission is the same money: customer service is sales+ by rank but the
-    // server refuses it /api/commissions, so the page would only show an error.
-    if (page === 'payouts' || page === 'commission') return canSeeMoney(user.role as TeamRole, 'commissions');
-    // Assignment decides whose book a job is in, and therefore who is paid for
-    // it — a rep must not be able to move one onto themselves.
-    if (page === 'assignments') return isManagerPlus;
-    // Conversations / Production / Claims / Documents are open to sales+ but their
-    // data is rep-scoped server-side (a sales user only sees their own clients) —
-    // Claims isn't rep-scoped (whoever's coordinating the claim needs to see it
-    // regardless of whose book the job is in), but stays in the same sales+ band.
-    if (page === 'conversations' || page === 'calls' || page === 'production' || page === 'claims' || page === 'documents') return isSalesPlus;
-    if (page === 'leads' || page === 'inbox' || page === 'sales' || page === 'client' || page === 'canvass' || page === 'kpis' || page === 'cheat-sheet' || page === 'playbook' || page === 'sales-journey' || page === 'commercial-training') return isSalesPlus;
-    // The Advisor follows its switch (shared/features.ts): when that is
-    // off the page is refused here and so drops out of the nav as well.
-    if (page === 'chat') return FEATURES.advisor;
-    // Every role may open Meetings; /api/meetings returns only the meetings
-    // that role is actually in, so a rep sees the sales meeting and no more.
-    return true; // dashboard + schedule + meetings are open to everyone signed in
-  };
+  const hiddenPages = profile?.hiddenPages ?? [];
+  const canSeePage = (page: Page): boolean => pageVisible(user.role as TeamRole, page, hiddenPages);
   const activePage: Page = canSeePage(currentPage) ? currentPage : 'dashboard';
   // So a bug report, or an error caught on its own, says which screen it came from.
   setBugPage(activePage);
@@ -227,10 +150,6 @@ function App() {
 
   const isActive = (page: Page) => activePage === page;
   const go = (page: Page) => {
-    // A standalone static build (its own engine, not a React page) — open it
-    // rather than swap SPA state into a page that doesn't exist here.
-    if (page === 'sales-journey') { window.open('/sales-journey/', '_blank', 'noopener'); return; }
-    if (page === 'commercial-training') { window.open('/commercial-training/', '_blank', 'noopener'); return; }
     setCurrentPage(page); setMoreOpen(false); setNavMoreOpen(false); setUserMenuOpen(false);
   };
   const badgeFor = (page: Page) => (page === 'leads' ? newLeads : page === 'conversations' ? unreadMessages : 0);
@@ -417,7 +336,7 @@ function App() {
                     <div className="px-4 py-3 border-b border-gray-100">
                       <p className="text-sm font-medium text-gray-900 truncate">{user.name || user.email}</p>
                       <p className="text-xs text-gray-500 truncate">{user.email}</p>
-                      <span className="inline-block mt-1.5 text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">{ROLE_LABEL[user.role] || user.role}</span>
+                      <span className="inline-block mt-1.5 text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">{ROLE_LABEL[user.role as TeamRole] || user.role}</span>
                     </div>
                     {canSeePage('account') && (
                       <button
@@ -442,6 +361,9 @@ function App() {
           </div>
         </div>
       </header>
+
+      {/* Admins only, until the company connects KynexPro. Blocks nothing. */}
+      <KynexProBanner isAdmin={isAdmin} onConnect={() => go('integrations')} />
 
       {/* Main Content */}
       <main id="main" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 md:pb-8">
@@ -495,6 +417,7 @@ function App() {
           <AccountPage onOpenClient={openClient} />
         )}
         {activePage === 'team' && <Team />}
+        {activePage === 'company' && <CompanyPage />}
         {activePage === 'bugs' && <Bugs />}
       </main>
 

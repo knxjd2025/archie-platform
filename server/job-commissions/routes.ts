@@ -542,7 +542,7 @@ async function ownTotals(me: Viewer): Promise<Array<{ status: string; count: num
         actor: user.email, system: 'jobtread', action: 'commission_pdf', targetId: row.jobExternalId,
         summary: `${name} (${(pdf.length / 1024).toFixed(0)} KB)`, ok: saved.ok, error: saved.error ?? null,
       });
-      if (!saved.ok) return res.status(502).json({ error: saved.error || "JobTread wouldn't accept the file." });
+      if (!saved.ok) return res.status(502).json({ error: saved.error || "Your CRM wouldn't accept the file." });
       res.json({ ok: true, fileId: saved.fileId, name, bytes: pdf.length });
     } catch (error: any) {
       return sendFailure(res, error, 'POST /api/job-commissions/:id/pdf');

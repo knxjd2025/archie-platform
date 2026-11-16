@@ -92,7 +92,7 @@ export async function viewerCanSeeLead(
 export function myLeadsTool(viewer?: AgentViewer): Tool {
   return {
     name: 'get_my_leads',
-    description: "The leads and jobs in this person's book (their own, or their team's for a leader; everyone's for admin) with status, pipeline stage, projected value, rep, schedule. Filter by status (new|contacted|qualified|proposal_sent|negotiation|won|lost), stage (JobTread pipeline stage), inProduction (jobs on the production board), or search text (customer / job name / address).",
+    description: "The leads and jobs in this person's book (their own, or their team's for a leader; everyone's for admin) with status, pipeline stage, projected value, rep, schedule. Filter by status (new|contacted|qualified|proposal_sent|negotiation|won|lost), stage (the company's CRM pipeline stage), inProduction (jobs on the production board), or search text (customer / job name / address).",
     parameters: {
       type: 'object',
       properties: {
@@ -181,13 +181,13 @@ export function followUpsTool(viewer?: AgentViewer): Tool {
 export function createFollowUpTool(viewer?: AgentViewer): Tool {
   return {
     name: 'create_follow_up',
-    description: "Create a follow-up reminder for this person (it lands on their Follow-ups list and, when tied to a job, is noted on the job in JobTread). Use when they ask you to remind them, or agree to a next step you suggested. Always confirm the note and due date back to them.",
+    description: "Create a follow-up reminder for this person (it lands on their Follow-ups list and, when tied to a job, is noted on the job in the company's CRM). Use when they ask you to remind them, or agree to a next step you suggested. Always confirm the note and due date back to them.",
     parameters: {
       type: 'object',
       properties: {
         note: { type: 'string', description: 'What to do, in one line' },
         dueDate: { type: 'string', description: 'YYYY-MM-DD (optional)' },
-        jobExternalId: { type: 'string', description: 'The JobTread job id this is about (optional — get it from get_my_leads / get_project)' },
+        jobExternalId: { type: 'string', description: 'The CRM job id this is about (optional, get it from get_my_leads / get_project)' },
         clientName: { type: 'string', description: 'Client name for the list (optional)' },
       },
       required: ['note'],
@@ -301,11 +301,11 @@ export function jobCommissionsTool(viewer?: AgentViewer): Tool {
 export function projectTool(viewer?: AgentViewer, opts: { money?: boolean } = {}): Tool {
   return {
     name: 'get_project',
-    description: "Look inside one project. Pass the JobTread job id (externalId from get_my_leads) or a search (customer name / job name / address). Returns the job's status and stage, contact, rep, projected value, open follow-ups, inspection submissions, roof reports / proposals, pre-construction checklist, commission record when applicable, and the latest JobTread estimates, daily logs, and notes. If the search matches several jobs you get the candidates back — ask which one.",
+    description: "Look inside one project. Pass the CRM job id (externalId from get_my_leads) or a search (customer name / job name / address). Returns the job's status and stage, contact, rep, projected value, open follow-ups, inspection submissions, roof reports / proposals, pre-construction checklist, commission record when applicable, and the latest the company's CRM estimates, daily logs, and notes. If the search matches several jobs you get the candidates back, ask which one.",
     parameters: {
       type: 'object',
       properties: {
-        externalId: { type: 'string', description: 'JobTread job id (preferred)' },
+        externalId: { type: 'string', description: 'Current CRM job id (preferred)' },
         search: { type: 'string', description: 'Customer name, job name, or address (when you do not have the id)' },
       },
     },

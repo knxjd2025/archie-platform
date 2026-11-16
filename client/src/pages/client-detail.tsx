@@ -74,7 +74,7 @@ export default function ClientDetail({ externalId, onBack, onOpenPlaybook }: { e
   const [tagging, setTagging] = useState<string | null>(null);
   const addTag = async (tag: string) => {
     setTagging(tag);
-    try { await api.post(`/api/leads/${externalId}/tag`, { tag }); flash(`Tagged "${tag}" in GoHighLevel`); }
+    try { await api.post(`/api/leads/${externalId}/tag`, { tag }); flash(`Tagged "${tag}" in KynexPro`); }
     catch (e: any) { flash(`Couldn't tag: ${e?.message || 'failed'}`); }
     finally { setTagging(null); }
   };
@@ -184,7 +184,7 @@ export default function ClientDetail({ externalId, onBack, onOpenPlaybook }: { e
     try {
       await api.post(`/api/jobs/${lead.externalId}/note`, { message: note.trim() });
       setMessages((m) => [{ source: 'jobtread', channel: 'note', direction: 'outbound', body: `You: ${note.trim()}`, date: Date.now() }, ...m]);
-      flash('Note added to JobTread'); setNote(''); setNoteOpen(false);
+      flash('Note added to your CRM'); setNote(''); setNoteOpen(false);
     } catch (e: any) { flash(`Couldn't add note: ${e?.message || 'failed'}`); } finally { setBusyNote(false); }
   };
 
@@ -240,7 +240,7 @@ export default function ClientDetail({ externalId, onBack, onOpenPlaybook }: { e
                 {lead.jobName && lead.jobName !== lead.customer && <span>{lead.jobName}</span>}
                 {lead.insuranceClaim && <span className="text-[11px] px-1.5 py-0.5 rounded bg-sky-100 text-sky-700">Insurance Claim</span>}
                 {lead.externalId && (
-                  <a href={`https://app.jobtread.com/jobs/${lead.externalId}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">Open in JobTread ↗</a>
+                  <a href={`https://app.jobtread.com/jobs/${lead.externalId}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">Open in Current CRM ↗</a>
                 )}
               </div>
             </div>
@@ -306,7 +306,7 @@ export default function ClientDetail({ externalId, onBack, onOpenPlaybook }: { e
                 <button onClick={book} disabled={booking || !bk.date || !bk.time} className="text-sm px-3 py-1.5 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark disabled:opacity-50">{booking ? 'Booking…' : 'Book it'}</button>
                 <button onClick={() => setBookOpen(false)} className="text-sm px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600">Cancel</button>
               </div>
-              <p className="text-xs text-gray-400">Times come from that person's live Google Calendar and GoHighLevel appointments. Booking adds it to their calendar — it'll show on the Schedule tab.</p>
+              <p className="text-xs text-gray-400">Times come from that person's live Google Calendar and KynexPro appointments. Booking adds it to their calendar, it'll show on the Schedule tab.</p>
             </div>
           )}
 
@@ -391,7 +391,7 @@ export default function ClientDetail({ externalId, onBack, onOpenPlaybook }: { e
           {/* Note action */}
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-gray-800">Add a note to JobTread</h3>
+              <h3 className="text-sm font-semibold text-gray-800">Add a note to Current CRM</h3>
               {!noteOpen && <button onClick={() => setNoteOpen(true)} className="text-xs text-blue-600 hover:underline">＋ Note</button>}
             </div>
             {noteOpen && (

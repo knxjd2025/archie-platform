@@ -135,7 +135,7 @@ export default function Production({ onOpenClient }: { onOpenClient?: (externalI
     try {
       const r = await api.post<{ ok: boolean; pipeline: Pipeline; jobtread?: { ok: boolean; error?: string } }>(`/api/production/${job.externalId}/pipeline/${path}`, body);
       setJobs((js) => js.map((j) => (j.externalId === job.externalId ? { ...j, pipeline: r.pipeline } : j)));
-      flash(r.jobtread && !r.jobtread.ok ? `${done} — but JobTread didn't take the status: ${r.jobtread.error || 'write failed'}` : done);
+      flash(r.jobtread && !r.jobtread.ok ? `${done}, but your CRM didn't take the status: ${r.jobtread.error || 'write failed'}` : done);
       await load({ silent: true });
     } catch (e: any) {
       flash(`${name(job)}: ${e?.message || 'failed'}`);
@@ -311,7 +311,7 @@ export default function Production({ onOpenClient }: { onOpenClient?: (externalI
                   onBack={() => { const prev = stages[colIdx - 1]; if (prev) moveTo(j, prev.key); }}
                   onAdvance={() => { const next = stages[colIdx + 1]; if (next) moveTo(j, next.key); }}
                   advanceLabel={advanceLabel(j)} lastLabel="Closed out" />
-                {j.jtStage && <p className="mt-1 text-[10px] text-gray-300 truncate" title="JobTread status">JT: {j.jtStage}</p>}
+                {j.jtStage && <p className="mt-1 text-[10px] text-gray-300 truncate" title="Current CRM status">CRM: {j.jtStage}</p>}
 
                 {noteFor === j.externalId ? (
                   <div className="mt-2">
@@ -320,7 +320,7 @@ export default function Production({ onOpenClient }: { onOpenClient?: (externalI
                       value={noteText}
                       onChange={(e) => setNoteText(e.target.value)}
                       rows={2}
-                      placeholder="Add a note to JobTread…"
+                      placeholder="Add a note to Current CRM…"
                       className="w-full text-xs border border-gray-200 rounded p-1.5 focus:ring-1 focus:ring-blue-400"
                     />
                     <div className="flex gap-1.5 mt-1">

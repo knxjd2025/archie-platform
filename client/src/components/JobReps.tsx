@@ -118,7 +118,7 @@ export default function JobReps({ externalId, repName, enteredByName, onChanged,
             <button onClick={save} disabled={saving || !primary} className="text-xs px-3 py-1.5 rounded bg-blue-600 text-white disabled:opacity-50">{saving ? 'Saving…' : 'Save'}</button>
             <button onClick={() => setEditing(false)} disabled={saving} className="text-xs px-3 py-1.5 rounded border border-gray-200 bg-white text-gray-600">Cancel</button>
           </div>
-          <p className="text-[11px] text-gray-400">Also updates the Sales Rep in JobTread. An existing commission record keeps its reps — adjust those in the commission box below.</p>
+          <p className="text-[11px] text-gray-400">Also updates the Sales Rep in your CRM. An existing commission record keeps its reps, adjust those in the commission box below.</p>
         </div>
       )}
     </div>

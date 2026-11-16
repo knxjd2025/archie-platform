@@ -101,8 +101,8 @@ export function effectsOfReportPresented(p: Positions): Effect[] {
 /** A JobTread proposal for the job was signed / approved. */
 export function effectsOfProposalSigned(p: Positions): Effect[] {
   const out: Effect[] = [];
-  if (salesBefore(p.salesStage, 'approved')) out.push({ pipeline: 'sales', to: 'approved', reason: 'proposal signed in JobTread' });
-  if (!p.productionStage) out.push({ pipeline: 'production', to: 'approved', reason: 'proposal signed in JobTread' });
+  if (salesBefore(p.salesStage, 'approved')) out.push({ pipeline: 'sales', to: 'approved', reason: 'proposal signed in Current CRM' });
+  if (!p.productionStage) out.push({ pipeline: 'production', to: 'approved', reason: 'proposal signed in Current CRM' });
   return out;
 }
 
@@ -114,11 +114,11 @@ export function effectsOfJobtreadStatus(jt: string | null, p: Positions): Effect
   const out: Effect[] = [];
   const prodTarget = stageForJobtreadStatus(jt);
   if (prodTarget && p.productionStage && isProd(p.productionStage) && prodIdx(prodTarget) > prodIdx(p.productionStage)) {
-    out.push({ pipeline: 'production', to: prodTarget, reason: `JobTread status is ${jt}` });
+    out.push({ pipeline: 'production', to: prodTarget, reason: `Current CRM status is ${jt}` });
   }
   const salesTarget = salesStageForJob(jt, prodTarget ?? p.productionStage);
   if (salesTarget && p.salesStage && isSalesProgressionStage(p.salesStage) && salesIdx(salesTarget) > salesIdx(p.salesStage)) {
-    out.push({ pipeline: 'sales', to: salesTarget, reason: `JobTread status is ${jt}` });
+    out.push({ pipeline: 'sales', to: salesTarget, reason: `Current CRM status is ${jt}` });
   }
   return out;
 }

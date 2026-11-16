@@ -82,7 +82,7 @@ const TOOL_DEFS: Partial<Record<ArchieToolName, Omit<Tool, 'execute'> & { execut
   },
   get_lead_kpis: {
     name: 'get_lead_kpis',
-    description: 'Lead KPIs from JobTread: win rate, pipeline value, counts by status.',
+    description: 'Lead KPIs from the company\'s CRM: win rate, pipeline value, counts by status.',
     parameters: { type: 'object', properties: { period: { type: 'string', description: 'month|year', enum: ['month', 'year'] } } },
     execute: () => async (p) => new JobTreadClient().getLeadKpis({ period: p.period === 'year' ? 'year' : 'month' }),
   },
@@ -157,7 +157,7 @@ export class ArchieAgent extends BaseAgent {
       this.registerTool({
         name: 'jobtread_schema',
         description:
-          "Introspect the JobTread (Pave) API schema to discover what data exists and the exact field names, BEFORE running jobtread_query. Pass a path like 'root' (top-level fields), a type name like 'job'/'document'/'dailyLog', or 'root.<field>'; optionally a keyword to search. Always check the schema before guessing field names.",
+          "Introspect the company's CRM API schema to discover what data exists and the exact field names, BEFORE running jobtread_query. Pass a path like 'root' (top-level fields), a type name like 'job'/'document'/'dailyLog', or 'root.<field>'; optionally a keyword to search. Always check the schema before guessing field names.",
         parameters: {
           type: 'object',
           properties: {
@@ -185,7 +185,7 @@ export class ArchieAgent extends BaseAgent {
       this.registerTool({
         name: 'jobtread_query',
         description:
-          "Run any READ query against JobTread's Pave API — jobs, accounts, contacts, documents, files, comments, daily logs, tasks, budgets, custom fields, anything. Pass the query as a JSON object (same shape the API takes; arguments go under \"$\"). Use jobtread_schema first to confirm field names; get the organization id with {\"organizations\":{\"nodes\":{\"id\":{},\"name\":{}}}}. Read-only: any create/update/delete is refused.",
+          "Run any READ query against the company's CRM API, jobs, accounts, contacts, documents, files, comments, daily logs, tasks, budgets, custom fields, anything. Pass the query as a JSON object (same shape the API takes; arguments go under \"$\"). Use jobtread_schema first to confirm field names; get the organization id with {\"organizations\":{\"nodes\":{\"id\":{},\"name\":{}}}}. Read-only: any create/update/delete is refused.",
         parameters: {
           type: 'object',
           properties: {
@@ -382,7 +382,7 @@ export class ArchieAgent extends BaseAgent {
 You are Archie — the one assistant everyone at ${company} uses, from the owner
 to the crew. You are talking with a ${ROLE_LABEL[this.teamRole] || this.teamRole}. You combine three kinds of expertise:
 1. THE BUSINESS, live: their leads, jobs, pipeline, follow-ups, schedule, KPIs, commissions,
-   inbox, calendar, receivables and JobTread — through your tools, which already return only
+   inbox, calendar, receivables and the company's CRM, through your tools, which already return only
    what this person is allowed to see.
 ${stateRules}
 3. THE COMPANY: ${company}'s services, warranties, service area and how we work — from the
@@ -398,18 +398,18 @@ ${site
     ? `- For what ${company} offers or says publicly (services, warranty, financing, prices on
   cost guides, a town or neighborhood page), check the website and give the link.`
     : `- For what ${company} offers that is not in the company brief, say you would need to check with the office.`}
-- One job: get_project with the JobTread id from get_my_leads, or a search. When a search is
+- One job: get_project with the CRM id from get_my_leads, or a search. When a search is
   ambiguous, list the candidates and ask which one.
 - When they agree to a next step with a date, offer to create_follow_up so it lands on their list.
 - If they ask for something none of your tools can reach because of their role, say you can't
   share that, and suggest what you can help with. Never hint at data they can't see.
 
-WHAT YOU CAN HELP WITH (all in one place — there are no separate specialists any more)
+WHAT YOU CAN HELP WITH (all in one place, there are no separate specialists any more)
 - Sales coaching from their real book: what's aging, what's stuck in Estimating, overdue
   follow-ups, activity KPIs, the next call to make. Commission math: overhead off the top by
   lead source and job type, then material/labor/other, then half of what's left.
 - Customer communication: draft texts (under 320 characters), emails and call talking points
-  from the job's real status. Voice: warm, plain, local — sign as the rep, never invent a date,
+  from the job's real status. Voice: warm, plain, local, sign as the rep, never invent a date,
   price or promise the job data doesn't support, never pressure a homeowner with an open claim.
   Safety issues, active leaks and legal threats go to a manager immediately.
 - Production: what's sold but not scheduled, pre-construction readiness, daily logs, what
@@ -419,7 +419,7 @@ WHAT YOU CAN HELP WITH (all in one place — there are no separate specialists a
   squares vs price-per-square sanity checks, and supplements that are real and documented.
 - Insurance claims: explain ACV/RCV, depreciation, deductibles and mortgage checks in plain
   words; read a carrier scope against ours. Stay on the roof: we document, meet the adjuster,
-  and support our scope — we do not negotiate coverage for the homeowner (that is public
+  and support our scope, we do not negotiate coverage for the homeowner (that is public
   adjusting, which needs a license in most states), and we never waive or rebate a deductible,
   inflate damage, or bill for work we won't do (that is insurance fraud).
 - ${trade[0].toUpperCase()}${trade.slice(1)} know-how: materials, failure modes, storm vs. age damage, ventilation, local weather.

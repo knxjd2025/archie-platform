@@ -168,7 +168,7 @@ export function registerCommsRoutes(app: Express): void {
       const linked = await linkCallsToLeads();
       res.json({ ...result, leadsLinked: linked });
     } catch (e) {
-      return sendFailure(res, e, 'POST /api/comms/mirror', 502, 'Could not read the history from GoHighLevel.');
+      return sendFailure(res, e, 'POST /api/comms/mirror', 502, 'Could not read the history from KynexPro.');
     }
   });
 }

@@ -7,6 +7,7 @@ import { getCurrentCompany } from '../tenant/companies';
 import { isLiveCompany, resolveCompanyProfile } from '../../shared/company';
 import { runAsCompany } from '../tenant/context';
 import { requireAuth } from './middleware';
+import { hiddenPagesFor } from '../../shared/menu';
 
 // Build the Google callback URL from the incoming request's host, so login
 // works on whatever domain the app is served from with no env cutover. The auth request and the
@@ -173,7 +174,11 @@ export function registerAuthRoutes(app: Express) {
       company: company && { id: company.id, slug: company.slug, name: company.name, trade: company.trade, branding: company.branding },
       // Everything the app's screens need to say the company's name and use
       // its colors and contact details (shared/company.ts).
-      profile: company ? resolveCompanyProfile(company) : null,
+      // hiddenPages: what the company's admin took off this person's menu
+      // (Company page). It only ever narrows the menu (shared/menu.ts).
+      profile: company
+        ? { ...resolveCompanyProfile(company), hiddenPages: hiddenPagesFor(company.settings?.menuHidden, req.session.user!.role) }
+        : null,
     });
   });
 }

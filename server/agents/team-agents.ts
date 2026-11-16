@@ -34,7 +34,7 @@ export function lookupJobTool(jt: JobTreadClient, viewer?: AgentViewer): Tool {
   return {
     name: 'lookup_job',
     description:
-      'Search JobTread live by customer name, address, or job name. Returns status, projected value, and address. Prefer get_my_leads (faster, richer) and use this when the app has not synced a brand-new job yet.',
+      'Search the company\'s CRM live by customer name, address, or job name. Returns status, projected value, and address. Prefer get_my_leads (faster, richer) and use this when the app has not synced a brand-new job yet.',
     parameters: {
       type: 'object',
       properties: {
@@ -65,7 +65,7 @@ function leadKpisTool(jt: JobTreadClient): Tool {
   return {
     name: 'get_company_lead_kpis',
     description:
-      'COMPANY-WIDE lead KPIs from JobTread: win rate, pipeline value, counts by status, recent leads. For one person\'s own activity numbers use get_my_kpis.',
+      'COMPANY-WIDE lead KPIs from the company\'s CRM: win rate, pipeline value, counts by status, recent leads. For one person\'s own activity numbers use get_my_kpis.',
     parameters: {
       type: 'object',
       properties: {

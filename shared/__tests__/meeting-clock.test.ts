@@ -79,7 +79,7 @@ describe('meetingClock', () => {
   });
 
   it('gives segments that fill the bar exactly once', () => {
-    for (const key of ['leadership', 'claims', 'sales', 'payroll'] as const) {
+    for (const key of ['leadership', 'claims', 'sales'] as const) {
       const m = MEETING_BY_KEY.get(key)!;
       const c = meetingClock(m, et('08:00'));
       expect(c.segments).toHaveLength(m.runningOrder.length);
@@ -95,7 +95,7 @@ describe('meetingClock', () => {
   });
 
   it('runs the whole length of every meeting without a gap or an early finish', () => {
-    for (const key of ['leadership', 'claims', 'sales', 'payroll'] as const) {
+    for (const key of ['leadership', 'claims', 'sales'] as const) {
       const m = MEETING_BY_KEY.get(key)!;
       expect(agendaMinutes(m), `${key}`).toBe(meetingMinutes(m));
     }

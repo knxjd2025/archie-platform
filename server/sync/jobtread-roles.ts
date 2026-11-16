@@ -171,7 +171,7 @@ export async function pullFromJobTread(jt = new JobTreadClient()): Promise<SyncR
       const mapped = jm.roleName ? JT_ROLE_TO_APP[jm.roleName] : undefined;
       if (jm.roleName && !mapped) {
         // An external-party role (Customer, Realtor…) must not become a login.
-        out.skipped.push(`${jm.name}: JobTread role "${jm.roleName}" has no app equivalent`);
+        out.skipped.push(`${jm.name}: Current CRM role "${jm.roleName}" has no app equivalent`);
       } else if (mapped && mapped !== existing.role) {
         patch.role = mapped;
         out.rolesImported.push(`${jm.name}: ${existing.role} -> ${mapped}`);
@@ -210,12 +210,12 @@ export async function pushRoleToJobTread(
     .from(teamMembers)
     .where(eq(teamMembers.id, memberId));
   if (!m) return { ok: false, reason: 'no such team member' };
-  if (!m.membershipId) return { ok: false, reason: 'not linked to a JobTread membership yet — run the pull first' };
+  if (!m.membershipId) return { ok: false, reason: 'not linked to a CRM membership yet, run the pull first' };
 
   const wanted = APP_ROLE_TO_JT[m.role as TeamRole];
   const ids = await roleIdsByName(jt);
   const roleId = ids.get(wanted);
-  if (!roleId) return { ok: false, reason: `JobTread has no role named "${wanted}"` };
+  if (!roleId) return { ok: false, reason: `Your CRM has no role named "${wanted}"` };
 
   try {
     await jt.paveQuery({
@@ -223,6 +223,6 @@ export async function pushRoleToJobTread(
     });
     return { ok: true };
   } catch (e: any) {
-    return { ok: false, reason: e?.message || 'JobTread rejected the role update' };
+    return { ok: false, reason: e?.message || 'Current CRM rejected the role update' };
   }
 }

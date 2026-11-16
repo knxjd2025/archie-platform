@@ -66,7 +66,7 @@ export class CFOAgent extends BaseAgent {
         properties: {
           invoiceId: {
             type: 'string',
-            description: 'The JobTread invoice ID',
+            description: 'The CRM invoice ID',
           },
           method: {
             type: 'string',
@@ -90,7 +90,7 @@ export class CFOAgent extends BaseAgent {
         properties: {
           jobId: {
             type: 'string',
-            description: 'The JobTread job ID',
+            description: 'The CRM job ID',
           },
         },
         required: ['jobId'],
@@ -212,7 +212,7 @@ export class CFOAgent extends BaseAgent {
     // Tool: Get cash position (Plaid balances + QBO receivables/payables)
     this.registerTool({
       name: 'get_cash_position',
-      description: 'Get a comprehensive cash position combining real-time bank balances (Plaid), outstanding receivables (JobTread), and QuickBooks data',
+      description: 'Get a comprehensive cash position combining real-time bank balances (Plaid), outstanding receivables (the company\'s CRM), and QuickBooks data',
       parameters: {
         type: 'object',
         properties: {},
@@ -231,7 +231,7 @@ export class CFOAgent extends BaseAgent {
         properties: {
           jobId: {
             type: 'string',
-            description: 'The JobTread job ID',
+            description: 'The CRM job ID',
           },
           amount: {
             type: 'number',
@@ -374,7 +374,7 @@ export class CFOAgent extends BaseAgent {
       };
     } catch (error: any) {
       return {
-        error: 'Unable to fetch invoices from JobTread',
+        error: 'Unable to fetch invoices from the company\'s CRM',
         message: error.message,
       };
     }
@@ -554,12 +554,12 @@ export class CFOAgent extends BaseAgent {
           period,
           startDate: start,
           endDate: end,
-          source: 'JobTread (QBO unavailable)',
-          note: 'QuickBooks not connected — showing job cost estimates from JobTread',
+          source: 'Current CRM (QBO unavailable)',
+          note: 'QuickBooks not connected, showing job cost estimates from the company\'s CRM',
           categories: [
-            { name: 'Materials', estimate: 'Available via JobTread job costs' },
-            { name: 'Labor', estimate: 'Available via JobTread time tracking' },
-            { name: 'Subcontractors', estimate: 'Available via JobTread vendor bills' },
+            { name: 'Materials', estimate: 'Available via Current CRM job costs' },
+            { name: 'Labor', estimate: 'Available via Current CRM time tracking' },
+            { name: 'Subcontractors', estimate: 'Available via Current CRM vendor bills' },
           ],
           activeJobCount: activeJobs.total,
           recommendation: 'Connect QuickBooks Online for detailed expense tracking by category',
@@ -615,10 +615,10 @@ export class CFOAgent extends BaseAgent {
         overdueAmount: invoices.invoices
           .filter(inv => inv.dueDate && new Date(inv.dueDate) < new Date())
           .reduce((sum, inv) => sum + inv.amountDue, 0),
-        source: 'JobTread',
+        source: 'Current CRM',
       };
     } catch (error: any) {
-      results.receivables = { error: 'JobTread unavailable', message: error.message };
+      results.receivables = { error: 'Current CRM unavailable', message: error.message };
     }
 
     // 3. QBO balance sheet snapshot

@@ -10,7 +10,7 @@ interface Board { date: string; people: Person[]; events: BoardEvent[]; warnings
 export interface TimeChoice { date: string; time: string; forEmail: string | null }
 
 const DEFAULT_DAYS = 5;
-const SOURCE_LABEL: Record<BoardEvent['source'], string> = { google: 'Google', ghl: 'GoHighLevel', both: 'GHL + Google' };
+const SOURCE_LABEL: Record<BoardEvent['source'], string> = { google: 'Google', ghl: 'KynexPro', both: 'KynexPro + Google' };
 
 /** Clock time of an instant, in the schedule board's time zone (Eastern, see shared/schedule-board). */
 const timeOf = (iso: string) => label12(etParts(iso).minutes);

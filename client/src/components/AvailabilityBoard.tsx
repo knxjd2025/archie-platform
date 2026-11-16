@@ -18,8 +18,8 @@ const DURATIONS = [30, 60, 90, 120];
 
 const SOURCE_STYLE: Record<BoardEvent['source'], { box: string; label: string }> = {
   google: { box: 'bg-blue-50 border-blue-500 text-blue-900', label: 'Google Calendar' },
-  ghl: { box: 'bg-purple-50 border-purple-500 text-purple-900', label: 'GoHighLevel' },
-  both: { box: 'bg-indigo-50 border-indigo-500 text-indigo-900', label: 'GoHighLevel + Google' },
+  ghl: { box: 'bg-purple-50 border-purple-500 text-purple-900', label: 'KynexPro' },
+  both: { box: 'bg-indigo-50 border-indigo-500 text-indigo-900', label: 'KynexPro + Google' },
 };
 
 const dayTitle = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', timeZone: 'UTC' });
@@ -138,7 +138,7 @@ export default function AvailabilityBoard({ onOpenClient }: { onOpenClient?: (ex
                     <p className="text-sm font-semibold text-gray-900 truncate" title={p.email}>{p.name}</p>
                     <div className="flex items-center gap-1 mt-0.5">
                       <span className={`text-[10px] px-1 rounded ${p.google ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-400 line-through'}`} title={p.google ? 'Google Calendar connected' : 'No company Google calendar'}>Google</span>
-                      <span className={`text-[10px] px-1 rounded ${p.ghl ? 'bg-purple-50 text-purple-700' : 'bg-gray-100 text-gray-400 line-through'}`} title={p.ghl ? 'GoHighLevel user matched by email' : 'No GoHighLevel user with this email'}>GHL</span>
+                      <span className={`text-[10px] px-1 rounded ${p.ghl ? 'bg-purple-50 text-purple-700' : 'bg-gray-100 text-gray-400 line-through'}`} title={p.ghl ? 'KynexPro user matched by email' : 'No KynexPro user with this email'}>KynexPro</span>
                       <span className="text-[10px] text-gray-400 ml-auto">{mine.filter((e) => !e.allDay).length} booked</span>
                     </div>
                     {open.length > 0 ? (
@@ -305,11 +305,11 @@ function BookingDialog({ slot, people, events, defaultDuration, onClose, onBooke
         });
         const name = `${nf.firstName} ${nf.lastName}`.trim() || nf.phone || nf.email;
         if (r.appointment && !r.appointment.ok) {
-          setErr(`${name} was added (JobTread: ${r.jobtread}), but the calendar booking failed: ${r.appointment.error || 'unknown error'}. Try the time again from their profile.`);
+          setErr(`${name} was added (Current CRM: ${r.jobtread}), but the calendar booking failed: ${r.appointment.error || 'unknown error'}. Try the time again from their profile.`);
           setDone(null);
           return;
         }
-        setDone({ message: `${name} added and ${type.toLowerCase()} booked on ${who} calendar (${r.appointment?.bookedOn}). JobTread: ${r.jobtread}. GoHighLevel: ${r.ghl}.`, externalId: r.jobId });
+        setDone({ message: `${name} added and ${type.toLowerCase()} booked on ${who} calendar (${r.appointment?.bookedOn}). Current CRM: ${r.jobtread}. KynexPro: ${r.ghl}.`, externalId: r.jobId });
       }
     } catch (e: any) {
       setErr(e?.message || 'Booking failed.');
@@ -388,7 +388,7 @@ function BookingDialog({ slot, people, events, defaultDuration, onClose, onBooke
               </label>
               <label><span className={lbl}>ZIP</span><input value={nf.zip} onChange={(e) => setNf({ ...nf, zip: e.target.value })} className={input} inputMode="numeric" /></label>
             </div>
-            <p className="col-span-2 text-[11px] text-gray-500">Creates the lead in JobTread and GoHighLevel with {person.name} as the sales rep{person.jobtreadSalesRep ? '' : ' in the app (they have no JobTread rep name on file, so JobTread shows you)'}, and books it on {who} calendar.{user && user.email.toLowerCase() !== personEmail ? ' You stay on it as a shared rep, so it stays in your leads.' : ''}</p>
+            <p className="col-span-2 text-[11px] text-gray-500">Creates the lead in your CRM and KynexPro with {person.name} as the sales rep{person.jobtreadSalesRep ? '' : ' in the app (they have no CRM rep name on file, so your CRM shows you)'}, and books it on {who} calendar.{user && user.email.toLowerCase() !== personEmail ? ' You stay on it as a shared rep, so it stays in your leads.' : ''}</p>
           </div>
         ) : (
           <div className="space-y-1.5">

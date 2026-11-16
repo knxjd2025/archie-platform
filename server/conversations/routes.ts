@@ -88,7 +88,7 @@ export function normalizeJobTreadComment(c: any): ConversationItem {
     // Comments that arrived as email read as inbound email; the rest are the
     // job's internal note/message feed.
     channel: c.isFromEmail ? 'email' : 'note',
-    contact: c.accountName || c.jobName || 'JobTread',
+    contact: c.accountName || c.jobName || 'Current CRM',
     contactId: '',
     lastMessage: `${author}${msg}`,
     direction: c.isFromEmail ? 'inbound' : 'outbound',

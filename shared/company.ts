@@ -83,6 +83,11 @@ export interface CompanySettings {
   modules?: Partial<Record<ArchieModule, boolean>>;
   /** IANA time zone for schedules and digests. Defaults to America/New_York. */
   timeZone?: string;
+  /**
+   * Menu pages hidden from each user level, set on the Company page
+   * (shared/menu.ts). Hiding only narrows a menu; it never grants a page.
+   */
+  menuHidden?: Partial<Record<import('./rbac').TeamRole, string[]>>;
 }
 
 export const ARCHIE_MODULES = [
@@ -152,6 +157,15 @@ export interface CompanyProfile {
   links: CompanyLink[];
   awards: CompanyImage[];
   colors: CompanyColors;
+  /**
+   * The colors for the app's chrome (top bar, ink surfaces), or '' when the
+   * company has none. `brandPrimary` is the stored main color made readable
+   * under white text (shared/contrast.ts), whatever wrote it: the key is older
+   * than the Company page and reports may have stored a light color in it.
+   * Reports keep the stored value through `colors`. `colors` always has a value.
+   */
+  brandPrimary: string;
+  brandAccent: string;
   credentials: string[];
   trustStats: string[];
   certifications: string[];
@@ -169,6 +183,8 @@ export interface CompanyProfile {
   serviceArea: string;
   timeZone: string;
 }
+
+import { readableWithWhite } from './contrast';
 
 const DEFAULT_PRIMARY = '#1F3A5F';
 
@@ -257,6 +273,8 @@ export function resolveCompanyProfile(company: {
       warning: '#D97706',
       danger: '#DC2626',
     },
+    brandPrimary: HEX_RE.test(clean(b.primaryColor)) ? readableWithWhite(clean(b.primaryColor)).color : '',
+    brandAccent: HEX_RE.test(clean(b.accentColor)) ? clean(b.accentColor) : '',
     credentials: cleanList(s.credentials),
     trustStats: cleanList(s.trustStats),
     certifications: cleanList(s.certifications),

@@ -20,10 +20,10 @@ describe('ghlContactLinks', () => {
 describe('callLogNote', () => {
   it("names how the call was placed, who placed it, and when, in the company's zone", () => {
     const note = callLogNote('ghl-app', 'rep@acme.test', new Date('2026-09-14T18:05:00Z'));
-    expect(note).toContain('LeadConnector app');
+    expect(note).toContain('KynexPro app');
     expect(note).toContain('rep@acme.test');
     expect(note).toContain('2:05 PM EDT');
-    expect(callLogNote('ghl-web', 'a')).toContain('GHL web dialer');
+    expect(callLogNote('ghl-web', 'a')).toContain('KynexPro web dialer');
     expect(callLogNote('phone', 'a')).toContain("rep's own phone");
   });
 });
@@ -101,6 +101,6 @@ describe('findOrCreateContact', () => {
 
   it('still reports a real failure as one', async () => {
     const ghl = client([], async () => { throw new Error('GHL API Error (503): unavailable'); });
-    expect(await findOrCreateContact(ghl, lead)).toEqual({ ok: false, error: 'GoHighLevel is not responding right now.' });
+    expect(await findOrCreateContact(ghl, lead)).toEqual({ ok: false, error: 'KynexPro is not responding right now.' });
   });
 });

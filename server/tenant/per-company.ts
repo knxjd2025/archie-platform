@@ -7,11 +7,13 @@
  * each company its own instance and refuses to make one with no company.
  *
  * Env credentials: a few integrations still read one account from the
- * environment (JobTread, Everee, Twilio, CompanyCam). Those belong
- * to exactly one company, named by ARCHIE_ENV_CREDENTIALS_COMPANY_ID, and any
- * other company is refused before a request leaves the server. Unset means
- * no company may use them. Each moves to per-company credentials
- * (company_integrations) as it is rebuilt.
+ * environment (Everee, Twilio). Those belong to exactly one company, named by
+ * ARCHIE_ENV_CREDENTIALS_COMPANY_ID, and any other company is refused before
+ * a request leaves the server. Unset means no company may use them. Each
+ * moves to per-company credentials (company_integrations) as it is rebuilt.
+ * JobTread (Current CRM) and CompanyCam already have: a company's own saved
+ * credentials come first, and the env account is only a fallback for its
+ * owning company (server/tenant/company-credentials.ts).
  */
 import { currentCompanyId } from './context';
 

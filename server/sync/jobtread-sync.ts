@@ -3,10 +3,14 @@ import { db } from '../db';
 import { deals, invoices, leads } from '../../shared/schema';
 import { upsertBySourceId } from './run';
 import { mapDeal, mapInvoice, type JtDocument } from './jobtread-map';
+import { JOBTREAD_API_URL, resolveJobTreadCredentials } from '../integrations/jobtread-connection';
 
-const JOBTREAD_API_URL = 'https://api.jobtread.com/pave';
 
 async function pave<T>(query: Record<string, any>): Promise<T> {
+  // The current company's own JobTread key; never the env key for a company
+  // that does not own it (a sync run by another company's admin used to pull
+  // the env account's jobs into that company).
+  const { grantKey } = await resolveJobTreadCredentials();
   // A stalled JobTread call with no timeout held the hourly sync until Vercel
   // killed the whole function at 300s. 20s.
   const controller = new AbortController();
@@ -14,13 +18,13 @@ async function pave<T>(query: Record<string, any>): Promise<T> {
   try {
     const res = await fetch(JOBTREAD_API_URL, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${process.env.JOBTREAD_API_KEY}`, 'Content-Type': 'application/json' },
+      headers: { Authorization: `Bearer ${grantKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ query }),
       signal: controller.signal,
     });
-    if (!res.ok) throw new Error(`JobTread ${res.status}: ${await res.text()}`);
+    if (!res.ok) throw new Error(`Current CRM ${res.status}: ${await res.text()}`);
     const json: any = await res.json();
-    if (json.errors?.length) throw new Error(`JobTread Pave: ${json.errors.map((e: any) => e.message).join(', ')}`);
+    if (json.errors?.length) throw new Error(`Current CRM Pave: ${json.errors.map((e: any) => e.message).join(', ')}`);
     return json;
   } finally {
     clearTimeout(timer);
@@ -28,12 +32,14 @@ async function pave<T>(query: Record<string, any>): Promise<T> {
 }
 
 async function orgId(): Promise<string> {
+  const saved = (await resolveJobTreadCredentials()).organizationId;
+  if (saved) return saved;
   // `currentGrant.organization` is null for account-level API keys (verified live);
   // `organizations.nodes[0].id` is the resolution path already proven to work in
   // server/integrations/jobtread.ts's getOrganizationId()/healthCheck().
   const r = await pave<any>({ organizations: { nodes: { id: {} } } });
   const id = r?.organizations?.nodes?.[0]?.id;
-  if (!id) throw new Error('JobTread: could not resolve organization id');
+  if (!id) throw new Error('Could not resolve your CRM organization id');
   return id;
 }
 

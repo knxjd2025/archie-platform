@@ -79,7 +79,7 @@ export default function Sales({ onOpenClient }: { onOpenClient?: (externalId: st
     setBusyId(job.externalId);
     try {
       const r = await api.post<{ ok: boolean; pipeline: Pipeline; jobtread?: { ok: boolean; error?: string }; handoff?: string | null }>(`/api/sales/${job.externalId}/${path}`, body);
-      const extra = [r.handoff, r.jobtread && !r.jobtread.ok ? `JobTread didn't take the status: ${r.jobtread.error || 'write failed'}` : null].filter(Boolean).join(' · ');
+      const extra = [r.handoff, r.jobtread && !r.jobtread.ok ? `Your CRM didn't take the status: ${r.jobtread.error || 'write failed'}` : null].filter(Boolean).join(' · ');
       flash(extra ? `${done} · ${extra}` : done);
       await load();
     } catch (e: any) {
@@ -252,7 +252,7 @@ export default function Sales({ onOpenClient }: { onOpenClient?: (externalId: st
                     </button>
                   </>
                 )}
-                {j.jtStage && <p className="mt-1 text-[10px] text-gray-300 truncate" title="JobTread status">JT: {j.jtStage}</p>}
+                {j.jtStage && <p className="mt-1 text-[10px] text-gray-300 truncate" title="Current CRM status">CRM: {j.jtStage}</p>}
               </>
             );
           }}

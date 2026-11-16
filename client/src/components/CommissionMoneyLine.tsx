@@ -140,7 +140,7 @@ export default function CommissionMoneyLine({
           ) : (
             <li key={s.id} className="flex items-center gap-2 py-1.5">
               <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${s.kind === 'doc' ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
-                {s.kind === 'doc' ? 'JobTread' : 'Manual'}
+                {s.kind === 'doc' ? 'Current CRM' : 'Manual'}
               </span>
               <span className="text-sm text-gray-700 flex-1 min-w-0 break-words">
                 {s.label}
@@ -223,8 +223,8 @@ export default function CommissionMoneyLine({
           </div>
           <div className="max-h-60 overflow-auto">
             {docsState === 'loading' && <p className="px-3 py-3 text-xs text-gray-400">Reading the job's documents…</p>}
-            {docsState === 'error' && <p className="px-3 py-3 text-xs text-red-600">Couldn't reach JobTread. Add the amount by hand instead.</p>}
-            {docsState === 'none' && <p className="px-3 py-3 text-xs text-gray-500">This job isn't in JobTread, so there are no documents to pick. Add the amount by hand.</p>}
+            {docsState === 'error' && <p className="px-3 py-3 text-xs text-red-600">Couldn't reach your CRM. Add the amount by hand instead.</p>}
+            {docsState === 'none' && <p className="px-3 py-3 text-xs text-gray-500">This job isn't in your CRM, so there are no documents to pick. Add the amount by hand.</p>}
             {docsState === 'ready' && !candidates.length && (
               <p className="px-3 py-3 text-xs text-gray-500">
                 No {wantType === 'customerOrder' ? 'customer documents' : 'purchase or work orders'} on this job yet.

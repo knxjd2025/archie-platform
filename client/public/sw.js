@@ -5,7 +5,7 @@
 //   immutable per build). Everything else is network-first, cache only offline.
 //
 // The cache used to be a constant 'brn-v1' with cache-first for every non-API
-// GET, so files without a hash in their name (/sales-journey/*, /logo.jpg, the
+// GET, so files without a hash in their name (/roof-systems/*, /logo.jpg, the
 // manifest) were frozen at whatever the first visit saw, across every deploy.
 // BUILD_ID is stamped in by vite.config.ts at build time, so each deploy gets a
 // fresh cache and the old ones are dropped on activate.
@@ -22,7 +22,7 @@ const CACHE = CACHE_PREFIX + BUILD_ID;
 const NEVER_CACHE_PREFIXES = ['/api/', '/r/'];
 // Standalone static pages served next to the app. They are not the app shell,
 // so they must never be stored as '/', but they may be kept under their own URL.
-const STATIC_PAGE_PREFIXES = ['/sales-journey/', '/commercial-training/', '/roof-systems/'];
+const STATIC_PAGE_PREFIXES = ['/roof-systems/'];
 
 function hasPrefix(pathname, prefixes) {
   return prefixes.some((p) => pathname === p.slice(0, -1) || pathname.startsWith(p));

@@ -350,7 +350,7 @@ export class TaxAccountantAgent extends BaseAgent {
           qboExpenseCategories: qboCategories,
           commonDeductions: [
             { category: 'Vehicle/Mileage', description: 'Business miles for job site visits, material runs', irsRate: '$0.70/mile (2025)' },
-            { category: 'Materials & Supplies', description: 'Roofing materials, tools, safety equipment', source: 'JobTread job costs' },
+            { category: 'Materials & Supplies', description: 'Roofing materials, tools, safety equipment', source: 'Current CRM job costs' },
             { category: 'Subcontractor Payments', description: '1099-NEC payments to subcontractors', source: '1099 filings' },
             { category: 'Insurance', description: 'General liability, workers comp, vehicle insurance', source: 'Bank statements' },
             { category: 'Office & Admin', description: 'Software subscriptions, office supplies, phone', source: 'Bank statements' },
@@ -360,7 +360,7 @@ export class TaxAccountantAgent extends BaseAgent {
           ],
           recommendation: qboCategories
             ? 'QuickBooks expense data available — cross-reference categories with deductible items above.'
-            : 'Review bank statements for recurring business expenses that may be categorized as deductions. Cross-reference with JobTread job costs for materials and subcontractor payments.',
+            : 'Review bank statements for recurring business expenses that may be categorized as deductions. Cross-reference with the company\'s CRM job costs for materials and subcontractor payments.',
         };
       },
     });
