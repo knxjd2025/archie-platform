@@ -18,12 +18,24 @@
  *   invocation;
  * - time-zone correct: the period is worked out from the company's own time
  *   zone (its profile), without a query;
- * - parallel where safe: up to `concurrency` companies at once.
+ * - parallel where safe: up to `concurrency` companies at once;
+ * - exclusive: a run claims a company's row atomically before working on it
+ *   (a lease in company_job_runs, migration 0010), so two overlapping
+ *   invocations never run the same company at once. A lease lasts
+ *   perCompanyMs plus a margin; a crashed run's lease expires and a later run
+ *   takes over. Success is recorded only while the run still holds its lease,
+ *   so a run that timed out (its work cannot be stopped from outside) or lost
+ *   its lease can never mark the period done.
+ *
+ * A job's `run` must honour `deadline` and `signal` (aborted when the company
+ * hits perCompanyMs) and be idempotent: a timed-out or crashed run is retried
+ * by a later invocation once its lease has expired.
  *
  * Each company's work runs as that company (runAsCompany), so it can only see
  * its own rows. Listing companies and reading progress are the only system
  * reads.
  */
+import { randomUUID } from 'node:crypto';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '../db';
 import { companies, companyJobRuns, type Company } from '../../shared/schema';
@@ -62,8 +74,12 @@ export interface CompanyJob<T> {
    * or null when nothing is due for it now. Pure: no queries.
    */
   period: (company: Company, now: Date) => string | null;
-  /** The work for one company. Runs as the company. `deadline` is an epoch ms it should finish by. */
-  run: (args: { company: Company; period: string; now: Date; deadline: number }) => Promise<T>;
+  /**
+   * The work for one company. Runs as the company. `deadline` is an epoch ms
+   * it should finish by; `signal` is aborted when it runs out of time. Must be
+   * idempotent (see the top of this file).
+   */
+  run: (args: { company: Company; period: string; now: Date; deadline: number; signal: AbortSignal }) => Promise<T>;
   /** Whether the period's work is finished. Default: yes. Unfinished work is picked up by the next run. */
   isComplete?: (value: T) => boolean;
   /** Hard cap on one company's work. */
@@ -84,7 +100,7 @@ export interface FanOutOptions {
 
 export type CompanyOutcome<T> =
   | { companyId: string; status: 'done' | 'partial'; period: string; value: T }
-  | { companyId: string; status: 'already_done' | 'not_reached'; period: string }
+  | { companyId: string; status: 'already_done' | 'not_reached' | 'in_progress'; period: string }
   | { companyId: string; status: 'not_due' }
   | { companyId: string; status: 'failed' | 'timed_out'; period: string; error: string };
 
@@ -131,6 +147,50 @@ async function mark(companyId: string, job: string, set: Partial<typeof companyJ
     .onConflictDoUpdate({ target: [companyJobRuns.companyId, companyJobRuns.job], set }), { loadProfile: false });
 }
 
+/** How long a claim lasts: the per-company cap plus a margin (at most 30s). */
+export function leaseMs(perCompanyMs: number): number {
+  return perCompanyMs + Math.min(perCompanyMs, 30_000);
+}
+
+type Claim = { token: string } | { skipped: 'already_done' | 'in_progress' };
+
+/**
+ * Take this company's job for this run, in one statement, as the company:
+ * succeeds only when no unexpired lease is held (and, unless forced, the
+ * period is not done). Also stamps attempted_at for the rotation order.
+ */
+async function claim(companyId: string, job: string, period: string, ignoreDone: boolean, ms: number): Promise<Claim> {
+  const token = randomUUID();
+  return runAsCompany(companyId, async () => {
+    const r = await db.execute(sql`
+      insert into company_job_runs (job, attempted_at, lease_token, lease_until)
+      values (${job}, now(), ${token}, now() + ${ms} * interval '1 millisecond')
+      on conflict (company_id, job) do update
+         set attempted_at = excluded.attempted_at, lease_token = excluded.lease_token, lease_until = excluded.lease_until
+       where (company_job_runs.lease_until is null or company_job_runs.lease_until <= now())
+         and (${ignoreDone}::boolean or company_job_runs.done_period is distinct from ${period})
+      returning lease_token`);
+    if (r.rows.length) return { token };
+    const [row] = await db.select({ donePeriod: companyJobRuns.donePeriod }).from(companyJobRuns).where(eq(companyJobRuns.job, job));
+    return { skipped: !ignoreDone && row?.donePeriod === period ? 'already_done' : 'in_progress' };
+  }, { loadProfile: false });
+}
+
+/**
+ * Change this run's row only while it still holds a valid lease. Returns
+ * whether it did. `release` drops the lease (finished or failed); a timed-out
+ * run keeps it, so nobody starts the company while its work may still run.
+ */
+async function updateHeld(companyId: string, job: string, token: string, set: Partial<typeof companyJobRuns.$inferInsert>, release: boolean): Promise<boolean> {
+  return runAsCompany(companyId, async () => {
+    const rows = await db.update(companyJobRuns)
+      .set({ ...set, ...(release ? { leaseToken: null, leaseUntil: null } : {}) })
+      .where(and(eq(companyJobRuns.job, job), eq(companyJobRuns.leaseToken, token), sql`${companyJobRuns.leaseUntil} > now()`))
+      .returning({ job: companyJobRuns.job });
+    return rows.length > 0;
+  }, { loadProfile: false });
+}
+
 /** Record that a company's work for a period is done, outside a run (e.g. seeding at creation). */
 export async function markCompanyJobDone(companyId: string, job: string, period: string): Promise<void> {
   const at = new Date();
@@ -170,22 +230,34 @@ export async function runCompanyJob<T>(job: CompanyJob<T>, opts: FanOutOptions =
       // Never start a company that could not finish inside the invocation.
       if (Date.now() + job.perCompanyMs > budgetEnd) continue;
       const { company, period, index } = item;
+      let token: string | null = null;
+      const controller = new AbortController();
       try {
-        // Tried now, before the work: if this invocation is killed, the
-        // company moves to the back and the ones not reached go first.
-        await mark(company.id, job.name, { attemptedAt: new Date() });
+        // Claimed now, before the work (which also marks it tried, so if this
+        // invocation is killed the company moves to the back of the queue).
+        const claimed = await claim(company.id, job.name, period, !!opts.ignoreDone, leaseMs(job.perCompanyMs));
+        if ('skipped' in claimed) {
+          outcomes[index] = { companyId: company.id, status: claimed.skipped, period };
+          continue;
+        }
+        token = claimed.token;
         const deadline = Date.now() + job.perCompanyMs;
         const value = await withTimeout(
-          runAsCompany(company.id, () => job.run({ company, period, now, deadline })),
+          runAsCompany(company.id, () => job.run({ company, period, now, deadline, signal: controller.signal })),
           job.perCompanyMs,
         );
         const complete = job.isComplete ? job.isComplete(value) : true;
-        if (complete) await mark(company.id, job.name, { donePeriod: period, doneAt: new Date(), lastError: null });
+        const recorded = await updateHeld(company.id, job.name, token,
+          complete ? { donePeriod: period, doneAt: new Date(), lastError: null } : { lastError: null }, true);
+        if (!recorded) throw new Error('lost its claim before finishing: not recorded as done');
         outcomes[index] = { companyId: company.id, status: complete ? 'done' : 'partial', period, value };
       } catch (err) {
         const timedOut = err instanceof CompanyTimeout;
+        if (timedOut) controller.abort(err);
         console.error(`[fan-out] ${job.name} ${timedOut ? 'timed out' : 'failed'} for company ${company.slug}:`, errorText(err));
-        await mark(company.id, job.name, { lastError: errorText(err) }).catch(() => {});
+        // A timed-out run keeps its lease until it expires: its work may still be running.
+        if (token) await updateHeld(company.id, job.name, token, { lastError: errorText(err) }, !timedOut).catch(() => {});
+        else await mark(company.id, job.name, { lastError: errorText(err) }).catch(() => {});
         outcomes[index] = { companyId: company.id, status: timedOut ? 'timed_out' : 'failed', period, error: errorText(err) };
       }
     }
@@ -193,6 +265,7 @@ export async function runCompanyJob<T>(job: CompanyJob<T>, opts: FanOutOptions =
   const n = Math.max(1, Math.min(job.concurrency ?? 1, queue.length || 1));
   await Promise.all(Array.from({ length: n }, worker));
 
+  // in_progress: another run holds the company; it is not this run's failure.
   const remaining = outcomes.filter((o) => o.status !== 'done' && o.status !== 'already_done' && o.status !== 'not_due').length;
   return {
     job: job.name,

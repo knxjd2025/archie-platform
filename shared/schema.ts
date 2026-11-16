@@ -129,6 +129,13 @@ export const companyJobRuns = pgTable('company_job_runs', {
   doneAt: timestamp('done_at'),
   attemptedAt: timestamp('attempted_at'),
   lastError: text('last_error'),
+  /**
+   * The run that holds this company's job right now, and until when
+   * (server/tenant/fan-out.ts). One run per company and job at a time; a
+   * crashed run's lease expires and the next run takes it. Migration 0010.
+   */
+  leaseToken: uuid('lease_token'),
+  leaseUntil: timestamp('lease_until'),
 }, (t) => ({
   pk: primaryKey({ columns: [t.companyId, t.job] }),
 }));

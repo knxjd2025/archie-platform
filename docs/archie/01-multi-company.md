@@ -182,7 +182,16 @@ companies and one 300s function, each job is also:
   `settings.timeZone`. The rep check-in goes out in the company's 8 AM to noon
   window, once per rep per day (`rep_daily_reminders`);
 - **parallel where safe**: a few companies at once for jobs that wait on other
-  services (reminders, chat summaries); one at a time for database-heavy ones.
+  services (reminders, chat summaries); one at a time for database-heavy ones;
+- **exclusive**: a run claims each company with one conditional
+  `INSERT ... ON CONFLICT DO UPDATE ... RETURNING` on `company_job_runs`
+  (a lease, migration 0010), so overlapping invocations (a manual run during
+  the cron, a repeated delivery) never run the same company twice. The lease
+  lasts `perCompanyMs` plus a margin; a crashed run's lease expires and a later
+  run takes over. Success is recorded only while the run still holds its lease,
+  so a run that timed out (its work cannot be stopped from outside; `signal` is
+  aborted) never marks the period done. A job's `run` must honour `deadline`
+  and `signal`, and be idempotent.
 
 Seeding (advisors, knowledge base) is one of these jobs (`/api/cron/seed-companies`,
 once per deployment per company) plus at company creation. It is never on the

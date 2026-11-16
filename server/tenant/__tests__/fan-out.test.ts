@@ -12,7 +12,14 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 describe.skipIf(!local)('runCompanyJob', async () => {
   const { createCompany } = await import('../companies');
-  const { currentCompanyId } = await import('../context');
+  const { currentCompanyId, runAsCompany } = await import('../context');
+  const { db } = await import('../../db');
+  const schema = await import('../../../shared/schema');
+  const { eq } = await import('drizzle-orm');
+  const donePeriod = async (companyId: string, job: string) => {
+    const [row] = await runAsCompany(companyId, () => db.select().from(schema.companyJobRuns).where(eq(schema.companyJobRuns.job, job)), { loadProfile: false });
+    return row?.donePeriod ?? null;
+  };
   const { runCompanyJob, localParts, companyTimeZone } = await import('../fan-out');
 
   const tag = `fan-${process.pid}-${Date.now()}`;
@@ -92,25 +99,82 @@ describe.skipIf(!local)('runCompanyJob', async () => {
     expect(order).toEqual([x, y, z, x]);
   });
 
-  it('caps one company and carries on with the others; the next run retries it', async () => {
+  it('caps one company and carries on with the others; a later run retries it once its lease expires', async () => {
     const [slow, b, c] = await threeCompanies();
     let hang = true;
     const ran: string[] = [];
+    let zombieSignal: AbortSignal | null = null;
     const job = {
       name: jobName(), perCompanyMs: 300, concurrency: 3,
       period: () => 'today',
-      run: async ({ company }: any) => {
-        if (company.id === slow && hang) await sleep(2_000);
+      run: async ({ company, signal }: any) => {
+        if (company.id === slow && hang) { zombieSignal = signal; await sleep(1_000); }
         ran.push(company.id);
       },
     };
     const r1 = await runCompanyJob(job, { onlyCompanyIds: [slow, b, c] });
     expect(r1.companies.find((o) => o.companyId === slow)?.status).toBe('timed_out');
     expect(r1.companies.filter((o) => o.status === 'done').map((o) => o.companyId).sort()).toEqual([b, c].sort());
-    hang = false;
+    expect(zombieSignal!.aborted).toBe(true);
+    // Its work is still running: nobody else may start the company yet.
     const r2 = await runCompanyJob(job, { onlyCompanyIds: [slow, b, c] });
-    expect(r2.companies.find((o) => o.companyId === slow)?.status).toBe('done');
-    expect(r2.remaining).toBe(0);
+    expect(r2.companies.find((o) => o.companyId === slow)?.status).toBe('in_progress');
+    await sleep(800); // the timed-out work ends, and its lease (300 + 300 ms) has expired
+    expect(await donePeriod(slow, job.name)).toBeNull(); // it could not record success
+    hang = false;
+    const r3 = await runCompanyJob(job, { onlyCompanyIds: [slow, b, c] });
+    expect(r3.companies.find((o) => o.companyId === slow)?.status).toBe('done');
+    expect(r3.remaining).toBe(0);
+  });
+
+  it('runs each company exactly once when two invocations overlap', async () => {
+    const ids = await threeCompanies();
+    const runs = new Map<string, number>();
+    const job = {
+      name: jobName(), perCompanyMs: 5_000, concurrency: 3,
+      period: () => 'today',
+      run: async ({ company }: any) => { runs.set(company.id, (runs.get(company.id) ?? 0) + 1); await sleep(300); },
+    };
+    const [r1, r2] = await Promise.all([runCompanyJob(job, { onlyCompanyIds: ids }), runCompanyJob(job, { onlyCompanyIds: ids })]);
+    expect(ids.map((id) => runs.get(id))).toEqual([1, 1, 1]);
+    for (const id of ids) {
+      const statuses = [r1, r2].map((r) => r.companies.find((o) => o.companyId === id)?.status).sort();
+      expect(statuses[0]).toBe('done');
+      expect(['already_done', 'in_progress']).toContain(statuses[1]);
+    }
+    // Even a forced run cannot start a company another run holds.
+    const forced = Promise.all([runCompanyJob(job, { onlyCompanyIds: ids, ignoreDone: true }), runCompanyJob(job, { onlyCompanyIds: ids, ignoreDone: true })]);
+    await forced;
+    expect(ids.map((id) => runs.get(id))).toEqual([2, 2, 2]);
+  });
+
+  it('retries a company whose run crashed holding the lease, after the lease expires', async () => {
+    const [id] = await threeCompanies();
+    const name = jobName();
+    // A crashed invocation: a lease nobody will release.
+    await runAsCompany(id, () => db.insert(schema.companyJobRuns)
+      .values({ job: name, leaseToken: '11111111-1111-4111-8111-111111111111', leaseUntil: new Date(Date.now() + 400) }), { loadProfile: false });
+    let ran = 0;
+    const job = { name, perCompanyMs: 1_000, period: () => 'today', run: async () => { ran++; } };
+    expect((await runCompanyJob(job, { onlyCompanyIds: [id] })).companies[0].status).toBe('in_progress');
+    await sleep(500);
+    expect((await runCompanyJob(job, { onlyCompanyIds: [id] })).companies[0].status).toBe('done');
+    expect(ran).toBe(1);
+  });
+
+  it('does not record success for a run that lost its lease', async () => {
+    const [id] = await threeCompanies();
+    const name = jobName();
+    const job = {
+      name, perCompanyMs: 1_000, period: () => 'today',
+      // Another run takes over mid-work (as if this one's lease had expired).
+      run: async () => {
+        await db.update(schema.companyJobRuns).set({ leaseToken: '22222222-2222-4222-8222-222222222222' }).where(eq(schema.companyJobRuns.job, name));
+      },
+    };
+    const r = await runCompanyJob(job, { onlyCompanyIds: [id] });
+    expect(r.companies[0]).toMatchObject({ status: 'failed', error: expect.stringMatching(/lost its claim/) });
+    expect(await donePeriod(id, name)).toBeNull();
   });
 
   it('keeps unfinished work for the next run', async () => {

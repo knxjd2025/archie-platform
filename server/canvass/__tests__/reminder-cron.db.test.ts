@@ -62,8 +62,19 @@ describe.skipIf(!local)('rep reminder cron', async () => {
     expect(statusOf(r1, ids.la)).toBe('not_due'); // 6:30 AM there
     expect(mail.sent).toEqual([email('a')]);
 
-    // 15 minutes later B's claim is still fresh: B is not finished, nothing is resent.
+    // Right away, B's timed-out run still holds the job's lease (its send may
+    // still be running): nobody starts B, nothing is resent.
     mail.hangFor.clear();
+    const r2a = await run(new Date(at930et.getTime() + 1 * 60_000));
+    expect(statusOf(r2a, ids.b)).toBe('in_progress');
+    expect(mail.sent).toEqual([email('a')]);
+
+    // Time passes: the job lease expires (it lasts the per-company cap plus a margin).
+    await runAsCompany(ids.b, () => db.update(schema.companyJobRuns)
+      .set({ leaseUntil: sql`now() - interval '1 second'` })
+      .where(eq(schema.companyJobRuns.job, repReminderJob().name)));
+
+    // 15 minutes later B's per-rep claim is still fresh: B is not finished, nothing is resent.
     const r2 = await run(new Date(at930et.getTime() + 15 * 60_000));
     expect(statusOf(r2, ids.a)).toBe('already_done');
     expect(statusOf(r2, ids.b)).toBe('partial');

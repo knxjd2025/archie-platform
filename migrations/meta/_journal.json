@@ -71,6 +71,13 @@
       "when": 1792715000000,
       "tag": "0009_company_leading_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792715010000,
+      "tag": "0010_company_job_leases",
+      "breakpoints": true
     }
   ]
 }
