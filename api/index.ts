@@ -74,8 +74,9 @@ app.use(createErrorHandler(recordServerError));
 // knowledge base before a new instance answered its first request: about 17
 // queries per company, one company after another, rerun every 60s while any
 // company failed. A company is seeded when it is created (provisionCompany in
-// server/seed.ts) and backfilled by an explicit, idempotent operator job
-// (scripts/seed-companies.ts), never on the request path.
+// server/seed.ts) and backfilled by explicit, idempotent jobs (the
+// /api/cron/seed-companies cron and scripts/seed-companies.ts), never on the
+// request path.
 
 // Export for Vercel serverless
 export default function handler(req: Request, res: Response) {

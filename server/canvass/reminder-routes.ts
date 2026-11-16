@@ -13,8 +13,8 @@ import { visibleIdsFor } from '../access/team-scope';
 import { dataScope } from '../../shared/rbac';
 import { sendFailure } from '../lib/failure';
 import { logWrite } from '../writes/log';
-import { easternNow, isSendWindow, runRepReminders } from './daily-reminder';
-import { forEachLiveCompany } from '../tenant/companies';
+import { easternNow, isSendWindow, runRepReminders, type ReminderRunResult } from './daily-reminder';
+import { companyTimeZone, runCompanyJob, type CompanyJob } from '../tenant/fan-out';
 
 /** Constant-time, so the secret can't be guessed a character at a time from response timing. */
 function cronAuthorized(req: Request): boolean {
@@ -27,27 +27,47 @@ function cronAuthorized(req: Request): boolean {
 
 const appUrl = (): string => (process.env.APP_BASE_URL || '').replace(/\/+$/, '');
 
+/**
+ * The morning check-in as a per-company job (server/tenant/fan-out.ts). Due in
+ * each company's own morning window (isSendWindow, its own time zone); the
+ * period is its local date, so a company is finished at most once a day and a
+ * run cut off part-way is picked up by the next one. `force` (a manual run)
+ * ignores the clock; it is still one message per rep per day.
+ */
+export function repReminderJob(opts: { force?: boolean; perCompanyMs?: number } = {}): CompanyJob<ReminderRunResult> {
+  return {
+    name: 'rep-daily-reminder',
+    period: (company, now) => {
+      const tz = companyTimeZone(company);
+      return opts.force || isSendWindow(now, tz) ? easternNow(now, tz).dateIso : null;
+    },
+    run: async ({ now }) => {
+      const result = await runRepReminders(now, appUrl());
+      await logWrite({
+        actor: 'system:cron', system: 'app', action: 'rep_daily_reminder', targetId: result.date,
+        summary: `${result.sent} sent, ${result.nothingToDo} with nothing to do, ${result.failed} failed (${result.reps} reps)`,
+        ok: result.failed === 0, error: null,
+      });
+      return result;
+    },
+    // A failed send, or one still in flight from an earlier run, is retried by
+    // a later run that morning; the per-rep claim keeps it to one message.
+    isComplete: (r) => r.failed === 0 && r.pending === 0,
+    perCompanyMs: opts.perCompanyMs ?? 90_000,
+    // Mostly waiting on KynexPro (GHL) and email: safe to overlap a few companies.
+    concurrency: 4,
+  };
+}
+
 export function registerRepReminderRoutes(app: Express) {
-  // Scheduled hourly through the US morning (vercel.json); each company sends
-  // on the run that lands on 8 AM in its own time zone. `?force=1` skips the
-  // clock for a manual run — still one message per rep per day.
+  // Every 15 minutes (vercel.json); each company is reminded once, in its own
+  // morning window. `?force=1` skips the clock for a manual run.
   app.get('/api/cron/rep-daily-reminder', async (req: Request, res: Response) => {
     if (!cronAuthorized(req)) return res.status(401).json({ error: 'unauthorized' });
     try {
-      const now = new Date();
       const force = req.query.force === '1';
-      // Once per company, as that company (server/tenant/cron.ts).
-      const companies = await forEachLiveCompany(async () => {
-        if (!force && !isSendWindow(now)) return { skipped: 'outside 8 AM where the company is', local: easternNow(now) };
-        const result = await runRepReminders(now, appUrl());
-        await logWrite({
-          actor: 'system:cron', system: 'app', action: 'rep_daily_reminder', targetId: result.date,
-          summary: `${result.sent} sent, ${result.nothingToDo} with nothing to do, ${result.failed} failed (${result.reps} reps)`,
-          ok: result.failed === 0, error: null,
-        });
-        return result;
-      });
-      res.json({ ok: companies.every((c) => c.ok), companies });
+      const report = await runCompanyJob(repReminderJob({ force }), { ignoreDone: force });
+      res.json(report);
     } catch (error: any) {
       return sendFailure(res, error, 'GET /api/cron/rep-daily-reminder');
     }

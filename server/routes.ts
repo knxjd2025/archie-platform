@@ -25,6 +25,7 @@ import { registerPhotoRoutes } from './photos/routes';
 import { registerCanvassRoutes } from './canvass/routes';
 import { registerTracerfyRoutes } from './canvass/tracerfy-routes';
 import { registerRepReminderRoutes } from './canvass/reminder-routes';
+import { registerSeedRoutes } from './seed-routes';
 import { registerInboxRoutes } from './inbox/routes';
 import { registerCompanyCamRoutes } from './companycam/routes';
 import { registerKpiRoutes } from './kpis/routes';
@@ -150,6 +151,7 @@ export function registerRoutes(app: Express) {
   registerCanvassRoutes(app);
   registerTracerfyRoutes(app);
   registerRepReminderRoutes(app);
+  registerSeedRoutes(app);
   registerInboxRoutes(app);
   registerCompanyCamRoutes(app);
   registerKpiRoutes(app);

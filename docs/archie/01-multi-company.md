@@ -95,8 +95,29 @@ per request from the current company's row instead of from env vars.
 
 ### 8. Background jobs
 
-Each cron runs `for each active company: runAsCompany(id, job)`, so one company's
-failure does not stop the others and no job ever runs without a company.
+Each cron runs its work once per live company, as that company, through
+`runCompanyJob` (`server/tenant/fan-out.ts`), so one company's failure does not
+stop the others and no job ever runs without a company. With hundreds of
+companies and one 300s function, each job is also:
+
+- **ordered**: companies tried least recently go first, then by id, so a run
+  that is cut off rotates instead of starving the same companies;
+- **bounded**: a cap per company, and no company starts that could not finish
+  inside the invocation (270s budget);
+- **resumable and idempotent**: `company_job_runs` (migration 0006) records the
+  last period each company finished (its local date, or local hour for
+  meetings); later runs in that period skip it, and work cut off part-way is
+  picked up by the next run. The crons run often (vercel.json) so the list
+  drains;
+- **in the company's time zone**: the period comes from the company's own
+  `settings.timeZone`. The rep check-in goes out in the company's 8 AM to noon
+  window, once per rep per day (`rep_daily_reminders`);
+- **parallel where safe**: a few companies at once for jobs that wait on other
+  services (reminders, chat summaries); one at a time for database-heavy ones.
+
+Seeding (advisors, knowledge base) is one of these jobs (`/api/cron/seed-companies`,
+once per deployment per company) plus at company creation. It is never on the
+request path.
 
 ## Running it
 
@@ -151,8 +172,9 @@ things to verify on the project's own dashboards, not known values:
 - `runAsCompany` / `runAsSystem` are async and await their result inside the
   context. A drizzle query only runs when awaited, so a query returned from the
   callback still runs as the company.
-- Scheduled jobs and webhooks have no session. Use `forEachLiveCompany` (crons)
-  or look the company up first (`getCompanyByGhlLocation`, `companyFromToken`).
+- Scheduled jobs and webhooks have no session. Use `runCompanyJob` (crons),
+  `forEachLiveCompany` (operator scripts) or look the company up first
+  (`getCompanyByGhlLocation`, `companyFromToken`).
 
 ## Tests
 

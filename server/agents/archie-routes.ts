@@ -6,7 +6,7 @@ import { sendFailure } from '../lib/failure';
 import { timingSafeEqualStr } from '../security-config';
 import { buildAgentViewer, type AgentViewer } from './viewer';
 import type { SessionUser } from '../access/rep-scope';
-import { forEachLiveCompany } from '../tenant/companies';
+import { companyTimeZone, localParts, runCompanyJob, type CompanyJob } from '../tenant/fan-out';
 import { currentCompanyId } from '../tenant/context';
 
 export const ADVISOR_KEY = 'advisor';
@@ -96,6 +96,28 @@ export function agentChatsCronGate(req: Request, res: Response, next: NextFuncti
   return requireAdmin(req, res, next);
 }
 
+/**
+ * Summarizing finished chat days, as a per-company job (server/tenant/fan-out.ts).
+ * The period is the company's local date: once its backlog is clear, later
+ * runs that day skip it. Each company gets a bounded slice (a batch of chats
+ * and a time budget); a company with more waiting is left unfinished and the
+ * next run continues it, so one busy company cannot starve the rest.
+ */
+export function chatSummaryJob(opts: { perCompanyMs?: number; batch?: number } = {}): CompanyJob<Awaited<ReturnType<typeof summarizePendingDays>>> {
+  const perCompanyMs = opts.perCompanyMs ?? 90_000;
+  return {
+    name: 'agent-chat-summaries',
+    period: (company, now) => localParts(now, companyTimeZone(company)).date,
+    // Stop starting model calls a little before the hard per-company cap.
+    run: ({ deadline }) => summarizePendingDays(opts.batch ?? 25, Math.max(0, deadline - Date.now() - 5_000)),
+    // A day that failed to summarize is retried the next day, not every run.
+    isComplete: (r) => r.deferred === 0 && !r.more,
+    perCompanyMs,
+    // Waiting on the model provider; a few at once, not more (shared account limits).
+    concurrency: 3,
+  };
+}
+
 export function registerArchieRoutes(app: Express) {
   app.post('/api/archie/chat', requireAuth, archieChatHandler);
 
@@ -133,10 +155,11 @@ export function registerArchieRoutes(app: Express) {
       // An admin running it by hand runs it for their own company only. The
       // scheduled run (no session) runs once per company, as that company.
       const own = currentCompanyId();
-      const companies = own
-        ? [{ companyId: own, ok: true, value: await summarizePendingDays() }]
-        : await forEachLiveCompany(() => summarizePendingDays());
-      res.json({ ok: companies.every((c) => c.ok), companies });
+      if (own) {
+        const companies = [{ companyId: own, ok: true, value: await summarizePendingDays() }];
+        return res.json({ ok: true, companies });
+      }
+      res.json(await runCompanyJob(chatSummaryJob()));
     } catch (err: any) {
       return sendFailure(res, err, 'GET /api/agent-chats/cron', 500, 'failed');
     }

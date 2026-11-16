@@ -12,6 +12,7 @@ import { syncTeamAdvisors, pruneUnavailableToolNotes } from './agents/team-advis
  */
 import { createCompany, forEachLiveCompany, type FanOutResult, type NewCompany } from './tenant/companies';
 import { runAsCompany } from './tenant/context';
+import { markCompanyJobDone, type CompanyJob } from './tenant/fan-out';
 import type { Company } from '../shared/schema';
 
 export const defaultAgents = [
@@ -298,10 +299,42 @@ export async function provisionCompany(
   const company = await createCompany(input);
   try {
     await runAsCompany(company.id, () => seed());
+    // So the backfill job does not seed it again for this version.
+    await markCompanyJobDone(company.id, SEED_JOB, seedVersion()).catch((e) => console.warn('[seed] could not record the seed:', e?.message || e));
     return { company, seeded: true };
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
     console.error(`[seed] company ${company.slug} was created but not seeded:`, error);
     return { company, seeded: false, error };
   }
+}
+
+/**
+ * Which version of the seed definitions this deployment carries. A company is
+ * seeded once per version by the backfill job, so a deploy that edits advisor
+ * wording reaches every company, a few at a time, and a deploy that changes
+ * nothing costs one idempotent pass.
+ */
+export const SEED_JOB = 'seed-company';
+
+export function seedVersion(): string {
+  return process.env.VERCEL_GIT_COMMIT_SHA || process.env.VERCEL_DEPLOYMENT_ID || 'local';
+}
+
+/**
+ * The seed backfill as a per-company job (server/tenant/fan-out.ts), for the
+ * /api/cron/seed-companies cron: every live company not yet seeded for this
+ * version, least recently tried first, a bounded number per run, resuming
+ * where the last run stopped. Never on the request path.
+ */
+export function seedCompaniesJob(opts: { perCompanyMs?: number } = {}): CompanyJob<void> {
+  return {
+    name: SEED_JOB,
+    period: () => seedVersion(),
+    run: () => seedCompany(),
+    perCompanyMs: opts.perCompanyMs ?? 60_000,
+    // The knowledge seed holds one client while its inserts use another, so
+    // two companies at once fit in the small per-instance pool.
+    concurrency: 2,
+  };
 }

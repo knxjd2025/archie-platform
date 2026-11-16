@@ -11,7 +11,7 @@
  * so a rep can see their own week before they walk in.
  */
 import type { Express, Request, Response } from 'express';
-import { forEachLiveCompany } from '../tenant/companies';
+import { companyTimeZone, localParts, runCompanyJob, type CompanyJob } from '../tenant/fan-out';
 import { etParts } from '../../shared/schedule-board';
 import { dayOfWeek } from '../../shared/et-periods';
 import { and, asc, desc, eq, isNull, ne } from 'drizzle-orm';
@@ -415,15 +415,32 @@ export function registerMeetingRoutes(app: Express) {
   }));
 
   /**
-   * Hourly, for every live company, as that company and in its own time zone:
-   *   - Sunday from 6 PM local, build next week's pack if it is not built yet;
-   *   - otherwise refresh this week's pack so the rooms are never a week stale
-   *     (a refresh never creates a pack early).
+   * Every 15 minutes (vercel.json); each company is done at most once per
+   * local hour (meetingPackJob). Cut-off runs resume where they stopped.
    */
   app.get('/api/cron/meetings', asyncHandler(async (req: Request, res: Response) => {
     if (!cronAuthorized(req)) return res.status(401).json({ error: 'unauthorized' });
-    const now = new Date();
-    const companies = await forEachLiveCompany(async () => {
+    res.json(await runCompanyJob(meetingPackJob()));
+  }));
+}
+
+/**
+ * The meeting pack, as a per-company job (server/tenant/fan-out.ts). Once per
+ * local hour for every live company, as that company and in its own time zone:
+ *   - Sunday from 6 PM local, build next week's pack if it is not built yet;
+ *   - otherwise refresh this week's pack so the rooms are never a week stale
+ *     (a refresh never creates a pack early).
+ * The period is the company's local date and hour, so a company finished this
+ * hour is skipped by later runs in the same hour.
+ */
+export function meetingPackJob(opts: { perCompanyMs?: number } = {}): CompanyJob<Record<string, unknown>> {
+  return {
+    name: 'meeting-pack',
+    period: (company, now) => {
+      const local = localParts(now, companyTimeZone(company));
+      return `${local.date}T${String(local.hour).padStart(2, '0')}`;
+    },
+    run: async ({ now }) => {
       const mondayIso = mondayFor(now);
       const [existing] = await db.select({ id: meetingWeeks.id }).from(meetingWeeks).where(eq(meetingWeeks.monday, mondayIso));
       const local = etParts(now);
@@ -439,7 +456,10 @@ export function registerMeetingRoutes(app: Express) {
       }
       const week = await generatePack(mondayIso, 'system:refresh', { fileIssues: false });
       return { monday: mondayIso, refreshed: iso(week.generatedAt) };
-    });
-    res.json({ ok: companies.every((c) => c.ok), companies });
-  }));
+    },
+    perCompanyMs: opts.perCompanyMs ?? 60_000,
+    // One at a time: buildAgendas already runs several queries at once, and
+    // the per-instance pool is small (server/db.ts).
+    concurrency: 1,
+  };
 }

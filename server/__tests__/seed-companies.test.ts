@@ -13,7 +13,8 @@ describe.skipIf(!local)('seeding companies', async () => {
   const { sql } = await import('drizzle-orm');
   const { runAsCompany } = await import('../tenant/context');
   const { createCompany } = await import('../tenant/companies');
-  const { provisionCompany, seedAll, seedCompany } = await import('../seed');
+  const { provisionCompany, seedAll, seedCompany, seedCompaniesJob } = await import('../seed');
+  const { runCompanyJob } = await import('../tenant/fan-out');
 
   const tag = `seed-${process.pid}-${Date.now()}`;
   const counts = (companyId: string) => runAsCompany(companyId, async () => {
@@ -59,5 +60,16 @@ describe.skipIf(!local)('seeding companies', async () => {
     await Promise.all([runAsCompany(x.id, () => seedCompany()), runAsCompany(y.id, () => seedCompany())]);
     expect((await counts(x.id)).knowledge).toBeGreaterThan(0);
     expect((await counts(y.id)).knowledge).toBeGreaterThan(0);
+  }, 60_000);
+
+  it('the backfill cron seeds companies not yet seeded, and skips ones seeded at creation', async () => {
+    const { company: fresh } = await provisionCompany({ slug: `${tag}-cron-fresh`, name: 'Fresh Roofing', status: 'active' });
+    const old = await createCompany({ slug: `${tag}-cron-old`, name: 'Old Roofing', status: 'active' });
+    const r1 = await runCompanyJob(seedCompaniesJob(), { onlyCompanyIds: [fresh.id, old.id] });
+    expect(r1.companies.find((c) => c.companyId === fresh.id)?.status).toBe('already_done');
+    expect(r1.companies.find((c) => c.companyId === old.id)?.status).toBe('done');
+    expect((await counts(old.id)).knowledge).toBeGreaterThan(0);
+    const r2 = await runCompanyJob(seedCompaniesJob(), { onlyCompanyIds: [fresh.id, old.id] });
+    expect(r2.companies.every((c) => c.status === 'already_done')).toBe(true);
   }, 60_000);
 });

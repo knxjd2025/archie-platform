@@ -114,6 +114,25 @@ export const companyAssets = pgTable('company_assets', {
   contentTypeCheck: check('company_assets_content_type_check', sql`${t.contentType} IN ('image/png','image/jpeg','image/webp')`),
 }));
 
+/**
+ * Where each company stands in each scheduled fan-out job
+ * (server/tenant/fan-out.ts): the last period it finished, so a job cut off
+ * by the function time limit resumes with the companies it did not reach and
+ * never repeats one already done; and when it was last tried, so the
+ * companies tried least recently go first. Created by migrations/0006.
+ */
+export const companyJobRuns = pgTable('company_job_runs', {
+  companyId: companyId(),
+  job: text('job').notNull(),
+  /** The period (e.g. the company's local date) whose work is finished. */
+  donePeriod: text('done_period'),
+  doneAt: timestamp('done_at'),
+  attemptedAt: timestamp('attempted_at'),
+  lastError: text('last_error'),
+}, (t) => ({
+  pk: primaryKey({ columns: [t.companyId, t.job] }),
+}));
+
 export const companyIntegrations = pgTable('company_integrations', {
   id: serial('id').primaryKey(),
   companyId: companyId(),

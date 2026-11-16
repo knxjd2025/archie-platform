@@ -1,7 +1,7 @@
 /**
  * The morning check-in every sales rep gets: what to update today.
  *
- * One message per rep, 8 AM in the company's time zone, Monday to Saturday, listing:
+ * One message per rep, from 8 AM in the company's time zone, Monday to Saturday, listing:
  *   - canvassed houses whose follow-up date has come
  *   - hot houses (interested / appointment / inspected) nobody has touched in days
  *   - today's appointments, and yesterday's that still need an outcome logged
@@ -39,25 +39,31 @@ const OPEN_LEAD_STATUSES = ['new', 'contacted', 'qualified', 'proposal_sent', 'n
 
 export interface EasternNow { dateIso: string; hour: number; weekday: number }
 
-/** Today's date, hour and weekday (0 = Sunday) in Eastern time. */
-export function easternNow(now: Date): EasternNow {
+/** Today's date, hour and weekday (0 = Sunday) in the company's time zone (or the one given). */
+export function easternNow(now: Date, timeZone: string = zone()): EasternNow {
   const parts = Object.fromEntries(
     new Intl.DateTimeFormat('en-US', {
-      timeZone: zone(), year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hour12: false, weekday: 'short',
+      timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hour12: false, weekday: 'short',
     }).formatToParts(now).map((p) => [p.type, p.value]),
   );
   const weekday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(parts.weekday);
   return { dateIso: `${parts.year}-${parts.month}-${parts.day}`, hour: Number(parts.hour) % 24, weekday };
 }
 
+/** The morning window closes at this local hour; a company not reached by then gets none that day. */
+export const SEND_WINDOW_END_HOUR = 12;
+
 /**
- * Vercel crons run in UTC, so the job is scheduled at both 12:00 and 13:00 UTC
- * and only the run that lands on 8 AM Eastern sends — right on either side of
- * daylight saving. Sunday is a day off.
+ * Whether it is the company's morning send window: from 8 AM until noon in its
+ * own time zone, Monday to Saturday. A window, not the single 8 AM hour: the
+ * cron runs every 15 minutes in UTC, and a company that a busy run did not
+ * reach at 8 is still reminded later that morning. Each rep still gets at most
+ * one check-in a day (rep_daily_reminders), and a company whose run finished
+ * is skipped for the rest of the day (company_job_runs).
  */
-export function isSendWindow(now: Date): boolean {
-  const e = easternNow(now);
-  return e.hour === SEND_HOUR && e.weekday !== 0;
+export function isSendWindow(now: Date, timeZone: string = zone()): boolean {
+  const e = easternNow(now, timeZone);
+  return e.hour >= SEND_HOUR && e.hour < SEND_WINDOW_END_HOUR && e.weekday !== 0;
 }
 
 /** UTC instant of Eastern midnight on a YYYY-MM-DD date. */
@@ -239,7 +245,11 @@ function reminderMode(): 'on' | 'off' | 'dry_run' {
   return v === 'off' || v === 'dry_run' ? v : 'on';
 }
 
-export interface ReminderRunResult { date: string; reps: number; sent: number; nothingToDo: number; alreadySent: number; failed: number; retried: number }
+export interface ReminderRunResult {
+  date: string; reps: number; sent: number; nothingToDo: number; alreadySent: number; failed: number; retried: number;
+  /** Claimed by an earlier run that has not recorded an outcome (still sending, or killed mid-send): not finished yet. */
+  pending: number;
+}
 
 /** A claimed row with no outcome after this long belongs to a run that was killed mid-send. */
 export const ABANDONED_CLAIM_MS = 10 * 60_000;
@@ -315,7 +325,7 @@ async function deliver(rep: Rep, msg: ReminderMessage, mode: 'on' | 'dry_run', a
 export async function runRepReminders(now: Date, appUrl: string): Promise<ReminderRunResult> {
   const mode = reminderMode();
   const date = easternNow(now).dateIso;
-  const result: ReminderRunResult = { date, reps: 0, sent: 0, nothingToDo: 0, alreadySent: 0, failed: 0, retried: 0 };
+  const result: ReminderRunResult = { date, reps: 0, sent: 0, nothingToDo: 0, alreadySent: 0, failed: 0, retried: 0, pending: 0 };
   if (mode === 'off') return result;
 
   const reps = (await db.select({
@@ -336,7 +346,16 @@ export async function runRepReminders(now: Date, appUrl: string): Promise<Remind
         .returning({ id: repDailyReminders.id });
       const retry = fresh ? null : await reclaimForRetry(rep.id, date);
       const claimedId = fresh?.id ?? retry?.id;
-      if (!claimedId) { result.alreadySent++; continue; }
+      if (!claimedId) {
+        // Sent already, or an earlier run claimed it and has not finished. The
+        // second case is not done: the claim is retried once it is abandoned.
+        const [row] = await db.select({ emailStatus: repDailyReminders.emailStatus, smsStatus: repDailyReminders.smsStatus })
+          .from(repDailyReminders)
+          .where(and(eq(repDailyReminders.teamMemberId, rep.id), eq(repDailyReminders.reminderDate, date)));
+        if (row && row.emailStatus === null && row.smsStatus === null) result.pending++;
+        else result.alreadySent++;
+        continue;
+      }
       if (retry) result.retried++;
       const outcome = await deliver(rep, msg, mode, { email: retry?.emailStatus === 'sent', sms: retry?.smsStatus === 'sent' });
       await db.update(repDailyReminders).set(outcome).where(eq(repDailyReminders.id, claimedId));
