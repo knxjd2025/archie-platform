@@ -9,7 +9,8 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { sql, eq, like } from 'drizzle-orm';
 
 const url = process.env.DATABASE_URL || '';
-const local = /@(localhost|127\.0\.0\.1)(:\d+)?\//.test(url);
+// A rehearsal database (scripts/rehearse-supabase.sh) opts in explicitly.
+const local = process.env.ARCHIE_REHEARSAL === '1' || /@(localhost|127\.0\.0\.1)(:\d+)?\//.test(url);
 
 describe.skipIf(!local)('company isolation', async () => {
   const { db, pool } = await import('../../db');

@@ -143,15 +143,17 @@ class TenantPool extends Pool {
       if (client[APPLIED] !== key) {
         try {
           const params = tenantParams(company, system);
-          if (client[INITIALISED]) await client.query(TENANT_SQL, params);
+          let applied;
+          if (client[INITIALISED]) applied = await client.query(TENANT_SQL, params);
           else {
-            await client.query(FIRST_CHECKOUT_SQL, [
+            applied = await client.query(FIRST_CHECKOUT_SQL, [
               ...params,
               'statement_timeout', `${DB_LIMITS.statementTimeoutMs}ms`,
               'idle_in_transaction_session_timeout', `${DB_LIMITS.idleInTransactionTimeoutMs}ms`,
             ]);
             client[INITIALISED] = true;
           }
+          if (system && applied.rows[0]?.role !== SYSTEM_ROLE) warnPre0008Once();
           client[APPLIED] = key;
         } catch (err) {
           // Unknown state: throw this connection away rather than reuse it.
@@ -185,6 +187,15 @@ function listenForErrors(client: TaggedClient): void {
     client[APPLIED] = undefined;
     console.error('[DB] connection lost while in use (it will be discarded):', err.message);
   });
+}
+
+let warnedPre0008 = false;
+/** System work ran on the old app.system setting: the database has no archie_system role yet. */
+function warnPre0008Once(): void {
+  if (warnedPre0008) return;
+  warnedPre0008 = true;
+  console.warn('[DB] system work is using the pre-0008 fallback (app.system): the archie_system role does not exist. '
+    + 'Run the migrations (0008) as the owner. See docs/archie/01-multi-company.md.');
 }
 
 /** Track the transaction status the server reports after every statement. */

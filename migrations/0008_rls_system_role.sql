@@ -1,6 +1,17 @@
 -- Archie: row level security that Postgres can plan with the company indexes.
 -- See docs/archie/01-multi-company.md, "Row Level Security".
 --
+-- ORDER AND ROLLBACK (read before running on a live database):
+-- 1. Deploy the current code FIRST, then run this migration. The current code
+--    works before and after it; code older than it cannot do system work
+--    after it (sign-in, GHL webhook routing, crons), and gets a loud error
+--    ("system work without the archie_system role") rather than nothing.
+-- 2. Never run code older than this migration against the database (a Vercel
+--    rollback past the deployment that shipped it, a preview deployment, a
+--    laptop) without first running scripts/sql/revert-0008-rls-system-role.sql.
+-- 3. To go forward again after a revert, rerun this file as the owner (it is
+--    idempotent; scripts/migrate.ts will not, it is recorded as applied).
+--
 -- Before: every company table had one policy,
 --   company_id = archie_current_company() OR archie_is_system()
 -- The OR with a non-indexable function kept Postgres from using any index on
@@ -18,8 +29,9 @@
 -- (SELECT archie_current_company()) is an initplan: computed once per query
 -- and usable as an index condition (company_id = $0).
 --
--- Safe on a live database with data: no table is rewritten and no index is
--- built here. Replacing a policy takes an ACCESS EXCLUSIVE lock on its table,
+-- Safe on a live database with data: no table is rewritten, and no index is
+-- built unless a company table has none starting with company_id (none does
+-- after 0002-0007; check first with the query in the docs' rollout section). Replacing a policy takes an ACCESS EXCLUSIVE lock on its table,
 -- held until the migration commits (well under a second for all tables; no
 -- statement here depends on table size). lock_timeout makes the migration
 -- fail instead of queueing behind a long query and blocking everyone else;
@@ -58,6 +70,34 @@ BEGIN
     EXECUTE 'GRANT archie_system TO archie_app';
   END IF;
 END $$;
+--> statement-breakpoint
+
+-- Older code (before this migration) does system work by setting
+-- app.system = 'on' without switching role. Under these policies that sees
+-- nothing at all: sign-in finds nobody, webhooks find no company, crons list
+-- no companies, all silently. Make it loud instead: the company function
+-- raises when system work is attempted without the archie_system role. New
+-- code sets app.system only together with the role, so it never trips this.
+-- Honouring the old setting instead would need a policy for archie_app with
+-- an OR on it, which is exactly what made every query a full scan.
+CREATE OR REPLACE FUNCTION archie_old_code_system_error() RETURNS uuid
+  LANGUAGE plpgsql STABLE
+  AS $$
+BEGIN
+  RAISE EXCEPTION 'Archie: system work without the archie_system role. This database has migration 0008 (role-based system access) and the running code is older.'
+    USING HINT = 'Deploy the current code, or run scripts/sql/revert-0008-rls-system-role.sql before running older code (rollback, preview, laptop).',
+          ERRCODE = 'insufficient_privilege';
+END $$;
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION archie_current_company() RETURNS uuid
+  LANGUAGE sql STABLE
+  AS $$ SELECT CASE
+    WHEN coalesce(current_setting('app.system', true), '') = 'on' AND current_user <> 'archie_system'
+      THEN archie_old_code_system_error()
+    ELSE nullif(current_setting('app.company_id', true), '')::uuid
+  END $$;
+--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION archie_old_code_system_error() TO archie_app, archie_system;
 --> statement-breakpoint
 
 -- archie_is_system() now reports the role, not a setting anyone can set.

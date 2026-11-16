@@ -209,20 +209,95 @@ request path.
   `postgres`, which has what the migrations need (`CREATEROLE`, ownership of the
   tables); nothing needs a superuser.
 - **Operator scripts** (`create-company.ts`, `seed-companies.ts`) use the app's
-  `DATABASE_URL` (`archie_app`), like the app. Run as the owner, system work
-  inside them is refused ("permission denied to set role"): the owner is not a
-  member of `archie_system`.
-- **Rolling out 0008 on a live database:** deploy the code first, then run the
-  migration. The code works with both: before 0008 it falls back to the old
-  `app.system` setting (the role does not exist yet), after it uses the role.
-  The other order is safe for isolation but, until the code is deployed, the
-  old code's system work (sign-in, webhooks, crons) sees nothing.
+  `DATABASE_URL` (`archie_app`), like the app. Run with the owner's URL they
+  stop at once and say which URL to use (as the owner, system work would be
+  refused: the owner is not a member of `archie_system`).
+- **Rolling out 0008, and rolling back.** See the section below.
 - **A new company:** `npx tsx scripts/create-company.ts --slug acme --name "Acme Roofing" --admin-email owner@acme.com --admin-name "Pat Owner" [--ghl-location <id>]`.
   It is seeded (advisors, knowledge base) as it is created (`provisionCompany`).
 - **Seeding is never on the request path.** A new server instance does no
   per-company work before answering. To backfill companies or push edited
   advisor wording to all of them: `npx tsx scripts/seed-companies.ts
   [--company <slug>]`. Idempotent; one company's failure does not stop the rest.
+
+## Rolling out 0008 (system role), and rolling back
+
+0008 changes how system work gets its access (a role instead of the
+`app.system` setting). Code older than 0008 cannot do system work on a
+database that has it: sign-in finds nobody, GHL webhooks find no company,
+crons list no companies. Since there is no sound way to honour the old
+setting without putting the `OR` back into every query's plan, 0008 makes it
+fail loudly instead: older code gets the error "system work without the
+archie_system role" (SQLSTATE 42501) with a hint naming the revert script.
+
+The rules:
+
+1. **Deploy the code first, then run the migration.** The current code works
+   on both sides: before 0008 it falls back to `app.system` (and logs once
+   that it is on the fallback), after it uses the role.
+2. **Never run code older than 0008 against the database without reverting
+   first.** That includes a Vercel Instant Rollback past the deployment that
+   shipped 0008, a preview deployment, or a laptop on an old branch. Revert as
+   the owner, in one transaction (idempotent, tens of milliseconds of locks):
+   `psql "$OWNER_URL" -v ON_ERROR_STOP=1 -1 -f scripts/sql/revert-0008-rls-system-role.sql`.
+   The current code keeps working on the reverted database (it sets the role
+   and the old setting), so revert first, then roll back.
+3. **To go forward again** after a revert, rerun the migration file the same
+   way: `psql "$OWNER_URL" -v ON_ERROR_STOP=1 -1 -f migrations/0008_rls_system_role.sql`
+   (`scripts/migrate.ts` will not, it is recorded as applied).
+
+Before running 0008 on production, check that no company table lacks an
+index starting with `company_id` (0008 would build one while holding its
+locks). Expect no rows:
+
+```sql
+select c.relname from pg_class c
+  join pg_attribute a on a.attrelid = c.oid and a.attname = 'company_id'
+ where c.relnamespace = 'public'::regnamespace and c.relkind = 'r'
+   and not exists (select 1 from pg_index i join pg_attribute x on x.attrelid = i.indrelid and x.attnum = i.indkey[0]
+                    where i.indrelid = c.oid and x.attname = 'company_id');
+```
+
+Run 0008 at the quietest hour: it takes a short ACCESS EXCLUSIVE lock on
+every company table, waiting at most 5s for each (`lock_timeout`); while it
+waits, traffic on tables it already locked queues. If it fails on the
+timeout, run it again.
+
+### Rehearsal on a Supabase branch
+
+Before production, rehearse on a Supabase branch (or a scratch project) on the
+production Postgres version (17). Never on production itself: it writes test
+rows and runs the revert.
+
+```sh
+OWNER_URL='postgresql://postgres.<ref>:<pw>@<host>:5432/postgres' \
+APP_URL='postgresql://archie_app.<ref>:<pw>@<host>:5432/postgres' \
+scripts/rehearse-supabase.sh --i-am-on-a-rehearsal-database
+```
+
+On a fresh branch the first run stops at step 5 because `archie_app` has no
+password yet: set one as the owner (`ALTER ROLE archie_app WITH LOGIN
+PASSWORD '...'`) and run it again. The steps:
+
+1. version and read-only pre-checks (no company table lacks a company index);
+2. the four `CREATE INDEX CONCURRENTLY` one at a time, then no invalid index;
+3. the migrations as the owner (`postgres`: proves `CREATE ROLE` and
+   `GRANT ... WITH INHERIT FALSE, SET TRUE` are allowed under Supabase);
+4. roles, membership and policies are exactly as designed;
+5. through the app's pool (`scripts/rehearse-role-check.ts`):
+   `select current_user` is `archie_system` inside `runAsSystem` and
+   `archie_app` outside (proves the session pooler keeps the role per
+   connection), and no context sees no company;
+6. the two security test files against it, as `archie_app`:
+   `ARCHIE_REHEARSAL=1 DATABASE_URL="$APP_URL" ARCHIE_TEST_OWNER_URL="$OWNER_URL"
+   npx vitest run server/tenant/__tests__/isolation.test.ts server/tenant/__tests__/system-role.test.ts`
+   (they load one row per company into every company table as the owner, with
+   every constraint in force, and need no superuser);
+7. the revert script, then 0008 again.
+
+It was run end to end locally on Postgres 16 with a non-superuser
+`CREATEROLE` owner (the shape of Supabase's `postgres`); Postgres 17 and
+Supabase's pooler are what the rehearsal is for.
 
 ## Capacity: database connections
 

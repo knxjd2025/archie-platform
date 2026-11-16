@@ -19,11 +19,13 @@ import { sql } from 'drizzle-orm';
 
 const url = process.env.DATABASE_URL || '';
 const ownerUrl = process.env.ARCHIE_TEST_OWNER_URL || '';
-const isLocal = (u: string) => /@(localhost|127\.0\.0\.1)(:\d+)?\//.test(u);
+// A rehearsal database (scripts/rehearse-supabase.sh) opts in explicitly.
+const rehearsal = process.env.ARCHIE_REHEARSAL === '1';
+const isLocal = (u: string) => rehearsal || /@(localhost|127\.0\.0\.1)(:\d+)?\//.test(u);
 
 const GLOBAL = new Set(['session', '_migrations', 'companies']);
 
-interface TableInfo { name: string; insert: (companyId: string) => { text: string; values: unknown[] } }
+interface TableInfo { name: string; deps: string[]; insert: (companyId: string) => { text: string; values: unknown[] } }
 
 /** SQLSTATE of a failed query (drizzle wraps pg errors in .cause). */
 async function sqlState(p: Promise<unknown>): Promise<string | null> {
@@ -47,7 +49,11 @@ describe.skipIf(!isLocal(url) || !isLocal(ownerUrl))('system role and company is
              coalesce(json_agg(json_build_object('name', a.attname, 'type', format_type(a.atttypid, a.atttypmod),
                         'enum', t.typtype = 'e', 'udt', t.typname,
                         'check', (select string_agg(pg_get_constraintdef(k.oid), ' ') from pg_constraint k
-                                   where k.conrelid = c.oid and k.contype = 'c' and a.attnum = any(k.conkey))))
+                                   where k.conrelid = c.oid and k.contype = 'c' and a.attnum = any(k.conkey)),
+                        'fk', (select json_build_object('table', f.confrelid::regclass::text, 'col', fa.attname)
+                                 from pg_constraint f join pg_attribute fa on fa.attrelid = f.confrelid and fa.attnum = f.confkey[1]
+                                where f.conrelid = c.oid and f.contype = 'f' and array_length(f.conkey, 1) = 1 and f.conkey[1] = a.attnum
+                                limit 1)))
                       filter (where a.attnotnull and not a.atthasdef and a.attname <> 'company_id' and a.attidentity = '' and a.attgenerated = ''), '[]') as cols
         from pg_class c
         join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public'
@@ -56,16 +62,22 @@ describe.skipIf(!isLocal(url) || !isLocal(ownerUrl))('system role and company is
        where c.relkind = 'r'
          and exists (select 1 from pg_attribute z where z.attrelid = c.oid and z.attname = 'company_id' and not z.attisdropped)
        group by c.relname order by c.relname`);
-    return rows.filter((r: any) => !GLOBAL.has(r.table)).map((r: any) => ({
+    type Col = { name: string; type: string; enum: boolean; udt: string; check: string | null; fk: { table: string; col: string } | null };
+    const unordered: TableInfo[] = rows.filter((r: any) => !GLOBAL.has(r.table)).map((r: any) => ({
       name: r.table,
+      // Required foreign keys point at the same company's row in the parent,
+      // so parents are written first (no need to switch foreign keys off).
+      deps: (r.cols as Col[]).map((c) => c.fk?.table.replace(/^"|"$/g, '')).filter((t): t is string => !!t && t !== 'companies' && t !== r.table),
       insert: (companyId: string) => {
         const cols = ['company_id'];
         const exprs = ['$1::uuid'];
         const values: unknown[] = [companyId];
-        for (const col of r.cols as { name: string; type: string; enum: boolean; udt: string; check: string | null }[]) {
+        for (const col of r.cols as Col[]) {
           cols.push(`"${col.name}"`);
           const literal = col.check?.match(/'([^']+)'::text/)?.[1];
-          if (col.enum) exprs.push(`(enum_range(null::${col.udt}))[1]`);
+          if (col.fk?.table === 'companies') exprs.push('$1::uuid');
+          else if (col.fk) exprs.push(`(select "${col.fk.col}" from ${col.fk.table} where company_id = $1::uuid limit 1)`);
+          else if (col.enum) exprs.push(`(enum_range(null::${col.udt}))[1]`);
           else if (literal) exprs.push(`'${literal}'`);
           else if (/^(text|character varying)/.test(col.type)) exprs.push(`'${tag}-' || gen_random_uuid()`);
           else if (/^(integer|bigint|smallint)/.test(col.type)) exprs.push('(random() * 1e8)::int');
@@ -82,6 +94,17 @@ describe.skipIf(!isLocal(url) || !isLocal(ownerUrl))('system role and company is
         return { text: `insert into "${r.table}" (${cols.join(', ')}) values (${exprs.join(', ')})`, values };
       },
     }));
+    // Parents before children.
+    const ordered: TableInfo[] = [];
+    const placed = new Set<string>();
+    let rest = unordered;
+    while (rest.length) {
+      const ready = rest.filter((t) => t.deps.every((d) => placed.has(d) || !unordered.some((u) => u.name === d)));
+      if (!ready.length) throw new Error(`foreign key cycle among: ${rest.map((t) => t.name).join(', ')}`);
+      for (const t of ready) { ordered.push(t); placed.add(t.name); }
+      rest = rest.filter((t) => !placed.has(t.name));
+    }
+    return ordered;
   }
 
   /** Wait until every client is back in the pool (system releases reset asynchronously). */
@@ -109,32 +132,36 @@ describe.skipIf(!isLocal(url) || !isLocal(ownerUrl))('system role and company is
 
   beforeAll(async () => {
     await owner.connect();
-    // The owner is a local superuser: it writes both companies' rows directly.
-    // Foreign keys are not what is under test, so their triggers are off for the load.
-    const co = await owner.query(
-      `insert into companies (slug, name, status) values ($1, 'Sysrole A', 'cancelled'), ($2, 'Sysrole B', 'cancelled') returning id, slug`,
-      [`${tag}-a`, `${tag}-b`]);
-    a = co.rows.find((r: any) => r.slug === `${tag}-a`).id;
-    b = co.rows.find((r: any) => r.slug === `${tag}-b`).id;
+    // Companies through the app's own system path; each company's rows by the
+    // owner, in that company's context, so this works for a non-superuser
+    // owner too (Supabase's postgres: row level security is forced on it),
+    // with every constraint, foreign keys included, in force.
+    const { createCompany } = await import('../companies');
+    a = (await createCompany({ slug: `${tag}-a`, name: 'Sysrole A', status: 'cancelled' })).id;
+    b = (await createCompany({ slug: `${tag}-b`, name: 'Sysrole B', status: 'cancelled' })).id;
     tables = await describeTables();
-    await owner.query('set session_replication_role = replica');
     const failed: string[] = [];
     for (const t of tables) {
       for (const id of [a, b]) {
         const q = t.insert(id);
+        await owner.query("select set_config('app.company_id', $1, false)", [id]);
         await owner.query(q.text, q.values).catch((e) => failed.push(`${t.name}: ${e.message}`));
       }
     }
-    await owner.query('set session_replication_role = default');
+    await owner.query("select set_config('app.company_id', '', false)");
     expect(failed).toEqual([]);
-  });
+  }, 120_000);
 
   afterAll(async () => {
-    await owner.query('set session_replication_role = replica');
-    for (const t of tables) await owner.query(`delete from "${t.name}" where company_id in ($1, $2)`, [a, b]);
-    await owner.query('delete from companies where id in ($1, $2)', [a, b]);
+    for (const id of [a, b]) {
+      if (!id) continue;
+      await owner.query("select set_config('app.company_id', $1, false)", [id]);
+      // Children before parents.
+      for (const t of [...tables].reverse()) await owner.query(`delete from "${t.name}" where company_id = $1`, [id]).catch(() => {});
+    }
+    await runAsSystem('test cleanup', () => pool.query('delete from companies where id in ($1, $2)', [a, b])).catch(() => {});
     await owner.end();
-  });
+  }, 120_000);
 
   it('covers every company table, including the ones added after 0002', () => {
     const names = tables.map((t) => t.name);
@@ -177,7 +204,7 @@ describe.skipIf(!isLocal(url) || !isLocal(ownerUrl))('system role and company is
     }, { loadProfile: false });
     expect(problems).toEqual([]);
     // B's rows are all still there.
-    const { rows } = await owner.query(`select count(*)::int as n from leads where company_id = $1`, [b]);
+    const { rows } = await runAsSystem('test check', () => pool.query('select count(*)::int as n from leads where company_id = $1', [b]));
     expect(rows[0].n).toBe(1);
   });
 
@@ -262,15 +289,25 @@ describe.skipIf(!isLocal(url) || !isLocal(ownerUrl))('system role and company is
     }
   });
 
-  it('does not let the old app.system setting grant anything any more', async () => {
+  it('refuses system work done the old way (app.system without the role) loudly, never silently', async () => {
+    // What code from before 0008 does: the setting, no role switch. It must
+    // not see anything, and must say why rather than return nothing.
     const client = await pool.connect();
     try {
       await client.query("select set_config('app.system', 'on', false)");
-      const { rows } = await client.query('select count(*)::int as n from leads');
-      expect(rows[0].n).toBe(0);
+      const err = await client.query('select count(*)::int as n from companies').then(() => null, (e) => e);
+      expect(err?.code).toBe('42501');
+      expect(err?.message).toMatch(/system work without the archie_system role/);
+      expect(err?.hint).toMatch(/revert-0008-rls-system-role\.sql/);
+      // Writes too.
+      const w = await client.query(`insert into settings (key, value) values ('${tag}-old', '{}')`).then(() => null, (e) => e);
+      expect(w?.code).toBe('42501');
     } finally {
       client.release(true); // do not hand this session on
     }
+    // Company work is untouched by the check.
+    const ok = await runAsCompany(a, () => pool.query('select count(*)::int as n from leads'), { loadProfile: false });
+    expect(ok.rows[0].n).toBe(1);
   });
 
   it('keeps both roles unable to bypass row level security or widen their own access', async () => {
