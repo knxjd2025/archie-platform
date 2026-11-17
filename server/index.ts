@@ -8,6 +8,7 @@ import { tenantFromSession } from './tenant/middleware';
 import { registerRoutes } from './routes';
 import { recordServerError } from './bugs/routes';
 import { seedAll } from './seed';
+import { SISTER_PREFIX, sisterRawBody } from './sister/door';
 import { corsOptions, sessionOptions, JSON_BODY_LIMIT } from './security-config';
 import { createErrorHandler } from './lib/error-response';
 import path from 'path';
@@ -24,6 +25,9 @@ app.use(cors(corsOptions()));
 
 // Raw body for webhooks (before JSON parsing)
 app.use('/api/webhooks', express.raw({ type: 'application/json' }));
+// Raw body for Roof Lee's signed requests too: the signature is over the bytes
+// as they arrived, so this must stay ahead of express.json (server/sister/door.ts).
+app.use(SISTER_PREFIX, sisterRawBody());
 
 // JSON parsing for everything else
 app.use(express.json({ limit: JSON_BODY_LIMIT }));

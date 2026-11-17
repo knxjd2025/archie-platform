@@ -73,6 +73,7 @@ import { verifyGhlWebhookSecret } from './integrations/ghl/webhook-secret';
 import { registerGhlConnectionRoutes } from './integrations/ghl/routes';
 import { registerConnectionRoutes } from './integrations/connection-routes';
 import { registerCompanyRoutes } from './company/routes';
+import { registerSisterRoutes } from './sister/routes';
 import { currentGhlLocationId, ghlAppBase } from './integrations/ghl/connection';
 import { getCompanyByGhlLocation } from './tenant/companies';
 import { runAsCompany } from './tenant/context';
@@ -125,6 +126,8 @@ export function registerRoutes(app: Express) {
 
   // First, so every route registered after it reports its failures to the bug log.
   registerBugRoutes(app);
+  // Roof Lee's signed endpoints. Shut (401) until SISTERS_ARCHIE_SECRET is set.
+  registerSisterRoutes(app);
   registerAuthRoutes(app);
   registerPasswordRoutes(app);
   registerGoogleRoutes(app);
