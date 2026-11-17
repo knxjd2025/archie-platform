@@ -14,12 +14,22 @@ const empty: ReminderInput = {
   totals: { followUpsDue: 0, staleHouses: 0, staleLeads: 0 },
 };
 
-describe('8 AM Eastern, whichever side of daylight saving', () => {
-  it('the 12:00 UTC run sends in summer, the 13:00 run in winter', () => {
+describe('the 8 AM to noon window, Eastern, whichever side of daylight saving', () => {
+  it('opens at 8 AM local in summer and in winter', () => {
     expect(isSendWindow(new Date('2026-07-15T12:00:00Z'))).toBe(true);  // 8 AM EDT, Wednesday
-    expect(isSendWindow(new Date('2026-07-15T13:00:00Z'))).toBe(false); // 9 AM EDT
+    expect(isSendWindow(new Date('2026-07-15T11:45:00Z'))).toBe(false); // 7:45 AM EDT
     expect(isSendWindow(new Date('2026-01-14T13:00:00Z'))).toBe(true);  // 8 AM EST, Wednesday
     expect(isSendWindow(new Date('2026-01-14T12:00:00Z'))).toBe(false); // 7 AM EST
+  });
+  it('stays open later in the morning, so a company reached late still gets it', () => {
+    expect(isSendWindow(new Date('2026-07-15T13:00:00Z'))).toBe(true);  // 9 AM EDT
+    expect(isSendWindow(new Date('2026-07-15T15:59:00Z'))).toBe(true);  // 11:59 AM EDT
+    expect(isSendWindow(new Date('2026-07-15T16:00:00Z'))).toBe(false); // noon EDT
+  });
+  it('uses the time zone it is given', () => {
+    // 8:30 AM in Los Angeles is 11:30 AM in New York.
+    expect(isSendWindow(new Date('2026-07-15T15:30:00Z'), 'America/Los_Angeles')).toBe(true);
+    expect(isSendWindow(new Date('2026-07-15T12:30:00Z'), 'America/Los_Angeles')).toBe(false); // 5:30 AM PDT
   });
   it('Sunday is a day off; Saturday is not', () => {
     expect(isSendWindow(new Date('2026-07-19T12:00:00Z'))).toBe(false); // Sunday

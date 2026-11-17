@@ -10,13 +10,18 @@
  * detail stays in the server log.
  */
 import type { ErrorRequestHandler, NextFunction, Request, Response } from 'express';
+import { BUSY_MESSAGE, BUSY_RETRY_AFTER_SECONDS, findDatabaseBusy } from './db-busy';
 
 /** Same wording as server/lib/failure.ts, so a failure reads the same either way. */
 export const GENERIC_SERVER_ERROR =
   "Something went wrong on our end. Try again — if it keeps happening, report it with the bug button.";
 
-/** The status an error asks for; anything missing or out of range is a 500. */
+/**
+ * The status an error asks for; anything missing or out of range is a 500.
+ * A busy database is a 503 even when drizzle has wrapped it.
+ */
 export function errorStatus(err: unknown): number {
+  if (findDatabaseBusy(err)) return 503;
   const e = (err && typeof err === 'object' ? err : {}) as { status?: unknown; statusCode?: unknown };
   const raw = Number(e.status ?? e.statusCode);
   return Number.isInteger(raw) && raw >= 400 && raw <= 599 ? raw : 500;
@@ -40,6 +45,13 @@ type ServerErrorRecorder = (what: string, err: unknown, req: Request) => void;
  */
 export function createErrorHandler(record: ServerErrorRecorder): ErrorRequestHandler {
   return (err: unknown, req: Request, res: Response, _next: NextFunction) => {
+    if (findDatabaseBusy(err)) {
+      // Saturated, not broken: tell the client to come back, and do not write
+      // a bug report into the database that is already full.
+      console.warn(`[db] busy: ${req.method} ${req.path} answered 503`);
+      res.setHeader('Retry-After', String(BUSY_RETRY_AFTER_SECONDS));
+      return res.status(503).json({ message: BUSY_MESSAGE });
+    }
     console.error('Error:', err);
     const status = errorStatus(err);
     if (status >= 500) record(`${req.method} ${req.route?.path ?? req.path}`, err, req);

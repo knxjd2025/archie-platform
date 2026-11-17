@@ -13,7 +13,10 @@ import { resolveCompanyProfile, type CompanyProfile } from '../../shared/company
 export interface TenantContext {
   /** The company this work is for, or null for cross-company system work. */
   companyId: string | null;
-  /** True only inside runAsSystem: the database lets this work see every company. */
+  /**
+   * True only inside runAsSystem: its connections run as the archie_system
+   * database role, which row level security lets see every company (server/db.ts).
+   */
   system: boolean;
   /** Why system access was needed, for logs. */
   reason?: string;

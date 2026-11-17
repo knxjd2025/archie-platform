@@ -56,14 +56,16 @@ export function createCompany(input: NewCompany): Promise<Company> {
 /** Companies that are allowed to run (trial or active). */
 export function listLiveCompanies(): Promise<Company[]> {
   return runAsSystem('list live companies', () =>
-    db.select().from(companies).where(inArray(companies.status, [...LIVE_STATUSES])));
+    db.select().from(companies).where(inArray(companies.status, [...LIVE_STATUSES])).orderBy(companies.id));
 }
 
 export interface FanOutResult<T> { companyId: string; ok: boolean; value?: T; error?: string }
 
 /**
- * Run a job once per live company, each as that company, one at a time. One
- * company's failure is recorded and the rest still run. For crons.
+ * Run a job once per live company, each as that company, one at a time, in id
+ * order. One company's failure is recorded and the rest still run. For
+ * operator scripts; scheduled jobs use runCompanyJob (server/tenant/fan-out.ts),
+ * which is bounded, resumable and ordered so no company starves.
  */
 export async function forEachLiveCompany<T>(job: (company: Company) => Promise<T>): Promise<FanOutResult<T>[]> {
   const list = await listLiveCompanies();

@@ -43,6 +43,41 @@
       "when": 1792714960000,
       "tag": "0005_company_assets",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792714970000,
+      "tag": "0006_company_job_runs",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792714980000,
+      "tag": "0007_leads_external_id_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792714990000,
+      "tag": "0008_rls_system_role",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792715000000,
+      "tag": "0009_company_leading_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792715010000,
+      "tag": "0010_company_job_leases",
+      "breakpoints": true
     }
   ]
 }

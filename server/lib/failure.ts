@@ -15,6 +15,7 @@
  * working and `relation "leads" does not exist` does not.
  */
 import type { Response } from 'express';
+import { BUSY_MESSAGE, BUSY_RETRY_AFTER_SECONDS, findDatabaseBusy } from './db-busy';
 
 /**
  * Something that wants to hear about every server-side failure — the bug log
@@ -81,6 +82,13 @@ export function sendFailure(
    */
   fallback?: string,
 ): Response {
+  // A busy database is an answer too: 503 with Retry-After, and no bug report
+  // (writing one would need the database that just said it is full).
+  if (findDatabaseBusy(error)) {
+    console.warn(`[api] ${what}: database busy, answered 503`);
+    res.setHeader('Retry-After', String(BUSY_RETRY_AFTER_SECONDS));
+    return res.status(503).json({ error: BUSY_MESSAGE });
+  }
   // "Not connected for this company" is an answer, not a bug: 409, not 500.
   if (status === 500 && error instanceof Error && NOT_CONNECTED.has(error.name)) status = 409;
   const detail = error instanceof Error ? (error.stack || error.message) : String(error ?? '');
