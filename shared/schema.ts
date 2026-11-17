@@ -42,6 +42,10 @@ export const companies = pgTable('companies', {
   // The company's GHL sub-account, which holds its contacts, messages,
   // calendars and pipelines.
   ghlLocationId: text('ghl_location_id').unique(),
+  // Roof Lee's id for this company, when Roof Lee made it (server/sister).
+  // Null for every company that was made any other way. Never set by hand
+  // and never attached to a company that already existed.
+  roofliCompanyId: uuid('roofli_company_id').unique(),
   branding: jsonb('branding').$type<import('./company').CompanyBranding>().notNull().default({}),
   settings: jsonb('settings').$type<import('./company').CompanySettings>().notNull().default({}),
   createdAt: timestamp('created_at').defaultNow().notNull(),
@@ -73,6 +77,21 @@ export const nativeHandoffs = pgTable('native_handoffs', {
   email: text('email').notNull(),
   expiresAt: timestamp('expires_at').notNull(),
 });
+
+/**
+ * Answers already given to Roof Lee's writes (server/sister), so the same
+ * request arriving twice does the work once and is answered as it was the
+ * first time. One row per company and idempotency-key. Its own table, like
+ * native_handoffs: nothing but the sister door writes it.
+ */
+export const sisterIdempotency = pgTable('sister_idempotency', {
+  companyId: companyId(),
+  key: text('key').notNull(),
+  response: jsonb('response').$type<{ status: number; body: unknown }>().notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (t) => ({
+  pk: primaryKey({ columns: [t.companyId, t.key] }),
+}));
 
 /**
  * One-time links for setting a password ('welcome' for a new person, 'reset'
@@ -208,8 +227,19 @@ export const teamMembers = pgTable('team_members', {
   // JobTread membership id, so the reporting line can be synced both ways
   // (JobTread models this as membership.parentMembership).
   jobtreadMembershipId: text('jobtread_membership_id'),
+  // The person's shared sign-in id, the same in Roof Lee and its sister
+  // products. Set only for people Roof Lee sent (source 'roofli'); their way
+  // in is Roof Lee's hand-off, found by this id and never by email.
+  authUserId: uuid('auth_user_id'),
+  // Who put this person on the roster: 'roofli' when Roof Lee sent them,
+  // null for everyone added in Archie itself.
+  source: text('source'),
   createdAt: timestamp('created_at').defaultNow(),
-});
+}, (t) => ({
+  // Created by migrations/0006 as a partial index; declared here so
+  // drizzle-kit does not see it as extra and drop it.
+  authUserUq: uniqueIndex('team_members_company_auth_user_uq').on(t.companyId, t.authUserId).where(sql`${t.authUserId} IS NOT NULL`),
+}));
 
 export type TeamMember = typeof teamMembers.$inferSelect;
 export type NewTeamMember = typeof teamMembers.$inferInsert;

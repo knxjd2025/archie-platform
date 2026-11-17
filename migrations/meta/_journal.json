@@ -43,6 +43,13 @@
       "when": 1792714960000,
       "tag": "0005_company_assets",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794957920529,
+      "tag": "0006_roofli_sister",
+      "breakpoints": true
     }
   ]
 }

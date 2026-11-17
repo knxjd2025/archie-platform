@@ -6,6 +6,7 @@
  * carries one request's company into the next.
  */
 import { describe, it, expect, beforeAll } from 'vitest';
+import { randomUUID } from 'node:crypto';
 import { sql, eq, like } from 'drizzle-orm';
 
 const url = process.env.DATABASE_URL || '';
@@ -166,6 +167,46 @@ describe.skipIf(!local)('company isolation', async () => {
       return (r.rows[0] as { id: string }).id;
     }));
     expect(seen).toBe(a);
+  });
+
+  // Roof Lee link (docs/archie/02-roof-lee-link.md). The two tests above already
+  // prove sister_idempotency sits behind the same policy as every other table;
+  // these prove what the table is for.
+  it('keeps one company\'s sister idempotency keys away from another', async () => {
+    const key = `${tag}-idem-key`;
+    await runAsCompany(a, () => db.insert(schema.sisterIdempotency).values({ key, response: { status: 200, body: { who: 'a' } } }));
+    // The same key in another company is a different row, not a clash, and not a read of A's answer.
+    expect(await runAsCompany(b, () => db.select().from(schema.sisterIdempotency).where(eq(schema.sisterIdempotency.key, key)))).toEqual([]);
+    await runAsCompany(b, () => db.insert(schema.sisterIdempotency).values({ key, response: { status: 200, body: { who: 'b' } } }));
+    const seenByA = await runAsCompany(a, () => db.select().from(schema.sisterIdempotency).where(eq(schema.sisterIdempotency.key, key)));
+    expect(seenByA.map((r) => r.response)).toEqual([{ status: 200, body: { who: 'a' } }]);
+    expect(seenByA[0].companyId).toBe(a);
+    // The same key twice in one company is refused: that is what makes a repeat a repeat.
+    const again = await runAsCompany(a, () => db.insert(schema.sisterIdempotency).values({ key, response: { status: 200, body: {} } })).then(() => null, (e) => e);
+    expect(again?.cause?.code ?? again?.code).toBe('23505');
+    await expectRefused(runAsCompany(b, () => db.insert(schema.sisterIdempotency).values({ companyId: a, key: `${key}-planted`, response: { status: 200, body: {} } })));
+    expect(await db.select().from(schema.sisterIdempotency).where(eq(schema.sisterIdempotency.key, key))).toEqual([]);
+  });
+
+  it('lets only system work say which Roof Lee company a company is, and never twice', async () => {
+    const roofliId = randomUUID();
+    // A company cannot claim a Roof Lee id for itself (it cannot write its own row at all).
+    await runAsCompany(a, () => db.update(schema.companies).set({ roofliCompanyId: roofliId }).where(eq(schema.companies.id, a)));
+    const [before] = await runAsSystem('test', () => db.select().from(schema.companies).where(eq(schema.companies.id, a)));
+    expect(before.roofliCompanyId).toBeNull();
+    await runAsSystem('test', () => db.update(schema.companies).set({ roofliCompanyId: roofliId }).where(eq(schema.companies.id, a)));
+    const clash = await runAsSystem('test', () => db.update(schema.companies).set({ roofliCompanyId: roofliId }).where(eq(schema.companies.id, b))).then(() => null, (e) => e);
+    expect(clash?.cause?.code ?? clash?.code).toBe('23505');
+    await runAsSystem('test', () => db.update(schema.companies).set({ roofliCompanyId: null }).where(eq(schema.companies.id, a)));
+  });
+
+  it('keeps a shared sign-in id to one person per company, and out of other companies\' sight', async () => {
+    const authUserId = randomUUID();
+    await runAsCompany(a, () => db.insert(schema.teamMembers).values({ name: 'Dana', email: `${tag}-dana@example.test`, role: 'admin', authUserId, source: 'roofli' }));
+    const twice = await runAsCompany(a, () => db.insert(schema.teamMembers).values({ name: 'Dana Two', email: `${tag}-dana2@example.test`, role: 'admin', authUserId, source: 'roofli' })).then(() => null, (e) => e);
+    expect(twice?.cause?.code ?? twice?.code).toBe('23505');
+    expect(await runAsCompany(b, () => db.select().from(schema.teamMembers).where(eq(schema.teamMembers.authUserId, authUserId)))).toEqual([]);
+    await runAsCompany(a, () => db.delete(schema.teamMembers).where(eq(schema.teamMembers.authUserId, authUserId)));
   });
 
   it('finds the company for a public link token, and nothing for an unknown one', async () => {
