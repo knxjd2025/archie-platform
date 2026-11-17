@@ -18,3 +18,14 @@ export async function endSessionsFor(email: string): Promise<number> {
   const res = await pool.query(`DELETE FROM "session" WHERE lower(sess->'user'->>'email') = $1`, [who]);
   return res.rowCount ?? 0;
 }
+
+/**
+ * Sign everyone in one company out everywhere, for a company that has been
+ * paused or closed. The roster re-check would refuse each of them within
+ * half a minute anyway (server/auth/middleware.ts); this ends it at once.
+ */
+export async function endSessionsForCompany(companyId: string): Promise<number> {
+  clearSessionRevalidationCache();
+  const res = await pool.query(`DELETE FROM "session" WHERE sess->'user'->>'companyId' = $1`, [companyId]);
+  return res.rowCount ?? 0;
+}

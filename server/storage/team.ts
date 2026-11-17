@@ -31,13 +31,18 @@ export interface SignInMember { member: TeamMember; company: Company }
  * The roster row for an email, with its company, looked up across every
  * company: at sign-in nobody knows the company yet. Email is unique across
  * Archie (one person, one company), so this is at most one row.
+ *
+ * People Roof Lee sent (source 'roofli', server/sister/members.ts) are never
+ * found here. Every sign-in that starts from an email (password, password
+ * reset, Google, the app's handoff) starts with this lookup, so none of them
+ * lets such a person in: their only way in is Roof Lee's own hand-off.
  */
 export function findSignInMember(email: string): Promise<SignInMember | undefined> {
   return runAsSystem('sign-in: find member by email', async () => {
     const rows = await db.select({ member: teamMembers, company: companies })
       .from(teamMembers)
       .innerJoin(companies, eq(companies.id, teamMembers.companyId))
-      .where(eq(teamMembers.email, email.trim().toLowerCase()));
+      .where(sql`${eq(teamMembers.email, email.trim().toLowerCase())} AND ${teamMembers.source} IS DISTINCT FROM 'roofli'`);
     return rows[0];
   });
 }

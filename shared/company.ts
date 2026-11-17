@@ -88,6 +88,22 @@ export interface CompanySettings {
    * (shared/menu.ts). Hiding only narrows a menu; it never grants a page.
    */
   menuHidden?: Partial<Record<import('./rbac').TeamRole, string[]>>;
+  /**
+   * Only for a company Roof Lee made (server/sister): what Roof Lee last sent.
+   * Written by the sister door and by nothing else.
+   */
+  roofli?: RoofLeeLink;
+}
+
+/** What Roof Lee last told Archie about a company it made. */
+export interface RoofLeeLink {
+  /** The company's confirmed facts, exactly as sent, under Roof Lee's ten headings. */
+  facts?: Record<string, unknown>;
+  /** What the company pays Roof Lee for. Nothing that costs money runs unless active and not a trial. */
+  plan?: { keys: string[]; active: boolean; trial: boolean };
+  /** The branding and settings keys filled from those facts, so a withdrawn fact can be taken back out. */
+  derived?: { branding: string[]; settings: string[] };
+  syncedAt?: string;
 }
 
 export const ARCHIE_MODULES = [
@@ -182,6 +198,12 @@ export interface CompanyProfile {
   community: string[];
   serviceArea: string;
   timeZone: string;
+  /**
+   * True for a company Roof Lee made (companies.roofli_company_id is set).
+   * Such a company never uses credentials held in Archie's own settings
+   * (server/tenant/per-company.ts).
+   */
+  madeByRoofli: boolean;
 }
 
 import { readableWithWhite } from './contrast';
@@ -209,6 +231,7 @@ export function resolveCompanyProfile(company: {
   trade?: string | null;
   branding?: CompanyBranding | null;
   settings?: CompanySettings | null;
+  roofliCompanyId?: string | null;
 }): CompanyProfile {
   const b = company.branding ?? {};
   const s = company.settings ?? {};
@@ -291,6 +314,7 @@ export function resolveCompanyProfile(company: {
     community: cleanList(s.community),
     serviceArea: clean(s.serviceArea),
     timeZone: clean(s.timeZone) || 'America/New_York',
+    madeByRoofli: !!company.roofliCompanyId,
   };
 }
 

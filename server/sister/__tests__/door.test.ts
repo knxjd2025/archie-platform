@@ -119,7 +119,7 @@ describe('the sister door', () => {
   it('refuses everything while the pair secret is unset, whatever it is signed with', async () => {
     delete process.env[SISTER_SECRET_ENV];
     expect((await send(base, { method: 'POST', path: V2, body: '{}' })).status).toBe(401);
-    expect((await send(base, { method: 'POST', path: V2, body: '{}', secret: '' || 'x' })).status).toBe(401);
+    expect((await send(base, { method: 'POST', path: V2, body: '{}', secret: 'x' })).status).toBe(401);
     process.env[SISTER_SECRET_ENV] = '   ';
     expect((await send(base, { method: 'POST', path: V2, body: '{}', secret: '   ' })).status).toBe(401);
     expect(seen).toEqual([]);
@@ -189,6 +189,14 @@ describe('the production entry (api/index.ts)', () => {
     const tampered = await send(base, { method: 'POST', path: NOWHERE, body, secret: 'another-secret' });
     expect(tampered.status).toBe(401);
     expect(await tampered.text()).toBe('');
+  });
+
+  it('does the same for a real endpoint: a signed body that is not a company is refused as one, not as a forgery', async () => {
+    const body = '{ "zeta" : 1,\n  "alpha":   [ 2 ] }';
+    const good = await send(base, { method: 'POST', path: '/api/sister/v1/companies', body, version: 1 });
+    expect(good.status).toBe(400);
+    const forged = await send(base, { method: 'POST', path: '/api/sister/v1/companies', body, version: 1, secret: 'another-secret' });
+    expect(forged.status).toBe(401);
   });
 
   it('tells an unsigned caller nothing, not even which addresses exist', async () => {

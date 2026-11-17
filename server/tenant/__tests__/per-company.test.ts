@@ -3,7 +3,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 const tenant = vi.hoisted(() => ({ companyId: null as string | null }));
 vi.mock('../context', () => ({ currentCompanyId: () => tenant.companyId }));
 
-import { assertEnvCredentials, EnvCredentialsUnavailableError, ownsEnvCredentials, perCompany } from '../per-company';
+import { assertEnvCredentials, EnvCredentialsUnavailableError, noteRoofLeeCompany, ownsEnvCredentials, perCompany } from '../per-company';
 
 const A = '11111111-1111-4111-8111-111111111111';
 const B = '22222222-2222-4222-8222-222222222222';
@@ -26,6 +26,20 @@ describe('env credentials belong to one company', () => {
     expect(() => assertEnvCredentials('JobTread')).toThrow(/not connected for this company/);
     tenant.companyId = null;
     expect(ownsEnvCredentials()).toBe(false);
+  });
+
+  it('never lets a company Roof Lee made own them, even when the setting names it', () => {
+    const C = '33333333-3333-4333-8333-333333333333';
+    process.env.ARCHIE_ENV_CREDENTIALS_COMPANY_ID = C;
+    tenant.companyId = C;
+    expect(ownsEnvCredentials()).toBe(true);
+    noteRoofLeeCompany(C.toUpperCase());
+    expect(ownsEnvCredentials()).toBe(false);
+    expect(() => assertEnvCredentials('Twilio')).toThrow(EnvCredentialsUnavailableError);
+    // Knowing one company is Roof Lee's changes nothing for the company that does own them.
+    process.env.ARCHIE_ENV_CREDENTIALS_COMPANY_ID = A;
+    tenant.companyId = A;
+    expect(ownsEnvCredentials()).toBe(true);
   });
 });
 

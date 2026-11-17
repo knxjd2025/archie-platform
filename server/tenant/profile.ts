@@ -11,6 +11,7 @@ import { db } from '../db';
 import { companies } from '../../shared/schema';
 import { resolveCompanyProfile, type CompanyProfile } from '../../shared/company';
 import { setProfileLoader } from './context';
+import { noteRoofLeeCompany } from './per-company';
 
 export { currentProfile, withProfile, NEUTRAL_PROFILE } from './context';
 
@@ -24,6 +25,7 @@ export async function loadProfile(companyId: string): Promise<CompanyProfile | n
   const rows = await db.select().from(companies).where(eq(companies.id, companyId));
   if (!rows[0]) return null;
   const profile = resolveCompanyProfile(rows[0]);
+  if (profile.madeByRoofli) noteRoofLeeCompany(companyId);
   cache.set(companyId, { profile, at: Date.now() });
   return profile;
 }

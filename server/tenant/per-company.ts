@@ -25,11 +25,31 @@ export class EnvCredentialsUnavailableError extends Error {
   }
 }
 
-/** True when the current company owns the deployment's env credentials. */
+/**
+ * Companies this process has seen that Roof Lee made (server/sister). Filled
+ * by every profile load (server/tenant/profile.ts: work for a company loads
+ * its profile first) and by the sister door whenever it finds or makes one.
+ */
+const roofLeeCompanies = new Set<string>();
+
+/** Remember that Roof Lee made this company. */
+export function noteRoofLeeCompany(companyId: string): void {
+  roofLeeCompanies.add(companyId.toLowerCase());
+}
+
+/**
+ * True when the current company owns the deployment's env credentials.
+ *
+ * Never for a company Roof Lee made, even if ARCHIE_ENV_CREDENTIALS_COMPANY_ID
+ * were pointed at it by mistake: those credentials belong to the one original
+ * company, and a Roof Lee company with none of its own simply has the
+ * integration off.
+ */
 export function ownsEnvCredentials(): boolean {
   const owner = (process.env.ARCHIE_ENV_CREDENTIALS_COMPANY_ID || '').trim().toLowerCase();
   const company = currentCompanyId();
-  return !!owner && !!company && company.toLowerCase() === owner;
+  if (!owner || !company || company.toLowerCase() !== owner) return false;
+  return !roofLeeCompanies.has(owner);
 }
 
 /** Throw unless the current company owns the deployment's env credentials for `service`. */
