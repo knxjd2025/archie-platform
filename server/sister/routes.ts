@@ -11,11 +11,25 @@ import type { Express, Request, Response } from 'express';
 import { waitUntil } from '@vercel/functions';
 import { runAsCompany } from '../tenant/context';
 import { seedCompany } from '../seed';
-import { SISTER_PREFIX, requireSister, sisterNotFound } from './door';
-import { parseCompanyRequest } from './contract';
-import { provisionCompany } from './companies';
+import { IDEMPOTENCY_HEADER, SISTER_PREFIX, requireSister, sisterNotFound } from './door';
+import { isCloseMode, isUuid, namesCompany, parseActing, parseCompanyRequest, parseMembers } from './contract';
+import { closeCompany, findRoofLeeCompany, provisionCompany, sisterStatus } from './companies';
+import { syncMembers } from './members';
+import { isIdempotencyKey, once } from './idempotency';
 
 const COMPANIES = `${SISTER_PREFIX}/v1/companies`;
+/** Whether Archie is fit for Roof Lee's customers to be sent into. Off unless set to true. */
+export const SISTER_READY_ENV = 'SISTERS_ARCHIE_READY';
+
+/**
+ * The company a request's address names, by Roof Lee's id and nothing else.
+ * Anything that is not such a company, including Archie's own id for one, is
+ * simply not found.
+ */
+async function companyInAddress(req: Request) {
+  const id = req.params.roofliCompanyId;
+  return isUuid(id) ? findRoofLeeCompany(id.toLowerCase()) : null;
+}
 
 /** One line for the log: what failed and the database's own code, never the query or its values. */
 function logFailure(what: string, err: unknown): void {
@@ -43,6 +57,63 @@ export function registerSisterRoutes(app: Express): void {
       }
     } catch (e) {
       failed(res, 'POST companies', e);
+    }
+  });
+
+  // Replace the company's team. Version 1 signature: it covers only the body,
+  // so the body must name the same company as the address.
+  app.put(`${COMPANIES}/:roofliCompanyId/members`, requireSister(1), async (req: Request, res: Response) => {
+    try {
+      const body = req.sister?.body;
+      if (!namesCompany(body, req.params.roofliCompanyId)) return res.status(400).json({ error: 'The company in the body is not the company in the address.' });
+      const team = parseMembers(body?.members);
+      if (!team.ok) return res.status(400).json({ error: team.error });
+      const company = await companyInAddress(req);
+      if (!company) return res.status(404).end();
+      const skipped = [...team.value.skipped, ...(await syncMembers(company.id, team.value.members))];
+      res.json({ ok: true, ...(skipped.length ? { skipped } : {}) });
+    } catch (e) {
+      failed(res, 'PUT members', e);
+    }
+  });
+
+  // Is Archie fit for Roof Lee's customers? A switch for the whole product,
+  // off until the owner turns it on.
+  app.get(`${SISTER_PREFIX}/v1/ready`, requireSister(1), (_req: Request, res: Response) => {
+    res.json({ ready: /^(1|true|yes)$/i.test((process.env[SISTER_READY_ENV] ?? '').trim()) });
+  });
+
+  // Roof Lee's health check for one company.
+  app.get(`${COMPANIES}/:roofliCompanyId`, requireSister(2), async (req: Request, res: Response) => {
+    try {
+      const company = await companyInAddress(req);
+      if (!company) return res.status(404).end();
+      res.json({ companyId: company.id, status: sisterStatus(company.status) });
+    } catch (e) {
+      failed(res, 'GET company', e);
+    }
+  });
+
+  // Pause or close a company. Never a deletion.
+  app.delete(`${COMPANIES}/:roofliCompanyId`, requireSister(2), async (req: Request, res: Response) => {
+    try {
+      const body = req.sister?.body;
+      if (!namesCompany(body, req.params.roofliCompanyId)) return res.status(400).json({ error: 'The company in the body is not the company in the address.' });
+      const mode = body?.mode;
+      if (!isCloseMode(mode)) return res.status(400).json({ error: 'Say whether to pause or to close.' });
+      const acting = parseActing(body?.acting);
+      if (!acting.ok) return res.status(400).json({ error: acting.error });
+      const key = req.get(IDEMPOTENCY_HEADER);
+      if (key !== undefined && !isIdempotencyKey(key)) return res.status(400).json({ error: 'The idempotency key could not be read.' });
+      const company = await companyInAddress(req);
+      if (!company) return res.status(404).end();
+      const answer = await once(company.id, key, async () => ({
+        status: 200,
+        body: { companyId: company.id, status: await closeCompany(company, mode, acting.value) },
+      }));
+      res.status(answer.status).json(answer.body);
+    } catch (e) {
+      failed(res, 'DELETE company', e);
     }
   });
 

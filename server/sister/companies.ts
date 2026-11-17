@@ -12,16 +12,17 @@
 import { randomBytes } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { db } from '../db';
-import { companies, type Company } from '../../shared/schema';
+import { companies, writeLog, type Company } from '../../shared/schema';
 import type { CompanyBranding, CompanySettings } from '../../shared/company';
 import { isLiveCompany } from '../../shared/company';
-import { runAsSystem } from '../tenant/context';
+import { runAsCompany, runAsSystem } from '../tenant/context';
 import { noteRoofLeeCompany } from '../tenant/per-company';
 import { clearProfileCache } from '../tenant/profile';
+import { clearSessionRevalidationCache } from '../auth/middleware';
 import { endSessionsForCompany } from '../auth/sessions';
 import { mapCompanyFacts } from './facts';
 import { syncMembers } from './members';
-import type { CompanyRequest, ProvisionPlan, Skipped } from './contract';
+import type { Acting, CloseMode, CompanyRequest, ProvisionPlan, Skipped } from './contract';
 
 type Status = Company['status'];
 
@@ -150,5 +151,46 @@ export async function provisionCompany(req: CompanyRequest): Promise<Provisioned
   const skipped = [...req.skipped, ...(await syncMembers(company.id, req.members))];
   // A company that has stopped paying is switched off: nobody stays signed in.
   if (isLiveCompany(company) && !isLiveCompany(after)) await endSessionsForCompany(company.id);
+  // One that is paying again is let back in at once, not when a cached "no" runs out.
+  if (!isLiveCompany(company) && isLiveCompany(after)) clearSessionRevalidationCache();
   return { companyId: company.id, created, live: isLiveCompany(after), skipped };
+}
+
+/** Where a company stands, in the three words the contract uses. */
+export type SisterStatus = 'active' | 'paused' | 'closed';
+
+export function sisterStatus(status: Status): SisterStatus {
+  if (status === 'cancelled') return 'closed';
+  return status === 'paused' ? 'paused' : 'active';
+}
+
+/**
+ * DELETE .../companies/{roofliCompanyId}: switch a company off. `pause` until
+ * it pays again (a later POST with an active plan brings it back), `close`
+ * for good. Neither deletes anything: every person and record stays, and
+ * deleting is a separate, manual decision outside the agreement.
+ *
+ * Switched off means nobody can sign in (the roster re-check refuses a
+ * company that is not live, and stored sessions are ended here) and no
+ * scheduled work runs for it (crons only visit live companies).
+ */
+export async function closeCompany(company: Company, mode: CloseMode, acting: Acting | undefined): Promise<SisterStatus> {
+  // Closed for good is never undone here, not even into "paused".
+  const next: Status = company.status === 'cancelled' || mode === 'close' ? 'cancelled' : 'paused';
+  if (next !== company.status) {
+    await runAsSystem('sister: pause or close one Roof Lee company', () =>
+      db.update(companies).set({ status: next, updatedAt: new Date() }).where(eq(companies.id, company.id)));
+    clearProfileCache(company.id);
+  }
+  await endSessionsForCompany(company.id);
+  // Who asked, in the company's own log. No person is named when a subscription simply ended.
+  await runAsCompany(company.id, () => db.insert(writeLog).values({
+    actor: acting ? `roofli:${acting.authUserId}` : 'roofli',
+    system: 'roofli',
+    action: mode === 'close' ? 'close_company' : 'pause_company',
+    targetId: company.id,
+    summary: mode === 'close' ? 'Closed from Roof Lee. Nothing was deleted.' : 'Paused from Roof Lee. Nothing was deleted.',
+    ok: true,
+  }), { loadProfile: false });
+  return sisterStatus(next);
 }

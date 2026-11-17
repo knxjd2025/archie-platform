@@ -126,3 +126,28 @@ export function parseCompanyRequest(body: Record<string, unknown> | undefined): 
     },
   };
 }
+
+/** Who a write is for: a statement by Roof Lee, covered by the signature. Not a sign-in. */
+export interface Acting { authUserId: string; role: RoofliRole }
+
+/** The `acting` block of a write. Absent is allowed where the contract says so; present must be whole. */
+export function parseActing(raw: unknown): Parsed<Acting | undefined> {
+  if (raw === undefined || raw === null) return { ok: true, value: undefined };
+  if (!isObject(raw) || !isUuid(raw.authUserId) || typeof raw.role !== 'string' || !(ROOFLI_ROLES as readonly string[]).includes(raw.role)) {
+    return { ok: false, error: 'The person this request is for could not be read.' };
+  }
+  return { ok: true, value: { authUserId: raw.authUserId.toLowerCase(), role: raw.role as RoofliRole } };
+}
+
+/**
+ * True when a body names the company in its address. The version 1 signature
+ * covers only the body, so on those endpoints the body MUST name the company:
+ * that is all that stops a request signed for one company being sent to
+ * another's address.
+ */
+export function namesCompany(body: Record<string, unknown> | undefined, roofliCompanyId: string): boolean {
+  return isUuid(body?.roofliCompanyId) && body.roofliCompanyId.toLowerCase() === roofliCompanyId.toLowerCase();
+}
+
+export type CloseMode = 'pause' | 'close';
+export const isCloseMode = (v: unknown): v is CloseMode => v === 'pause' || v === 'close';

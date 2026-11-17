@@ -22,6 +22,12 @@ no keys). The Best Roofing AI app and its repo are separate and are not changed 
    pipeline, reviews, AI agent, automations, forms, payments, reports).
 6. **New look**: Archie's own design system.
 
+## The Roof Lee link
+
+Roof Lee can make, update, pause and close companies in Archie through signed
+requests under `/api/sister`. It is off until `SISTERS_ARCHIE_SECRET` is set.
+See docs/archie/02-roof-lee-link.md.
+
 ## Not in this repo on purpose
 
 - `ios/` and `android/` app shells (will be regenerated with Archie's own bundle IDs)
