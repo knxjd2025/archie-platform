@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../lib/api';
 import { ROLE_LABEL, type TeamRole } from '../../../shared/rbac';
+import { PLAN_LABEL, formatDollars, type Plan } from '../../../shared/billing/pricing';
 
 /**
  * The Operator page: for the people who run Archie (ARCHIE_OPERATOR_EMAILS),
@@ -24,6 +25,13 @@ interface CompanySummary {
   kynexProConnected: boolean;
   leads30d: number;
   messages30d: number;
+  /** What the team costs now (shared/billing/pricing.ts), and Stripe's subscription status. */
+  plan: Plan;
+  seats: number;
+  monthlyTotalCents: number;
+  subscriptionStatus: string | null;
+  noSubscription: boolean;
+  seatSyncFailed: boolean;
 }
 interface TeamRow { id: number; name: string; email: string; role: string; active: boolean; canSignIn: boolean; hasPassword: boolean; lastSignInAt: string | null }
 interface AuditRow { at: string; operatorEmail: string; action: string; details: Record<string, unknown> }
@@ -49,6 +57,32 @@ function StatusPill({ status }: { status: Status }) {
 }
 
 const DAY = 24 * 60 * 60 * 1000;
+
+const SUBSCRIPTION_LABEL: Record<string, string> = {
+  active: 'Paying', trialing: 'Card on file', past_due: 'Past due', unpaid: 'Unpaid', canceled: 'Cancelled',
+  incomplete: 'Incomplete', incomplete_expired: 'Payment failed', paused: 'Paused',
+};
+
+/** "Team, 5 seats, $397/mo". */
+const planText = (c: Pick<CompanySummary, 'plan' | 'seats' | 'monthlyTotalCents'>): string =>
+  `${PLAN_LABEL[c.plan] ?? c.plan}, ${c.seats} ${c.seats === 1 ? 'seat' : 'seats'}, ${formatDollars(c.monthlyTotalCents)}/mo`;
+
+/** Stripe's status in plain words, or a "No subscription" flag. */
+function SubscriptionBadge({ c }: { c: Pick<CompanySummary, 'subscriptionStatus' | 'noSubscription' | 'seatSyncFailed'> }) {
+  const bad = c.subscriptionStatus === 'past_due' || c.subscriptionStatus === 'unpaid' || c.subscriptionStatus === 'canceled' || c.subscriptionStatus === 'incomplete_expired';
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1">
+      {c.noSubscription && !c.subscriptionStatus ? (
+        <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ring-inset whitespace-nowrap bg-orange-50 text-orange-800 ring-orange-200">No subscription</span>
+      ) : (
+        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ring-inset whitespace-nowrap ${bad ? 'bg-red-50 text-red-700 ring-red-200' : 'bg-green-50 text-green-700 ring-green-200'}`}>
+          {SUBSCRIPTION_LABEL[c.subscriptionStatus ?? ''] ?? c.subscriptionStatus}
+        </span>
+      )}
+      {c.seatSyncFailed && <span className="text-xs text-red-700" title="The last seat update to Stripe failed. It is retried every hour.">Seats not synced</span>}
+    </span>
+  );
+}
 
 function formatDate(iso: string | null): string {
   if (!iso) return 'Not set';
@@ -386,6 +420,8 @@ function CompanyPanel({ id, onClose, onChanged }: { id: string; onClose: () => v
                 <Fact label="Last sign-in" value={ago(detail.lastSignInAt)} />
                 <Fact label="Leads, last 30 days" value={detail.leads30d} />
                 <Fact label="Messages, last 30 days" value={detail.messages30d} />
+                <Fact label="Plan" value={planText(detail)} />
+                <Fact label="Subscription" value={<SubscriptionBadge c={detail} />} />
                 <Fact label="KynexPro" value={detail.kynexProConnected ? 'Connected' : 'Not connected yet'} />
                 <Fact label="Connected apps" value={detail.integrations.length ? detail.integrations.join(', ') : 'None yet'} hint={detail.integrations.join(', ')} />
               </dl>
@@ -574,6 +610,8 @@ export default function Operator() {
                 <Fact label="Messages, 30 days" value={c.messages30d} />
                 <Fact label="KynexPro" value={c.kynexProConnected ? 'Connected' : 'Not yet'} />
                 <Fact label="Trial" value={trialText(c) || 'Not on trial'} />
+                <Fact label="Plan" value={planText(c)} />
+                <Fact label="Subscription" value={<SubscriptionBadge c={c} />} />
               </dl>
             </button>
           </li>
@@ -590,6 +628,8 @@ export default function Operator() {
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium">Trial</th>
                 <th className="px-4 py-3 font-medium text-right">People</th>
+                <th className="px-4 py-3 font-medium">Plan</th>
+                <th className="px-4 py-3 font-medium">Subscription</th>
                 <th className="px-4 py-3 font-medium">Last sign-in</th>
                 <th className="px-4 py-3 font-medium">KynexPro</th>
                 <th className="px-4 py-3 font-medium text-right" title="Leads created in the last 30 days">Leads (30d)</th>
@@ -598,9 +638,9 @@ export default function Operator() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {rows === null && !error && [0, 1, 2].map((i) => (
-                <tr key={i}><td colSpan={8} className="px-4 py-3"><div className="h-4 rounded bg-gray-100 animate-pulse" /></td></tr>
+                <tr key={i}><td colSpan={10} className="px-4 py-3"><div className="h-4 rounded bg-gray-100 animate-pulse" /></td></tr>
               ))}
-              {rows?.length === 0 && <tr><td colSpan={8} className="px-4 py-10 text-center text-gray-500">No companies match.</td></tr>}
+              {rows?.length === 0 && <tr><td colSpan={10} className="px-4 py-10 text-center text-gray-500">No companies match.</td></tr>}
               {rows?.map((c) => (
                 <tr key={c.id} onClick={() => setOpenId(c.id)} className="cursor-pointer hover:bg-gray-50">
                   <td className="px-4 py-3">
@@ -610,6 +650,8 @@ export default function Operator() {
                   <td className="px-4 py-3"><StatusPill status={c.status} /></td>
                   <td className="px-4 py-3 text-gray-600 whitespace-nowrap" title={c.trialEndsAt ? formatDate(c.trialEndsAt) : undefined}>{trialText(c) || 'Not on trial'}</td>
                   <td className="px-4 py-3 text-right text-gray-700 whitespace-nowrap" title={`${c.canSignIn} of ${c.members} can sign in`}>{c.canSignIn} / {c.members}</td>
+                  <td className="px-4 py-3 text-gray-700 whitespace-nowrap" title={`${c.seats} billable ${c.seats === 1 ? 'seat' : 'seats'}`}>{PLAN_LABEL[c.plan] ?? c.plan} {formatDollars(c.monthlyTotalCents)}/mo</td>
+                  <td className="px-4 py-3"><SubscriptionBadge c={c} /></td>
                   <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{ago(c.lastSignInAt)}</td>
                   <td className="px-4 py-3 whitespace-nowrap">{c.kynexProConnected ? <span className="text-green-700">Connected</span> : <span className="text-gray-500">Not yet</span>}</td>
                   <td className="px-4 py-3 text-right text-gray-700">{c.leads30d}</td>

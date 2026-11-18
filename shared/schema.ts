@@ -162,6 +162,45 @@ export const companyJobRuns = pgTable('company_job_runs', {
   pk: primaryKey({ columns: [t.companyId, t.job] }),
 }));
 
+/**
+ * Each company's Stripe billing (server/billing/*, migrations/0012): one row
+ * per company. The plan and seats are what Stripe bills for now; the seat
+ * count the team has comes from team_members and is pushed to Stripe by the
+ * seat sync. Never card data: cards live only at Stripe.
+ */
+export const companyBilling = pgTable('company_billing', {
+  companyId: companyId().primaryKey(),
+  stripeCustomerId: text('stripe_customer_id'),
+  stripeSubscriptionId: text('stripe_subscription_id'),
+  plan: text('plan', { enum: ['solo', 'team'] }),
+  seats: integer('seats'),
+  /** Stripe's subscription status: active, trialing, past_due, unpaid, canceled, incomplete, ... */
+  subscriptionStatus: text('subscription_status'),
+  currentPeriodEnd: timestamp('current_period_end'),
+  cancelAtPeriodEnd: boolean('cancel_at_period_end').notNull().default(false),
+  /** Why the last seat update to Stripe failed; cleared when one succeeds. Retried by the hourly job. */
+  seatSyncError: text('seat_sync_error'),
+  seatSyncFailedAt: timestamp('seat_sync_failed_at'),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (t) => ({
+  customerUq: uniqueIndex('company_billing_customer_uq').on(t.stripeCustomerId),
+  subscriptionUq: uniqueIndex('company_billing_subscription_uq').on(t.stripeSubscriptionId),
+  planCheck: check('company_billing_plan_check', sql`${t.plan} IS NULL OR ${t.plan} IN ('solo', 'team')`),
+}));
+
+export type CompanyBilling = typeof companyBilling.$inferSelect;
+
+/**
+ * Stripe webhook events already handled, by event id, so a repeated delivery
+ * does nothing. Global: the app role has no access, the system role may read,
+ * add and remove (migrations/0012).
+ */
+export const stripeEvents = pgTable('stripe_events', {
+  id: text('id').primaryKey(),
+  type: text('type').notNull(),
+  receivedAt: timestamp('received_at').defaultNow().notNull(),
+});
+
 export const companyIntegrations = pgTable('company_integrations', {
   id: serial('id').primaryKey(),
   companyId: companyId(),

@@ -47,8 +47,9 @@ describe.skipIf(!local)('company isolation', async () => {
 
   it('puts every company table behind row level security', async () => {
     const tables = (Object.values(schema) as unknown[]).filter((t) => is(t, PgTable)).map((t) => getTableConfig(t as any));
-    // Global on purpose: companies itself, and the operator audit log (about companies, owned by none).
-    const missingColumn = tables.filter((t) => !['companies', 'operator_audit_log'].includes(t.name) && !t.columns.some((c) => c.name === 'company_id')).map((t) => t.name);
+    // Global on purpose: companies itself, the operator audit log (about companies, owned by none),
+    // and the Stripe event ledger (an event has no company until it is read).
+    const missingColumn = tables.filter((t) => !['companies', 'operator_audit_log', 'stripe_events'].includes(t.name) && !t.columns.some((c) => c.name === 'company_id')).map((t) => t.name);
     expect(missingColumn).toEqual([]);
     const names = tables.map((t) => t.name);
     const { rows } = await pool.query(
@@ -74,7 +75,7 @@ describe.skipIf(!local)('company isolation', async () => {
                  from pg_policies p where p.schemaname = 'public' and p.tablename = c.relname) as policies
          from pg_class c join pg_namespace n on n.oid = c.relnamespace
         where n.nspname = 'public' and c.relkind in ('r', 'p')`);
-    const GLOBAL = new Set(['session', '_migrations', 'companies', 'operator_audit_log']);
+    const GLOBAL = new Set(['session', '_migrations', 'companies', 'operator_audit_log', 'stripe_events']);
     // Exactly two policies (migrations/0008): the company's own rows for
     // everyone, and every row for the archie_system role only. No OR anywhere.
     const own = '(company_id = ( SELECT archie_current_company() AS archie_current_company))';
@@ -114,6 +115,22 @@ describe.skipIf(!local)('company isolation', async () => {
         where has_table_privilege(r.rolname, 'public.operator_audit_log', p.privilege_type)
         order by 1, 2`);
     expect(grants.map((g: any) => `${g.rolname}:${g.privilege_type}`)).toEqual(['archie_system:INSERT', 'archie_system:SELECT']);
+  });
+
+  it('gives the Stripe event ledger one policy, for the system role only, and no app grants (migrations/0012)', async () => {
+    const { rows: policies } = await pool.query(
+      `select policyname || '|' || array_to_string(roles, ',') || '|' || cmd || '|' || coalesce(qual, '') || '|' || coalesce(with_check, '') as p
+         from pg_policies where schemaname = 'public' and tablename = 'stripe_events' order by policyname`);
+    expect(policies.map((r: any) => r.p)).toEqual(['stripe_events_system|archie_system|ALL|true|true']);
+    const { rows: [t] } = await pool.query(
+      `select relrowsecurity as rls, relforcerowsecurity as forced from pg_class where relname = 'stripe_events' and relnamespace = 'public'::regnamespace`);
+    expect(t).toEqual({ rls: true, forced: true });
+    const { rows: grants } = await pool.query(
+      `select r.rolname, p.privilege_type from (values ('archie_app'), ('archie_system')) r(rolname)
+         cross join (values ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE'), ('TRUNCATE')) p(privilege_type)
+        where has_table_privilege(r.rolname, 'public.stripe_events', p.privilege_type)
+        order by 1, 2`);
+    expect(grants.map((g: any) => `${g.rolname}:${g.privilege_type}`)).toEqual(['archie_system:DELETE', 'archie_system:INSERT', 'archie_system:SELECT']);
   });
 
   it('lets a company read its own companies row but never change it', async () => {

@@ -24,6 +24,7 @@ import { validateTeamMemberInput } from '../storage/team-validate';
 import { mintPasswordLink, passwordLinkUrl, PASSWORD_LINK_TTL_MS } from '../auth/password-links';
 import { defaultTrialEnd } from '../tenant/companies';
 import { isLiveCompany } from '../../shared/company';
+import { afterSeatChange } from '../billing/service';
 import {
   COMPANY_STATUSES, audit, emailTaken, freeSlug, getCompany, getCompanyDetail, getMember, listCompanies,
   setCompanyStatus, type CompanyStatus,
@@ -130,6 +131,9 @@ export function registerOperatorRoutes(app: Express): void {
       details: { name, slug, adminName: admin.value.name, adminEmail: admin.value.email, adminAdded: true, seeded, trialEndsAt: trialEndsAt.toISOString() },
     });
     if (!seeded) console.error(`[operator] company ${slug} was created but not seeded: ${seedError}`);
+    // A new company has no subscription yet, so this does nothing today; kept so
+    // every change to who can sign in goes through the same seat sync.
+    await afterSeatChange(company.id, 'the operator added the first admin');
     res.status(201).json({
       company: { id: company.id, name: company.name, slug: company.slug, status: company.status, trialEndsAt: trialEndsAt.toISOString() },
       admin: { name: admin.value.name, email: admin.value.email },

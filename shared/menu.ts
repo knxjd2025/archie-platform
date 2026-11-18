@@ -30,7 +30,7 @@ export const MENU_PAGES = [
   'production', 'claims', 'documents',
   'commission', 'payouts', 'kpis',
   'cheat-sheet', 'playbook',
-  'assignments', 'team', 'company', 'integrations', 'bugs', 'account',
+  'assignments', 'team', 'company', 'billing', 'integrations', 'bugs', 'account',
 ] as const;
 
 export type MenuPage = (typeof MENU_PAGES)[number];
@@ -80,6 +80,8 @@ export const MENU_ITEMS: MenuItem[] = [
   { page: 'assignments', label: 'Unassigned', icon: '🏷️', group: 'setup' },
   { page: 'team', label: 'Team', icon: '👤', group: 'setup' },
   { page: 'company', label: 'Company', icon: '🎨', group: 'setup' },
+  // Shown only while billing is on (STRIPE_SECRET_KEY set); App.tsx asks /api/billing/status.
+  { page: 'billing', label: 'Billing', icon: '💳', group: 'setup' },
   { page: 'integrations', label: 'Integrations', icon: '🔌', group: 'setup' },
   { page: 'bugs', label: 'Bugs', icon: '🐞', group: 'setup' },
   { page: 'account', label: 'My Account', icon: '🗂️', group: 'setup' },
@@ -96,7 +98,7 @@ export function roleCanSeePage(role: TeamRole, page: MenuPage | 'client'): boole
   const isAdmin = role === 'admin';
   const isManagerPlus = role === 'admin' || role === 'manager';
   const isSalesPlus = role !== 'production'; // everyone but production
-  if (page === 'team' || page === 'integrations' || page === 'bugs' || page === 'company') return isAdmin;
+  if (page === 'team' || page === 'integrations' || page === 'bugs' || page === 'company' || page === 'billing') return isAdmin;
   // Payouts is no longer admin-only: a rep opens it to see what they are
   // owed. The server returns only their own rows and refuses every paying
   // action, so this is about whether the page is worth showing, not about
@@ -125,7 +127,7 @@ export function roleCanSeePage(role: TeamRole, page: MenuPage | 'client'): boole
 export const ALWAYS_SHOWN_PAGES: readonly MenuPage[] = ['dashboard'];
 
 /** An admin cannot hide these from admins: it would lock the company out of putting things back. */
-export const ADMIN_PROTECTED_PAGES: readonly MenuPage[] = ['company', 'team', 'integrations'];
+export const ADMIN_PROTECTED_PAGES: readonly MenuPage[] = ['company', 'team', 'billing', 'integrations'];
 
 export type MenuCell = 'never' | 'locked_on' | 'switch';
 

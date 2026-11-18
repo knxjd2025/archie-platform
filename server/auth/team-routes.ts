@@ -11,6 +11,10 @@ import { mintPasswordLink, passwordLinkUrl } from './password-links';
 import { passwordMailConfigured, sendPasswordLinkEmail } from './password-mail';
 import { getCurrentCompany } from '../tenant/companies';
 import { CRM_LABEL } from '../../shared/product-names';
+import { afterSeatChange } from '../billing/service';
+
+/** A billable seat: someone on the team who can sign in (shared/billing/pricing.ts). */
+const isSeat = (m: { active: boolean; canLogin: boolean } | undefined | null): boolean => !!m && m.active && m.canLogin;
 
 /** Postgres unique_violation. team_members.email is NOT NULL UNIQUE. */
 const DUPLICATE_KEY = '23505';
@@ -82,6 +86,8 @@ export function registerTeamRoutes(app: Express) {
     }
     try {
       const created = await createTeamMember(parsed.value, req.session.user!.email);
+      // Saved first; Stripe follows, and a Stripe failure never undoes the add (server/billing/service.ts).
+      if (isSeat(created)) await afterSeatChange(req.session.user!.companyId, 'a team member was added');
       // A member who can sign in gets a link to choose their password. Never
       // fails the add: the admin can resend from Forgot password.
       const welcomeEmailSent = created.canLogin ? await sendWelcomeEmail(created) : false;
@@ -129,6 +135,8 @@ export function registerTeamRoutes(app: Express) {
     // entry so switching them off or changing their role applies right away.
     clearSessionRevalidationCache(before.email);
     clearSessionRevalidationCache(updated.email);
+    // Signing in on or off changes the bill. Saved first; Stripe follows and never undoes the change.
+    if (isSeat(before) !== isSeat(updated)) await afterSeatChange(req.session.user!.companyId, 'a team member was switched on or off');
 
     // Role syncs both ways with JobTread (see sync/jobtread-roles.ts). Best
     // effort: a JobTread hiccup must never block an app role change.

@@ -21,6 +21,8 @@ import {
 import { runAsCompany, runAsSystem } from '../tenant/context';
 import { clearSessionRevalidationCache } from '../auth/middleware';
 import { isLiveCompany } from '../../shared/company';
+import { quoteForSeats, type Plan } from '../../shared/billing/pricing';
+import { isGoodSubscription } from '../../shared/billing/status';
 
 export const COMPANY_STATUSES = ['trial', 'active', 'paused', 'cancelled'] as const;
 export type CompanyStatus = (typeof COMPANY_STATUSES)[number];
@@ -42,6 +44,19 @@ export interface CompanySummary {
   kynexProConnected: boolean;
   leads30d: number;
   messages30d: number;
+  /**
+   * Billing (shared/billing/pricing.ts, server/billing/*). The plan, seats and
+   * monthly total are what the company's current team costs (people who can
+   * sign in); subscriptionStatus is Stripe's, or null with no subscription.
+   */
+  plan: Plan;
+  seats: number;
+  monthlyTotalCents: number;
+  subscriptionStatus: string | null;
+  /** No subscription that is active, trialing or past due. */
+  noSubscription: boolean;
+  /** The last seat update to Stripe failed (retried hourly). */
+  seatSyncFailed: boolean;
 }
 
 export interface TeamRow {
@@ -102,9 +117,13 @@ const summaryColumns = (since: Date) => sql`
   (c.ghl_location_id is not null and exists (
      select 1 from company_integrations i where i.company_id = c.id and i.provider = 'ghl')) as kynexpro,
   (select count(*) from leads l where l.company_id = c.id and l.created_at >= ${since}) as leads_30d,
-  (select count(*) from comm_messages x where x.company_id = c.id and x.sent_at >= ${since}) as messages_30d`;
+  (select count(*) from comm_messages x where x.company_id = c.id and x.sent_at >= ${since}) as messages_30d,
+  (select b.subscription_status from company_billing b where b.company_id = c.id) as subscription_status,
+  (select b.seat_sync_error is not null from company_billing b where b.company_id = c.id) as seat_sync_failed`;
 
 function toSummary(r: Record<string, unknown>): CompanySummary {
+  const quote = quoteForSeats(num(r.can_sign_in));
+  const subscriptionStatus = typeof r.subscription_status === 'string' ? r.subscription_status : null;
   return {
     id: String(r.id),
     name: String(r.name),
@@ -118,6 +137,12 @@ function toSummary(r: Record<string, unknown>): CompanySummary {
     kynexProConnected: r.kynexpro === true,
     leads30d: num(r.leads_30d),
     messages30d: num(r.messages_30d),
+    plan: quote.plan,
+    seats: quote.seats,
+    monthlyTotalCents: quote.monthlyTotalCents,
+    subscriptionStatus,
+    noSubscription: !isGoodSubscription(subscriptionStatus),
+    seatSyncFailed: r.seat_sync_failed === true,
   };
 }
 
