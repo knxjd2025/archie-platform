@@ -50,6 +50,13 @@
       "when": 1794957920529,
       "tag": "0006_roofli_sister",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794960577616,
+      "tag": "0007_roofli_sso",
+      "breakpoints": true
     }
   ]
 }

@@ -79,6 +79,18 @@ export const nativeHandoffs = pgTable('native_handoffs', {
 });
 
 /**
+ * Sign-in tickets from Roof Lee that have been used (server/sister/sso.ts). A
+ * ticket is good for one use: its id is written here, as a SHA-256 only, in
+ * the same step that accepts it, so a second use finds the row and is refused.
+ * The same shape as native_handoffs, and its own table for the same reason.
+ */
+export const sisterSsoTickets = pgTable('sister_sso_tickets', {
+  companyId: companyId(),
+  jtiHash: text('jti_hash').primaryKey(),
+  expiresAt: timestamp('expires_at').notNull(),
+});
+
+/**
  * Answers already given to Roof Lee's writes (server/sister), so the same
  * request arriving twice does the work once and is answered as it was the
  * first time. One row per company and idempotency-key. Its own table, like

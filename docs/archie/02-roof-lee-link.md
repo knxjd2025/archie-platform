@@ -52,6 +52,11 @@ on exactly as before with the migration applied.
 
 If this code is ever rolled back, leave the migration in place.
 
+The later migrations for this link (`0007_roofli_sso.sql` onwards) only add
+new tables that nothing touches until the link is switched on. Apply them in
+the same step, before deploying: a link switched on without them answers
+every sign-in and every request from Roof Lee with a refusal.
+
 ## Where the code is
 
 | File | What it does |
@@ -64,6 +69,8 @@ If this code is ever rolled back, leave the migration in place.
 | `server/sister/members.ts` | Makes the team exactly the list Roof Lee sent. |
 | `server/sister/facts.ts` | What Archie takes from a company's confirmed facts. |
 | `server/sister/idempotency.ts` | Does a write once, however many times it arrives. |
+| `server/sister/ticket.ts` | Roof Lee's sign-in ticket reader, pasted word for word. Do not edit here. |
+| `server/sister/sso.ts` | One sign-in: spends a ticket and says who it signs in. |
 
 Both entry files (`server/index.ts` and `api/index.ts`) keep the raw body for
 `/api/sister` ahead of `express.json`. The signature is over the bytes as they
@@ -79,15 +86,47 @@ production entry, to prove it.
 | `GET` | `/api/sister/v1/ready` | version 1 |
 | `GET` | `/api/sister/v1/companies/{roofliCompanyId}` | version 2 (also the method and address) |
 | `DELETE` | `/api/sister/v1/companies/{roofliCompanyId}` | version 2 |
+| `POST` | `/api/sister/v1/sso` | none: the browser posts a one-time ticket |
 
 Each address takes exactly one form of signature and never the other. Anything
 else under `/api/sister` answers `404` to a signed request and a bare `401` to
 an unsigned one.
 
-Still to build (tasks A5 to A9 in Roof Lee's Stage 1 plan): one sign-in
-(`/sso`), the read and write endpoints for Lee, events back to Roof Lee,
-Archie's own jobs, and the "no messages of its own" gate with the
-`messages.quiet` capability.
+Still to build (tasks A6 to A9 in Roof Lee's Stage 1 plan): the read and
+write endpoints for Lee, events back to Roof Lee, Archie's own jobs, and the
+"no messages of its own" gate with the `messages.quiet` capability.
+
+## One sign-in
+
+A person signed in to Roof Lee presses "Open Archie". Roof Lee hands their
+browser a page that posts one form field, `ticket`, to
+`POST /api/sister/v1/sso`. The ticket is signed with the pair secret, lives
+sixty seconds and works once. Archie then:
+
+1. Checks the signature over the bytes as they arrived, before reading them,
+   with `SISTERS_ARCHIE_SECRET` and nothing else.
+2. Refuses a ticket that is not version 2, not made for `archie`, past its
+   end, from the future, or claiming a life other than sixty seconds.
+3. Records the ticket's id (a SHA-256 of it, in `sister_sso_tickets`) in one
+   step, so a second use, or a copy arriving at the same moment, is refused.
+4. Finds the person by their shared sign-in id inside the company the ticket
+   names, among the people Roof Lee sent. Never by email.
+5. Applies the usual gates: the company is live, the person is active and may
+   sign in, and the deployment's own block and allow lists.
+6. Starts a brand-new session (never the session id the browser arrived with)
+   and sends the browser to `/`.
+
+The role in the ticket grants nothing: the person gets the role Archie holds
+for them from the last team list. Every refusal is the same page, with one
+plain sentence, status `401`, no session and no reason. The ticket is read
+from the form body only, never from the address, and is never logged.
+
+Taking someone off the team in Roof Lee ends their Archie sessions (the next
+team list leaves them out). Signing out of Roof Lee does not.
+
+Known limit, set by the agreement: anyone who holds a valid, unused ticket can
+have a browser post it. It is worth one sign-in for sixty seconds, as the
+person it names.
 
 ## Rules this code keeps
 
@@ -103,8 +142,7 @@ Archie's own jobs, and the "no messages of its own" gate with the
   once. Rows are kept, so their history stays.
 - **People Roof Lee sent have no email sign-in.** They have no password, and
   the lookup every email sign-in starts with (`findSignInMember`) never finds
-  them. Their only way in will be Roof Lee's hand-off (task A5). Until that is
-  built they cannot sign in to Archie at all, which is the safe default.
+  them. Their only way in is Roof Lee's hand-off ("One sign-in" below).
 - **No credentials from Archie's own settings.** The JobTread key and the
   other values in the environment belong to the one original company. A
   company Roof Lee made never owns them, even if

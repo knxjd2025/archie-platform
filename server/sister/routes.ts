@@ -7,7 +7,7 @@
  * An answer never carries detail about a failure: a database error names
  * queries and people, and Roof Lee only needs to know to try again.
  */
-import type { Express, Request, Response } from 'express';
+import express, { type Express, type NextFunction, type Request, type Response } from 'express';
 import { waitUntil } from '@vercel/functions';
 import { runAsCompany } from '../tenant/context';
 import { seedCompany } from '../seed';
@@ -16,6 +16,8 @@ import { isCloseMode, isUuid, namesCompany, parseActing, parseCompanyRequest, pa
 import { closeCompany, findRoofLeeCompany, mayCloseCompany, provisionCompany, sisterStatus } from './companies';
 import { syncMembers } from './members';
 import { isIdempotencyKey, once } from './idempotency';
+import { startSignedInSession } from '../auth/routes';
+import { SSO_REFUSED_PAGE, signInFromTicket } from './sso';
 
 const COMPANIES = `${SISTER_PREFIX}/v1/companies`;
 /** Whether Archie is fit for Roof Lee's customers to be sent into. Off unless set to true. */
@@ -42,7 +44,36 @@ function failed(res: Response, what: string, err: unknown): void {
   if (!res.headersSent) res.status(500).json({ error: 'Archie could not finish this request. Send it again.' });
 }
 
+/** Every refused sign-in: one status, one plain sentence, no session and no reason. */
+function refuseSignIn(res: Response): void {
+  if (res.headersSent) return;
+  res.status(401).set('cache-control', 'no-store').type('html').send(SSO_REFUSED_PAGE);
+}
+
+/** The form a browser posts. A body that cannot be read is refused like any other bad ticket. */
+function ticketForm() {
+  const parse = express.urlencoded({ extended: false, limit: '16kb' });
+  return (req: Request, res: Response, next: NextFunction) => parse(req, res, (err?: unknown) => (err ? refuseSignIn(res) : next()));
+}
+
 export function registerSisterRoutes(app: Express): void {
+  // One sign-in. Posted by the person's browser, so it carries no signature
+  // headers: the ticket is its own proof (./sso.ts). The ticket is in the body
+  // and is never logged. Shut, like everything else here, until the pair
+  // secret is set.
+  app.post(`${SISTER_PREFIX}/v1/sso`, ticketForm(), async (req: Request, res: Response) => {
+    try {
+      const user = await signInFromTicket((req.body as { ticket?: unknown } | undefined)?.ticket);
+      if (!user) return refuseSignIn(res);
+      // A brand-new session id: never the one the browser arrived with.
+      await startSignedInSession(req, user);
+      res.set('cache-control', 'no-store').redirect(303, '/');
+    } catch (e) {
+      logFailure('sign-in from Roof Lee', e);
+      refuseSignIn(res);
+    }
+  });
+
   // Make the company, or bring it up to date. Version 1 signature (the body names the company).
   app.post(COMPANIES, requireSister(1), async (req: Request, res: Response) => {
     try {

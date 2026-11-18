@@ -53,7 +53,7 @@ export function sisterRawBody(): RequestHandler {
 }
 
 /** The pair secret, or '' when it is not set (which shuts the door). */
-function pairSecret(): string {
+export function pairSecret(): string {
   return (process.env[SISTER_SECRET_ENV] ?? '').trim();
 }
 

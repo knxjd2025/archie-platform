@@ -5,7 +5,7 @@
 import express from 'express';
 import http, { type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { sign, signRequest } from '../verify';
 import { registerSisterRoutes } from '../routes';
 import { SISTER_PREFIX, SISTER_SECRET_ENV, sisterRawBody } from '../door';
@@ -86,4 +86,27 @@ export function companyBody(tag: string, over: Record<string, unknown> = {}) {
     },
     ...over,
   };
+}
+
+/** What a sign-in ticket says (docs/sisters/contract-v2.md, "The ticket"). */
+export interface TestTicket {
+  v?: unknown; jti?: string; product?: string; roofliCompanyId: string; authUserId: string;
+  email?: string; role?: string; iat?: number; exp?: number;
+}
+
+/** A ticket written and signed the way Roof Lee writes one. Fields are in the contract's order. */
+export function makeTicket(t: TestTicket, secret: string = TEST_SECRET): string {
+  const iat = t.iat ?? Math.floor(Date.now() / 1000);
+  const text = JSON.stringify({
+    v: t.v ?? 2,
+    jti: t.jti ?? randomBytes(16).toString('hex'),
+    product: t.product ?? 'archie',
+    roofliCompanyId: t.roofliCompanyId,
+    authUserId: t.authUserId,
+    email: t.email ?? 'dana@example.test',
+    role: t.role ?? 'owner',
+    iat,
+    exp: t.exp ?? iat + 60,
+  });
+  return `${Buffer.from(text, 'utf8').toString('base64url')}.${createHmac('sha256', secret).update(text).digest('hex')}`;
 }

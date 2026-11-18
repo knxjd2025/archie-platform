@@ -214,6 +214,18 @@ describe('the production entry (api/index.ts)', () => {
     expect(await r.text()).toBe('');
   });
 
+  it('answers a sign-in form with the plain refusal page, not the signed door\'s bare 401', async () => {
+    const { SSO_REFUSED_PAGE } = await import('../sso');
+    const r = await fetch(`${base}/api/sister/v1/sso`, {
+      method: 'POST', redirect: 'manual',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ ticket: 'not-a-ticket' }).toString(),
+    });
+    expect(r.status).toBe(401);
+    expect(await r.text()).toBe(SSO_REFUSED_PAGE);
+    expect(r.headers.get('set-cookie')).toBeNull();
+  });
+
   it('leaves the rest of the app answering as before', async () => {
     const ping = await fetch(`${base}/api/ping`);
     expect(ping.status).toBe(200);
