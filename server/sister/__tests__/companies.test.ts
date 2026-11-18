@@ -21,7 +21,8 @@ vi.mock('../../seed', async () => {
   return {
     seedCompany: vi.fn(async () => { seeded.push(String(currentCompanyId())); }),
     seedAll: async () => {},
-    createSeedOnce: () => async () => {},
+    SEED_JOB: 'seed-company',
+    seedVersion: () => 'test',
   };
 });
 vi.mock('@vercel/functions', () => ({ waitUntil: (p: Promise<unknown>) => { background.push(p); } }));
@@ -99,6 +100,33 @@ describe.skipIf(!localDb)('Roof Lee makes a company in Archie', async () => {
   it('answers first and finishes setting the company up afterwards, as that company', async () => {
     seeded.length = 0;
     const { id } = await make();
+    await Promise.allSettled(background);
+    expect(seeded).toEqual([id]);
+  });
+
+  it('sets a company up once: it is recorded the way the seed cron records it, and a repeat seeds nothing', async () => {
+    seeded.length = 0;
+    const { body, id } = await make();
+    await Promise.allSettled(background);
+    // What /api/cron/seed-companies reads to know this company is done for this version.
+    const runs = await runAsCompany(id, () => db.select().from(schema.companyJobRuns));
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toMatchObject({ companyId: id, job: 'seed-company', donePeriod: 'test', lastError: null, leaseToken: null });
+    expect(runs[0].doneAt).not.toBeNull();
+    // The same request again (Roof Lee repeats itself freely) seeds nothing more.
+    expect((await post(body)).status).toBe(200);
+    await Promise.allSettled(background);
+    expect(seeded).toEqual([id]);
+  });
+
+  it('leaves a company that is not live to be set up later, when it is', async () => {
+    seeded.length = 0;
+    const { body, id } = await make({ plan: { keys: ['base'], active: false, trial: false } });
+    await Promise.allSettled(background);
+    expect((await companyRow(id)).status).toBe('paused');
+    expect(seeded).toEqual([]);
+    // Paying again: live, and set up after that answer.
+    expect((await post({ ...body, plan: { keys: ['base'], active: true, trial: false } })).status).toBe(200);
     await Promise.allSettled(background);
     expect(seeded).toEqual([id]);
   });

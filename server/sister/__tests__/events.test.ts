@@ -21,7 +21,7 @@ import { EVENTS_PATH, EVENTS_URL_ENV, FINISHED_STAGE_ENV, eventsUrl, finishedSta
 // Work handed to waitUntil (the send that follows the answer) is kept here so a test can wait for it.
 const afterAnswer: Promise<unknown>[] = [];
 vi.mock('@vercel/functions', () => ({ waitUntil: (p: Promise<unknown>) => { afterAnswer.push(Promise.resolve(p).catch(() => {})); } }));
-vi.mock('../../seed', () => ({ seedCompany: async () => {}, seedAll: async () => {}, createSeedOnce: () => async () => {} }));
+vi.mock('../../seed', () => ({ seedCompany: async () => {}, seedAll: async () => {}, SEED_JOB: 'seed-company', seedVersion: () => 'test' }));
 
 describe('where news is sent', () => {
   afterEach(() => { delete process.env[EVENTS_URL_ENV]; delete process.env[FINISHED_STAGE_ENV]; });
@@ -242,6 +242,24 @@ describe.skipIf(!localDb)('news going back to Roof Lee', async () => {
     await runEventDelivery();
     await runAsCompany(c.id, () => deliverDue());
     expect(about(c.roofliId)).toHaveLength(2);
+  });
+
+  it('the scheduled run starts with the company whose news has waited longest', async () => {
+    const first = await make();
+    const second = await make();
+    answers = [500, 500];
+    await archieLead(second.id);
+    await archieLead(first.id);
+    await settle();
+    // Both are due; `first` has been due for longer, whichever was made or told first.
+    const dueSince = (companyId: string, seconds: number) => runAsCompany(companyId, () => db.update(schema.outboundEvents)
+      .set({ nextAttemptAt: sql`now() - make_interval(secs => ${seconds})` }).where(sql`${schema.outboundEvents.deliveredAt} IS NULL`));
+    await dueSince(second.id, 60);
+    await dueSince(first.id, 600);
+    got = [];
+    await runEventDelivery();
+    const order = got.map((g) => g.body?.roofliCompanyId).filter((id) => id === first.roofliId || id === second.roofliId);
+    expect(order).toEqual([first.roofliId, second.roofliId]);
   });
 
   it('tells the same lead once, however often it is reported', async () => {

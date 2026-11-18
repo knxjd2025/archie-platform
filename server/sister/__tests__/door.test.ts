@@ -14,11 +14,12 @@ import type { AddressInfo } from 'node:net';
 import { sign, signRequest } from '../verify';
 import { requireSister, sisterRawBody, SISTER_PREFIX, SISTER_SECRET_ENV } from '../door';
 
-// api/index.ts seeds every live company before its first request. Not what is under test.
+// Setting a company up (its advisors and knowledge base) is not what is under test.
 vi.mock('../../seed', () => ({
   seedAll: async () => {},
   seedCompany: async () => {},
-  createSeedOnce: () => async () => {},
+  SEED_JOB: 'seed-company',
+  seedVersion: () => 'test',
 }));
 
 const SECRET = 'door-test-pair-secret';

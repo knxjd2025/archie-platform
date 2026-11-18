@@ -266,16 +266,24 @@ export async function runEventDelivery(opts: { http?: Fetch; budgetMs?: number }
   const total = { on: eventsOn(), companies: 0, delivered: 0, failed: 0, rejected: 0, unanswered: 0 };
   if (!total.on) return total;
   const deadline = Date.now() + (opts.budgetMs ?? 40_000);
-  // Only companies that have something due. Only their ids are read.
+  // Only companies that have something due. Only their ids are read. This is
+  // the one read across companies (the archie_system role); every send below
+  // runs as its own company. In a fixed order, like every scheduled job
+  // (server/tenant/fan-out.ts): the company whose news has waited longest
+  // goes first, then by id. A try pushes a row's next time forward, so a run
+  // that is cut short moves on to other companies next time instead of
+  // starting with the same ones again.
   const waiting = await runAsSystem('sister: find the Roof Lee companies with news waiting to be sent', () =>
-    db.selectDistinct({ id: companies.id }).from(companies)
+    db.select({ id: companies.id }).from(companies)
       .innerJoin(outboundEvents, eq(outboundEvents.companyId, companies.id))
       .where(and(
         isNotNull(companies.roofliCompanyId),
         inArray(companies.status, [...LIVE_STATUSES]),
         isNull(outboundEvents.deliveredAt), isNull(outboundEvents.gaveUpAt),
         sql`${outboundEvents.nextAttemptAt} <= now()`,
-      )));
+      ))
+      .groupBy(companies.id)
+      .orderBy(sql`min(${outboundEvents.nextAttemptAt})`, companies.id));
   for (const { id } of waiting) {
     if (Date.now() >= deadline || total.unanswered >= 2) break;
     try {

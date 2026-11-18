@@ -16,7 +16,7 @@ import { randomUUID } from 'node:crypto';
 import { companyBody, dropSecret, localDb, member, sisterSend, startSisterApp, useSecret, type TestMember } from './helpers';
 import { signRequest } from '../verify';
 
-vi.mock('../../seed', () => ({ seedCompany: async () => {}, seedAll: async () => {}, createSeedOnce: () => async () => {} }));
+vi.mock('../../seed', () => ({ seedCompany: async () => {}, seedAll: async () => {}, SEED_JOB: 'seed-company', seedVersion: () => 'test' }));
 vi.mock('@vercel/functions', () => ({ waitUntil: () => {} }));
 
 describe.skipIf(!localDb)('read and write for Lee', async () => {

@@ -10,7 +10,8 @@
 import express, { type Express, type NextFunction, type Request, type Response } from 'express';
 import { waitUntil } from '@vercel/functions';
 import { runAsCompany } from '../tenant/context';
-import { seedCompany } from '../seed';
+import { BUSY_MESSAGE, BUSY_RETRY_AFTER_SECONDS, findDatabaseBusy } from '../lib/db-busy';
+import { setUpCompany } from './setup';
 import { IDEMPOTENCY_HEADER, SISTER_PREFIX, requireSister, sisterNotFound } from './door';
 import { isCloseMode, isUuid, namesCompany, parseActing, parseActingQuery, parseCompanyRequest, parseLeadChange, parseMembers, parseNewLead, parseNote, parseRecordId, type Acting } from './contract';
 import { closeCompany, findRoofLeeCompany, mayCloseCompany, provisionCompany, sisterStatus } from './companies';
@@ -47,6 +48,14 @@ function logFailure(what: string, err: unknown): void {
 }
 
 function failed(res: Response, what: string, err: unknown): void {
+  // A full database is an answer, not a fault (server/lib/db-busy.ts): 503 and
+  // when to come back, the same as every other route. Roof Lee sends again
+  // whatever it got no clear answer to, and nothing was kept for the key.
+  if (findDatabaseBusy(err)) {
+    console.warn(`[sister] ${what}: database busy, answered 503`);
+    if (!res.headersSent) res.status(503).set('Retry-After', String(BUSY_RETRY_AFTER_SECONDS)).json({ error: BUSY_MESSAGE });
+    return;
+  }
   logFailure(what, err);
   if (!res.headersSent) res.status(500).json({ error: 'Archie could not finish this request. Send it again.' });
 }
@@ -107,9 +116,11 @@ export function registerSisterRoutes(app: Express): void {
       const done = await provisionCompany(parsed.value);
       res.status(done.created ? 201 : 200).json({ companyId: done.companyId, ...(done.skipped.length ? { skipped: done.skipped } : {}) });
       // The slow part (the company's advisors and knowledge base) comes after
-      // the answer. It only fills in what is missing, so a repeat costs little.
+      // the answer, once: it is recorded the way the seed-companies cron
+      // records it (./setup.ts), so a repeat of this request reads one row and
+      // seeds nothing. If it fails here, that cron seeds the company later.
       if (done.live) {
-        waitUntil(runAsCompany(done.companyId, () => seedCompany()).catch((e) => logFailure('setting up a new company', e)));
+        waitUntil(setUpCompany(done.companyId).catch((e) => logFailure('setting up a new company', e)));
       }
     } catch (e) {
       failed(res, 'POST companies', e);

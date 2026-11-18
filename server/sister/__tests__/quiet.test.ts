@@ -17,7 +17,7 @@ import { join, relative, sep } from 'node:path';
 import { companyBody, dropSecret, localDb, member, sisterSend, startSisterApp, useSecret, type TestMember } from './helpers';
 import { OWN_MESSAGE_KEYS, isQuiet, isRoofLeeContact, ownMessageOn } from '../quiet';
 
-vi.mock('../../seed', () => ({ seedCompany: async () => {}, seedAll: async () => {}, createSeedOnce: () => async () => {} }));
+vi.mock('../../seed', () => ({ seedCompany: async () => {}, seedAll: async () => {}, SEED_JOB: 'seed-company', seedVersion: () => 'test' }));
 vi.mock('@vercel/functions', () => ({ waitUntil: () => {} }));
 
 // A way to pretend one of the features was switched on for a company, to see

@@ -19,7 +19,7 @@ import { randomUUID } from 'node:crypto';
 import { companyBody, dropSecret, localDb, makeTicket, member, sisterSend, useSecret } from './helpers';
 import { SISTER_PREFIX, sisterRawBody } from '../door';
 
-vi.mock('../../seed', () => ({ seedCompany: async () => {}, seedAll: async () => {}, createSeedOnce: () => async () => {} }));
+vi.mock('../../seed', () => ({ seedCompany: async () => {}, seedAll: async () => {}, SEED_JOB: 'seed-company', seedVersion: () => 'test' }));
 vi.mock('@vercel/functions', () => ({ waitUntil: () => {} }));
 
 describe.skipIf(!localDb)('one sign-in from Roof Lee', async () => {

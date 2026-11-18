@@ -15,7 +15,7 @@ import type { AddressInfo } from 'node:net';
 import { randomUUID } from 'node:crypto';
 import { companyBody, dropSecret, localDb, member, sisterSend, startSisterApp, useSecret } from './helpers';
 
-vi.mock('../../seed', () => ({ seedCompany: async () => {}, seedAll: async () => {}, createSeedOnce: () => async () => {} }));
+vi.mock('../../seed', () => ({ seedCompany: async () => {}, seedAll: async () => {}, SEED_JOB: 'seed-company', seedVersion: () => 'test' }));
 vi.mock('@vercel/functions', () => ({ waitUntil: () => {} }));
 
 describe.skipIf(!localDb)('a Roof Lee company\'s life in Archie', async () => {
