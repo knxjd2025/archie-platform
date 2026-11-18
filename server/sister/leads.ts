@@ -20,7 +20,7 @@ import { requireCompanyId } from '../tenant/context';
 import { leadScopeFor, type ActingMember } from './acting';
 import type { LeadChange, NewLead } from './contract';
 import { rememberWithin, type SisterAnswer } from './idempotency';
-import { isPipelineStage, jobtreadStatusFor, normalizeTrades, type TradeStep } from '../../shared/production-pipeline';
+import { isPipelineStage, jobtreadStatusFor, moveBlocker, normalizeTrades, type TradeStep } from '../../shared/production-pipeline';
 import { ensureJobIdentity, isNativeJobId } from '../production/native-jobs';
 import { moveStage } from '../production/pipeline';
 
@@ -215,6 +215,13 @@ export async function moveJob(member: ActingMember, id: number, stage: unknown):
   if (!row) return null;
   if (row.externalId && !isNativeJobId(row.externalId)) {
     return { status: 409, body: { error: 'This job is kept in another system, so Archie cannot move it from here.' }, remember: false };
+  }
+  if (!row.externalId) {
+    // Not on any board yet. It would start at Approved: if the board would
+    // refuse the move from there, refuse now, before the lead is given an
+    // identity and put on the board by a request that was turned down.
+    const blocker = moveBlocker(stage, { stage: 'approved', trades: normalizeTrades(['roofing']), checks: {} }, { preconSubmitted: false, walkthroughSubmitted: false });
+    if (blocker) return { status: 409, body: { error: blocker }, remember: false };
   }
   const key = row.externalId ?? await ensureJobIdentity(row.id);
   if (!isNativeJobId(key)) return { status: 409, body: { error: 'This company does not keep its jobs in Archie.' }, remember: false };

@@ -126,6 +126,11 @@ describe.skipIf(!localDb)('Archie\'s own jobs', async () => {
   it('keeps the board\'s own rules: a move the board would refuse a person is refused Roof Lee too', async () => {
     const c = await make();
     const id = await newLead(c);
+    // Turned down before it was ever on the board: it is not put there, and gets no identity.
+    const early = await move(c, id, 'closed_out', c.office);
+    expect(early.status).toBe(409);
+    expect((await leadRow(c, id)).externalId).toBeNull();
+    expect(await boardRows(c)).toEqual([]);
     expect((await move(c, id, 'pre_production', c.office)).status).toBe(200);
     // Scheduling waits for the pre-construction checklist, whoever asks.
     const key = randomUUID();

@@ -247,7 +247,8 @@ JobTread, so its leads had no key and could never sit on a board.
   board's rules hold: a stage that is waiting for something (the
   pre-construction checklist, the final walkthrough, a ticked box) answers
   `409` with the reason in plain words, and the same request can be sent again
-  later. An unknown stage answers `400`. Crew cannot move a job this way
+  later. A lead that is turned down on its very first move is not put on the
+  board and gets no identity. An unknown stage answers `400`. Crew cannot move a job this way
   (`403`), the same as they cannot see leads. A job that another system keeps
   answers `409` and is left alone. Each move is written to the company's log
   under the person it was for.
