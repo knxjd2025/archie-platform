@@ -53,4 +53,31 @@ describe.skipIf(!isLocal)('migrations replace invalid leftover indexes', () => {
       await owner.query('delete from leads where source = $1', [tag]);
     });
   }
+
+  // The Roof Lee link's index on leads (0015) follows the same rule. It is
+  // unique and partial, and must come back exactly so.
+  it('0015_archie_native_jobs.sql rebuilds leads_company_native_job_uq when a failed concurrent build left it invalid', async () => {
+    if (!(owner as any)._connected) await owner.connect();
+    const name = 'leads_company_native_job_uq';
+    await owner.query('set session_replication_role = replica');
+    await owner.query(`insert into leads (company_id, source, external_id) values ($1, $2, 'dup'), ($1, $2, 'dup')`, [company, tag]);
+    await owner.query('set session_replication_role = default');
+    await owner.query(`drop index if exists ${name}`);
+    const failed = await owner.query(`create unique index concurrently ${name} on leads (source, external_id)`).then(() => null, (e) => e);
+    expect(failed?.code).toBe('23505');
+    expect(await state(name)).toMatchObject({ valid: false });
+
+    // The whole file again, as an operator rerunning it would: the columns
+    // are already there (IF NOT EXISTS), the broken index is replaced.
+    await owner.query('begin');
+    await owner.query(sqlOf('0015_archie_native_jobs.sql'));
+    await owner.query('commit');
+
+    const after = await state(name);
+    expect(after.valid).toBe(true);
+    expect(after.def).toMatch(/UNIQUE/);
+    expect(after.def).toContain('(company_id, external_id)');
+    expect(after.def).toMatch(/WHERE .*external_id.* ~~ 'archie-%'/);
+    await owner.query('delete from leads where source = $1', [tag]);
+  });
 });
