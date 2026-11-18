@@ -5,8 +5,16 @@
 --
 -- Nothing writes a row unless SISTERS_ARCHIE_SECRET and ROOFLI_EVENTS_URL are
 -- both set, and then only for a company with a roofli_company_id. Nothing
--- here changes how any existing company behaves. Created after 0002's RLS
--- loop ran, so it gets the same policy and index here by hand.
+-- here changes how any existing company behaves. Needs 0008
+-- (archie_protect_company_table).
+--
+-- Indexes: (company_id, dedupe_key) is the company-first index every read as
+-- one company uses. outbound_events_due_idx (next_attempt_at, undelivered rows
+-- only) is for the one system read, the scheduled run asking which companies
+-- have news waiting; it stays small because delivered rows leave it.
+
+SET LOCAL lock_timeout = '5s';
+--> statement-breakpoint
 
 CREATE TABLE "outbound_events" (
 	"company_id" uuid DEFAULT archie_current_company() NOT NULL,
@@ -27,14 +35,8 @@ ALTER TABLE "outbound_events" ADD CONSTRAINT "outbound_events_company_id_compani
 CREATE UNIQUE INDEX "outbound_events_company_dedupe_uq" ON "outbound_events" USING btree ("company_id","dedupe_key");--> statement-breakpoint
 CREATE INDEX "outbound_events_due_idx" ON "outbound_events" USING btree ("next_attempt_at") WHERE "outbound_events"."delivered_at" IS NULL AND "outbound_events"."gave_up_at" IS NULL;
 --> statement-breakpoint
-ALTER TABLE outbound_events ENABLE ROW LEVEL SECURITY;
---> statement-breakpoint
-ALTER TABLE outbound_events FORCE ROW LEVEL SECURITY;
---> statement-breakpoint
-CREATE POLICY company_isolation ON outbound_events
-  USING (company_id = archie_current_company() OR archie_is_system())
-  WITH CHECK (company_id = archie_current_company() OR archie_is_system());
---> statement-breakpoint
-CREATE INDEX IF NOT EXISTS outbound_events_company_id_idx ON outbound_events (company_id);
---> statement-breakpoint
-GRANT SELECT, INSERT, UPDATE, DELETE ON outbound_events TO archie_app;
+-- Row level security the way every company table has it since 0008: on and
+-- forced, the company's own rows for everyone (company_isolation), every row
+-- for the archie_system role only (company_system), grants for both roles.
+-- outbound_events_company_dedupe_uq starts with company_id, so no separate company index is made.
+SELECT archie_protect_company_table('outbound_events');

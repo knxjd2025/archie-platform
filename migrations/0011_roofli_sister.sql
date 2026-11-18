@@ -12,9 +12,22 @@
 -- new columns in every read of team_members and companies, so deployed first
 -- it breaks sign-in for everyone. This file is safe under the older code.
 --
+-- NEEDS 0008 (the system role): the new table is protected with
+-- archie_protect_company_table(), which 0008 creates. Numbered 0011 so it
+-- runs after 0006 to 0010.
+--
 -- Nothing here changes how an existing company behaves: every new column is
--- null for it. sister_idempotency is created after 0002's RLS loop ran, so it
--- gets the same policy and index here by hand.
+-- null for it.
+--
+-- Locks on a live database: three ADD COLUMNs with no default (a catalog
+-- change, no rewrite), a unique constraint on companies and a partial unique
+-- index on team_members (both small tables, built in milliseconds). Each takes
+-- its lock briefly; lock_timeout makes the migration fail instead of queueing
+-- behind a long query and blocking sign-in. If it fails on the timeout, run it
+-- again.
+
+SET LOCAL lock_timeout = '5s';
+--> statement-breakpoint
 
 CREATE TABLE "sister_idempotency" (
 	"company_id" uuid DEFAULT archie_current_company() NOT NULL,
@@ -31,14 +44,8 @@ ALTER TABLE "sister_idempotency" ADD CONSTRAINT "sister_idempotency_company_id_c
 CREATE UNIQUE INDEX "team_members_company_auth_user_uq" ON "team_members" USING btree ("company_id","auth_user_id") WHERE "team_members"."auth_user_id" IS NOT NULL;--> statement-breakpoint
 ALTER TABLE "companies" ADD CONSTRAINT "companies_roofli_company_id_unique" UNIQUE("roofli_company_id");
 --> statement-breakpoint
-ALTER TABLE sister_idempotency ENABLE ROW LEVEL SECURITY;
---> statement-breakpoint
-ALTER TABLE sister_idempotency FORCE ROW LEVEL SECURITY;
---> statement-breakpoint
-CREATE POLICY company_isolation ON sister_idempotency
-  USING (company_id = archie_current_company() OR archie_is_system())
-  WITH CHECK (company_id = archie_current_company() OR archie_is_system());
---> statement-breakpoint
-CREATE INDEX IF NOT EXISTS sister_idempotency_company_id_idx ON sister_idempotency (company_id);
---> statement-breakpoint
-GRANT SELECT, INSERT, UPDATE, DELETE ON sister_idempotency TO archie_app;
+-- Row level security the way every company table has it since 0008: on and
+-- forced, the company's own rows for everyone (company_isolation), every row
+-- for the archie_system role only (company_system), grants for both roles.
+-- The primary key starts with company_id, so no separate company index is made.
+SELECT archie_protect_company_table('sister_idempotency');

@@ -6,8 +6,10 @@
 --
 -- Only POST /api/sister/v1/sso reads or writes this table, and that address
 -- is shut until SISTERS_ARCHIE_SECRET is set. Nothing here changes how any
--- existing company behaves. Created after 0002's RLS loop ran, so it gets the
--- same policy and index here by hand.
+-- existing company behaves. Needs 0008 (archie_protect_company_table).
+
+SET LOCAL lock_timeout = '5s';
+--> statement-breakpoint
 
 CREATE TABLE "sister_sso_tickets" (
 	"company_id" uuid DEFAULT archie_current_company() NOT NULL,
@@ -17,14 +19,8 @@ CREATE TABLE "sister_sso_tickets" (
 --> statement-breakpoint
 ALTER TABLE "sister_sso_tickets" ADD CONSTRAINT "sister_sso_tickets_company_id_companies_id_fk" FOREIGN KEY ("company_id") REFERENCES "public"."companies"("id") ON DELETE no action ON UPDATE no action;
 --> statement-breakpoint
-ALTER TABLE sister_sso_tickets ENABLE ROW LEVEL SECURITY;
---> statement-breakpoint
-ALTER TABLE sister_sso_tickets FORCE ROW LEVEL SECURITY;
---> statement-breakpoint
-CREATE POLICY company_isolation ON sister_sso_tickets
-  USING (company_id = archie_current_company() OR archie_is_system())
-  WITH CHECK (company_id = archie_current_company() OR archie_is_system());
---> statement-breakpoint
-CREATE INDEX IF NOT EXISTS sister_sso_tickets_company_id_idx ON sister_sso_tickets (company_id);
---> statement-breakpoint
-GRANT SELECT, INSERT, UPDATE, DELETE ON sister_sso_tickets TO archie_app;
+-- Row level security the way every company table has it since 0008: on and
+-- forced, the company's own rows for everyone (company_isolation), every row
+-- for the archie_system role only (company_system), grants for both roles.
+-- The primary key is the ticket, so this also makes sister_sso_tickets_company_id_idx.
+SELECT archie_protect_company_table('sister_sso_tickets');

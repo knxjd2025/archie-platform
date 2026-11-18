@@ -5,8 +5,13 @@
 --
 -- Only Roof Lee's signed endpoints read or write this table so far, and they
 -- are shut until SISTERS_ARCHIE_SECRET is set. Nothing here changes how any
--- existing company behaves. Created after 0002's RLS loop ran, so it gets the
--- same policy and index here by hand.
+-- existing company behaves. Needs 0008 (archie_protect_company_table).
+--
+-- Locks on a live database: the foreign keys take a brief lock on companies
+-- and leads (the new table is empty, so there is nothing to check).
+
+SET LOCAL lock_timeout = '5s';
+--> statement-breakpoint
 
 CREATE TABLE "lead_notes" (
 	"company_id" uuid DEFAULT archie_current_company() NOT NULL,
@@ -23,16 +28,12 @@ ALTER TABLE "lead_notes" ADD CONSTRAINT "lead_notes_company_id_companies_id_fk" 
 ALTER TABLE "lead_notes" ADD CONSTRAINT "lead_notes_lead_id_leads_id_fk" FOREIGN KEY ("lead_id") REFERENCES "public"."leads"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "lead_notes_lead_idx" ON "lead_notes" USING btree ("lead_id","created_at");
 --> statement-breakpoint
-ALTER TABLE lead_notes ENABLE ROW LEVEL SECURITY;
+-- Row level security the way every company table has it since 0008: on and
+-- forced, the company's own rows for everyone (company_isolation), every row
+-- for the archie_system role only (company_system), grants for both roles.
+-- No index starts with company_id, so this also makes lead_notes_company_id_idx.
+SELECT archie_protect_company_table('lead_notes');
 --> statement-breakpoint
-ALTER TABLE lead_notes FORCE ROW LEVEL SECURITY;
---> statement-breakpoint
-CREATE POLICY company_isolation ON lead_notes
-  USING (company_id = archie_current_company() OR archie_is_system())
-  WITH CHECK (company_id = archie_current_company() OR archie_is_system());
---> statement-breakpoint
-CREATE INDEX IF NOT EXISTS lead_notes_company_id_idx ON lead_notes (company_id);
---> statement-breakpoint
-GRANT SELECT, INSERT, UPDATE, DELETE ON lead_notes TO archie_app;
---> statement-breakpoint
-GRANT USAGE, SELECT ON SEQUENCE lead_notes_id_seq TO archie_app;
+-- The function grants the table; the id sequence is granted here, to both
+-- roles (system work may add a note too).
+GRANT USAGE, SELECT ON SEQUENCE lead_notes_id_seq TO archie_app, archie_system;
