@@ -108,7 +108,9 @@ describe.skipIf(!localDb)('read and write for Lee', async () => {
     // Copies arriving together: one does the work, the others wait or are told to come back.
     const key2 = randomUUID();
     const burst = await Promise.all([1, 2, 3, 4].map(() => newLead(c, c.owner, { name: 'Jo Burst' }, key2)));
-    for (const r of burst) expect([201, 409]).toContain(r.status);
+    for (const r of burst) expect([201, 503]).toContain(r.status);
+    // "Come back", with when: Roof Lee reads a 4xx as a plain no and would give the lead up.
+    for (const r of burst.filter((x) => x.status === 503)) expect(r.retryAfter).toBe('5');
     expect(burst.some((r) => r.status === 201)).toBe(true);
     expect((await leadRows(c.id)).filter((l) => l.jobName === 'Jo Burst')).toHaveLength(1);
     // The same key in another company is that company's own key.

@@ -2,10 +2,11 @@
  * A write from Roof Lee is done once per company and key, however many copies
  * arrive and however they overlap. Against the real test database.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { localDb } from './helpers';
 import { isIdempotencyKey } from '../idempotency';
+import { BUSY_RETRY_AFTER_SECONDS, DatabaseBusyError } from '../../lib/db-busy';
 
 describe('idempotency keys', () => {
   it('are visible characters, 1 to 200 of them', () => {
@@ -42,8 +43,11 @@ describe.skipIf(!localDb)('doing a write once', async () => {
     const answers = await Promise.all([once(a, key, slow), once(a, key, slow), once(a, key, slow)]);
     expect(n).toBe(1);
     expect(answers.filter((x) => x.status === 201).length).toBe(1);
-    // The others are told to come back, never given a half answer.
-    expect(answers.filter((x) => x.status === 409).length).toBe(2);
+    // The others are told to come back, never given a half answer and never
+    // a plain "no": Roof Lee gives up on a 4xx, and the first copy may succeed.
+    const waiting = answers.filter((x) => x.status !== 201);
+    expect(waiting).toHaveLength(2);
+    for (const w of waiting) expect(w).toMatchObject({ status: 503, retryAfter: BUSY_RETRY_AFTER_SECONDS });
     expect(await once(a, key, slow)).toEqual({ status: 201, body: { made: true } });
     expect(n).toBe(1);
   });
@@ -75,11 +79,32 @@ describe.skipIf(!localDb)('doing a write once', async () => {
     const c = counter();
     // A process claimed the key and died before answering.
     await runAsCompany(a, () => db.insert(schema.sisterIdempotency).values({ key, response: { status: 0, body: null } }));
-    expect((await once(a, key, c.work)).status).toBe(409);
+    expect((await once(a, key, c.work)).status).toBe(503);
     expect(c.n).toBe(0);
     await runAsCompany(a, () => db.update(schema.sisterIdempotency).set({ createdAt: sql`now() - interval '2 minutes'` }).where(mine));
     expect(await once(a, key, c.work)).toEqual({ status: 200, body: { n: 1 } });
     expect(await once(a, key, c.work)).toEqual({ status: 200, body: { n: 1 } });
+  });
+
+  it('tells a repeat to come back when a full database kept the key from being let go', async () => {
+    const key = randomUUID();
+    const c = counter();
+    const busy = new DatabaseBusyError('no connection became free', new Error('timeout exceeded when trying to connect'));
+    // The work fails on a full database, and so does letting go of the key.
+    const stuck = vi.spyOn(db, 'delete').mockImplementationOnce(() => { throw busy; });
+    await expect(once(a, key, async () => { throw busy; })).rejects.toBe(busy);
+    stuck.mockRestore();
+    // The repeat is "not yet" with when to come back, and does no work...
+    const again = await once(a, key, c.work);
+    expect(again).toMatchObject({ status: 503, retryAfter: BUSY_RETRY_AFTER_SECONDS });
+    expect(c.n).toBe(0);
+    // ...and once the claim counts as abandoned, the same key does the work.
+    const mine = and(eq(schema.sisterIdempotency.companyId, a), eq(schema.sisterIdempotency.key, key));
+    await runAsCompany(a, () => db.update(schema.sisterIdempotency).set({ createdAt: sql`now() - interval '2 minutes'` }).where(mine));
+    expect(await once(a, key, c.work)).toEqual({ status: 200, body: { n: 1 } });
+    // When to come back is never stored with an answer.
+    const [row] = await runAsCompany(a, () => db.select().from(schema.sisterIdempotency).where(mine));
+    expect(row.response).toEqual({ status: 200, body: { n: 1 } });
   });
 
   it('simply runs the work when there is no key', async () => {

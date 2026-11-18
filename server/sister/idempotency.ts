@@ -15,6 +15,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../db';
 import { sisterIdempotency } from '../../shared/schema';
 import { runAsCompany } from '../tenant/context';
+import { BUSY_RETRY_AFTER_SECONDS } from '../lib/db-busy';
 
 export interface SisterAnswer {
   status: number;
@@ -24,13 +25,26 @@ export interface SisterAnswer {
    * may not do this yet). It is not kept, so the same key can be tried again.
    */
   remember?: boolean;
+  /** Seconds to wait before sending again; goes out as `Retry-After`. Never stored. */
+  retryAfter?: number;
 }
 
 /** Stored while the work is still going on. Never sent to anyone. */
 const IN_HAND: SisterAnswer = { status: 0, body: null };
 /** A claim this old with no answer was abandoned (the process died), and may be taken over. */
 const ABANDONED_AFTER_SECONDS = 60;
-const BUSY: SisterAnswer = { status: 409, body: { error: 'This request is already being handled. Send it again in a minute.' } };
+/**
+ * Another copy of this request holds the key. That is "not yet", never "no":
+ * the first copy may well succeed, or it may have failed with the database too
+ * full to let go of the key (see `release`). So it is answered like a busy
+ * database, 503 and when to come back. Roof Lee reads a 409 as a plain
+ * refusal and would give the request up.
+ */
+const BUSY: SisterAnswer = {
+  status: 503,
+  body: { error: 'This request is already being handled. Send it again in a few seconds.' },
+  retryAfter: BUSY_RETRY_AFTER_SECONDS,
+};
 
 /** A key Roof Lee could have sent: visible characters, 1 to 200 of them. */
 export function isIdempotencyKey(key: unknown): key is string {
@@ -45,6 +59,11 @@ export function isIdempotencyKey(key: unknown): key is string {
  * An answer of 500 or more, a thrown error, or an answer marked
  * `remember: false` is not remembered: the work was not done, so the next
  * copy may try again.
+ *
+ * Letting go of the key needs the database too. When the work failed because
+ * the database was full, that can fail as well; the key then stays in hand
+ * until it counts as abandoned, and copies arriving meanwhile are told to come
+ * back (503), never refused.
  */
 export async function once(companyId: string, key: string | undefined, work: () => Promise<SisterAnswer>): Promise<SisterAnswer> {
   if (key === undefined) return work();
@@ -71,7 +90,7 @@ export async function once(companyId: string, key: string | undefined, work: () 
     await release();
     throw e;
   }
-  const { remember = true, ...kept } = answer;
+  const { remember = true, retryAfter: _never, ...kept } = answer;
   if (kept.status >= 500 || !remember) { await release(); return kept; }
   await runAsCompany(companyId, () => db.update(sisterIdempotency).set({ response: kept }).where(mine), { loadProfile: false });
   return kept;

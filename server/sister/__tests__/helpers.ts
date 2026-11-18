@@ -41,7 +41,7 @@ export interface Sent {
 }
 
 /** Sends one request signed as Roof Lee signs it. */
-export async function sisterSend(base: string, o: Sent): Promise<{ status: number; body: any; text: string }> {
+export async function sisterSend(base: string, o: Sent): Promise<{ status: number; body: any; text: string; retryAfter: string | null }> {
   const method = o.method ?? 'GET';
   const body = o.json === undefined ? undefined : JSON.stringify(o.json);
   const at = Date.now();
@@ -60,7 +60,7 @@ export async function sisterSend(base: string, o: Sent): Promise<{ status: numbe
   const text = await res.text();
   let parsed: any = null;
   try { parsed = text ? JSON.parse(text) : null; } catch { parsed = null; }
-  return { status: res.status, body: parsed, text };
+  return { status: res.status, body: parsed, text, retryAfter: res.headers.get('retry-after') };
 }
 
 export interface TestMember { authUserId: string; email: string; fullName: string | null; role: string }

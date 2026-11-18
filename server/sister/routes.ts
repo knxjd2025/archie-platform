@@ -50,7 +50,8 @@ function logFailure(what: string, err: unknown): void {
 function failed(res: Response, what: string, err: unknown): void {
   // A full database is an answer, not a fault (server/lib/db-busy.ts): 503 and
   // when to come back, the same as every other route. Roof Lee sends again
-  // whatever it got no clear answer to, and nothing was kept for the key.
+  // whatever it got no clear answer to. The key is let go of if the database
+  // allows it; if not, the repeat is told to come back too (./idempotency.ts).
   if (findDatabaseBusy(err)) {
     console.warn(`[sister] ${what}: database busy, answered 503`);
     if (!res.headersSent) res.status(503).set('Retry-After', String(BUSY_RETRY_AFTER_SECONDS)).json({ error: BUSY_MESSAGE });
@@ -58,6 +59,13 @@ function failed(res: Response, what: string, err: unknown): void {
   }
   logFailure(what, err);
   if (!res.headersSent) res.status(500).json({ error: 'Archie could not finish this request. Send it again.' });
+}
+
+/** Sends what a write answered, with when to come back if it said so. */
+function send(res: Response, answer: SisterAnswer): void {
+  if (answer.retryAfter !== undefined) res.set('Retry-After', String(answer.retryAfter));
+  if (answer.body === null) res.status(answer.status).end();
+  else res.status(answer.status).json(answer.body);
 }
 
 /** Every refused sign-in: one status, one plain sentence, no session and no reason. */
@@ -184,7 +192,7 @@ export function registerSisterRoutes(app: Express): void {
         }
         return { status: 200, body: { companyId: company.id, status: await closeCompany(company, mode, acting.value) } };
       });
-      res.status(answer.status).json(answer.body);
+      send(res, answer);
     } catch (e) {
       failed(res, 'DELETE company', e);
     }
@@ -212,11 +220,6 @@ export function registerSisterRoutes(app: Express): void {
     if (!isLiveCompany(company)) { res.status(409).json({ error: 'This company is paused or closed in Archie.' }); return null; }
     return company;
   }
-
-  const send = (res: Response, answer: SisterAnswer): void => {
-    if (answer.body === null) res.status(answer.status).end();
-    else res.status(answer.status).json(answer.body);
-  };
 
   /**
    * One write for a named person, done once. Reads the three things every
