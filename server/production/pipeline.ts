@@ -13,6 +13,7 @@ import {
 } from '../../shared/production-pipeline';
 import { JobTreadClient } from '../integrations/jobtread';
 import { logWrite } from '../writes/log';
+import { emitJobFinished, finishedStage } from '../sister/events';
 
 export interface PipelineSnapshot extends PipelineState {
   hasRow: boolean;
@@ -130,6 +131,9 @@ export async function moveStage(externalId: string, target: unknown, actor: stri
   if (!row.depositReceivedAt && stageIndex(snap.stage) < stageIndex('pre_production') && stageIndex(target) >= stageIndex('pre_production')) patch.depositReceivedAt = now;
   const [updated] = await db.update(productionPipeline).set(patch).where(eq(productionPipeline.id, row.id)).returning();
   const jobtread = await mirrorToJobTread(externalId, target, snap.trades, actor, `${stageLabel(snap.stage)} → ${stageLabel(target)}`);
+  // News for Roof Lee, for a company it made (server/sister/events.ts). Here, inside
+  // the move, so a move made by automation is told as well. Never fails the move.
+  if (target === finishedStage()) await emitJobFinished(externalId, now);
   let automation: string[] = [];
   if (!opts.system) {
     const { onProductionStage } = await import('../pipelines/automation');

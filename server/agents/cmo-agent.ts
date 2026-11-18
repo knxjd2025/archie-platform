@@ -6,6 +6,7 @@ import { GoHighLevelClient } from '../integrations/gohighlevel';
 import { JobTreadClient } from '../integrations/jobtread';
 import { leadScope, viewerCanSeeLead } from './sales-tools';
 import { currentProfile } from '../tenant/context';
+import { emitLeadCreated } from '../sister/events';
 
 /** Most leads get_lead_pipeline returns in one call. */
 const PIPELINE_MAX_LIMIT = 50;
@@ -584,6 +585,8 @@ export class CMOAgent extends BaseAgent {
       .returning();
 
     actionsTaken.push(`Created lead record (ID: ${lead.id})`);
+    // News for Roof Lee, for a company it made. Does nothing for anyone else.
+    await emitLeadCreated(lead);
 
     // 2. Qualify the lead
     const qualification = await this.qualifyLead(lead.id);

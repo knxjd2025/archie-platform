@@ -11,15 +11,22 @@ authority. This page says how Archie's half is built.
 
 ## It is off until the owner turns it on
 
-Two settings, both unset by default:
+Three settings, all unset by default:
 
 | Setting | Unset means |
 |---|---|
-| `SISTERS_ARCHIE_SECRET` | Every request under `/api/sister` is refused with a bare `401`. Nothing about the link runs. |
+| `SISTERS_ARCHIE_SECRET` | Every request under `/api/sister` is refused with a bare `401`, no sign-in ticket is accepted, and no news is recorded or sent. Nothing about the link runs. |
 | `SISTERS_ARCHIE_READY` | Archie answers "not ready", so Roof Lee shows no Archie button and uses no Archie tool for anyone. |
+| `ROOFLI_EVENTS_URL` | Archie records and sends no news (a new lead, a finished job) for anyone. |
+
+One optional setting, `ROOFLI_JOB_FINISHED_STAGE`, says which stage of the
+production board means "job finished" for Roof Lee. Unset, it is `closed_out`.
 
 Once migration `0006_roofli_sister.sql` is in the database, deploying this
-code with neither setting changes nothing for any existing company. The
+code with none of these settings changes nothing for any existing company.
+The one visible difference is a new scheduled knock every ten minutes at
+`/api/cron/sister-events` (`vercel.json`), which answers at once that there is
+nothing to do. The
 migration has to be there first: see "Before deploying this code" below.
 
 `SISTERS_ARCHIE_SECRET` is a fresh secret for this pair only. It is never
@@ -74,6 +81,7 @@ every sign-in and every request from Roof Lee with a refusal.
 | `server/sister/acting.ts` | Finds the person a request is for on the company's own team, and applies Archie's role rules to them. |
 | `server/sister/leads.ts` | Leads, jobs and notes as Roof Lee's assistant reads and changes them. |
 | `server/sister/capabilities.ts` | What Archie says it can do for one company. |
+| `server/sister/events.ts` | News going back to Roof Lee: the outbox, the signing, the sending and the retries. |
 
 Both entry files (`server/index.ts` and `api/index.ts`) keep the raw body for
 `/api/sister` ahead of `express.json`. The signature is over the bytes as they
@@ -101,10 +109,13 @@ Each address takes exactly one form of signature and never the other. Anything
 else under `/api/sister` answers `404` to a signed request and a bare `401` to
 an unsigned one.
 
-Still to build (tasks A7 to A9 in Roof Lee's Stage 1 plan): events back to
-Roof Lee, Archie's own jobs (with moving a job's stage and handing over
-photos), and the "no messages of its own" gate with the `messages.quiet`
-capability.
+Archie also sends: `POST {Roof Lee}/api/sister/v1/events` (version 2
+signature), and answers its own scheduler at `GET /api/cron/sister-events`
+(`CRON_SECRET`).
+
+Still to build (tasks A8 and A9 in Roof Lee's Stage 1 plan): Archie's own jobs
+(with moving a job's stage and handing over photos), and the "no messages of
+its own" gate with the `messages.quiet` capability.
 
 ## Read and write for Lee
 
@@ -184,6 +195,46 @@ Known limit, set by the agreement: anyone who holds a valid, unused ticket can
 have a browser post it. It is worth one sign-in for sixty seconds, as the
 person it names.
 
+## News going back to Roof Lee
+
+Archie tells Roof Lee when something happens that Roof Lee did not cause:
+
+| Event | When | What is sent |
+|---|---|---|
+| `lead.created` | A lead is made inside Archie: typed in by a person, or come in from a form or a text. Never for a lead Roof Lee added (source `roofli`), and never for the JobTread copy. | `leadId`, `source`, `name`, `phone`, `email`, `message`, `jobType`, `town` |
+| `job.finished` | A job reaches the finished stage on the production board. Told from inside the move itself, so a move made by automation counts too. Once per job. | `jobId`, `jobType`, `town`, `photoConsent` (always `false` for now), `finishedAt` |
+
+How it works:
+
+- **Only for companies Roof Lee made, and only when switched on.** With
+  `SISTERS_ARCHIE_SECRET` or `ROOFLI_EVENTS_URL` unset, nothing is written and
+  nothing is sent, for anyone. A company without a Roof Lee id never gets a
+  row. A paused or closed company's news is held back until it is live again.
+- **Written first, sent after.** The news goes into `outbound_events`
+  (migration `0009`) when the thing happens, and is sent right after the
+  person who caused it has their answer. Recording it never fails the work
+  that caused it.
+- **Signed like every other version 2 request**: over the method, the address
+  `/api/sister/v1/events` and the body, with the pair secret. Archie never
+  follows a redirect with a signed event.
+- **Tried again until Roof Lee has it.** Anything but a `2xx` is tried again
+  after 1 minute, then 5, 15, 60 and so on up to once a day, by the scheduled
+  run at `/api/cron/sister-events` (every ten minutes, guarded by
+  `CRON_SECRET`). A `400` means Roof Lee cannot read it, so Archie gives up on
+  that one. News more than 7 days old is no longer sent.
+- **Delivered once.** A delivered event is never sent again. A row is taken
+  before it is sent, so two runs at once do not both send it. If Archie dies
+  between sending and writing that down, the same event id goes out again and
+  Roof Lee, which handles each id once, ignores the repeat.
+- **One piece of news, one event.** Reporting the same lead twice, or moving a
+  job out of the finished stage and back, makes no second event.
+- **`ROOFLI_EVENTS_URL`** is Roof Lee's own address (`https://...`), with or
+  without the events path. It must be `https`. Anything else counts as unset.
+
+Not sent yet: `cost.incurred`. Archie spends none of Kynex's money for a Roof
+Lee company today (its paid integrations are off for such a company). The
+first feature that does must send it.
+
 ## Rules this code keeps
 
 - **A company is found by Roof Lee's id and nothing else.**
@@ -235,8 +286,8 @@ person it names.
 
 ## Turning it on (live step, owner only)
 
-Migration `0006_roofli_sister.sql` is not a step here. It was applied before
-this code was deployed ("Before deploying this code" above).
+The migrations (`0006` to `0009`) are not a step here. They were applied
+before this code was deployed ("Before deploying this code" above).
 
 1. Generate one fresh secret and set it as `SISTERS_ARCHIE_SECRET` in both
    Archie and Roof Lee.
@@ -244,7 +295,18 @@ this code was deployed ("Before deploying this code" above).
    Falls): make it, change its team, pause it, close it. Check that the
    contract's worked examples verify against the deployed address, including
    one request with a query in its address.
-3. Only then set `SISTERS_ARCHIE_READY=true`.
+3. Set `ROOFLI_EVENTS_URL` to Roof Lee's address and check `CRON_SECRET` is
+   set. Add a lead by hand in the test company and see it arrive in Roof Lee.
+   Leave this until Roof Lee is ready to receive: news that cannot be
+   delivered is kept for 7 days and then dropped.
+4. Open Archie from Roof Lee as the test company's owner, and check that the
+   same button does nothing for someone taken off the team.
+5. Only then set `SISTERS_ARCHIE_READY=true`.
+
+Still open for the owner: which stage means "job finished" (the default is
+closed out), and whether the hosting plan runs a scheduled job every ten
+minutes. If it does not, change the schedule in `vercel.json`: news is still
+sent right away, and only the retries after a failure get slower.
 
 ## Tests
 

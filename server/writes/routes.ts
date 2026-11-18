@@ -20,6 +20,7 @@ import { applyAssignment } from '../access/assignment-service';
 import { sendFailure } from '../lib/failure';
 import { dataScope } from '../../shared/rbac';
 import { jobTreadWriteFailStatus } from '../integrations/jobtread-connection';
+import { emitLeadCreated } from '../sister/events';
 
 
 export interface AppointmentSlot { date: string; time: string; durationMins: number; type: string; notes: string }
@@ -352,6 +353,8 @@ export function registerWriteRoutes(app: Express) {
       actor, system: 'jobtread', action: 'create_lead', targetId: jt.jobId || (row?.id ? String(row.id) : null),
       summary: clientName, ok: jt.ok, error: jt.error || ghlErr,
     });
+    // News for Roof Lee, for a company it made. Does nothing for anyone else.
+    if (row) await emitLeadCreated(row);
 
     // 4) Optional: the appointment the rep just agreed to on the phone, booked
     //    in the same breath so nothing has to be typed twice.

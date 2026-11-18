@@ -91,6 +91,37 @@ export const sisterSsoTickets = pgTable('sister_sso_tickets', {
 });
 
 /**
+ * News waiting to be told to Roof Lee (server/sister/events.ts): a new lead,
+ * a finished job. Written when the thing happens, delivered right after, and
+ * tried again with growing waits until Roof Lee says it has it. One row per
+ * piece of news: `dedupeKey` (for example "lead.created:42") stops the same
+ * thing being told twice. Only companies Roof Lee made ever get a row.
+ */
+export const outboundEvents = pgTable('outbound_events', {
+  companyId: companyId(),
+  /** Archie's own id for the event, sent as its `id`. Roof Lee handles each id once. */
+  id: text('id').primaryKey(),
+  dedupeKey: text('dedupe_key').notNull(),
+  type: text('type').notNull(),
+  data: jsonb('data').$type<Record<string, unknown>>().notNull(),
+  occurredAt: timestamp('occurred_at').notNull(),
+  attempts: integer('attempts').notNull().default(0),
+  /** When to try next. Moved forward before each try, so two runs never send the same row at once. */
+  nextAttemptAt: timestamp('next_attempt_at').defaultNow().notNull(),
+  deliveredAt: timestamp('delivered_at'),
+  /** Set when Roof Lee said it cannot read the event, or it grew too old: no more tries. */
+  gaveUpAt: timestamp('gave_up_at'),
+  /** How the last try ended, in a few plain words. Never Roof Lee's own wording. */
+  lastError: text('last_error'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (t) => ({
+  dedupeUq: uniqueIndex('outbound_events_company_dedupe_uq').on(t.companyId, t.dedupeKey),
+  dueIdx: index('outbound_events_due_idx').on(t.nextAttemptAt).where(sql`${t.deliveredAt} IS NULL AND ${t.gaveUpAt} IS NULL`),
+}));
+
+export type OutboundEvent = typeof outboundEvents.$inferSelect;
+
+/**
  * Answers already given to Roof Lee's writes (server/sister), so the same
  * request arriving twice does the work once and is answered as it was the
  * first time. One row per company and idempotency-key. Its own table, like

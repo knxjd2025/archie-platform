@@ -23,6 +23,8 @@ import { isLiveCompany } from '../../shared/company';
 import { findActingMember, mayWorkLeads, type ActingMember } from './acting';
 import { capabilitiesFor } from './capabilities';
 import { addNote, createLead, getJob, listJobs, updateLead } from './leads';
+import { runEventDelivery } from './events';
+import { timingSafeEqualStr } from '../security-config';
 
 const COMPANIES = `${SISTER_PREFIX}/v1/companies`;
 /** Whether Archie is fit for Roof Lee's customers to be sent into. Off unless set to true. */
@@ -61,7 +63,25 @@ function ticketForm() {
   return (req: Request, res: Response, next: NextFunction) => parse(req, res, (err?: unknown) => (err ? refuseSignIn(res) : next()));
 }
 
+/** Where the scheduler knocks to send waiting news to Roof Lee (vercel.json). */
+export const SISTER_EVENTS_CRON = '/api/cron/sister-events';
+
+// Constant-time, and shut when CRON_SECRET is unset (the same rule as every other cron here).
+const cronAuthorized = (req: Request): boolean =>
+  !!process.env.CRON_SECRET && timingSafeEqualStr(String(req.headers['authorization'] || ''), `Bearer ${process.env.CRON_SECRET}`);
+
 export function registerSisterRoutes(app: Express): void {
+  // Sends news that is waiting to go to Roof Lee, and tries again what failed
+  // before (./events.ts). Does nothing at all unless the link's settings are there.
+  app.get(SISTER_EVENTS_CRON, async (req: Request, res: Response) => {
+    if (!cronAuthorized(req)) return res.status(401).json({ error: 'unauthorized' });
+    try {
+      res.json({ ok: true, ...(await runEventDelivery()) });
+    } catch (e) {
+      failed(res, 'sending news to Roof Lee', e);
+    }
+  });
+
   // One sign-in. Posted by the person's browser, so it carries no signature
   // headers: the ticket is its own proof (./sso.ts). The ticket is in the body
   // and is never logged. Shut, like everything else here, until the pair

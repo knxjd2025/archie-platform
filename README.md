@@ -25,14 +25,17 @@ no keys). The Best Roofing AI app and its repo are separate and are not changed 
 ## The Roof Lee link
 
 Roof Lee can make, update, pause and close companies in Archie through signed
-requests under `/api/sister`. It is off until `SISTERS_ARCHIE_SECRET` is set.
-See docs/archie/02-roof-lee-link.md.
+requests under `/api/sister`, sign its members in to Archie with a one-time
+ticket, and read and add leads for them. Archie tells Roof Lee about new leads
+and finished jobs. All of it is off until `SISTERS_ARCHIE_SECRET` is set (and,
+for the news, `ROOFLI_EVENTS_URL`). See docs/archie/02-roof-lee-link.md.
 
 **Before this code is deployed, apply migration `0006_roofli_sister.sql` to the
 database.** The code reads the new columns on every sign-in, link on or off, so
 deploying first breaks sign-in for every existing company. The migration is
 safe to apply under the code that is live today. Nothing in the build or deploy
-runs migrations.
+runs migrations. Apply `0007` to `0009` in the same step: they only add tables
+the link uses once it is switched on.
 
 ## Not in this repo on purpose
 
