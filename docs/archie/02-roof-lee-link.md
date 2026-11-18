@@ -73,15 +73,25 @@ hold at once because the code that is live already has `0008`.
 1. Check where the database stands, as the owner. The list must end at
    `0010_company_job_leases.sql`, with no `roofli` name in it:
    `select name from _migrations order by name;`
-   And `select archie_is_system(), to_regprocedure('archie_protect_company_table(regclass)') is not null;`
-   must answer `f` and `t`. If `0008` was ever reverted
-   (`scripts/sql/revert-0008-rls-system-role.sql`), go forward again first, as
-   01-multi-company.md says, and only then carry on here.
+   `select to_regprocedure('archie_protect_company_table(regclass)') is not null;`
+   must answer `t`. Then make sure `0008` is in force and was not reverted
+   (`scripts/sql/revert-0008-rls-system-role.sql` leaves that function in
+   place, so the line above cannot tell). This must return no rows:
+   `select tablename from pg_policies where schemaname = 'public' and qual like '%archie_is_system%';`
+   and this must return more than zero:
+   `select count(*) from pg_policies where schemaname = 'public' and policyname = 'company_system';`
+   If either is wrong, `0008` was reverted: go forward again first, as
+   01-multi-company.md says, and only then carry on here. Last, `0015` adds a
+   unique index, so no company may already hold two leads with the same
+   `archie-` id. This must return no rows:
+   `select company_id, external_id, count(*) from leads where external_id like 'archie-%' group by 1, 2 having count(*) > 1;`
 2. If `leads` is large, build `0015`'s index by hand first so writes to leads
    are not held up while it is built (the statements are at the top of
    `migrations/0015_archie_native_jobs.sql`; one statement at a time, on a
    direct connection). On a small table skip this.
-3. Apply the migrations as the database owner, at a quiet hour:
+3. Apply the migrations as the database owner, at a quiet hour, **from a
+   checkout of this branch** (the command applies the files in the folder it
+   is run from; run from main it finds nothing new, says so and exits clean):
    `DATABASE_URL=<owner url> npx tsx scripts/migrate.ts`
    It skips the eleven already applied and runs `0011` to `0015` in order,
    each in its own transaction. Each takes its locks for milliseconds and
@@ -92,7 +102,10 @@ hold at once because the code that is live already has `0008`.
    `select job_type, photo_consent from leads limit 1` all run without an
    error, and this returns four rows, each with `{company_isolation,company_system}`:
    `select tablename, array_agg(policyname::text order by policyname) from pg_policies where tablename in ('sister_idempotency','sister_sso_tickets','lead_notes','outbound_events') group by 1;`
-5. Only then deploy this code.
+5. Only then deploy this code. Merging this branch into main IS the deploy,
+   so steps 1 to 4 come before the merge. A preview build of this branch, if
+   previews use the same database, fails sign-in and lead screens until then;
+   that is this step not done yet, not a fault in the build.
 
 If this code is ever rolled back, leave the migrations in place: the older
 code does not notice them. (Main's rule still stands: never run code older
@@ -157,8 +170,10 @@ any other part of Archie:
   request seeds nothing. If it fails, or the company was made while paused,
   that cron (or the request that makes it live) sets it up later.
 - **A full database is answered `503`** with `Retry-After`, the same as every
-  other route, not `500`. Nothing is kept for the request's key, so Roof Lee
-  can send it again.
+  other route, not `500`. The request's key is let go of so Roof Lee can send
+  it again. If the database was too full even for that, the key stays held for
+  up to a minute, and a repeat in that time is also answered `503` with
+  `Retry-After`: "not yet", never a refusal.
 - **The scheduled news run** takes companies in a fixed order, the one whose
   news has waited longest first, so a run that is cut short moves on next
   time instead of starting with the same companies.
@@ -444,7 +459,9 @@ first feature that does must send it.
   that names nobody (a subscription ended) is allowed, as the contract says.
 - **A write sent twice is done once.** The key from the `idempotency-key`
   header is claimed per company in `sister_idempotency` before the work
-  starts, and the first answer is given again to any repeat.
+  starts, and the first answer is given again to any repeat. A repeat that
+  arrives while the first copy is still being worked on is answered `503` with
+  `Retry-After` (come back), not a `4xx`, which Roof Lee would read as "no".
 - **Every failure looks the same from outside.** A wrong secret, an old
   timestamp and an unset secret all answer a bare `401`. A `500` never carries
   detail. (A database that is full for a moment answers `503` with
