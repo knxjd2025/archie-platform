@@ -22,12 +22,13 @@ Three settings, all unset by default:
 One optional setting, `ROOFLI_JOB_FINISHED_STAGE`, says which stage of the
 production board means "job finished" for Roof Lee. Unset, it is `closed_out`.
 
-Once migration `0006_roofli_sister.sql` is in the database, deploying this
-code with none of these settings changes nothing for any existing company.
+Once migrations `0011_roofli_sister.sql` to `0015_archie_native_jobs.sql` are
+in the database, deploying this code with none of these settings changes
+nothing for any existing company.
 The one visible difference is a new scheduled knock every ten minutes at
 `/api/cron/sister-events` (`vercel.json`), which answers at once that there is
 nothing to do. The
-migration has to be there first: see "Before deploying this code" below.
+migrations have to be there first: see "Before deploying this code" below.
 
 `SISTERS_ARCHIE_SECRET` is a fresh secret for this pair only. It is never
 copied from another product, another repository or an older shared secret.
@@ -35,41 +36,71 @@ Archie never reads `SISTERS_SHARED_SECRET` at all.
 
 ## Before deploying this code (owner only, must come first)
 
-**Apply migration `0006_roofli_sister.sql` to the database before this code is
+**Apply migrations `0011` to `0015` to the database before this code is
 deployed. Not after, and not as part of switching the link on.**
 
-This code reads the new columns every time it reads a person or a company,
-whether or not the link is switched on. Deployed against a database that does
-not have them yet, sign-in fails for everyone ("column
-team_members.auth_user_id does not exist") and so does all scheduled company
-work ("column roofli_company_id does not exist"). Nothing in the build or the
-deploy runs migrations, so this is a step a person has to do.
+| Migration | What it adds | When |
+|---|---|---|
+| `0011_roofli_sister.sql` | `companies.roofli_company_id`, `team_members.auth_user_id` and `source`, the table `sister_idempotency` | **Before deploy.** The code reads these columns on every sign-in and every company read. |
+| `0012_roofli_sso.sql` | the table `sister_sso_tickets` | Same step. Nothing touches it until the link is on. |
+| `0013_roofli_lead_notes.sql` | the table `lead_notes` | Same step. Nothing touches it until the link is on. |
+| `0014_roofli_events.sql` | the table `outbound_events` | Same step. Nothing touches it until the link is on. |
+| `0015_archie_native_jobs.sql` | six columns on `leads`, one partial unique index | **Before deploy.** The code reads these columns on every read of a lead. |
 
-The other order is safe. The migration only adds three columns that are null
-for every existing company and person, one index, one uniqueness rule and one
-new table. The code that is live today never names any of them, so it carries
-on exactly as before with the migration applied.
+Why the order matters. This code reads the new columns every time it reads a
+person, a company or a lead, whether or not the link is switched on. Deployed
+against a database that does not have them yet, sign-in fails for everyone
+("column team_members.auth_user_id does not exist"), so does all scheduled
+company work ("column roofli_company_id does not exist"), and so does every
+screen that shows a lead. Nothing in the build or the deploy runs migrations,
+so this is a step a person has to do.
 
-1. Apply the migration as the database owner:
+The other order is safe. The code that is live today names none of the new
+columns or tables, so it carries on exactly as before with all five applied:
+the new columns are null (and `photo_consent` false) for every existing row,
+the new index is empty, and the new tables are empty.
+
+**How this sits with `0006` to `0010`.** Those five are main's and are already
+in the live database; these five come after them and change none of them.
+They need `0008` (the system role) to be there, because each new table gets
+its row level security from `archie_protect_company_table()`, which `0008`
+created: the company's own rows for everyone, every row for the
+`archie_system` role only, no `OR`. Note the order is the opposite of `0008`'s
+own ("deploy the code first, then run the migration",
+docs/archie/01-multi-company.md): here it is migrate first, then deploy. Both
+hold at once because the code that is live already has `0008`.
+
+1. Check where the database stands, as the owner. The list must end at
+   `0010_company_job_leases.sql`, with no `roofli` name in it:
+   `select name from _migrations order by name;`
+   And `select archie_is_system(), to_regprocedure('archie_protect_company_table(regclass)') is not null;`
+   must answer `f` and `t`. If `0008` was ever reverted
+   (`scripts/sql/revert-0008-rls-system-role.sql`), go forward again first, as
+   01-multi-company.md says, and only then carry on here.
+2. If `leads` is large, build `0015`'s index by hand first so writes to leads
+   are not held up while it is built (the statements are at the top of
+   `migrations/0015_archie_native_jobs.sql`; one statement at a time, on a
+   direct connection). On a small table skip this.
+3. Apply the migrations as the database owner, at a quiet hour:
    `DATABASE_URL=<owner url> npx tsx scripts/migrate.ts`
-2. Check it is there: `select auth_user_id, source from team_members limit 1`
-   and `select roofli_company_id from companies limit 1` both run without an
-   error.
-3. Only then deploy this code.
+   It skips the eleven already applied and runs `0011` to `0015` in order,
+   each in its own transaction. Each takes its locks for milliseconds and
+   waits at most 5 seconds for one (`lock_timeout`); if one fails on the
+   timeout, run the command again.
+4. Check they are there: `select auth_user_id, source from team_members limit 1`,
+   `select roofli_company_id from companies limit 1` and
+   `select job_type, photo_consent from leads limit 1` all run without an
+   error, and this returns four rows, each with `{company_isolation,company_system}`:
+   `select tablename, array_agg(policyname::text order by policyname) from pg_policies where tablename in ('sister_idempotency','sister_sso_tickets','lead_notes','outbound_events') group by 1;`
+5. Only then deploy this code.
 
-If this code is ever rolled back, leave the migration in place.
+If this code is ever rolled back, leave the migrations in place: the older
+code does not notice them. (Main's rule still stands: never run code older
+than `0008` against this database without reverting `0008` first. The revert
+script and a later rerun of `0008` both cover the link's tables too.)
 
-The later migrations `0007_roofli_sso.sql` to `0009_roofli_events.sql` only
-add new tables that nothing touches until the link is switched on. Apply them
-in the same step, before deploying: a link switched on without them answers
-every sign-in and every request from Roof Lee with a refusal.
-
-**`0010_archie_native_jobs.sql` is like `0006`: it must be in the database
-before the code that comes with it is deployed.** It adds six columns to
-`leads`, and that code reads them every time it reads a lead, for every
-company, link or no link. Deployed without it, every screen that shows a lead
-fails. Applied first, it changes nothing: the columns are empty for every lead
-there is, and the one new index is empty too.
+A link switched on without `0012` to `0014` answers every sign-in and every
+request from Roof Lee with a refusal, which is why they go in the same step.
 
 ## Where the code is
 
@@ -80,6 +111,7 @@ there is, and the one new index is empty too.
 | `server/sister/routes.ts` | The endpoints. |
 | `server/sister/contract.ts` | Reads what Roof Lee sends. Maps roles. |
 | `server/sister/companies.ts` | Makes, updates, pauses and closes a company. |
+| `server/sister/setup.ts` | Sets a new company up (advisors, knowledge base) once, and records it the way the seed cron does. |
 | `server/sister/members.ts` | Makes the team exactly the list Roof Lee sent. |
 | `server/sister/facts.ts` | What Archie takes from a company's confirmed facts. |
 | `server/sister/idempotency.ts` | Does a write once, however many times it arrives. |
@@ -97,6 +129,39 @@ Both entry files (`server/index.ts` and `api/index.ts`) keep the raw body for
 `/api/sister` ahead of `express.json`. The signature is over the bytes as they
 arrived, so without that nothing verifies. A test boots `api/index.ts`, the
 production entry, to prove it.
+
+## How it fits Archie's database rules
+
+The rules are in docs/archie/01-multi-company.md. The link follows them like
+any other part of Archie:
+
+- **Its four tables** (`sister_idempotency`, `sister_sso_tickets`,
+  `lead_notes`, `outbound_events`) are company tables: each has a
+  `company_id` and is protected in its migration with
+  `archie_protect_company_table()`, so it has exactly the two policies every
+  company table has. `isolation.test.ts` and `system-role.test.ts` find them
+  in the database by themselves and hold them to the same checks.
+- **Work for one company runs as that company** (`runAsCompany`), after the
+  company has been found from Roof Lee's id.
+- **Work across companies is system work** (`runAsSystem`, which runs as the
+  `archie_system` database role), kept to these: finding a company by Roof
+  Lee's id, making or updating or pausing one company's own row (a company
+  cannot write its own row), asking whether an email address already belongs
+  to someone, and the scheduled run asking which companies have news waiting.
+  Each names its reason and reads or writes as little as it can.
+- **A new company is set up once, after the answer.** Seeding is never done
+  before a request is answered. `setup.ts` seeds the company as itself and
+  records it in `company_job_runs` under the seed job, exactly as
+  `provisionCompany` in `server/seed.ts` does, so `/api/cron/seed-companies`
+  does not seed it a second time for the same version, and a repeat of the
+  request seeds nothing. If it fails, or the company was made while paused,
+  that cron (or the request that makes it live) sets it up later.
+- **A full database is answered `503`** with `Retry-After`, the same as every
+  other route, not `500`. Nothing is kept for the request's key, so Roof Lee
+  can send it again.
+- **The scheduled news run** takes companies in a fixed order, the one whose
+  news has waited longest first, so a run that is cut short moves on next
+  time instead of starting with the same companies.
 
 ## Endpoints built so far
 
@@ -160,7 +225,7 @@ and jobs, add a lead, change one and add a note.
   until then.
 - **Fields.** `message` is the lead's standing note (`leads.notes`), which
   `PATCH` replaces when it sends `notes`. `notes` in an answer is the list of
-  notes added one at a time (`lead_notes`, migration `0008`), newest first.
+  notes added one at a time (`lead_notes`, migration `0013`), newest first.
   No money is ever in an answer.
 - **Photos.** `photoConsent` is `true` only when a person recorded, in
   Archie, that the customer agreed. `photos` is always empty and the photo
@@ -263,7 +328,7 @@ JobTread, so its leads had no key and could never sit on a board.
   photos live in its JobTread, and a Roof Lee company has no JobTread. So
   there is no uploaded photo to hand over, and the photo address answers
   `404`. Roof Lee is the place a Roof Lee company's job photos are uploaded.
-- **New columns on `leads`** (migration `0010`): `job_type` (what Roof Lee
+- **New columns on `leads`** (migration `0015`): `job_type` (what Roof Lee
   called the job, also kept in `service_type`), `photo_consent`, and four that
   nothing fills yet because the agreement has no field for them: `lat`, `lng`,
   `lead_source`, `post_ref`.
@@ -320,7 +385,7 @@ How it works:
   nothing is sent, for anyone. A company without a Roof Lee id never gets a
   row. A paused or closed company's news is held back until it is live again.
 - **Written first, sent after.** The news goes into `outbound_events`
-  (migration `0009`) when the thing happens, and is sent right after the
+  (migration `0014`) when the thing happens, and is sent right after the
   person who caused it has their answer. Recording it never fails the work
   that caused it.
 - **Signed like every other version 2 request**: over the method, the address
@@ -382,7 +447,8 @@ first feature that does must send it.
   starts, and the first answer is given again to any repeat.
 - **Every failure looks the same from outside.** A wrong secret, an old
   timestamp and an unset secret all answer a bare `401`. A `500` never carries
-  detail.
+  detail. (A database that is full for a moment answers `503` with
+  `Retry-After` instead: send it again.)
 
 ## Role map
 
@@ -395,7 +461,7 @@ first feature that does must send it.
 
 ## Turning it on (live step, owner only)
 
-The migrations (`0006` to `0010`) are not a step here. They were applied
+The migrations (`0011` to `0015`) are not a step here. They were applied
 before this code was deployed ("Before deploying this code" above).
 
 1. Generate one fresh secret and set it as `SISTERS_ARCHIE_SECRET` in both

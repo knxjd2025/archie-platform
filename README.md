@@ -30,12 +30,21 @@ ticket, and read and add leads for them. Archie tells Roof Lee about new leads
 and finished jobs. All of it is off until `SISTERS_ARCHIE_SECRET` is set (and,
 for the news, `ROOFLI_EVENTS_URL`). See docs/archie/02-roof-lee-link.md.
 
-**Before this code is deployed, apply migration `0006_roofli_sister.sql` to the
-database.** The code reads the new columns on every sign-in, link on or off, so
-deploying first breaks sign-in for every existing company. The migration is
-safe to apply under the code that is live today. Nothing in the build or deploy
-runs migrations. Apply `0007` to `0009` in the same step: they only add tables
-the link uses once it is switched on.
+**Before this code is deployed, apply migrations `0011_roofli_sister.sql` to
+`0015_archie_native_jobs.sql` to the database, as the owner.** The code reads
+the columns `0011` adds on every sign-in and the ones `0015` adds on every
+read of a lead, link on or off, so deploying first breaks sign-in and every
+lead screen for every existing company. All five are safe to apply under the
+code that is live today. `0012` to `0014` only add tables the link uses once
+it is switched on. Nothing in the build or deploy runs migrations.
+
+They come after `0006` to `0010`, which are already in the live database, and
+they need `0008` (the system role) to be there: each new table is protected
+with the function `0008` created. So this is the opposite order to `0008`
+itself, which was "deploy the code first, then migrate"
+(docs/archie/01-multi-company.md): for the link it is migrate first, then
+deploy. The steps and checks are in docs/archie/02-roof-lee-link.md, "Before
+deploying this code".
 
 ## Not in this repo on purpose
 

@@ -305,7 +305,7 @@ export const teamMembers = pgTable('team_members', {
   source: text('source'),
   createdAt: timestamp('created_at').defaultNow(),
 }, (t) => ({
-  // Created by migrations/0006 as a partial index; declared here so
+  // Created by migrations/0011 as a partial index; declared here so
   // drizzle-kit does not see it as extra and drop it.
   authUserUq: uniqueIndex('team_members_company_auth_user_uq').on(t.companyId, t.authUserId).where(sql`${t.authUserId} IS NOT NULL`),
 }));
@@ -1052,7 +1052,7 @@ export const leads = pgTable('leads', {
   closedOn: timestamp('closed_on'),
   insuranceClaim: boolean('insurance_claim'),
 
-  // Archie's own jobs (server/production/native-jobs.ts, migration 0010): what a
+  // Archie's own jobs (server/production/native-jobs.ts, migration 0015): what a
   // job kept on Archie's own board, with no JobTread behind it, needs to carry.
   jobType: text('job_type'),                    // 'replacement', 'repair', ... as the customer or Roof Lee put it
   lat: doublePrecision('lat'),
