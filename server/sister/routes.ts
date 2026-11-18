@@ -22,7 +22,7 @@ import type { Company } from '../../shared/schema';
 import { isLiveCompany } from '../../shared/company';
 import { findActingMember, mayWorkLeads, type ActingMember } from './acting';
 import { capabilitiesFor } from './capabilities';
-import { addNote, createLead, getJob, listJobs, updateLead } from './leads';
+import { addNote, createLead, getJob, listJobs, moveJob, updateLead } from './leads';
 import { runEventDelivery } from './events';
 import { timingSafeEqualStr } from '../security-config';
 
@@ -312,6 +312,19 @@ export function registerSisterRoutes(app: Express): void {
     const id = parseRecordId(req.params.id);
     return (id === null ? null : await addNote(member, id, text.value, key)) ?? NO_SUCH;
   }));
+
+  // Move a job along the production board. A lead is put on the board, under
+  // a job identity Archie makes, the first time it is moved. The board's own
+  // rules decide whether the move may be made.
+  app.post(`${COMPANIES}/:roofliCompanyId/jobs/:id/stage`, requireSister(2), leeWrite('POST job stage', async (member, req) => {
+    const id = parseRecordId(req.params.id);
+    return (id === null ? null : await moveJob(member, id, req.sister?.body?.stage)) ?? NO_SUCH;
+  }));
+
+  // One uploaded photo of a job, as a file. Archie holds no uploaded photo of
+  // its own for any job yet (a job's `photos` list is always empty), so there
+  // is never one to hand over: not found, and never a link to somewhere else.
+  app.get(`${COMPANIES}/:roofliCompanyId/jobs/:id/photos/:photoId`, requireSister(2), leeRead('GET job photo', async () => NO_SUCH, { needsPerson: false }));
 
   // Last: whatever no route above answered.
   app.use(SISTER_PREFIX, sisterNotFound());

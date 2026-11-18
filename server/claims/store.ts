@@ -7,6 +7,7 @@ import { db } from '../db';
 import { claims, clientReports, leads } from '../../shared/schema';
 import { logWrite } from '../writes/log';
 import { JobTreadClient } from '../integrations/jobtread';
+import { isNativeJobId } from '../production/native-jobs';
 import {
   CLAIM_NEXT_ACTION, CLAIM_DUE_DAYS, isClaimPipelineStage, freshDisputeSteps, claimMoveBlocker, jobtreadStatusForClaim, LEGACY_CLAIM_STAGE,
   type ClaimGateContext,
@@ -55,6 +56,11 @@ export async function mirrorClaimToJobTread(c: ClaimRow, stage: string, actor: s
   if (!target) return { ok: true };
   const [before] = await db.select({ stage: leads.stage }).from(leads).where(eq(leads.externalId, c.jobtreadJobId));
   if (before?.stage === target) return { ok: true };
+  // One of Archie's own jobs (server/production/native-jobs.ts): nothing in JobTread to tell.
+  if (isNativeJobId(c.jobtreadJobId)) {
+    await db.update(leads).set({ stage: target, updatedAt: new Date() }).where(eq(leads.externalId, c.jobtreadJobId));
+    return { ok: true };
+  }
   let result: { ok: boolean; error?: string };
   try { result = await new JobTreadClient().setJobStage(c.jobtreadJobId, target); }
   catch (e: any) { result = { ok: false, error: e?.message || 'Current CRM stage update failed' }; }

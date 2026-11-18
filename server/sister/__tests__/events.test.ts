@@ -332,6 +332,20 @@ describe.skipIf(!localDb)('news going back to Roof Lee', async () => {
     expect(about(c.roofliId)).toHaveLength(1);
   });
 
+  it('says the customer agreed to their photos being used only when a person recorded it', async () => {
+    const c = await make();
+    const jobKey = `archie-${randomUUID().replace(/-/g, '')}`;
+    await runAsCompany(c.id, () => db.insert(schema.leads).values({ source: 'roofli', externalId: jobKey, firstName: 'Pat', jobType: 'repair', serviceType: 'replacement', status: 'won' } as any));
+    const { recordPhotoConsent } = await import('../../production/native-jobs');
+    expect(await runAsCompany(c.id, () => recordPhotoConsent(jobKey, true, 'riley@example.test'))).toBe(true);
+    await runAsCompany(c.id, () => moveStage(jobKey, 'closed_out', 'system', { system: true, reason: 'test' }));
+    await settle();
+    const mine = about(c.roofliId);
+    expect(mine).toHaveLength(1);
+    // A job Roof Lee's own lead became is still news when it is finished.
+    expect(mine[0].body).toMatchObject({ type: 'job.finished', data: { photoConsent: true, jobType: 'repair' } });
+  });
+
   it('uses the stage the owner chose as "finished"', async () => {
     const c = await make();
     process.env[FINISHED_STAGE_ENV] = 'final_walkthrough';

@@ -142,11 +142,10 @@ export async function emitJobFinished(jobExternalId: string, finishedAt: Date): 
     if (!lead) return;
     await record('job.finished', `job.finished:${lead.id}`, finishedAt, {
       jobId: String(lead.id),
-      jobType: words(lead.serviceType, 80),
+      jobType: words(lead.jobType ?? lead.serviceType, 80),
       town: words(lead.city, 80),
-      // Archie keeps no record of a customer agreeing to their photos being
-      // used, so it never says they did (that comes with task A8).
-      photoConsent: false,
+      // Only what a person recorded on the job (server/production/native-jobs.ts).
+      photoConsent: lead.photoConsent === true,
       finishedAt: finishedAt.toISOString(),
     });
   } catch {

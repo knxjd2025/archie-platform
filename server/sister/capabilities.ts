@@ -11,14 +11,17 @@
  *                    by itself is off for this company. Roof Lee adds no lead,
  *                    changes none and moves no job until it has heard this.
  *                    NOT REPORTED YET: the gate those features read is task A9.
- *   jobs.native      Archie can keep this company's jobs on its own board,
- *                    without JobTread. NOT REPORTED YET: task A8.
- *
- * So today the list is empty for everyone, which Roof Lee reads as "read and
- * add notes only".
+ *   jobs.native      Archie keeps this company's jobs on its own board,
+ *                    without JobTread. Read from keepsOwnJobs, the same switch
+ *                    that decides whether a lead may be given a job identity.
  */
 import type { Company } from '../../shared/schema';
+import { keepsOwnJobs } from '../production/native-jobs';
 
-export async function capabilitiesFor(_company: Company): Promise<string[]> {
-  return [];
+export type Capability = 'messages.quiet' | 'jobs.native';
+
+export async function capabilitiesFor(company: Company): Promise<Capability[]> {
+  const can: Capability[] = [];
+  if (keepsOwnJobs(company)) can.push('jobs.native');
+  return can;
 }

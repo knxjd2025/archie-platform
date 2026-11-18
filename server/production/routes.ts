@@ -8,6 +8,7 @@ import { asyncHandler } from '../lib/async-handler';
 import { PRODUCTION_STAGES } from './columns';
 import { latestWalkthroughByJob, walkthroughSummary, type WalkthroughSummary } from './walkthrough-status';
 import { PIPELINE_STAGES, TRADES, STAGE_CHECKS, moveBlocker, nextStage, type GateContext } from '../../shared/production-pipeline';
+import { recordPhotoConsent } from './native-jobs';
 import { snapshotFor, gateContexts, pipelineRows, moveStage, setTrades, completeTrade, setCheck, pipelineHistory, type PipelineSnapshot } from './pipeline';
 
 export interface ProductionJob {
@@ -139,6 +140,15 @@ export function registerProductionRoutes(app: Express) {
     const row = await setCheck(id, req.body?.key, req.body?.value, req.session.user!.email);
     if (!row) return res.status(400).json({ error: 'Unknown check.' });
     res.json({ ok: true, pipeline: snapshotFor(row, null) });
+  }));
+
+  // Record whether the customer agreed to photos of their job being used
+  // (./native-jobs.ts). Only ever set by a person, here.
+  app.post('/api/production/:externalId/photo-consent', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+    const id = await guard(req, res); if (!id) return;
+    if (typeof req.body?.agreed !== 'boolean') return res.status(400).json({ error: 'Say whether the customer agreed.' });
+    if (!(await recordPhotoConsent(id, req.body.agreed, req.session.user!.email))) return res.status(404).json({ error: 'not found' });
+    res.json({ ok: true, photoConsent: req.body.agreed });
   }));
 
   app.get('/api/production/:externalId/pipeline/history', requireAuth, asyncHandler(async (req: Request, res: Response) => {

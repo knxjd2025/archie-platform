@@ -59,10 +59,17 @@ on exactly as before with the migration applied.
 
 If this code is ever rolled back, leave the migration in place.
 
-The later migrations for this link (`0007_roofli_sso.sql` onwards) only add
-new tables that nothing touches until the link is switched on. Apply them in
-the same step, before deploying: a link switched on without them answers
+The later migrations `0007_roofli_sso.sql` to `0009_roofli_events.sql` only
+add new tables that nothing touches until the link is switched on. Apply them
+in the same step, before deploying: a link switched on without them answers
 every sign-in and every request from Roof Lee with a refusal.
+
+**`0010_archie_native_jobs.sql` is like `0006`: it must be in the database
+before the code that comes with it is deployed.** It adds six columns to
+`leads`, and that code reads them every time it reads a lead, for every
+company, link or no link. Deployed without it, every screen that shows a lead
+fails. Applied first, it changes nothing: the columns are empty for every lead
+there is, and the one new index is empty too.
 
 ## Where the code is
 
@@ -81,6 +88,7 @@ every sign-in and every request from Roof Lee with a refusal.
 | `server/sister/acting.ts` | Finds the person a request is for on the company's own team, and applies Archie's role rules to them. |
 | `server/sister/leads.ts` | Leads, jobs and notes as Roof Lee's assistant reads and changes them. |
 | `server/sister/capabilities.ts` | What Archie says it can do for one company. |
+| `server/production/native-jobs.ts` | Archie's own jobs: the job identity Archie makes, who gets one, and the record of a customer agreeing to photos. |
 | `server/sister/events.ts` | News going back to Roof Lee: the outbox, the signing, the sending and the retries. |
 
 Both entry files (`server/index.ts` and `api/index.ts`) keep the raw body for
@@ -104,6 +112,8 @@ production entry, to prove it.
 | `POST` | `/api/sister/v1/companies/{roofliCompanyId}/leads` | version 2 |
 | `PATCH` | `/api/sister/v1/companies/{roofliCompanyId}/leads/{id}` | version 2 |
 | `POST` | `/api/sister/v1/companies/{roofliCompanyId}/leads/{id}/notes` | version 2 |
+| `POST` | `/api/sister/v1/companies/{roofliCompanyId}/jobs/{id}/stage` | version 2 |
+| `GET` | `/api/sister/v1/companies/{roofliCompanyId}/jobs/{id}/photos/{photoId}` | version 2 (always `404` today, see "Archie's own jobs") |
 
 Each address takes exactly one form of signature and never the other. Anything
 else under `/api/sister` answers `404` to a signed request and a bare `401` to
@@ -113,9 +123,8 @@ Archie also sends: `POST {Roof Lee}/api/sister/v1/events` (version 2
 signature), and answers its own scheduler at `GET /api/cron/sister-events`
 (`CRON_SECRET`).
 
-Still to build (tasks A8 and A9 in Roof Lee's Stage 1 plan): Archie's own jobs
-(with moving a job's stage and handing over photos), and the "no messages of
-its own" gate with the `messages.quiet` capability.
+Still to build (task A9 in Roof Lee's Stage 1 plan): the "no messages of its
+own" gate with the `messages.quiet` capability.
 
 ## Read and write for Lee
 
@@ -151,17 +160,65 @@ and jobs, add a lead, change one and add a note.
   `PATCH` replaces when it sends `notes`. `notes` in an answer is the list of
   notes added one at a time (`lead_notes`, migration `0008`), newest first.
   No money is ever in an answer.
-- **Photos.** Archie keeps no record of a customer agreeing to their photos
-  being used, so `photoConsent` is always `false`, `photos` is always empty,
-  and the photo address answers `404`. That changes with Archie's own jobs
-  (task A8).
-- **Capabilities.** The list is empty for every company today. Neither
-  `messages.quiet` nor `jobs.native` may be claimed until the work behind it
-  exists (tasks A9 and A8), and each must be worked out in
-  `server/sister/capabilities.ts` from the switch the feature itself reads.
-  Roof Lee adds and changes no lead until it has heard `messages.quiet`, so
-  until then the write endpoints here are built and tested but Roof Lee will
-  not call them.
+- **Photos.** `photoConsent` is `true` only when a person recorded, in
+  Archie, that the customer agreed. `photos` is always empty and the photo
+  address always answers `404`, because Archie holds no uploaded photo of its
+  own for any job (see "Archie's own jobs").
+- **Capabilities.** Each is worked out in `server/sister/capabilities.ts` from
+  the switch the feature itself reads, never typed as a fixed answer.
+  `jobs.native` is reported for every company Roof Lee made.
+  `messages.quiet` is not reported yet (task A9). Roof Lee adds and changes no
+  lead and moves no job until it has heard `messages.quiet`, so until then
+  the write endpoints here are built and tested but Roof Lee will not call
+  them.
+
+## Archie's own jobs
+
+Archie's boards are keyed on a job key (`leads.external_id`). For the original
+company that is JobTread's id for the job. A company Roof Lee made has no
+JobTread, so its leads had no key and could never sit on a board.
+
+- **An identity Archie makes.** The first time one of such a company's leads
+  is put on the production board it is given a key of Archie's own: `archie-`
+  and 32 hex characters. The lead keeps it for good. The id Roof Lee uses for
+  the record (the row's number) does not change when a lead becomes a job.
+- **Only for a company Roof Lee made.** `keepsOwnJobs` in
+  `server/production/native-jobs.ts` is the one switch. The `jobs.native`
+  capability and the code that makes an identity both read it. No other
+  company's lead is ever given one, so nothing changes for it.
+- **Nothing goes to JobTread for such a job.** Every place that would tell
+  JobTread about a move (the production, sales and claim boards) checks the
+  key first and, for one of Archie's own, keeps the status in Archie instead.
+  No outside call, and no failed-call line in the company's log.
+- **Moving a job from Roof Lee.** `POST .../jobs/{id}/stage` with `stage` (one
+  of the board's own stage keys, `approved` to `closed_out`) and `acting`. It
+  is the same move a person makes in Archie, made as the person named, so the
+  board's rules hold: a stage that is waiting for something (the
+  pre-construction checklist, the final walkthrough, a ticked box) answers
+  `409` with the reason in plain words, and the same request can be sent again
+  later. An unknown stage answers `400`. Crew cannot move a job this way
+  (`403`), the same as they cannot see leads. A job that another system keeps
+  answers `409` and is left alone. Each move is written to the company's log
+  under the person it was for.
+- **A finished job is news.** When one of these jobs reaches the finished
+  stage, `job.finished` goes to Roof Lee like any other, including for a lead
+  Roof Lee itself added.
+- **Consent to use photos** is a yes a person records on the job:
+  `POST /api/production/{job key}/photo-consent` with `{ "agreed": true }`,
+  signed in to Archie. Nothing sets it by itself, and it is written to the
+  company's log. There is no button for it on a screen yet.
+- **Photos.** Archie stores no job photos itself. The original company's
+  photos live in its JobTread, and a Roof Lee company has no JobTread. So
+  there is no uploaded photo to hand over, and the photo address answers
+  `404`. Roof Lee is the place a Roof Lee company's job photos are uploaded.
+- **New columns on `leads`** (migration `0010`): `job_type` (what Roof Lee
+  called the job, also kept in `service_type`), `photo_consent`, and four that
+  nothing fills yet because the agreement has no field for them: `lat`, `lng`,
+  `lead_source`, `post_ref`.
+
+Not built: a button in Archie for a person to put a lead on the board
+themselves. Today a Roof Lee company's lead gets onto the board when Roof Lee
+moves it; from there everything on the board works from inside Archie.
 
 ## One sign-in
 
@@ -202,7 +259,7 @@ Archie tells Roof Lee when something happens that Roof Lee did not cause:
 | Event | When | What is sent |
 |---|---|---|
 | `lead.created` | A lead is made inside Archie: typed in by a person, or come in from a form or a text. Never for a lead Roof Lee added (source `roofli`), and never from the JobTread sync, which does not report leads at all. A lead a person types in is reported even when the company's own JobTread accepted it. | `leadId`, `source`, `name`, `phone`, `email`, `message`, `jobType`, `town` |
-| `job.finished` | A job reaches the finished stage on the production board. Told from inside the move itself, so a move made by automation counts too. Once per job. | `jobId`, `jobType`, `town`, `photoConsent` (always `false` for now), `finishedAt` |
+| `job.finished` | A job reaches the finished stage on the production board. Told from inside the move itself, so a move made by automation counts too. Once per job. | `jobId`, `jobType`, `town`, `photoConsent` (`true` only when a person recorded it), `finishedAt` |
 
 How it works:
 
@@ -286,7 +343,7 @@ first feature that does must send it.
 
 ## Turning it on (live step, owner only)
 
-The migrations (`0006` to `0009`) are not a step here. They were applied
+The migrations (`0006` to `0010`) are not a step here. They were applied
 before this code was deployed ("Before deploying this code" above).
 
 1. Generate one fresh secret and set it as `SISTERS_ARCHIE_SECRET` in both

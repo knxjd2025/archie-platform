@@ -9,7 +9,9 @@
  *
  * Archie keeps leads and jobs in one table. A row is a "job" once it sits on
  * the production board, and a "lead" until then. The id Roof Lee is given is
- * the row's own number, as digits.
+ * the row's own number, as digits, and stays the same when a lead becomes a
+ * job. A lead of a company that keeps its own jobs is put on the board under
+ * a job identity Archie makes itself (server/production/native-jobs.ts).
  */
 import { and, desc, eq, ilike, inArray, or, type SQL } from 'drizzle-orm';
 import { db } from '../db';
@@ -18,6 +20,9 @@ import { requireCompanyId } from '../tenant/context';
 import { leadScopeFor, type ActingMember } from './acting';
 import type { LeadChange, NewLead } from './contract';
 import { rememberWithin, type SisterAnswer } from './idempotency';
+import { isPipelineStage, jobtreadStatusFor, normalizeTrades, type TradeStep } from '../../shared/production-pipeline';
+import { ensureJobIdentity, isNativeJobId } from '../production/native-jobs';
+import { moveStage } from '../production/pipeline';
 
 type LeadRow = typeof leads.$inferSelect;
 
@@ -43,8 +48,9 @@ export interface SisterJobDetail extends SisterJob {
   address: string | null;
   message: string | null;
   notes: Array<{ text: string; at: string }>;
-  /** Whether the customer agreed to their photos being used. Archie does not record that yet, so: no. */
+  /** True only when a person recorded that the customer agreed to their photos being used. */
   photoConsent: boolean;
+  /** Uploaded photos of the job that Archie itself holds. It holds none yet, so: empty. */
   photos: Array<{ id: string }>;
 }
 
@@ -67,7 +73,7 @@ function toJob(r: LeadRow, board: Map<string, string>): SisterJob {
     kind: boardStage ? 'job' : 'lead',
     name: nameOf(r),
     stage: boardStage ?? r.stage ?? r.status ?? null,
-    jobType: r.serviceType,
+    jobType: r.jobType ?? r.serviceType,
     town: r.city,
     phone: r.phone,
     email: r.email,
@@ -117,9 +123,10 @@ export async function getJob(id: number, member: ActingMember | undefined): Prom
     address: row.address,
     message: row.notes,
     notes: notes.map((n) => ({ text: n.text, at: n.at.toISOString() })),
-    // Archie keeps no record of a customer agreeing to their photos being
-    // used, so it never says they did and hands over no photo (task A8).
-    photoConsent: false,
+    // Only what a person recorded (recordPhotoConsent). Archie holds no
+    // uploaded photo of its own for a job (the original company's photos live
+    // in its JobTread), so there is none to list, with or without consent.
+    photoConsent: row.photoConsent === true,
     photos: [],
   };
 }
@@ -143,7 +150,7 @@ export async function createLead(member: ActingMember, lead: NewLead, key: strin
       firstName: first, lastName: rest.join(' ') || null, jobName: lead.name,
       phone: lead.phone ?? null, email: lead.email ?? null,
       address: lead.address ?? null, city: lead.town ?? null,
-      serviceType: lead.jobType ?? null, notes: lead.message ?? null,
+      serviceType: lead.jobType ?? null, jobType: lead.jobType ?? null, notes: lead.message ?? null,
       status: 'new',
       enteredBy: member.email, enteredByName: member.name,
     }).returning({ id: leads.id });
@@ -190,4 +197,35 @@ export async function addNote(member: ActingMember, id: number, text: string, ke
     await rememberWithin(tx, companyId, key, answer);
     return answer;
   });
+}
+
+/**
+ * Moves a job along the production board, putting the lead on the board first
+ * if it is not there yet. Null when there is no such record for this person.
+ *
+ * The move is Archie's own (server/production/pipeline.ts), made as the person
+ * it is for, so the board's rules apply exactly as they do to someone using
+ * Archie: a stage that is waiting for something answers 409 with the reason.
+ * Only one of Archie's own jobs is moved here. A job that another system
+ * keeps is left where it is, because moving it would mean telling that system.
+ */
+export async function moveJob(member: ActingMember, id: number, stage: unknown): Promise<SisterAnswer | null> {
+  if (!isPipelineStage(stage)) return { status: 400, body: { error: 'Archie has no such stage.' }, remember: false };
+  const row = await findRow(id, member);
+  if (!row) return null;
+  if (row.externalId && !isNativeJobId(row.externalId)) {
+    return { status: 409, body: { error: 'This job is kept in another system, so Archie cannot move it from here.' }, remember: false };
+  }
+  const key = row.externalId ?? await ensureJobIdentity(row.id);
+  if (!isNativeJobId(key)) return { status: 409, body: { error: 'This company does not keep its jobs in Archie.' }, remember: false };
+  const moved = await moveStage(key, stage, member.email);
+  if (!moved.ok) return { status: moved.status, body: { error: moved.error }, remember: false };
+  // Put on the board where it already stood: no move was made, so nothing set
+  // the status the rest of Archie reads. Set it once, here.
+  if (!moved.moved && !row.stage) {
+    await db.update(leads).set({ stage: jobtreadStatusFor(stage, normalizeTrades(moved.row.trades.map((t) => t.key), moved.row.trades as TradeStep[])), updatedAt: new Date() })
+      .where(eq(leads.id, row.id));
+  }
+  await db.insert(writeLog).values(logEntry(member, 'move_job', String(row.id), `Moved to ${stage}`));
+  return { status: 200, body: { ok: true, stage: moved.row.stage } };
 }

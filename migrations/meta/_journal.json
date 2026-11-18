@@ -71,6 +71,13 @@
       "when": 1794961521429,
       "tag": "0009_roofli_events",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794964201058,
+      "tag": "0010_archie_native_jobs",
+      "breakpoints": true
     }
   ]
 }

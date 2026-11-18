@@ -58,12 +58,13 @@ describe.skipIf(!localDb)('read and write for Lee', async () => {
   const logRows = (id: string) => runAsCompany(id, () => db.select().from(schema.writeLog).orderBy(desc(schema.writeLog.id)));
   const noteRows = (id: string) => runAsCompany(id, () => db.select().from(schema.leadNotes).orderBy(schema.leadNotes.id));
 
-  it('says what Archie can do for a company, and today that is nothing extra', async () => {
+  it('says what Archie can do for a company', async () => {
     const c = await make();
     const r = await read(c, '/capabilities');
     expect(r.status).toBe(200);
-    // messages.quiet and jobs.native are not built yet, so neither may be claimed.
-    expect(r.body).toEqual({ capabilities: [] });
+    // Worked out per company, from the switches the features themselves read
+    // (jobs.test.ts and quiet.test.ts say when each may be claimed).
+    expect(r.body).toEqual({ capabilities: ['jobs.native'] });
     expect((await sisterSend(base, { path: `${companies}/${randomUUID()}/capabilities`, version: 2 })).status).toBe(404);
     // The older signature, which does not cover the address, opens nothing here.
     expect((await sisterSend(base, { path: `${companies}/${c.roofliId}/capabilities`, version: 1 })).status).toBe(401);
@@ -206,7 +207,7 @@ describe.skipIf(!localDb)('read and write for Lee', async () => {
     expect((await sisterSend(base, { path: `${companies}/${c.roofliId}/jobs?actingUserId=nope&actingRole=office`, version: 2 })).status).toBe(400);
   });
 
-  it('shows one lead in full, with its notes, and never claims consent to use photos', async () => {
+  it('shows one lead in full, with its notes, and claims no consent to use photos that nobody recorded', async () => {
     const c = await make();
     const id = (await newLead(c, c.office)).body.leadId as string;
     const key = randomUUID();

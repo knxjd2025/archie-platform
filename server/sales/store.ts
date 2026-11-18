@@ -7,6 +7,7 @@ import { db } from '../db';
 import { leads, salesPipeline, clientReports, productionPipeline, type SalesPipelineRow } from '../../shared/schema';
 import { logWrite } from '../writes/log';
 import { JobTreadClient } from '../integrations/jobtread';
+import { isNativeJobId } from '../production/native-jobs';
 import { SALES_BOARD_STAGES, isSalesStage, isSalesLost, salesMoveBlocker, salesDone, jobtreadStatusForSales, salesStageForJob, salesReopenStage, lostReasonBlocker, salesLostReasonLabel, MAX_LOST_NOTE, type SalesGateContext } from '../../shared/sales-pipeline';
 import { labelOf } from '../../shared/pipeline-core';
 import { isPipelineStage as isProductionStage } from '../../shared/production-pipeline';
@@ -75,6 +76,12 @@ async function mirrorToJobTread(externalId: string, stage: string, actor: string
   if (!target) return { ok: true };
   const [before] = await db.select({ stage: leads.stage }).from(leads).where(eq(leads.externalId, externalId));
   if (before?.stage === target) return { ok: true };
+  // One of Archie's own jobs (server/production/native-jobs.ts): nothing in
+  // JobTread to tell, so the status is kept here instead.
+  if (isNativeJobId(externalId)) {
+    await db.update(leads).set({ stage: target, updatedAt: new Date() }).where(eq(leads.externalId, externalId));
+    return { ok: true };
+  }
   let result: { ok: boolean; error?: string };
   try { result = await new JobTreadClient().setJobStage(externalId, target); }
   catch (e: any) { result = { ok: false, error: e?.message || 'Current CRM stage update failed' }; }

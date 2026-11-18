@@ -1017,7 +1017,21 @@ export const leads = pgTable('leads', {
   scheduleEnd: timestamp('schedule_end'),
   closedOn: timestamp('closed_on'),
   insuranceClaim: boolean('insurance_claim'),
-});
+
+  // Archie's own jobs (server/production/native-jobs.ts, migration 0010): what a
+  // job kept on Archie's own board, with no JobTread behind it, needs to carry.
+  jobType: text('job_type'),                    // 'replacement', 'repair', ... as the customer or Roof Lee put it
+  lat: doublePrecision('lat'),
+  lng: doublePrecision('lng'),
+  // True only once a person has recorded that the customer agreed to photos of
+  // their job being used. Nothing sets it by itself.
+  photoConsent: boolean('photo_consent').notNull().default(false),
+  leadSource: text('lead_source'),              // where the customer first came from, in words (not the `source` system)
+  postRef: text('post_ref'),                    // the post or page that brought them, when known
+}, (t) => ({
+  // An Archie-made job identity ('archie-...') names one lead in its company.
+  nativeJobUq: uniqueIndex('leads_company_native_job_uq').on(t.companyId, t.externalId).where(sql`${t.externalId} LIKE 'archie-%'`),
+}));
 
 /**
  * Notes on a lead or job, one row each, newest shown first. Added for the

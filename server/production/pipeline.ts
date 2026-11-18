@@ -14,6 +14,7 @@ import {
 import { JobTreadClient } from '../integrations/jobtread';
 import { logWrite } from '../writes/log';
 import { emitJobFinished, finishedStage } from '../sister/events';
+import { isNativeJobId } from './native-jobs';
 
 export interface PipelineSnapshot extends PipelineState {
   hasRow: boolean;
@@ -86,6 +87,12 @@ async function mirrorToJobTread(externalId: string, stage: PipelineStage, trades
   const target = jobtreadStatusFor(stage, trades);
   const [before] = await db.select({ stage: leads.stage }).from(leads).where(eq(leads.externalId, externalId));
   if (before?.stage === target) return { ok: true };
+  // One of Archie's own jobs (./native-jobs.ts): there is nothing in JobTread
+  // to tell. The status the rest of Archie reads is kept here instead.
+  if (isNativeJobId(externalId)) {
+    await db.update(leads).set({ stage: target, updatedAt: new Date() }).where(eq(leads.externalId, externalId));
+    return { ok: true };
+  }
   let result: { ok: boolean; error?: string };
   try {
     result = await new JobTreadClient().setJobStage(externalId, target);
