@@ -988,6 +988,27 @@ export const leads = pgTable('leads', {
   insuranceClaim: boolean('insurance_claim'),
 });
 
+/**
+ * Notes on a lead or job, one row each, newest shown first. Added for the
+ * Roof Lee link (server/sister/leads.ts): leads.notes is one block of text
+ * that a change replaces, so a note someone adds had nowhere to live with its
+ * author and its time.
+ */
+export const leadNotes = pgTable('lead_notes', {
+  companyId: companyId(),
+  id: serial('id').primaryKey(),
+  leadId: integer('lead_id').notNull().references(() => leads.id),
+  text: text('text').notNull(),
+  author: text('author').notNull(),             // email of the person it was written for
+  authorName: text('author_name'),
+  system: text('system'),                       // 'roofli' when it came through Roof Lee
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (t) => ({
+  leadIdx: index('lead_notes_lead_idx').on(t.leadId, t.createdAt),
+}));
+
+export type LeadNote = typeof leadNotes.$inferSelect;
+
 // Agent Tasks - work items for agents
 export const agentTasks = pgTable('agent_tasks', {
   companyId: companyId(),

@@ -12,12 +12,17 @@ import { waitUntil } from '@vercel/functions';
 import { runAsCompany } from '../tenant/context';
 import { seedCompany } from '../seed';
 import { IDEMPOTENCY_HEADER, SISTER_PREFIX, requireSister, sisterNotFound } from './door';
-import { isCloseMode, isUuid, namesCompany, parseActing, parseCompanyRequest, parseMembers } from './contract';
+import { isCloseMode, isUuid, namesCompany, parseActing, parseActingQuery, parseCompanyRequest, parseLeadChange, parseMembers, parseNewLead, parseNote, parseRecordId, type Acting } from './contract';
 import { closeCompany, findRoofLeeCompany, mayCloseCompany, provisionCompany, sisterStatus } from './companies';
 import { syncMembers } from './members';
-import { isIdempotencyKey, once } from './idempotency';
+import { isIdempotencyKey, once, type SisterAnswer } from './idempotency';
 import { startSignedInSession } from '../auth/routes';
 import { SSO_REFUSED_PAGE, signInFromTicket } from './sso';
+import type { Company } from '../../shared/schema';
+import { isLiveCompany } from '../../shared/company';
+import { findActingMember, mayWorkLeads, type ActingMember } from './acting';
+import { capabilitiesFor } from './capabilities';
+import { addNote, createLead, getJob, listJobs, updateLead } from './leads';
 
 const COMPANIES = `${SISTER_PREFIX}/v1/companies`;
 /** Whether Archie is fit for Roof Lee's customers to be sent into. Off unless set to true. */
@@ -153,6 +158,140 @@ export function registerSisterRoutes(app: Express): void {
       failed(res, 'DELETE company', e);
     }
   });
+
+  // ---- Read and write for Lee, Roof Lee's assistant ------------------------
+  //
+  // Every one of these finds the company from the address, by Roof Lee's id,
+  // then does its work as that company and nothing wider. A record that
+  // belongs to another company is not found. A person is named by Roof Lee
+  // (in the address for a read, in the body for a write) and Archie applies
+  // its own role rules to them (./acting.ts).
+
+  const NOT_ALLOWED = { status: 403, body: { error: 'This person may not do that in Archie.' }, remember: false } as const;
+  const NO_SUCH = { status: 404, body: null, remember: false } as const;
+
+  /**
+   * The live company an address names, or an answer already sent: 404 for a
+   * company Roof Lee never made, 409 for one that is paused or closed (Archie
+   * does nothing for it until it is brought back).
+   */
+  async function liveCompany(req: Request, res: Response): Promise<Company | null> {
+    const company = await companyInAddress(req);
+    if (!company) { res.status(404).end(); return null; }
+    if (!isLiveCompany(company)) { res.status(409).json({ error: 'This company is paused or closed in Archie.' }); return null; }
+    return company;
+  }
+
+  const send = (res: Response, answer: SisterAnswer): void => {
+    if (answer.body === null) res.status(answer.status).end();
+    else res.status(answer.status).json(answer.body);
+  };
+
+  /**
+   * One write for a named person, done once. Reads the three things every
+   * write must carry (the company in the address, who it is for, and a key),
+   * then runs `work` as the company with the person Archie found.
+   */
+  function leeWrite(what: string, work: (member: ActingMember, req: Request, key: string) => Promise<SisterAnswer>) {
+    return async (req: Request, res: Response) => {
+      try {
+        const body = req.sister?.body;
+        // A body that repeats the company must name the one in the address (rule 2).
+        if (body?.roofliCompanyId !== undefined && !namesCompany(body, req.params.roofliCompanyId)) {
+          return res.status(400).json({ error: 'The company in the body is not the company in the address.' });
+        }
+        const acting = parseActing(body?.acting);
+        if (!acting.ok || !acting.value) return res.status(400).json({ error: 'Say who this request is for.' });
+        const key = req.get(IDEMPOTENCY_HEADER);
+        if (!isIdempotencyKey(key)) return res.status(400).json({ error: 'This request needs an idempotency key.' });
+        const company = await liveCompany(req, res);
+        if (!company) return;
+        const who: Acting = acting.value;
+        const answer = await once(company.id, key, () => runAsCompany(company.id, async () => {
+          const member = await findActingMember(who);
+          // Not kept: the team list may simply not have arrived yet.
+          if (!member || !mayWorkLeads(member)) return NOT_ALLOWED;
+          return work(member, req, key);
+        }, { loadProfile: false }));
+        send(res, answer);
+      } catch (e) {
+        failed(res, what, e);
+      }
+    };
+  }
+
+  /** One read. `work` is given the person it is for, or undefined when Roof Lee named nobody. */
+  function leeRead(what: string, work: (member: ActingMember | undefined, req: Request) => Promise<SisterAnswer>, opts: { needsPerson: boolean }) {
+    return async (req: Request, res: Response) => {
+      try {
+        const acting = parseActingQuery(req.query as Record<string, unknown>);
+        if (!acting.ok) return res.status(400).json({ error: acting.error });
+        if (opts.needsPerson && !acting.value) return res.status(400).json({ error: 'Say who this request is for.' });
+        const company = await liveCompany(req, res);
+        if (!company) return;
+        const who = acting.value;
+        const answer = await runAsCompany(company.id, async () => {
+          if (!who) return work(undefined, req);
+          const member = await findActingMember(who);
+          if (!member) return NOT_ALLOWED;
+          return work(member, req);
+        }, { loadProfile: false });
+        send(res, answer);
+      } catch (e) {
+        failed(res, what, e);
+      }
+    };
+  }
+
+  // What Archie can do for this company. Asked by Roof Lee's scheduled run, for nobody in particular.
+  app.get(`${COMPANIES}/:roofliCompanyId/capabilities`, requireSister(2), async (req: Request, res: Response) => {
+    try {
+      const company = await liveCompany(req, res);
+      if (!company) return;
+      res.json({ capabilities: await capabilitiesFor(company) });
+    } catch (e) {
+      failed(res, 'GET capabilities', e);
+    }
+  });
+
+  // Leads and jobs this person may see. Someone who may not see leads at all is shown none.
+  app.get(`${COMPANIES}/:roofliCompanyId/jobs`, requireSister(2), leeRead('GET jobs', async (member, req) => {
+    if (!member || !mayWorkLeads(member)) return { status: 200, body: { jobs: [] } };
+    const text = typeof req.query.text === 'string' ? req.query.text : undefined;
+    return { status: 200, body: { jobs: await listJobs(member, { text }) } };
+  }, { needsPerson: true }));
+
+  // One lead or job. Named nobody (the scheduled run): the company's own record, if it has one.
+  app.get(`${COMPANIES}/:roofliCompanyId/jobs/:id`, requireSister(2), leeRead('GET job', async (member, req) => {
+    const id = parseRecordId(req.params.id);
+    if (id === null || (member && !mayWorkLeads(member))) return NO_SUCH;
+    const job = await getJob(id, member);
+    return job ? { status: 200, body: { job } } : NO_SUCH;
+  }, { needsPerson: false }));
+
+  // A new lead, kept in Archie only: no JobTread, no KynexPro, no message to anyone.
+  app.post(`${COMPANIES}/:roofliCompanyId/leads`, requireSister(2), leeWrite('POST leads', async (member, req, key) => {
+    const lead = parseNewLead(req.sister?.body);
+    if (!lead.ok) return { status: 400, body: { error: lead.error }, remember: false };
+    return createLead(member, lead.value, key);
+  }));
+
+  // Change a lead's status, standing note or contact details.
+  app.patch(`${COMPANIES}/:roofliCompanyId/leads/:id`, requireSister(2), leeWrite('PATCH lead', async (member, req) => {
+    const change = parseLeadChange(req.sister?.body);
+    if (!change.ok) return { status: 400, body: { error: change.error }, remember: false };
+    const id = parseRecordId(req.params.id);
+    if (id === null || !(await updateLead(member, id, change.value))) return NO_SUCH;
+    return { status: 200, body: { ok: true } };
+  }));
+
+  // Add a note to a lead or job.
+  app.post(`${COMPANIES}/:roofliCompanyId/leads/:id/notes`, requireSister(2), leeWrite('POST note', async (member, req, key) => {
+    const text = parseNote(req.sister?.body);
+    if (!text.ok) return { status: 400, body: { error: text.error }, remember: false };
+    const id = parseRecordId(req.params.id);
+    return (id === null ? null : await addNote(member, id, text.value, key)) ?? NO_SUCH;
+  }));
 
   // Last: whatever no route above answered.
   app.use(SISTER_PREFIX, sisterNotFound());

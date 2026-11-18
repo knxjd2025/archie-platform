@@ -151,3 +151,111 @@ export function namesCompany(body: Record<string, unknown> | undefined, roofliCo
 
 export type CloseMode = 'pause' | 'close';
 export const isCloseMode = (v: unknown): v is CloseMode => v === 'pause' || v === 'close';
+
+/** The two address fields that say who a read is for, with the same meaning as `acting` on a write. */
+export const ACTING_USER_PARAM = 'actingUserId';
+export const ACTING_ROLE_PARAM = 'actingRole';
+
+/**
+ * Who a read is for, from its address (which the signature covers). Both
+ * fields absent means nobody: the scheduled run. One without the other, or
+ * either unreadable, is a mistake.
+ */
+export function parseActingQuery(query: Record<string, unknown>): Parsed<Acting | undefined> {
+  const authUserId = query[ACTING_USER_PARAM];
+  const role = query[ACTING_ROLE_PARAM];
+  if (authUserId === undefined && role === undefined) return { ok: true, value: undefined };
+  const parsed = parseActing({ authUserId, role });
+  return parsed.ok && !parsed.value ? { ok: false, error: 'The person this request is for could not be read.' } : parsed;
+}
+
+/**
+ * An id as Archie gives one out for a lead or a job: a whole number, as
+ * digits. Anything else names nothing here.
+ */
+export function parseRecordId(raw: unknown): number | null {
+  if (typeof raw !== 'string' || !/^[1-9]\d{0,8}$/.test(raw)) return null;
+  return Number(raw);
+}
+
+const PHONE_RE = /^[\d\s()+.-]{7,20}$/;
+
+/** Plain text of at most `max` characters, or undefined when the field was not sent. `null` when it cannot be used. */
+function words(raw: unknown, max: number): string | undefined | null {
+  if (raw === undefined || raw === null) return undefined;
+  if (typeof raw !== 'string') return null;
+  // eslint-disable-next-line no-control-regex
+  const tidy = raw.replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, ' ').trim();
+  if (tidy.length > max) return null;
+  return tidy === '' ? undefined : tidy;
+}
+
+export interface NewLead {
+  name: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  town?: string;
+  jobType?: string;
+  message?: string;
+}
+
+/** The body of POST .../leads. Only the fields the agreement lists are read. */
+export function parseNewLead(body: Record<string, unknown> | undefined): Parsed<NewLead> {
+  if (!body) return { ok: false, error: 'The request has no body.' };
+  const name = words(body.name, 200);
+  if (!name) return { ok: false, error: 'A lead needs a name of at most 200 characters.' };
+  const phone = words(body.phone, 40);
+  if (phone === null || (phone && !PHONE_RE.test(phone))) return { ok: false, error: 'That phone number does not look right.' };
+  const email = words(body.email, 254);
+  if (email === null || (email && !EMAIL_RE.test(email))) return { ok: false, error: 'That email address does not look right.' };
+  const address = words(body.address, 300);
+  const town = words(body.town, 80);
+  const jobType = words(body.jobType, 80);
+  const message = words(body.message, 4000);
+  if (address === null || town === null || jobType === null || message === null) return { ok: false, error: 'One of the fields is too long or is not text.' };
+  return { ok: true, value: { name, phone, email: email?.toLowerCase(), address, town, jobType, message } };
+}
+
+export const LEAD_STATUSES = ['new', 'contacted', 'qualified', 'proposal_sent', 'negotiation', 'won', 'lost', 'disqualified'] as const;
+export type LeadStatus = (typeof LEAD_STATUSES)[number];
+
+export interface LeadChange {
+  status?: LeadStatus;
+  notes?: string;
+  name?: string;
+  phone?: string;
+  email?: string;
+}
+
+/** The body of PATCH .../leads/{id}. At least one field must be given. */
+export function parseLeadChange(body: Record<string, unknown> | undefined): Parsed<LeadChange> {
+  if (!body) return { ok: false, error: 'The request has no body.' };
+  const change: LeadChange = {};
+  if (body.status !== undefined && body.status !== null) {
+    if (typeof body.status !== 'string' || !(LEAD_STATUSES as readonly string[]).includes(body.status)) {
+      return { ok: false, error: `The status must be one of: ${LEAD_STATUSES.join(', ')}.` };
+    }
+    change.status = body.status as LeadStatus;
+  }
+  const notes = words(body.notes, 4000);
+  const name = words(body.name, 200);
+  const phone = words(body.phone, 40);
+  const email = words(body.email, 254);
+  if (notes === null || name === null) return { ok: false, error: 'One of the fields is too long or is not text.' };
+  if (phone === null || (phone && !PHONE_RE.test(phone))) return { ok: false, error: 'That phone number does not look right.' };
+  if (email === null || (email && !EMAIL_RE.test(email))) return { ok: false, error: 'That email address does not look right.' };
+  if (notes) change.notes = notes;
+  if (name) change.name = name;
+  if (phone) change.phone = phone;
+  if (email) change.email = email.toLowerCase();
+  if (Object.keys(change).length === 0) return { ok: false, error: 'Say what to change.' };
+  return { ok: true, value: change };
+}
+
+/** The body of POST .../leads/{id}/notes. */
+export function parseNote(body: Record<string, unknown> | undefined): Parsed<string> {
+  const text = words(body?.text, 2000);
+  if (!text) return { ok: false, error: 'A note needs some text, at most 2000 characters.' };
+  return { ok: true, value: text };
+}

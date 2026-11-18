@@ -57,6 +57,13 @@
       "when": 1794960577616,
       "tag": "0007_roofli_sso",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794960899592,
+      "tag": "0008_roofli_lead_notes",
+      "breakpoints": true
     }
   ]
 }

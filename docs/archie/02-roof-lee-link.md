@@ -71,6 +71,9 @@ every sign-in and every request from Roof Lee with a refusal.
 | `server/sister/idempotency.ts` | Does a write once, however many times it arrives. |
 | `server/sister/ticket.ts` | Roof Lee's sign-in ticket reader, pasted word for word. Do not edit here. |
 | `server/sister/sso.ts` | One sign-in: spends a ticket and says who it signs in. |
+| `server/sister/acting.ts` | Finds the person a request is for on the company's own team, and applies Archie's role rules to them. |
+| `server/sister/leads.ts` | Leads, jobs and notes as Roof Lee's assistant reads and changes them. |
+| `server/sister/capabilities.ts` | What Archie says it can do for one company. |
 
 Both entry files (`server/index.ts` and `api/index.ts`) keep the raw body for
 `/api/sister` ahead of `express.json`. The signature is over the bytes as they
@@ -87,14 +90,67 @@ production entry, to prove it.
 | `GET` | `/api/sister/v1/companies/{roofliCompanyId}` | version 2 (also the method and address) |
 | `DELETE` | `/api/sister/v1/companies/{roofliCompanyId}` | version 2 |
 | `POST` | `/api/sister/v1/sso` | none: the browser posts a one-time ticket |
+| `GET` | `/api/sister/v1/companies/{roofliCompanyId}/capabilities` | version 2 |
+| `GET` | `/api/sister/v1/companies/{roofliCompanyId}/jobs` | version 2 |
+| `GET` | `/api/sister/v1/companies/{roofliCompanyId}/jobs/{id}` | version 2 |
+| `POST` | `/api/sister/v1/companies/{roofliCompanyId}/leads` | version 2 |
+| `PATCH` | `/api/sister/v1/companies/{roofliCompanyId}/leads/{id}` | version 2 |
+| `POST` | `/api/sister/v1/companies/{roofliCompanyId}/leads/{id}/notes` | version 2 |
 
 Each address takes exactly one form of signature and never the other. Anything
 else under `/api/sister` answers `404` to a signed request and a bare `401` to
 an unsigned one.
 
-Still to build (tasks A6 to A9 in Roof Lee's Stage 1 plan): the read and
-write endpoints for Lee, events back to Roof Lee, Archie's own jobs, and the
-"no messages of its own" gate with the `messages.quiet` capability.
+Still to build (tasks A7 to A9 in Roof Lee's Stage 1 plan): events back to
+Roof Lee, Archie's own jobs (with moving a job's stage and handing over
+photos), and the "no messages of its own" gate with the `messages.quiet`
+capability.
+
+## Read and write for Lee
+
+Lee is Roof Lee's assistant. These endpoints let it read a company's leads
+and jobs, add a lead, change one and add a note.
+
+- **The company comes from the address**, by Roof Lee's id, and the work then
+  runs as that company. A lead id that belongs to another company answers
+  `404`, exactly as if it did not exist. A company that is paused or closed
+  answers `409` to all of these: Archie does nothing for it.
+- **Who it is for.** A write names the person in its `acting` block; a read in
+  its address (`?actingUserId=...&actingRole=...`). Archie finds that person
+  on the company's own team by their shared sign-in id and applies its own
+  role rules (`shared/rbac.ts`) to the role it holds for them. Where Roof Lee
+  states a lower role than Archie holds, the lower one counts. Someone not on
+  the team is answered `403`.
+- **What each role gets.** Owners, admins and office staff can see and work
+  every lead. Crew (the production role here) cannot see leads in Archie at
+  all: a list comes back empty, one lead answers `404`, a write `403`.
+- **A write is done once.** Every write must carry an `idempotency-key`. A new
+  lead, and a new note, are saved in the same transaction as the answer to
+  that key, so the same key can never make a second one. A refusal is not
+  remembered, so the same request can be sent again once the team list has
+  caught up.
+- **A lead Roof Lee adds stays in Archie.** It is stored with source `roofli`,
+  with no call to JobTread, KynexPro or anything else, and no message to
+  anyone. Every change is written to the company's log under the person it
+  was for.
+- **Ids** are Archie's own row numbers, as digits. Leads and jobs share one
+  list; a record is a `job` once it sits on the production board and a `lead`
+  until then.
+- **Fields.** `message` is the lead's standing note (`leads.notes`), which
+  `PATCH` replaces when it sends `notes`. `notes` in an answer is the list of
+  notes added one at a time (`lead_notes`, migration `0008`), newest first.
+  No money is ever in an answer.
+- **Photos.** Archie keeps no record of a customer agreeing to their photos
+  being used, so `photoConsent` is always `false`, `photos` is always empty,
+  and the photo address answers `404`. That changes with Archie's own jobs
+  (task A8).
+- **Capabilities.** The list is empty for every company today. Neither
+  `messages.quiet` nor `jobs.native` may be claimed until the work behind it
+  exists (tasks A9 and A8), and each must be worked out in
+  `server/sister/capabilities.ts` from the switch the feature itself reads.
+  Roof Lee adds and changes no lead until it has heard `messages.quiet`, so
+  until then the write endpoints here are built and tested but Roof Lee will
+  not call them.
 
 ## One sign-in
 

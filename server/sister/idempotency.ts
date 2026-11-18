@@ -76,3 +76,21 @@ export async function once(companyId: string, key: string | undefined, work: () 
   await runAsCompany(companyId, () => db.update(sisterIdempotency).set({ response: kept }).where(mine), { loadProfile: false });
   return kept;
 }
+
+/** A transaction on Archie's database, as db.transaction hands one out. */
+export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * Keeps the answer to a write in the SAME transaction as the write itself.
+ *
+ * `once` stores the answer after the work has finished. For work that makes a
+ * new row, that leaves a gap: if the process dies between the two, the claim
+ * is taken over a minute later and the row is made a second time. Calling
+ * this inside the work's own transaction closes the gap: either the row and
+ * its answer are both there, or neither is.
+ */
+export async function rememberWithin(tx: Tx, companyId: string, key: string | undefined, answer: SisterAnswer): Promise<void> {
+  if (key === undefined) return;
+  await tx.update(sisterIdempotency).set({ response: { status: answer.status, body: answer.body } })
+    .where(and(eq(sisterIdempotency.companyId, companyId), eq(sisterIdempotency.key, key)));
+}
