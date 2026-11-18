@@ -70,6 +70,7 @@ import { sendFailure } from './lib/failure';
 import { registerCommsRoutes } from './comms/routes';
 import { blockDisabledJobs } from './tenant/cron';
 import { verifyGhlWebhookSecret } from './integrations/ghl/webhook-secret';
+import { handleGhlNewContact } from './integrations/ghl/new-contact';
 import { registerGhlConnectionRoutes } from './integrations/ghl/routes';
 import { registerConnectionRoutes } from './integrations/connection-routes';
 import { registerCompanyRoutes } from './company/routes';
@@ -1159,33 +1160,9 @@ export function registerRoutes(app: Express) {
       const ghl = new GoHighLevelClient();
       const { eventType, data } = ghl.parseWebhookPayload(payload);
 
-      // Handle new contact/lead
+      // Handle new contact/lead (./integrations/ghl/new-contact.ts)
       if (eventType === 'ContactCreate' || eventType === 'contact.create') {
-        const [agentRow] = await db
-          .select()
-          .from(agents)
-          .where(eq(agents.role, 'cmo'));
-
-        // The company's own people become GHL contacts when Archie emails
-        // them (a set-password link, a reminder). They are not leads.
-        const contactEmail = String(data?.email || '').trim().toLowerCase();
-        const isTeamMember = !!contactEmail && !!(await getTeamMemberByEmail(contactEmail));
-        if (isTeamMember) {
-          console.log('[webhook] new GHL contact is a team member; not treated as a lead');
-        } else if (agentRow) {
-          const cmo = new CMOAgent(toAgentConfig(agentRow));
-          const leadData = ghl.contactToLead(data);
-
-          const result = await cmo.handleNewLead({
-            ...leadData,
-            serviceType: data.customField?.serviceType || data.tags?.find((t: string) =>
-              ['repair', 'replacement', 'inspection'].includes(t.toLowerCase())
-            ),
-            propertyType: data.customField?.propertyType,
-          });
-
-          console.log('Lead processed:', result);
-        }
+        await handleGhlNewContact(data);
       }
       });
 

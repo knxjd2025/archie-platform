@@ -21,7 +21,7 @@ import { SSO_REFUSED_PAGE, signInFromTicket } from './sso';
 import type { Company } from '../../shared/schema';
 import { isLiveCompany } from '../../shared/company';
 import { findActingMember, mayWorkLeads, type ActingMember } from './acting';
-import { capabilitiesFor } from './capabilities';
+import { capabilitiesFor, type Capability } from './capabilities';
 import { addNote, createLead, getJob, listJobs, moveJob, updateLead } from './leads';
 import { runEventDelivery } from './events';
 import { timingSafeEqualStr } from '../security-config';
@@ -211,8 +211,15 @@ export function registerSisterRoutes(app: Express): void {
    * One write for a named person, done once. Reads the three things every
    * write must carry (the company in the address, who it is for, and a key),
    * then runs `work` as the company with the person Archie found.
+   *
+   * `needs` names what Archie must be able to say about the company for this
+   * write to be made at all (the agreement's "Only when ... is reported").
+   * Roof Lee holds itself to the same rule from what it last heard; Archie
+   * holds to it here from what is true now, so a write that slips through
+   * after something changed is still refused. Not kept, so it can be sent
+   * again.
    */
-  function leeWrite(what: string, work: (member: ActingMember, req: Request, key: string) => Promise<SisterAnswer>) {
+  function leeWrite(what: string, needs: Capability[], work: (member: ActingMember, req: Request, key: string) => Promise<SisterAnswer>) {
     return async (req: Request, res: Response) => {
       try {
         const body = req.sister?.body;
@@ -227,6 +234,10 @@ export function registerSisterRoutes(app: Express): void {
         const company = await liveCompany(req, res);
         if (!company) return;
         const who: Acting = acting.value;
+        if (needs.length) {
+          const can = await capabilitiesFor(company);
+          if (!needs.every((n) => can.includes(n))) return res.status(409).json({ error: 'Archie is not set up to take this for this company yet.' });
+        }
         const answer = await once(company.id, key, () => runAsCompany(company.id, async () => {
           const member = await findActingMember(who);
           // Not kept: the team list may simply not have arrived yet.
@@ -290,14 +301,15 @@ export function registerSisterRoutes(app: Express): void {
   }, { needsPerson: false }));
 
   // A new lead, kept in Archie only: no JobTread, no KynexPro, no message to anyone.
-  app.post(`${COMPANIES}/:roofliCompanyId/leads`, requireSister(2), leeWrite('POST leads', async (member, req, key) => {
+  // Only while Archie sends this company's customers nothing by itself.
+  app.post(`${COMPANIES}/:roofliCompanyId/leads`, requireSister(2), leeWrite('POST leads', ['messages.quiet'], async (member, req, key) => {
     const lead = parseNewLead(req.sister?.body);
     if (!lead.ok) return { status: 400, body: { error: lead.error }, remember: false };
     return createLead(member, lead.value, key);
   }));
 
   // Change a lead's status, standing note or contact details.
-  app.patch(`${COMPANIES}/:roofliCompanyId/leads/:id`, requireSister(2), leeWrite('PATCH lead', async (member, req) => {
+  app.patch(`${COMPANIES}/:roofliCompanyId/leads/:id`, requireSister(2), leeWrite('PATCH lead', ['messages.quiet'], async (member, req) => {
     const change = parseLeadChange(req.sister?.body);
     if (!change.ok) return { status: 400, body: { error: change.error }, remember: false };
     const id = parseRecordId(req.params.id);
@@ -306,7 +318,7 @@ export function registerSisterRoutes(app: Express): void {
   }));
 
   // Add a note to a lead or job.
-  app.post(`${COMPANIES}/:roofliCompanyId/leads/:id/notes`, requireSister(2), leeWrite('POST note', async (member, req, key) => {
+  app.post(`${COMPANIES}/:roofliCompanyId/leads/:id/notes`, requireSister(2), leeWrite('POST note', [], async (member, req, key) => {
     const text = parseNote(req.sister?.body);
     if (!text.ok) return { status: 400, body: { error: text.error }, remember: false };
     const id = parseRecordId(req.params.id);
@@ -316,7 +328,7 @@ export function registerSisterRoutes(app: Express): void {
   // Move a job along the production board. A lead is put on the board, under
   // a job identity Archie makes, the first time it is moved. The board's own
   // rules decide whether the move may be made.
-  app.post(`${COMPANIES}/:roofliCompanyId/jobs/:id/stage`, requireSister(2), leeWrite('POST job stage', async (member, req) => {
+  app.post(`${COMPANIES}/:roofliCompanyId/jobs/:id/stage`, requireSister(2), leeWrite('POST job stage', ['messages.quiet', 'jobs.native'], async (member, req) => {
     const id = parseRecordId(req.params.id);
     return (id === null ? null : await moveJob(member, id, req.sister?.body?.stage)) ?? NO_SUCH;
   }));

@@ -7,6 +7,7 @@ import { GoHighLevelClient } from '../integrations/gohighlevel';
 import { getQuickBooksClient } from '../integrations/quickbooks';
 import { getPlaidClient } from '../integrations/plaid-client';
 import { calculateCommissionTool, listCommissionsTool } from './team-agents';
+import { maySendOwnMessage, OWN_MESSAGES_OFF } from '../sister/quiet';
 
 export class CFOAgent extends BaseAgent {
   private jobtread: JobTreadClient;
@@ -382,6 +383,8 @@ export class CFOAgent extends BaseAgent {
 
   // Send payment reminder
   private async sendPaymentReminder(invoiceId: string, method: string = 'email') {
+    // Nobody pressed send on this reminder, so ask first (server/sister/quiet.ts).
+    if (!(await maySendOwnMessage('payment_reminder'))) return { success: false, error: OWN_MESSAGES_OFF };
     try {
       // Get invoice details
       const invoiceData = await this.jobtread.getInvoices({ limit: 100 });

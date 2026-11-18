@@ -88,6 +88,8 @@ there is, and the one new index is empty too.
 | `server/sister/acting.ts` | Finds the person a request is for on the company's own team, and applies Archie's role rules to them. |
 | `server/sister/leads.ts` | Leads, jobs and notes as Roof Lee's assistant reads and changes them. |
 | `server/sister/capabilities.ts` | What Archie says it can do for one company. |
+| `server/sister/quiet.ts` | The messages Archie sends a customer by itself, and the one switch that says whether it may. |
+| `server/integrations/ghl/new-contact.ts` | What happens when a new contact arrives from KynexPro. Skips a contact Roof Lee made. |
 | `server/production/native-jobs.ts` | Archie's own jobs: the job identity Archie makes, who gets one, and the record of a customer agreeing to photos. |
 | `server/sister/events.ts` | News going back to Roof Lee: the outbox, the signing, the sending and the retries. |
 
@@ -123,8 +125,8 @@ Archie also sends: `POST {Roof Lee}/api/sister/v1/events` (version 2
 signature), and answers its own scheduler at `GET /api/cron/sister-events`
 (`CRON_SECRET`).
 
-Still to build (task A9 in Roof Lee's Stage 1 plan): the "no messages of its
-own" gate with the `messages.quiet` capability.
+Every Archie task in Roof Lee's Stage 1 plan (A1 to A9) is now built. What is
+left is the live step ("Turning it on" below).
 
 ## Read and write for Lee
 
@@ -166,11 +168,60 @@ and jobs, add a lead, change one and add a note.
   own for any job (see "Archie's own jobs").
 - **Capabilities.** Each is worked out in `server/sister/capabilities.ts` from
   the switch the feature itself reads, never typed as a fixed answer.
-  `jobs.native` is reported for every company Roof Lee made.
-  `messages.quiet` is not reported yet (task A9). Roof Lee adds and changes no
-  lead and moves no job until it has heard `messages.quiet`, so until then
-  the write endpoints here are built and tested but Roof Lee will not call
-  them.
+  `jobs.native` and `messages.quiet` are both reported for every company Roof
+  Lee made. Roof Lee adds and changes no lead and moves no job until it has
+  heard `messages.quiet`, and Archie holds itself to the same rule: adding a
+  lead, changing one and moving a job answer `409` for a company that is not
+  quiet (moving a job also needs `jobs.native`). Reading and adding a note are
+  not held back.
+
+## No messages of its own
+
+For a company Roof Lee made, Archie sends a customer nothing by itself. Such a
+message would skip Roof Lee's approval, its cap per company and its cost
+ledger.
+
+"By itself" means nobody pressed send on that message: it goes out because a
+lead arrived, because an advisor (a model) decided to, or because a schedule
+came round.
+
+What was found by reading the code, and what was done:
+
+| Feature | Where | Now |
+|---|---|---|
+| The text a new lead gets the moment it arrives (speed to lead) | `CMOAgent.handleNewLead`, reached from the KynexPro, JobTread and Twilio webhooks | Asks the switch. Off for a Roof Lee company: the lead is kept and scored, nothing is sent. |
+| A text an advisor decides to send a lead | the marketing advisor's `send_sms_to_lead` tool (chats, tasks, the scheduled advisor run) | Asks the switch. Off for a Roof Lee company. |
+| A payment reminder an advisor sends | the finance advisor's `send_payment_reminder` tool and its overdue sweep | Asks the switch. Off for a Roof Lee company. |
+| Follow-ups | `server/followups`, the advisors' follow-up tasks | Nothing is sent to a customer: a follow-up is a task for a person. Listed in the switch for whoever builds a sent one. |
+| Review requests | the marketing advisor's `draft_review_request` | Nothing is sent: it only writes the words for a person. Listed in the switch for the same reason. |
+
+Not counted, because a person presses send on each message: a text or email
+written on a contact or a lead, a signature request and its reminder, a
+certificate of completion, an insurance letter. Also not counted: the signed
+copy emailed back to a customer after they sign a document a person sent
+them, and mail to the company's own people (password links, the daily
+reminder to reps). None of these can leave for a Roof Lee company today in any
+case, because it has no sending account of its own in Archie.
+
+How it is kept:
+
+- **One switch.** `server/sister/quiet.ts` lists every such feature and
+  answers one question, `maySendOwnMessage(kind)`, which each feature asks
+  just before it would send. For a company Roof Lee made the answer is no. For
+  a company that cannot be found it is also no. For every other company it is
+  yes, exactly as before.
+- **`messages.quiet` comes from the same switch.** It is said only while the
+  answer is no for every kind. Switching one of them on for a company later
+  takes the capability away without anyone remembering to.
+- **A contact Roof Lee made creates nothing.** Roof Lee tags every KynexPro
+  contact it makes `roofli`. When such a contact arrives at
+  `/api/webhooks/gohighlevel` it is not taken in: no second lead, no news back
+  to Roof Lee, no text. This holds for every company.
+- **New code that sends must say which kind it is.** A test
+  (`server/sister/__tests__/quiet.test.ts`) lists every file that hands a
+  text or an email to a provider. A new file that starts sending fails the
+  test until someone decides whether a person presses send, or it asks the
+  switch.
 
 ## Archie's own jobs
 
@@ -364,6 +415,11 @@ Still open for the owner: which stage means "job finished" (the default is
 closed out), and whether the hosting plan runs a scheduled job every ten
 minutes. If it does not, change the schedule in `vercel.json`: news is still
 sent right away, and only the retries after a failure get slower.
+
+Before `SISTERS_ARCHIE_READY` is set, also check with the test company: ask
+for its capabilities and see both `messages.quiet` and `jobs.native`; add a
+lead from Roof Lee and move it to Approved, and see it on the production
+board in Archie; and confirm no text or email reached the test customer.
 
 ## Tests
 

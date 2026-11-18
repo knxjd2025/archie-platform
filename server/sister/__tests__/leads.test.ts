@@ -64,7 +64,7 @@ describe.skipIf(!localDb)('read and write for Lee', async () => {
     expect(r.status).toBe(200);
     // Worked out per company, from the switches the features themselves read
     // (jobs.test.ts and quiet.test.ts say when each may be claimed).
-    expect(r.body).toEqual({ capabilities: ['jobs.native'] });
+    expect(r.body).toEqual({ capabilities: ['messages.quiet', 'jobs.native'] });
     expect((await sisterSend(base, { path: `${companies}/${randomUUID()}/capabilities`, version: 2 })).status).toBe(404);
     // The older signature, which does not cover the address, opens nothing here.
     expect((await sisterSend(base, { path: `${companies}/${c.roofliId}/capabilities`, version: 1 })).status).toBe(401);

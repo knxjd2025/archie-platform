@@ -7,6 +7,7 @@ import { JobTreadClient } from '../integrations/jobtread';
 import { leadScope, viewerCanSeeLead } from './sales-tools';
 import { currentProfile } from '../tenant/context';
 import { emitLeadCreated } from '../sister/events';
+import { maySendOwnMessage, OWN_MESSAGES_OFF, type OwnMessage } from '../sister/quiet';
 
 /** Most leads get_lead_pipeline returns in one call. */
 const PIPELINE_MAX_LIMIT = 50;
@@ -129,7 +130,7 @@ export class CMOAgent extends BaseAgent {
       execute: async (params) => {
         const denied = await this.denyUnlessVisible(params.leadId);
         if (denied) return denied;
-        return this.sendSmsToLead(Number(params.leadId), params.message);
+        return this.sendSmsToLead(Number(params.leadId), params.message, 'advisor_text');
       },
     });
 
@@ -411,8 +412,12 @@ export class CMOAgent extends BaseAgent {
     return { score, qualified, reason, recommendation };
   }
 
-  // Send SMS to a lead
-  private async sendSmsToLead(leadId: number, message: string) {
+  // Send SMS to a lead. Nobody pressed send on this message, so it asks
+  // first whether Archie may send this kind by itself for this company
+  // (server/sister/quiet.ts). `kind` says which of them it is.
+  private async sendSmsToLead(leadId: number, message: string, kind: OwnMessage) {
+    if (!(await maySendOwnMessage(kind))) throw new Error(OWN_MESSAGES_OFF);
+
     const [lead] = await db.select().from(leads).where(eq(leads.id, leadId));
 
     if (!lead) {
@@ -592,13 +597,18 @@ export class CMOAgent extends BaseAgent {
     const qualification = await this.qualifyLead(lead.id);
     actionsTaken.push(`Qualified lead: Score ${qualification.score}/10 - ${qualification.qualified ? 'QUALIFIED' : 'NOT QUALIFIED'}`);
 
-    // 3. If qualified, send immediate response
-    if (qualification.qualified && lead.phone) {
+    // 3. If qualified, send immediate response. Not for a company whose
+    // messages go out through Roof Lee (server/sister/quiet.ts): the lead is
+    // kept and scored, and nothing is sent to anyone.
+    const mayReply = await maySendOwnMessage('new_lead_reply');
+    if (!mayReply) {
+      actionsTaken.push('No message sent: this company\'s messages go out through Roof Lee');
+    } else if (qualification.qualified && lead.phone) {
       const serviceDesc = lead.serviceType || 'roofing service';
       const smsMessage = `Hi ${lead.firstName || 'there'}! Thanks for contacting ${company.displayName}! We received your request for ${serviceDesc}. A team member will call you soon. Questions? Reply to this text${callUs}. - ${company.displayName}`;
 
       try {
-        await this.sendSmsToLead(lead.id, smsMessage);
+        await this.sendSmsToLead(lead.id, smsMessage, 'new_lead_reply');
         actionsTaken.push('Sent immediate SMS response');
       } catch (error: any) {
         actionsTaken.push(`SMS failed: ${error.message}`);
@@ -629,7 +639,7 @@ export class CMOAgent extends BaseAgent {
       }
 
       try {
-        await this.sendSmsToLead(lead.id, message);
+        await this.sendSmsToLead(lead.id, message, 'new_lead_reply');
         actionsTaken.push('Sent acknowledgment SMS');
       } catch (error: any) {
         actionsTaken.push(`SMS failed: ${error.message}`);
