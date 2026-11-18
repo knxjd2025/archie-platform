@@ -22,7 +22,7 @@
  * holds for them from the last team list Roof Lee sent.
  */
 import { createHash } from 'node:crypto';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, lt } from 'drizzle-orm';
 import { db } from '../db';
 import { sisterSsoTickets, teamMembers } from '../../shared/schema';
 import { isLiveCompany } from '../../shared/company';
@@ -72,8 +72,12 @@ export async function signInFromTicket(raw: unknown, now: Date = new Date()): Pr
       .onConflictDoNothing().returning({ jtiHash: sisterSsoTickets.jtiHash });
     if (!first[0]) return null;
     // Clear away this company's long-finished tickets while here. Best effort.
+    // Compared with the SAME clock that wrote expires_at (this process's), as
+    // every other one-time store here does. The database's now() reads in its
+    // session's time zone: on a session east of UTC it would call the row just
+    // written long finished and delete it, and the ticket would work twice.
     await db.delete(sisterSsoTickets)
-      .where(sql`${sisterSsoTickets.expiresAt} < now() - make_interval(mins => ${KEEP_AFTER_END_MINUTES})`)
+      .where(lt(sisterSsoTickets.expiresAt, new Date(now.getTime() - KEEP_AFTER_END_MINUTES * 60_000)))
       .then(() => {}, () => {});
 
     // Step 7. By the shared sign-in id, inside this company, among the people
