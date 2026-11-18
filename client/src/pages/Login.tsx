@@ -3,9 +3,20 @@ import { useAuth } from '../lib/auth';
 import { isNativeApp, startNativeSignIn } from '../lib/native';
 import { ArchieMark, PRODUCT_NAME } from '../lib/company';
 import { postAuth } from '../lib/auth-post';
+import { COMPANY_CANCELLED_MESSAGE, COMPANY_PAUSED_MESSAGE } from '../../../shared/company';
+
+/** What each `?error=` from the Google sign-in means, in plain words. */
+const ERROR_TEXT: Record<string, string> = {
+  not_authorized: 'That account is not authorized.',
+  cancelled: 'Sign-in was not finished. Try again.',
+  company_inactive: COMPANY_PAUSED_MESSAGE,
+  company_closed: COMPANY_CANCELLED_MESSAGE,
+};
+/** Errors that are an answer, not a fault: no "ask your admin if this keeps happening". */
+const FINAL_ERRORS = new Set(['not_authorized', 'cancelled', 'company_inactive', 'company_closed']);
 
 export default function Login() {
-  const { expired } = useAuth();
+  const { expired, notice } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [clicking, setClicking] = useState(false);
   const native = isNativeApp();
@@ -78,18 +89,19 @@ export default function Login() {
           {error && (
             <div className="mb-4">
               <p className="text-sm text-red-600 font-medium">
-                {error === 'not_authorized' ? 'That account is not authorized.'
-                  : error === 'cancelled' ? 'Sign-in was not finished. Try again.'
-                  : 'Sign-in failed. Try again.'}
+                {ERROR_TEXT[error] ?? 'Sign-in failed. Try again.'}
               </p>
-              {error !== 'not_authorized' && error !== 'cancelled' && (
+              {!FINAL_ERRORS.has(error) && (
                 <p className="text-xs text-gray-400 mt-1">
                   If this keeps happening, ask your company's {PRODUCT_NAME} admin.
                 </p>
               )}
             </div>
           )}
-          {expired && (
+          {notice && !error && (
+            <p role="status" className="mb-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{notice}</p>
+          )}
+          {expired && !notice && (
             <p className="mb-3 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
               Your session timed out — sign in again to pick up where you left off.
             </p>

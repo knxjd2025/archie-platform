@@ -4,7 +4,7 @@ import { applyBrandTheme } from './brand';
 import { isSetPasswordPath } from './password-pages';
 import { setTimeZoneProvider } from '../../../shared/schedule-board';
 import type { TeamRole } from '../../../shared/rbac';
-import type { CompanyProfile } from '../../../shared/company';
+import { COMPANY_INACTIVE_CODE, type CompanyProfile } from '../../../shared/company';
 
 export interface AuthUser { email: string; name: string; role: TeamRole }
 /**
@@ -27,9 +27,16 @@ interface AuthState {
   signOut: () => Promise<void>;
   /** Ask the server again for the person and their company, e.g. after the Company page saves. */
   refresh: () => Promise<void>;
+  /**
+   * The server lists this person in ARCHIE_OPERATOR_EMAILS: show the Operator
+   * page. Only shows or hides it; the server checks every operator request.
+   */
+  isOperator: boolean;
+  /** Why the last session ended, when the server said (a paused company). Shown on the sign-in page. */
+  notice: string | null;
 }
 
-const Ctx = createContext<AuthState>({ user: null, profile: null, loading: true, expired: false, offline: false, signOut: async () => {}, refresh: async () => {} });
+const Ctx = createContext<AuthState>({ user: null, profile: null, loading: true, expired: false, offline: false, signOut: async () => {}, refresh: async () => {}, isOperator: false, notice: null });
 
 /**
  * Who was signed in last time the server answered.
@@ -108,12 +115,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [expired, setExpired] = useState(false);
   const [offline, setOffline] = useState(false);
+  const [isOperator, setIsOperator] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const checkRef = useRef<(() => Promise<void>) | null>(null);
 
   // When the session goes, drop to the sign-in screen rather than leaving a
   // shell where every panel fails differently.
   useEffect(() => {
-    const onExpired = () => { setUser(null); setProfile(null); setExpired(true); setOffline(false); writeCachedUser(null); writeCachedProfile(null); };
+    const onExpired = (e: Event) => {
+      const reason = (e as CustomEvent<{ reason?: string } | undefined>).detail?.reason ?? null;
+      setUser(null); setProfile(null); setIsOperator(false); setNotice(reason); setExpired(!reason); setOffline(false);
+      writeCachedUser(null); writeCachedProfile(null);
+    };
     window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
     return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
   }, []);
@@ -133,6 +146,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           retry.cancel();
           setUser(u);
           setProfile(p);
+          setIsOperator(d?.isOperator === true);
           setOffline(false);
           writeCachedUser(u);
           writeCachedProfile(p);
@@ -142,7 +156,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (r.status === 401 || r.status === 403) {
           // The server answered and said no. That is a real sign-out, so the
           // cached session goes with it.
+          const d = await r.json().catch(() => null);
+          if (!cancelled && d?.code === COMPANY_INACTIVE_CODE && typeof d?.message === 'string') setNotice(d.message);
           retry.cancel();
+          setIsOperator(false);
           setUser(null);
           setProfile(null);
           setOffline(false);
@@ -187,6 +204,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
     setUser(null);
     setProfile(null);
+    setIsOperator(false);
+    setNotice(null);
     setExpired(false);
     setOffline(false);
     writeCachedUser(null);
@@ -206,7 +225,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refresh = async () => { await checkRef.current?.(); };
 
-  return <Ctx.Provider value={{ user, profile, loading, expired, offline, signOut, refresh }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ user, profile, loading, expired, offline, signOut, refresh, isOperator, notice }}>{children}</Ctx.Provider>;
 }
 
 export function useAuth() { return useContext(Ctx); }

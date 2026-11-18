@@ -78,6 +78,13 @@
       "when": 1792715010000,
       "tag": "0010_company_job_leases",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792715020000,
+      "tag": "0011_operator_console",
+      "breakpoints": true
     }
   ]
 }

@@ -36,9 +36,12 @@ import CallsPage from './pages/calls';
 import CallBar from './components/CallBar';
 import BugReportButton from './components/BugReportButton';
 import Bugs from './pages/bugs';
+import Operator from './pages/operator';
 import { setBugPage } from './lib/bug-monitor';
 
-type Page = MenuPage | 'client';
+// 'operator' is not on the company menu: it is for the people who run Archie,
+// shown from the account menu when /api/auth/me says isOperator.
+type Page = MenuPage | 'client' | 'operator';
 
 /**
  * One source of truth for navigation: shared/menu.ts. It drives the desktop
@@ -75,7 +78,7 @@ function App() {
   // remembers whichever page you actually came from.
   const [clientOrigin, setClientOrigin] = useState<Page>('leads');
 
-  const { user, profile, loading, offline, signOut } = useAuth();
+  const { user, profile, loading, offline, signOut, isOperator } = useAuth();
   const company = useCompany();
 
   useEffect(() => {
@@ -116,6 +119,7 @@ function App() {
       ...Object.fromEntries(NAV.map((n) => [n.page, n.label])),
       client: 'Client',
       inbox: 'Inbox Leads',
+      operator: 'Operator',
     };
     document.title = titles[currentPage] ? `${titles[currentPage]} · ${PRODUCT_NAME}` : PRODUCT_NAME;
   }, [currentPage]);
@@ -134,7 +138,8 @@ function App() {
   // "last page" either, because activePage falls back to Home.
   const isAdmin = user.role === 'admin';
   const hiddenPages = profile?.hiddenPages ?? [];
-  const canSeePage = (page: Page): boolean => pageVisible(user.role as TeamRole, page, hiddenPages);
+  const canSeePage = (page: Page): boolean =>
+    page === 'operator' ? isOperator : pageVisible(user.role as TeamRole, page, hiddenPages);
   const activePage: Page = canSeePage(currentPage) ? currentPage : 'dashboard';
   // So a bug report, or an error caught on its own, says which screen it came from.
   setBugPage(activePage);
@@ -346,6 +351,14 @@ function App() {
                         <span aria-hidden className="w-5 text-center">🗂️</span>My Account
                       </button>
                     )}
+                    {isOperator && (
+                      <button
+                        onClick={() => go('operator')}
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                      >
+                        <span aria-hidden className="w-5 text-center">🛠️</span>Operator
+                      </button>
+                    )}
                     <div className="border-t border-gray-100" />
                     <button
                       onClick={() => { setUserMenuOpen(false); signOut(); }}
@@ -418,6 +431,7 @@ function App() {
         )}
         {activePage === 'team' && <Team />}
         {activePage === 'company' && <CompanyPage />}
+        {activePage === 'operator' && <Operator />}
         {activePage === 'bugs' && <Bugs />}
       </main>
 

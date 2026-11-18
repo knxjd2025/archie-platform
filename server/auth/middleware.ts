@@ -3,7 +3,7 @@ import { atLeast, type TeamRole } from '../../shared/rbac';
 import { isAllowedLoginEmail, isBlockedLoginEmail, memberCanLogin, type LoginGateMember } from './allowlist';
 import { getTeamMemberByEmail } from '../storage/team';
 import { getCurrentCompany } from '../tenant/companies';
-import { isLiveCompany } from '../../shared/company';
+import { COMPANY_INACTIVE_CODE, inactiveCompanyMessage, isLiveCompany } from '../../shared/company';
 import { currentCompanyId, isCompanyId } from '../tenant/context';
 
 /** A session that belongs to a blocked address is ended on the spot, even one that predates the block. */
@@ -27,14 +27,19 @@ function endBlockedSession(req: Request, res: Response): boolean {
 const REVALIDATE_TTL_MS = 30_000;
 
 type RosterRow = (LoginGateMember & { role: TeamRole; name: string }) | null;
-const rosterCache = new Map<string, { row: RosterRow; at: number }>();
+/**
+ * A roster lookup. `inactive` is the company's status when the company is
+ * paused or cancelled (then `row` is null), so the person is told why.
+ */
+interface RosterLookup { row: RosterRow; inactive?: string }
+const rosterCache = new Map<string, RosterLookup & { at: number }>();
 /**
  * The lookup in flight, per email. A page load fires a burst of parallel API
  * calls, and on a cold cache every one of them missed and ran its own roster
  * query. They now share the first one's. Only a finished lookup is cached, so
  * a failed one is retried by the next request rather than remembered.
  */
-const rosterInflight = new Map<string, Promise<RosterRow>>();
+const rosterInflight = new Map<string, Promise<RosterLookup>>();
 
 /** Cache key: the same email in another company's context is a different lookup. */
 const rosterKey = (email: string): string => `${currentCompanyId() ?? '-'}|${email.trim().toLowerCase()}`;
@@ -52,27 +57,28 @@ export function clearSessionRevalidationCache(email?: string): void {
   }
 }
 
-async function fetchRosterRow(key: string, email: string): Promise<RosterRow> {
+async function fetchRosterRow(key: string, email: string): Promise<RosterLookup> {
   // Runs as the session's company (server/tenant/middleware.ts), so a member
   // of any other company is simply not found, and a paused or cancelled
   // company's members all read as gone.
   const company = await getCurrentCompany();
   if (!isLiveCompany(company)) {
-    rosterCache.set(key, { row: null, at: Date.now() });
-    return null;
+    const lookup: RosterLookup = { row: null, inactive: company?.status };
+    rosterCache.set(key, { ...lookup, at: Date.now() });
+    return lookup;
   }
   const member = await getTeamMemberByEmail(email);
   const row: RosterRow = member
     ? { active: member.active, canLogin: member.canLogin, role: member.role as TeamRole, name: member.name }
     : null;
   rosterCache.set(key, { row, at: Date.now() });
-  return row;
+  return { row };
 }
 
-async function loadRosterRow(email: string): Promise<RosterRow> {
+async function loadRosterRow(email: string): Promise<RosterLookup> {
   const key = rosterKey(email);
   const hit = rosterCache.get(key);
-  if (hit && Date.now() - hit.at < REVALIDATE_TTL_MS) return hit.row;
+  if (hit && Date.now() - hit.at < REVALIDATE_TTL_MS) return { row: hit.row, inactive: hit.inactive };
   const pending = rosterInflight.get(key);
   if (pending) return pending;
   const lookup = fetchRosterRow(key, email.trim().toLowerCase());
@@ -90,11 +96,12 @@ async function loadRosterRow(email: string): Promise<RosterRow> {
  * optional LOGIN_ALLOWLIST when it is set, and an active roster member with
  * login enabled. Returns the current roster row when the session may continue.
  */
-async function currentMember(email: string): Promise<RosterRow> {
-  if (isBlockedLoginEmail(email)) return null;
-  if (process.env.LOGIN_ALLOWLIST && !isAllowedLoginEmail(email)) return null;
-  const row = await loadRosterRow(email);
-  return row && memberCanLogin(row) ? row : null;
+async function currentMember(email: string): Promise<RosterLookup> {
+  if (isBlockedLoginEmail(email)) return { row: null };
+  if (process.env.LOGIN_ALLOWLIST && !isAllowedLoginEmail(email)) return { row: null };
+  const lookup = await loadRosterRow(email);
+  if (lookup.inactive) return lookup;
+  return { row: lookup.row && memberCanLogin(lookup.row) ? lookup.row : null };
 }
 
 /**
@@ -116,15 +123,23 @@ async function revalidateSession(req: Request, res: Response): Promise<boolean> 
     req.session.destroy(() => res.status(401).json({ message: 'Not authenticated' }));
     return false;
   }
-  let member: RosterRow;
+  let lookup: RosterLookup;
   try {
-    member = await currentMember(user.email);
+    lookup = await currentMember(user.email);
   } catch (err) {
     // A roster read failure is not proof the person was removed, and ending
     // every session on a database blip would sign the whole team out. Refuse
     // this one request instead.
     console.error('[auth] session revalidation failed', err);
     res.status(503).json({ message: 'Could not verify your sign-in. Try again.' });
+    return false;
+  }
+  const member = lookup.row;
+  if (lookup.inactive) {
+    // Paused or cancelled: say so, instead of a bare "Not authenticated".
+    console.warn(`[auth] ending session for ${user.email}: company is ${lookup.inactive}`);
+    const message = inactiveCompanyMessage(lookup.inactive);
+    req.session.destroy(() => res.status(401).json({ message, error: message, code: COMPANY_INACTIVE_CODE }));
     return false;
   }
   if (!member) {

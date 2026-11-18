@@ -46,9 +46,31 @@ export const companies = pgTable('companies', {
   settings: jsonb('settings').$type<import('./company').CompanySettings>().notNull().default({}),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  // When a trial's free period ends (migrations/0011). Shown on the operator
+  // page; not enforced yet (billing will). Null: no end date recorded.
+  trialEndsAt: timestamp('trial_ends_at'),
 });
 
 export type Company = typeof companies.$inferSelect;
+
+/**
+ * What the people who run Archie (operators, ARCHIE_OPERATOR_EMAILS) changed,
+ * from the operator console (server/operator/*). Global, not a company table:
+ * the app role has no access to it at all, the system role may only read and
+ * append (migrations/0011). Never holds a link, token or password.
+ */
+export const operatorAuditLog = pgTable('operator_audit_log', {
+  id: serial('id').primaryKey(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  operatorEmail: text('operator_email').notNull(),
+  action: text('action').notNull(),
+  targetCompanyId: uuid('target_company_id').references(() => companies.id),
+  details: jsonb('details').$type<Record<string, unknown>>().notNull().default({}),
+}, (t) => ({
+  companyCreatedIdx: index('operator_audit_log_company_created_idx').on(t.targetCompanyId, t.createdAt),
+}));
+
+export type OperatorAuditEntry = typeof operatorAuditLog.$inferSelect;
 
 /**
  * The company a row belongs to. The default stamps the company of the current

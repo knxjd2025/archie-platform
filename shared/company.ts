@@ -309,3 +309,15 @@ export const LIVE_STATUSES = ['trial', 'active'] as const;
 
 export const isLiveCompany = (c: { status: string } | null | undefined): boolean =>
   !!c && (LIVE_STATUSES as readonly string[]).includes(c.status);
+
+/**
+ * What a person in a paused or cancelled company is told when they try to
+ * sign in or their session is ended. Plain, and it names who can fix it.
+ */
+export const COMPANY_PAUSED_MESSAGE = "Your company's Archie account is paused. Contact your administrator.";
+export const COMPANY_CANCELLED_MESSAGE = "Your company's Archie account is closed. Contact your administrator.";
+/** The `code` in a refusal for a paused or cancelled company, so the app can show the message on the sign-in page. */
+export const COMPANY_INACTIVE_CODE = 'company_inactive';
+
+export const inactiveCompanyMessage = (status: string | null | undefined): string =>
+  status === 'cancelled' ? COMPANY_CANCELLED_MESSAGE : COMPANY_PAUSED_MESSAGE;

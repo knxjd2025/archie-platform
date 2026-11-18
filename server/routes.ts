@@ -75,6 +75,7 @@ import { verifyGhlWebhookSecret } from './integrations/ghl/webhook-secret';
 import { registerGhlConnectionRoutes } from './integrations/ghl/routes';
 import { registerConnectionRoutes } from './integrations/connection-routes';
 import { registerCompanyRoutes } from './company/routes';
+import { registerOperatorRoutes } from './operator/routes';
 import { currentGhlLocationId, ghlAppBase } from './integrations/ghl/connection';
 import { getCompanyByGhlLocation } from './tenant/companies';
 import { runAsCompany } from './tenant/context';
@@ -171,6 +172,8 @@ export function registerRoutes(app: Express) {
   registerMeetingRoutes(app);
   registerPlaybookRoutes(app);
   registerBoardRoutes(app);
+  // The people who run Archie (ARCHIE_OPERATOR_EMAILS); guarded as a whole prefix.
+  registerOperatorRoutes(app);
 
   // ==================== CALLS & MESSAGES (our own, not a provider's) ====
   registerCommsRoutes(app);

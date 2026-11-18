@@ -197,6 +197,29 @@ Seeding (advisors, knowledge base) is one of these jobs (`/api/cron/seed-compani
 once per deployment per company) plus at company creation. It is never on the
 request path.
 
+### 9. Operator console
+
+The people who run Archie (not anyone inside a roofing company) use the
+Operator page and `/api/operator/*` (`server/operator/`).
+
+- **Who:** emails in `ARCHIE_OPERATOR_EMAILS` (comma separated), signed in
+  normally. Read on every request, so removing an email revokes access at
+  once. Being a company admin never makes anyone an operator. Unset: nobody.
+- **What:** list every company with its numbers, view one (team, connected
+  apps by name, recent operator actions), create a company with its first
+  admin (returns a 72-hour welcome link to hand over), pause, resume or cancel
+  (pausing or cancelling ends every session of that company's people), and
+  make a 1-hour reset link for a member.
+- **Access:** reads of one company run as that company (`runAsCompany`, the
+  id only ever from the URL); the company list, status changes and the audit
+  log are `runAsSystem`, each with its own reason.
+- **Audit:** every change appends to `operator_audit_log` (migration 0011):
+  global, no `company_id`, RLS forced with one policy for `archie_system`;
+  `archie_app` has no privileges on it (42501), `archie_system` only
+  `SELECT, INSERT` (append-only). Links and tokens are never written to it.
+- **Trials:** `companies.trial_ends_at`, set to `ARCHIE_TRIAL_DAYS` (default
+  14) from creation for a trial. Displayed only; nothing enforces it yet.
+
 ## Running it
 
 - **Database URL.** Use the Supabase *session* pooler (port 5432) or a direct

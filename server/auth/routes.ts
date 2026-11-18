@@ -4,7 +4,8 @@ import { handoffUrl, mintHandoff, redeemHandoff, sweepExpiredHandoffs } from './
 import { isAllowedLoginEmail, isBlockedLoginEmail, memberCanLogin } from './allowlist';
 import { findSignInMember, touchLogin } from '../storage/team';
 import { getCurrentCompany } from '../tenant/companies';
-import { isLiveCompany, resolveCompanyProfile } from '../../shared/company';
+import { COMPANY_INACTIVE_CODE, inactiveCompanyMessage, isLiveCompany, resolveCompanyProfile } from '../../shared/company';
+import { isOperatorEmail } from '../operator/allowlist';
 import { runAsCompany } from '../tenant/context';
 import { requireAuth } from './middleware';
 import { hiddenPagesFor } from '../../shared/menu';
@@ -104,7 +105,7 @@ export function registerAuthRoutes(app: Express) {
       }
       // A paused or cancelled company's team cannot sign in.
       if (!isLiveCompany(found.company)) {
-        return res.redirect('/login?error=company_inactive');
+        return res.redirect(`/login?error=${found.company.status === 'cancelled' ? 'company_closed' : 'company_inactive'}`);
       }
       const { member, company } = found;
 
@@ -149,7 +150,10 @@ export function registerAuthRoutes(app: Express) {
         return res.status(403).json({ error: 'not authorized' });
       }
       const found = await findSignInMember(email);
-      if (!found || !memberCanLogin(found.member) || !isLiveCompany(found.company)) return res.status(403).json({ error: 'not authorized' });
+      if (!found || !memberCanLogin(found.member)) return res.status(403).json({ error: 'not authorized' });
+      if (!isLiveCompany(found.company)) {
+        return res.status(403).json({ error: inactiveCompanyMessage(found.company.status), code: COMPANY_INACTIVE_CODE });
+      }
       // The token only ever opens the company that minted it.
       if (found.company.id !== grant.companyId) return res.status(403).json({ error: 'not authorized' });
       const { member, company } = found;
@@ -179,6 +183,9 @@ export function registerAuthRoutes(app: Express) {
       profile: company
         ? { ...resolveCompanyProfile(company), hiddenPages: hiddenPagesFor(company.settings?.menuHidden, req.session.user!.role) }
         : null,
+      // Only shows or hides the Operator page. The operator routes check
+      // ARCHIE_OPERATOR_EMAILS again on every request (server/operator).
+      isOperator: isOperatorEmail(req.session.user!.email),
     });
   });
 }
