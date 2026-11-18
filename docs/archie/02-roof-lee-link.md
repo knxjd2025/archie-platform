@@ -201,7 +201,7 @@ Archie tells Roof Lee when something happens that Roof Lee did not cause:
 
 | Event | When | What is sent |
 |---|---|---|
-| `lead.created` | A lead is made inside Archie: typed in by a person, or come in from a form or a text. Never for a lead Roof Lee added (source `roofli`), and never for the JobTread copy. | `leadId`, `source`, `name`, `phone`, `email`, `message`, `jobType`, `town` |
+| `lead.created` | A lead is made inside Archie: typed in by a person, or come in from a form or a text. Never for a lead Roof Lee added (source `roofli`), and never from the JobTread sync, which does not report leads at all. A lead a person types in is reported even when the company's own JobTread accepted it. | `leadId`, `source`, `name`, `phone`, `email`, `message`, `jobType`, `town` |
 | `job.finished` | A job reaches the finished stage on the production board. Told from inside the move itself, so a move made by automation counts too. Once per job. | `jobId`, `jobType`, `town`, `photoConsent` (always `false` for now), `finishedAt` |
 
 How it works:

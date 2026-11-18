@@ -106,12 +106,16 @@ type LeadRow = typeof leads.$inferSelect;
 /**
  * A new lead arrived. Call it wherever Archie makes a lead of its own (typed
  * in by a person, or come in from a form or a text). Never for a lead Roof
- * Lee itself added, and never for the JobTread mirror, which is rewritten on
- * every sync.
+ * Lee itself added.
+ *
+ * The JobTread sync (server/sync) must never call this: it rewrites its
+ * copies on every run. That is kept by not calling it there, not by looking
+ * at the source, because a lead a person types in is also filed under
+ * 'jobtread' once the company's own JobTread has accepted it.
  */
 export async function emitLeadCreated(lead: Pick<LeadRow, 'id' | 'source' | 'firstName' | 'lastName' | 'jobName' | 'phone' | 'email' | 'notes' | 'serviceType' | 'city' | 'createdAt'>): Promise<void> {
   if (!eventsOn()) return;
-  if (lead.source === ROOFLI_LEAD_SOURCE || lead.source === 'jobtread') return;
+  if (lead.source === ROOFLI_LEAD_SOURCE) return;
   const name = [lead.firstName, lead.lastName].filter((x) => x && x !== 'null').join(' ').trim() || lead.jobName;
   await record('lead.created', `lead.created:${lead.id}`, lead.createdAt ?? new Date(), {
     leadId: String(lead.id),

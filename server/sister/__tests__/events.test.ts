@@ -159,7 +159,7 @@ describe.skipIf(!localDb)('news going back to Roof Lee', async () => {
     expect(row.deliveredAt).not.toBeNull();
   });
 
-  it('never tells Roof Lee about a lead Roof Lee itself added, or a JobTread copy', async () => {
+  it('never tells Roof Lee about a lead Roof Lee itself added', async () => {
     const c = await make();
     const r = await sisterSend(base, {
       method: 'POST', path: `${companies}/${c.roofliId}/leads`, version: 2, headers: { 'idempotency-key': randomUUID() },
@@ -167,10 +167,27 @@ describe.skipIf(!localDb)('news going back to Roof Lee', async () => {
     });
     expect(r.status).toBe(201);
     await archieLead(c.id, { source: 'roofli' });
-    await archieLead(c.id, { source: 'jobtread', externalId: `jt-${randomUUID()}` });
     await settle();
     expect(await outbox(c.id)).toEqual([]);
     expect(about(c.roofliId)).toEqual([]);
+  });
+
+  it('tells Roof Lee about a lead a person typed in even when the company\'s own JobTread took it', async () => {
+    // The lead form files such a lead under 'jobtread' once JobTread accepts it.
+    const c = await make();
+    const lead = await archieLead(c.id, { source: 'jobtread', externalId: `jt-${randomUUID()}` });
+    await settle();
+    const mine = about(c.roofliId);
+    expect(mine).toHaveLength(1);
+    expect(mine[0].body).toMatchObject({ type: 'lead.created', data: { leadId: String(lead.id), name: 'Pat Hollis' } });
+  });
+
+  it('the JobTread sync, which rewrites its copies on every run, reports no leads', async () => {
+    const { readFileSync, readdirSync } = await import('node:fs');
+    const dir = new URL('../../sync/', import.meta.url);
+    for (const file of readdirSync(dir).filter((f) => f.endsWith('.ts'))) {
+      expect(readFileSync(new URL(file, dir), 'utf8'), file).not.toContain('emitLeadCreated');
+    }
   });
 
   it('records and sends nothing unless the settings are there and Roof Lee made the company', async () => {
