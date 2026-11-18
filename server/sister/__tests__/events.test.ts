@@ -189,9 +189,12 @@ describe.skipIf(!localDb)('news going back to Roof Lee', async () => {
     await settle();
     expect(await outbox(c.id)).toEqual([]);
     expect(await outbox(plain.id)).toEqual([]);
-    expect(got).toEqual([]);
-    // And the scheduled run has nothing to do either.
-    expect(await runEventDelivery()).toMatchObject({ on: true, delivered: 0 });
+    expect(about(c.roofliId)).toEqual([]);
+    // And the scheduled run has nothing to send for either of them. (It may
+    // send other companies' news left waiting in the shared test database.)
+    await runEventDelivery();
+    expect(about(c.roofliId)).toEqual([]);
+    expect(got.filter((g) => g.raw.includes(plain.id))).toEqual([]);
   });
 
   it('tries a failed delivery again later, and delivers it once', async () => {
