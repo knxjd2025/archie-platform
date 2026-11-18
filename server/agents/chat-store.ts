@@ -154,14 +154,17 @@ export async function summarizeChat(chatId: number, opts: { timeoutMs?: number }
 export async function summarizePendingDays(
   limit = 50,
   budgetMs = 200_000,
-): Promise<{ summarized: number; failed: number; deferred: number }> {
+): Promise<{ summarized: number; failed: number; deferred: number; more: boolean }> {
   const today = businessDay();
-  const pending = await db
+  // One past the limit, to know whether more are waiting beyond this batch.
+  const found = await db
     .select({ id: agentChats.id })
     .from(agentChats)
     .where(and(lt(agentChats.day, today), isNull(agentChats.summarizedAt)))
     .orderBy(desc(agentChats.day))
-    .limit(limit);
+    .limit(limit + 1);
+  const more = found.length > limit;
+  const pending = found.slice(0, limit);
 
   const started = Date.now();
   let n = 0;
@@ -179,7 +182,7 @@ export async function summarizePendingDays(
       console.error(`[chat-store] summarizeChat failed for chat ${c.id}:`, e?.message || e);
     }
   }
-  return { summarized: n, failed, deferred: pending.length - i };
+  return { summarized: n, failed, deferred: pending.length - i, more };
 }
 
 export interface PastDay { day: string; agentKey: string; summary: string | null }

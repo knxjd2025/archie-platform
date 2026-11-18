@@ -1,3 +1,4 @@
+import { BUSY_MESSAGE, BUSY_RETRY_AFTER_SECONDS, findDatabaseBusy } from './lib/db-busy';
 import type { Express, Request, Response } from 'express';
 import { registerAuthRoutes } from './auth/routes';
 import { getTeamMemberByEmail } from './storage/team';
@@ -25,6 +26,7 @@ import { registerPhotoRoutes } from './photos/routes';
 import { registerCanvassRoutes } from './canvass/routes';
 import { registerTracerfyRoutes } from './canvass/tracerfy-routes';
 import { registerRepReminderRoutes } from './canvass/reminder-routes';
+import { registerSeedRoutes } from './seed-routes';
 import { registerInboxRoutes } from './inbox/routes';
 import { registerCompanyCamRoutes } from './companycam/routes';
 import { registerKpiRoutes } from './kpis/routes';
@@ -154,6 +156,7 @@ export function registerRoutes(app: Express) {
   registerCanvassRoutes(app);
   registerTracerfyRoutes(app);
   registerRepReminderRoutes(app);
+  registerSeedRoutes(app);
   registerInboxRoutes(app);
   registerCompanyCamRoutes(app);
   registerKpiRoutes(app);
@@ -1168,6 +1171,14 @@ export function registerRoutes(app: Express) {
 
       res.json({ received: true });
     } catch (error: any) {
+      // Database full: ask GHL to send it again rather than lose the event.
+      // 429, not 503: some senders retry only on 429 (GHL's policy is not
+      // confirmed here), and a sender that retries 5xx retries 429 too.
+      if (findDatabaseBusy(error)) {
+        console.warn('[webhook] GHL event deferred: database busy (429)');
+        res.setHeader('Retry-After', String(BUSY_RETRY_AFTER_SECONDS));
+        return res.status(429).json({ error: BUSY_MESSAGE });
+      }
       console.error('GHL webhook error:', error);
       return sendFailure(res, error, 'POST /api/webhooks/gohighlevel');
     }

@@ -176,6 +176,32 @@ export const companyAssets = pgTable('company_assets', {
   contentTypeCheck: check('company_assets_content_type_check', sql`${t.contentType} IN ('image/png','image/jpeg','image/webp')`),
 }));
 
+/**
+ * Where each company stands in each scheduled fan-out job
+ * (server/tenant/fan-out.ts): the last period it finished, so a job cut off
+ * by the function time limit resumes with the companies it did not reach and
+ * never repeats one already done; and when it was last tried, so the
+ * companies tried least recently go first. Created by migrations/0006.
+ */
+export const companyJobRuns = pgTable('company_job_runs', {
+  companyId: companyId(),
+  job: text('job').notNull(),
+  /** The period (e.g. the company's local date) whose work is finished. */
+  donePeriod: text('done_period'),
+  doneAt: timestamp('done_at'),
+  attemptedAt: timestamp('attempted_at'),
+  lastError: text('last_error'),
+  /**
+   * The run that holds this company's job right now, and until when
+   * (server/tenant/fan-out.ts). One run per company and job at a time; a
+   * crashed run's lease expires and the next run takes it. Migration 0010.
+   */
+  leaseToken: uuid('lease_token'),
+  leaseUntil: timestamp('lease_until'),
+}, (t) => ({
+  pk: primaryKey({ columns: [t.companyId, t.job] }),
+}));
+
 export const companyIntegrations = pgTable('company_integrations', {
   id: serial('id').primaryKey(),
   companyId: companyId(),
@@ -919,7 +945,11 @@ export const calls = pgTable('calls', {
   costCents: integer('cost_cents'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+}, (t) => ({
+  // The company's newest calls first (/api/calls, the comms summary).
+  // Created by migrations/0009.
+  companyStartedIdx: index('calls_company_started_at_idx').on(t.companyId, t.startedAt),
+}));
 
 /** Texts and emails to customers through our own numbers and mailboxes. */
 export const commMessages = pgTable('comm_messages', {
@@ -944,7 +974,11 @@ export const commMessages = pgTable('comm_messages', {
   errorDetail: text('error_detail'),
   sentAt: timestamp('sent_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+}, (t) => ({
+  // The company's messages by time (the comms summary, newest first).
+  // Created by migrations/0009.
+  companySentIdx: index('comm_messages_company_sent_at_idx').on(t.companyId, t.sentAt),
+}));
 
 /** The numbers we own and what each one is for. */
 export const phoneNumbers = pgTable('phone_numbers', {
@@ -1029,6 +1063,13 @@ export const leads = pgTable('leads', {
   leadSource: text('lead_source'),              // where the customer first came from, in words (not the `source` system)
   postRef: text('post_ref'),                    // the post or page that brought them, when known
 }, (t) => ({
+  // Leads are looked up by their source system's id all over (client pages,
+  // reports, webhooks). Company first: every query runs as one company.
+  // Created by migrations/0007.
+  companyExternalIdx: index('leads_company_external_id_idx').on(t.companyId, t.externalId),
+  // The company's newest leads first (/api/leads, dashboard, agents).
+  // Created by migrations/0009.
+  companyCreatedIdx: index('leads_company_created_at_idx').on(t.companyId, t.createdAt),
   // An Archie-made job identity ('archie-...') names one lead in its company.
   nativeJobUq: uniqueIndex('leads_company_native_job_uq').on(t.companyId, t.externalId).where(sql`${t.externalId} LIKE 'archie-%'`),
 }));

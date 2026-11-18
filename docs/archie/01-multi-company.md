@@ -38,22 +38,90 @@ Global tables (no `company_id`): `companies`, `session`, `_migrations`,
 
 ### 3. Row Level Security (the backstop)
 
-For each company table:
+Two database roles, two policies per company table (migrations/0008):
 
 ```sql
 alter table t enable row level security;
 alter table t force row level security;
+-- Everyone: the current company's rows only.
 create policy company_isolation on t
-  using (company_id = archie_current_company() or archie_is_system())
-  with check (company_id = archie_current_company() or archie_is_system());
+  using (company_id = (select archie_current_company()))
+  with check (company_id = (select archie_current_company()));
+-- The system role only: every row.
+create policy company_system on t to archie_system using (true) with check (true);
 ```
 
 - `archie_current_company()` reads `current_setting('app.company_id', true)`.
-- `archie_is_system()` reads `current_setting('app.system', true) = 'on'`.
-- With neither set, every query sees **zero rows** and every insert **fails**.
-  Missing context fails closed, never open.
-- The app connects as a dedicated role `archie_app` that is not a superuser and
-  has `NOBYPASSRLS`, so the policies apply to it. Migrations run as the owner.
+  With no company set it is null, so every query sees **zero rows** and every
+  insert **fails**. Missing context fails closed, never open.
+- The app connects as `archie_app`: not a superuser, `NOBYPASSRLS`, so the
+  policies apply to it. As itself it gets only `company_isolation`.
+- Deliberate cross-company work (`runAsSystem`) switches its connection to the
+  role `archie_system` (`set_config('role', 'archie_system', false)`, the same
+  as `SET ROLE`). For that role the two policies combine to
+  `company_id = ... OR true`, which Postgres folds to `true`.
+- Migrations run as the owner.
+
+**Why this shape (performance).** Postgres can only use an index on
+`company_id` when the policy's company condition stands alone. The old policy,
+`company_id = archie_current_company() OR archie_is_system()`, could not be
+turned into an index condition, so a query with no other selective filter (and
+almost no query filters by company itself) scanned every company's rows. Now
+every query carries `company_id = $0` as an index condition. Wrapping the
+function in `(select ...)` makes it an initplan, computed once per query
+instead of once per row. Measured on 200 companies (1.7M rows), with
+`scripts/rls-explain.sh`: the leads list went from a 156 ms sequential scan of
+400,000 rows to a 0.7 ms index scan of the company's own rows.
+
+Do not put an `OR` into a company policy (for example `OR archie_is_system()`):
+it brings the full scans back. System access is the `company_system` policy.
+
+**The two roles.**
+
+| | `archie_app` | `archie_system` |
+|---|---|---|
+| logs in | yes (the app's `DATABASE_URL`) | no (`NOLOGIN`): only `SET ROLE` from `archie_app` |
+| superuser, `BYPASSRLS`, `CREATEROLE`, `CREATEDB` | no | no |
+| table grants | `SELECT, INSERT, UPDATE, DELETE` (not `_migrations`) | the same |
+| rows | its company's (`company_isolation`) | every company's (`company_system`) |
+| membership | in `archie_system` with `SET` only: no `INHERIT`, no `ADMIN` | in nothing |
+
+This is not weaker than the old `app.system = 'on'` setting: before, any SQL
+the app role could run could turn system access on with `set_config`; now it
+takes `SET ROLE archie_system`, which needs the same (arbitrary SQL as the app
+role) and grants exactly what `app.system` did. Neither role can grant itself
+more: no `ADMIN` on any role, no `CREATEROLE`, and it owns no table, so it
+cannot alter, disable or drop a policy. `app.system` no longer grants anything,
+and `archie_is_system()` now reports the role. The tests check all of this.
+
+**On a pooled connection** (`server/db.ts`): the role is set on every checkout
+together with the company, in one statement (or confirmed unchanged), so it
+never carries over; a connection leaving system work is reset to no role and no
+company as it is released (and thrown away if the reset fails); and a
+connection released in the middle of a transaction is thrown away, because a
+later rollback would undo settings made inside it. The role comes only from
+`runAsSystem`, never from anything in a request.
+
+**A new company table** gets its protection with one call in its migration,
+after `CREATE TABLE`:
+
+```sql
+SELECT archie_protect_company_table('my_new_table');
+```
+
+It turns row level security on and forces it, creates both policies, grants
+both roles, and adds a `(company_id)` index when no index starts with
+`company_id`. `isolation.test.ts` fails for any table with a `company_id` that
+lacks exactly these two policies, and `system-role.test.ts` proves the
+behaviour on every such table.
+
+**Indexes.** Every company table has an index that starts with `company_id`.
+For a hot query that also filters or sorts on another column, use a composite
+index with `company_id` first, for example `(company_id, external_id)` (0007)
+or `(company_id, created_at)` (0009, scanned backward for newest first).
+Measure with `scripts/rls-explain.sh` before adding one. On a live database,
+build large indexes with `CREATE INDEX CONCURRENTLY` by hand first; the
+migration's `CREATE INDEX IF NOT EXISTS` then does nothing.
 
 ### 4. Request context
 
@@ -69,9 +137,10 @@ create policy company_isolation on t
   `runAsCompany`.
 
 `server/db.ts` gives drizzle a pool wrapper. Every time a connection is checked out
-it runs `select set_config('app.company_id', $1, false), set_config('app.system', $2, false)`
-for the current context (or clears both when there is none), so the setting can
-never leak from one request to the next on a pooled connection.
+it sets `app.company_id` and the role (`archie_system` inside `runAsSystem`,
+otherwise back to `archie_app`) for the current context in one statement (or
+clears both when there is none), so neither can leak from one request to the
+next on a pooled connection. See "On a pooled connection" above.
 
 ### 5. Sessions and sign-in
 
@@ -95,8 +164,38 @@ per request from the current company's row instead of from env vars.
 
 ### 8. Background jobs
 
-Each cron runs `for each active company: runAsCompany(id, job)`, so one company's
-failure does not stop the others and no job ever runs without a company.
+Each cron runs its work once per live company, as that company, through
+`runCompanyJob` (`server/tenant/fan-out.ts`), so one company's failure does not
+stop the others and no job ever runs without a company. With hundreds of
+companies and one 300s function, each job is also:
+
+- **ordered**: companies tried least recently go first, then by id, so a run
+  that is cut off rotates instead of starving the same companies;
+- **bounded**: a cap per company, and no company starts that could not finish
+  inside the invocation (270s budget);
+- **resumable and idempotent**: `company_job_runs` (migration 0006) records the
+  last period each company finished (its local date, or local hour for
+  meetings); later runs in that period skip it, and work cut off part-way is
+  picked up by the next run. The crons run often (vercel.json) so the list
+  drains;
+- **in the company's time zone**: the period comes from the company's own
+  `settings.timeZone`. The rep check-in goes out in the company's 8 AM to noon
+  window, once per rep per day (`rep_daily_reminders`);
+- **parallel where safe**: a few companies at once for jobs that wait on other
+  services (reminders, chat summaries); one at a time for database-heavy ones;
+- **exclusive**: a run claims each company with one conditional
+  `INSERT ... ON CONFLICT DO UPDATE ... RETURNING` on `company_job_runs`
+  (a lease, migration 0010), so overlapping invocations (a manual run during
+  the cron, a repeated delivery) never run the same company twice. The lease
+  lasts `perCompanyMs` plus a margin; a crashed run's lease expires and a later
+  run takes over. Success is recorded only while the run still holds its lease,
+  so a run that timed out (its work cannot be stopped from outside; `signal` is
+  aborted) never marks the period done. A job's `run` must honour `deadline`
+  and `signal`, and be idempotent.
+
+Seeding (advisors, knowledge base) is one of these jobs (`/api/cron/seed-companies`,
+once per deployment per company) plus at company creation. It is never on the
+request path.
 
 ## Running it
 
@@ -106,15 +205,141 @@ failure does not stop the others and no job ever runs without a company.
   setting would not stick; `server/db.ts` refuses to start on it.
 - **Migrations** run as the database owner: `DATABASE_URL=<owner url> npx tsx scripts/migrate.ts`.
   Then give the app role a password: `ALTER ROLE archie_app WITH LOGIN PASSWORD '...'`.
+  `archie_system` needs no password: it cannot log in. On Supabase the owner is
+  `postgres`, which has what the migrations need (`CREATEROLE`, ownership of the
+  tables); nothing needs a superuser.
+- **Operator scripts** (`create-company.ts`, `seed-companies.ts`) use the app's
+  `DATABASE_URL` (`archie_app`), like the app. Run with the owner's URL they
+  stop at once and say which URL to use (as the owner, system work would be
+  refused: the owner is not a member of `archie_system`).
+- **Rolling out 0008, and rolling back.** See the section below.
 - **A new company:** `npx tsx scripts/create-company.ts --slug acme --name "Acme Roofing" --admin-email owner@acme.com --admin-name "Pat Owner" [--ghl-location <id>]`.
+  It is seeded (advisors, knowledge base) as it is created (`provisionCompany`).
+- **Seeding is never on the request path.** A new server instance does no
+  per-company work before answering. To backfill companies or push edited
+  advisor wording to all of them: `npx tsx scripts/seed-companies.ts
+  [--company <slug>]`. Idempotent; one company's failure does not stop the rest.
+
+## Rolling out 0008 (system role), and rolling back
+
+0008 changes how system work gets its access (a role instead of the
+`app.system` setting). Code older than 0008 cannot do system work on a
+database that has it: sign-in finds nobody, GHL webhooks find no company,
+crons list no companies. Since there is no sound way to honour the old
+setting without putting the `OR` back into every query's plan, 0008 makes it
+fail loudly instead: older code gets the error "system work without the
+archie_system role" (SQLSTATE 42501) with a hint naming the revert script.
+
+The rules:
+
+1. **Deploy the code first, then run the migration.** The current code works
+   on both sides: before 0008 it falls back to `app.system` (and logs once
+   that it is on the fallback), after it uses the role.
+2. **Never run code older than 0008 against the database without reverting
+   first.** That includes a Vercel Instant Rollback past the deployment that
+   shipped 0008, a preview deployment, or a laptop on an old branch. Revert as
+   the owner, in one transaction (idempotent, tens of milliseconds of locks):
+   `psql "$OWNER_URL" -v ON_ERROR_STOP=1 -1 -f scripts/sql/revert-0008-rls-system-role.sql`.
+   The current code keeps working on the reverted database (it sets the role
+   and the old setting), so revert first, then roll back.
+3. **To go forward again** after a revert, rerun the migration file the same
+   way: `psql "$OWNER_URL" -v ON_ERROR_STOP=1 -1 -f migrations/0008_rls_system_role.sql`
+   (`scripts/migrate.ts` will not, it is recorded as applied).
+
+Before running 0008 on production, check that no company table lacks an
+index starting with `company_id` (0008 would build one while holding its
+locks). Expect no rows:
+
+```sql
+select c.relname from pg_class c
+  join pg_attribute a on a.attrelid = c.oid and a.attname = 'company_id'
+ where c.relnamespace = 'public'::regnamespace and c.relkind = 'r'
+   and not exists (select 1 from pg_index i join pg_attribute x on x.attrelid = i.indrelid and x.attnum = i.indkey[0]
+                    where i.indrelid = c.oid and x.attname = 'company_id');
+```
+
+Run 0008 at the quietest hour: it takes a short ACCESS EXCLUSIVE lock on
+every company table, waiting at most 5s for each (`lock_timeout`); while it
+waits, traffic on tables it already locked queues. If it fails on the
+timeout, run it again.
+
+### Rehearsal on a Supabase branch
+
+Before production, rehearse on a Supabase branch (or a scratch project) on the
+production Postgres version (17). Never on production itself: it writes test
+rows and runs the revert.
+
+```sh
+OWNER_URL='postgresql://postgres.<ref>:<pw>@<host>:5432/postgres' \
+APP_URL='postgresql://archie_app.<ref>:<pw>@<host>:5432/postgres' \
+scripts/rehearse-supabase.sh --i-am-on-a-rehearsal-database
+```
+
+On a fresh branch the first run stops at step 5 because `archie_app` has no
+password yet: set one as the owner (`ALTER ROLE archie_app WITH LOGIN
+PASSWORD '...'`) and run it again. The steps:
+
+1. version and read-only pre-checks (no company table lacks a company index);
+2. the four `CREATE INDEX CONCURRENTLY` one at a time, then no invalid index;
+3. the migrations as the owner (`postgres`: proves `CREATE ROLE` and
+   `GRANT ... WITH INHERIT FALSE, SET TRUE` are allowed under Supabase);
+4. roles, membership and policies are exactly as designed;
+5. through the app's pool (`scripts/rehearse-role-check.ts`):
+   `select current_user` is `archie_system` inside `runAsSystem` and
+   `archie_app` outside (proves the session pooler keeps the role per
+   connection), and no context sees no company;
+6. the two security test files against it, as `archie_app`:
+   `ARCHIE_REHEARSAL=1 DATABASE_URL="$APP_URL" ARCHIE_TEST_OWNER_URL="$OWNER_URL"
+   npx vitest run server/tenant/__tests__/isolation.test.ts server/tenant/__tests__/system-role.test.ts`
+   (they load one row per company into every company table as the owner, with
+   every constraint in force, and need no superuser);
+7. the revert script, then 0008 again.
+
+It was run end to end locally on Postgres 16 with a non-superuser
+`CREATEROLE` owner (the shape of Supabase's `postgres`); Postgres 17 and
+Supabase's pooler are what the rehearsal is for.
+
+## Capacity: database connections
+
+Each Vercel instance has one pool (`server/db.ts`), shared with the session
+store. On the Supabase session pooler every pooled client holds one Postgres
+connection, and instances multiply under load, so the limit that matters is
+roughly: busy instances x `DB_POOL_MAX` <= the pooler's pool size <= Postgres
+`max_connections` (minus what Supabase reserves for itself).
+
+App settings (env vars, defaults in brackets):
+
+| var | default | what it does |
+|---|---|---|
+| `DB_POOL_MAX` | 5 | clients per instance |
+| `DB_IDLE_TIMEOUT_MS` | 5000 | idle clients close, so a frozen instance holds none (with `attachDatabasePool`) |
+| `DB_CONNECT_TIMEOUT_MS` | 5000 | a query waiting longer for a client fails with "Database busy" (503) |
+| `DB_STATEMENT_TIMEOUT_MS` | 30000 | `statement_timeout` on every app connection |
+| `DB_IDLE_IN_TXN_TIMEOUT_MS` | 60000 | `idle_in_transaction_session_timeout` on every app connection |
+
+What the operator must check as the number of companies grows. These are
+things to verify on the project's own dashboards, not known values:
+
+- **Supabase pool size** (Database > Settings > Connection pooling). Compare it
+  with the peak number of concurrent Vercel instances (Vercel > Observability)
+  times `DB_POOL_MAX`. If "Database busy" errors or pooler "max clients" errors
+  appear, raise the pool size before raising `DB_POOL_MAX`.
+- **Compute size.** The pool size can only go as high as the compute's
+  `max_connections` allows; a larger compute raises both. Check the current
+  values for the plan in use.
+- **Region.** Vercel functions should run in the same region as the database;
+  every query is a round trip.
+- Do **not** switch to the transaction pooler (port 6543): company isolation
+  depends on per-connection settings, and `server/db.ts` refuses to start on it.
 
 ## Pitfalls
 
 - `runAsCompany` / `runAsSystem` are async and await their result inside the
   context. A drizzle query only runs when awaited, so a query returned from the
   callback still runs as the company.
-- Scheduled jobs and webhooks have no session. Use `forEachLiveCompany` (crons)
-  or look the company up first (`getCompanyByGhlLocation`, `companyFromToken`).
+- Scheduled jobs and webhooks have no session. Use `runCompanyJob` (crons),
+  `forEachLiveCompany` (operator scripts) or look the company up first
+  (`getCompanyByGhlLocation`, `companyFromToken`).
 
 ## Tests
 
@@ -126,6 +351,15 @@ failure does not stop the others and no job ever runs without a company.
   company sees nothing, pooled connections never leak a company.
 - `server/tenant/__tests__/api-isolation.test.ts`: the same through the real
   request path (session, middleware, roster re-check, routes).
+- `server/tenant/__tests__/system-role.test.ts`: on every company table (found
+  in the database, not a list), with a row for two companies: no context sees
+  and writes nothing, one company never sees or writes the other's, system work
+  sees both; system access never survives on a pooled connection (after
+  success, an error, a statement timeout, or a release mid-transaction); neither
+  role can widen its access.
+- `scripts/rls-explain.sh`: loads 200 companies of data into a throwaway
+  database and prints `EXPLAIN (ANALYZE, BUFFERS)` for the hot queries as the
+  app role. Rerun it before adding an index or changing a policy.
 - Cross-company tests: create two companies, write data as A, prove B sees none of
   it through the API and through direct queries, and that writes without a company
   fail.

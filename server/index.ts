@@ -82,7 +82,9 @@ const PORT = process.env.PORT || 3000;
 
 async function start() {
   try {
-    // Seed default agents and knowledge base on startup
+    // Local development only: one long-lived process, so seeding every company
+    // once at start is fine here. The Vercel entry (api/index.ts) never seeds on
+    // the request path; see scripts/seed-companies.ts. Failures are logged.
     await seedAll();
 
     // In development, use Vite middleware (dynamic import to avoid bundling)

@@ -10,7 +10,8 @@ import { randomUUID } from 'node:crypto';
 import { sql, eq, like } from 'drizzle-orm';
 
 const url = process.env.DATABASE_URL || '';
-const local = /@(localhost|127\.0\.0\.1)(:\d+)?\//.test(url);
+// A rehearsal database (scripts/rehearse-supabase.sh) opts in explicitly.
+const local = process.env.ARCHIE_REHEARSAL === '1' || /@(localhost|127\.0\.0\.1)(:\d+)?\//.test(url);
 
 describe.skipIf(!local)('company isolation', async () => {
   const { db, pool } = await import('../../db');
@@ -68,19 +69,35 @@ describe.skipIf(!local)('company isolation', async () => {
       `select c.relname, c.relrowsecurity as rls, c.relforcerowsecurity as forced,
               exists (select 1 from information_schema.columns k
                        where k.table_schema = 'public' and k.table_name = c.relname and k.column_name = 'company_id') as has_company,
-              (select array_agg(p.policyname || '|' || p.cmd || '|' || coalesce(p.qual, '') || '|' || coalesce(p.with_check, '') order by p.policyname)
+              (select array_agg(p.policyname || '|' || array_to_string(p.roles, ',') || '|' || p.cmd || '|'
+                                || coalesce(p.qual, '') || '|' || coalesce(p.with_check, '') order by p.policyname)
                  from pg_policies p where p.schemaname = 'public' and p.tablename = c.relname) as policies
          from pg_class c join pg_namespace n on n.oid = c.relnamespace
         where n.nspname = 'public' and c.relkind in ('r', 'p')`);
     const GLOBAL = new Set(['session', '_migrations', 'companies']);
-    const expected = '((company_id = archie_current_company()) OR archie_is_system())';
+    // Exactly two policies (migrations/0008): the company's own rows for
+    // everyone, and every row for the archie_system role only. No OR anywhere.
+    const own = '(company_id = ( SELECT archie_current_company() AS archie_current_company))';
+    const expected = [`company_isolation|public|ALL|${own}|${own}`, 'company_system|archie_system|ALL|true|true'];
     const bad = rows
       .filter((r: any) => !GLOBAL.has(r.relname))
       .filter((r: any) => !r.has_company || !r.rls || !r.forced
-        || (r.policies ?? []).length !== 1
-        || r.policies[0] !== `company_isolation|ALL|${expected}|${expected}`)
+        || JSON.stringify(r.policies ?? []) !== JSON.stringify(expected))
       .map((r: any) => `${r.relname}: ${JSON.stringify(r.policies)}`);
     expect(bad).toEqual([]);
+    // Every company table, including those added by 0004-0007.
+    const covered = rows.filter((r: any) => !GLOBAL.has(r.relname)).map((r: any) => r.relname);
+    expect(covered).toEqual(expect.arrayContaining(['password_links', 'company_assets', 'company_job_runs', 'leads']));
+  });
+
+  it('gives the companies table only self-read for the app and everything for system work', async () => {
+    const { rows } = await pool.query(
+      `select policyname || '|' || array_to_string(roles, ',') || '|' || cmd || '|' || coalesce(qual, '') || '|' || coalesce(with_check, '') as p
+         from pg_policies where schemaname = 'public' and tablename = 'companies' order by policyname`);
+    expect(rows.map((r: any) => r.p)).toEqual([
+      'company_self_read|public|SELECT|(id = ( SELECT archie_current_company() AS archie_current_company))|',
+      'company_system|archie_system|ALL|true|true',
+    ]);
   });
 
   it('lets a company read its own companies row but never change it', async () => {

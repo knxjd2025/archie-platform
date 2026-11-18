@@ -29,19 +29,27 @@ async function main() {
   const { companies, teamMembers } = await import('../shared/schema');
   const { eq } = await import('drizzle-orm');
   const { runAsCompany, runAsSystem } = await import('../server/tenant/context');
-  const { createCompany } = await import('../server/tenant/companies');
-  const { seedCompany } = await import('../server/seed');
+  const { provisionCompany, seedCompany } = await import('../server/seed');
+  const { requireAppRole } = await import('./lib/require-app-role');
+  try { await requireAppRole(pool); } catch (e) {
+    console.error((e as Error).message);
+    await pool.end();
+    process.exit(1);
+  }
 
   try {
     const existing = await runAsSystem('create-company script: check slug', () =>
       db.select().from(companies).where(eq(companies.slug, slug)));
-    const company = existing[0] ?? await createCompany({
+    // A new company is seeded as it is created (provisionCompany).
+    const provisioned = existing[0] ? null : await provisionCompany({
       slug, name,
       trade: arg('trade') ?? 'roofing',
       status: (arg('status') as 'trial' | 'active' | undefined) ?? 'trial',
       ghlLocationId: arg('ghl-location') ?? null,
     });
+    const company = existing[0] ?? provisioned!.company;
     console.log(existing[0] ? `Company already exists: ${company.name} (${company.id})` : `Created company: ${company.name} (${company.id})`);
+    if (provisioned && !provisioned.seeded) console.error(`Seeding failed (${provisioned.error}); trying again below.`);
 
     const taken = await runAsSystem('create-company script: check admin email', () =>
       db.select({ companyId: teamMembers.companyId }).from(teamMembers).where(eq(teamMembers.email, adminEmail)));
@@ -56,7 +64,9 @@ async function main() {
       } else {
         console.log(`Admin already on the team: ${adminEmail}`);
       }
-      await seedCompany();
+      // Idempotent: an existing company is brought up to date, a new one is
+      // already seeded and this only confirms it (or retries a failed seed).
+      if (!provisioned?.seeded) await seedCompany();
       console.log('Seeded advisors and knowledge base.');
     });
   } finally {

@@ -2,8 +2,8 @@
  * Scheduled jobs in Archie.
  *
  * A cron request carries no company. Every job that touches company data runs
- * once per live company, as that company (forEachLiveCompany), so it can never
- * read or write across companies.
+ * once per live company, as that company (runCompanyJob in ./fan-out.ts), so
+ * it can never read or write across companies.
  *
  * The Best Roofing AI app had jobs tied to one company's own systems (JobTread
  * syncs, a Gmail inbox watcher, the ops "brain", outreach, RoofLink). They are

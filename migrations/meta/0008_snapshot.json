@@ -1,6 +1,6 @@
 {
-  "id": "b52b89a8-62de-439f-bf02-7768d94c4558",
-  "prevId": "609a613e-ff5a-4e80-856a-8ba7b6b61e7e",
+  "id": "91e7e41b-7e24-4ee9-b863-b5e43612d1a8",
+  "prevId": "c94b8ad6-78e1-45d1-bde8-276dea0b4af6",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2555,12 +2555,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "roofli_company_id": {
-          "name": "roofli_company_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "branding": {
           "name": "branding",
           "type": "jsonb",
@@ -2606,13 +2600,6 @@
           "nullsNotDistinct": false,
           "columns": [
             "ghl_location_id"
-          ]
-        },
-        "companies_roofli_company_id_unique": {
-          "name": "companies_roofli_company_id_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "roofli_company_id"
           ]
         }
       },
@@ -2785,6 +2772,78 @@
         }
       },
       "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.company_job_runs": {
+      "name": "company_job_runs",
+      "schema": "",
+      "columns": {
+        "company_id": {
+          "name": "company_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "archie_current_company()"
+        },
+        "job": {
+          "name": "job",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "done_period": {
+          "name": "done_period",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "done_at": {
+          "name": "done_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "attempted_at": {
+          "name": "attempted_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_error": {
+          "name": "last_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "company_job_runs_company_id_companies_id_fk": {
+          "name": "company_job_runs_company_id_companies_id_fk",
+          "tableFrom": "company_job_runs",
+          "tableTo": "companies",
+          "columnsFrom": [
+            "company_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "company_job_runs_company_id_job_pk": {
+          "name": "company_job_runs_company_id_job_pk",
+          "columns": [
+            "company_id",
+            "job"
+          ]
+        }
+      },
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
@@ -5562,118 +5621,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.lead_notes": {
-      "name": "lead_notes",
-      "schema": "",
-      "columns": {
-        "company_id": {
-          "name": "company_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "archie_current_company()"
-        },
-        "id": {
-          "name": "id",
-          "type": "serial",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "lead_id": {
-          "name": "lead_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "text": {
-          "name": "text",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "author": {
-          "name": "author",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "author_name": {
-          "name": "author_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "system": {
-          "name": "system",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "lead_notes_lead_idx": {
-          "name": "lead_notes_lead_idx",
-          "columns": [
-            {
-              "expression": "lead_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "lead_notes_company_id_companies_id_fk": {
-          "name": "lead_notes_company_id_companies_id_fk",
-          "tableFrom": "lead_notes",
-          "tableTo": "companies",
-          "columnsFrom": [
-            "company_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "lead_notes_lead_id_leads_id_fk": {
-          "name": "lead_notes_lead_id_leads_id_fk",
-          "tableFrom": "lead_notes",
-          "tableTo": "leads",
-          "columnsFrom": [
-            "lead_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.leads": {
       "name": "leads",
       "schema": "",
@@ -5894,7 +5841,29 @@
           "notNull": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "leads_company_external_id_idx": {
+          "name": "leads_company_external_id_idx",
+          "columns": [
+            {
+              "expression": "company_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "external_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "leads_company_id_companies_id_fk": {
           "name": "leads_company_id_companies_id_fk",
@@ -8632,113 +8601,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.sister_idempotency": {
-      "name": "sister_idempotency",
-      "schema": "",
-      "columns": {
-        "company_id": {
-          "name": "company_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "archie_current_company()"
-        },
-        "key": {
-          "name": "key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "response": {
-          "name": "response",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "sister_idempotency_company_id_companies_id_fk": {
-          "name": "sister_idempotency_company_id_companies_id_fk",
-          "tableFrom": "sister_idempotency",
-          "tableTo": "companies",
-          "columnsFrom": [
-            "company_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "sister_idempotency_company_id_key_pk": {
-          "name": "sister_idempotency_company_id_key_pk",
-          "columns": [
-            "company_id",
-            "key"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.sister_sso_tickets": {
-      "name": "sister_sso_tickets",
-      "schema": "",
-      "columns": {
-        "company_id": {
-          "name": "company_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "archie_current_company()"
-        },
-        "jti_hash": {
-          "name": "jti_hash",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "expires_at": {
-          "name": "expires_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "sister_sso_tickets_company_id_companies_id_fk": {
-          "name": "sister_sso_tickets_company_id_companies_id_fk",
-          "tableFrom": "sister_sso_tickets",
-          "tableTo": "companies",
-          "columnsFrom": [
-            "company_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.sync_runs": {
       "name": "sync_runs",
       "schema": "",
@@ -8943,18 +8805,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "auth_user_id": {
-          "name": "auth_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "source": {
-          "name": "source",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -8963,30 +8813,7 @@
           "default": "now()"
         }
       },
-      "indexes": {
-        "team_members_company_auth_user_uq": {
-          "name": "team_members_company_auth_user_uq",
-          "columns": [
-            {
-              "expression": "company_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "auth_user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"team_members\".\"auth_user_id\" IS NOT NULL",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "team_members_company_id_companies_id_fk": {
           "name": "team_members_company_id_companies_id_fk",

@@ -5,6 +5,7 @@
  * Server failures do not come through here — sendFailure() and the Express
  * error handlers hand them to recordServerError() directly.
  */
+import { findDatabaseBusy } from '../lib/db-busy';
 import { timingSafeEqual } from 'node:crypto';
 import type { Express, Request, Response } from 'express';
 import { sql } from 'drizzle-orm';
@@ -100,6 +101,8 @@ function afterResponse(work: Promise<unknown>): void {
 
 export function recordServerError(where: string, error: unknown, req?: Request): void {
   if (Date.now() < pausedUntil) return;
+  // A full database is not a bug, and recording it would need the database.
+  if (findDatabaseBusy(error)) return;
   const err = error instanceof Error ? error : new Error(String(error ?? 'Unknown error'));
   // A Drizzle query error says "Failed query: …"; the reason is in its cause.
   const cause = (err as { cause?: unknown }).cause;
