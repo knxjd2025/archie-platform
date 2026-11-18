@@ -16,7 +16,15 @@ import { db } from '../db';
 import { sisterIdempotency } from '../../shared/schema';
 import { runAsCompany } from '../tenant/context';
 
-export interface SisterAnswer { status: number; body: unknown }
+export interface SisterAnswer {
+  status: number;
+  body: unknown;
+  /**
+   * False for a refusal that did no work and may stop applying (the person
+   * may not do this yet). It is not kept, so the same key can be tried again.
+   */
+  remember?: boolean;
+}
 
 /** Stored while the work is still going on. Never sent to anyone. */
 const IN_HAND: SisterAnswer = { status: 0, body: null };
@@ -34,8 +42,9 @@ export function isIdempotencyKey(key: unknown): key is string {
  * in which case the first answer is returned and nothing is done. With no key
  * the work simply runs (only for writes that are safe to repeat anyway).
  *
- * An answer of 500 or more, or a thrown error, is not remembered: the work
- * did not finish, so the next copy may try again.
+ * An answer of 500 or more, a thrown error, or an answer marked
+ * `remember: false` is not remembered: the work was not done, so the next
+ * copy may try again.
  */
 export async function once(companyId: string, key: string | undefined, work: () => Promise<SisterAnswer>): Promise<SisterAnswer> {
   if (key === undefined) return work();
@@ -62,7 +71,8 @@ export async function once(companyId: string, key: string | undefined, work: () 
     await release();
     throw e;
   }
-  if (answer.status >= 500) { await release(); return answer; }
-  await runAsCompany(companyId, () => db.update(sisterIdempotency).set({ response: answer }).where(mine), { loadProfile: false });
-  return answer;
+  const { remember = true, ...kept } = answer;
+  if (kept.status >= 500 || !remember) { await release(); return kept; }
+  await runAsCompany(companyId, () => db.update(sisterIdempotency).set({ response: kept }).where(mine), { loadProfile: false });
+  return kept;
 }

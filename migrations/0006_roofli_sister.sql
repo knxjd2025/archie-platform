@@ -8,6 +8,10 @@
 -- sister_idempotency            answers already given to Roof Lee's writes,
 --                               one row per company and idempotency-key.
 --
+-- APPLY THIS BEFORE THE CODE THAT USES IT IS DEPLOYED. That code names the
+-- new columns in every read of team_members and companies, so deployed first
+-- it breaks sign-in for everyone. This file is safe under the older code.
+--
 -- Nothing here changes how an existing company behaves: every new column is
 -- null for it. sister_idempotency is created after 0002's RLS loop ran, so it
 -- gets the same policy and index here by hand.

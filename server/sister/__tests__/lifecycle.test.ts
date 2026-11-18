@@ -357,6 +357,107 @@ describe.skipIf(!localDb)('a Roof Lee company\'s life in Archie', async () => {
       expect((await companyRow(other.id)).status).toBe('trial');
     });
 
+    // Contract rule 4: Archie applies its own role rules to the person a
+    // write is for. Roof Lee's word on their role is not enough by itself.
+    describe('who may pause or close', () => {
+      const live = { plan: { keys: ['base'], active: true, trial: false } };
+      const refused = async (id: string, r: { status: number; body: any }) => {
+        expect(r.status).toBe(403);
+        expect(Object.keys(r.body)).toEqual(['error']);
+        expect((await companyRow(id)).status).toBe('active');
+        expect(await runAsCompany(id, () => db.select().from(schema.writeLog))).toEqual([]);
+      };
+
+      it('refuses crew and office, for pause and for close, and ends nobody\'s session', async () => {
+        const owner = member(tag, 'owner');
+        const crew = member(tag, 'crew');
+        const office = member(tag, 'office');
+        const { id, roofliId } = await make({ members: [owner, crew, office], ...live });
+        const sid = await storeSession(id, owner.email);
+        for (const who of [crew, office]) {
+          for (const mode of ['pause', 'close']) {
+            await refused(id, await del(roofliId, { roofliCompanyId: roofliId, mode, acting: { authUserId: who.authUserId, role: who.role } }));
+          }
+        }
+        expect(await sessionExists(sid)).toBe(true);
+        expect(await knock(id, owner.email)).toBe(200);
+      });
+
+      it('goes by the role Archie holds, not the role the request states', async () => {
+        const crew = member(tag, 'crew');
+        const { id, roofliId } = await make({ members: [member(tag, 'owner'), crew], ...live });
+        await refused(id, await del(roofliId, { roofliCompanyId: roofliId, mode: 'close', acting: { authUserId: crew.authUserId, role: 'owner' } }));
+      });
+
+      it('refuses an admin in Archie whom Roof Lee now calls crew', async () => {
+        const owner = member(tag, 'owner');
+        const { id, roofliId } = await make({ members: [owner], ...live });
+        await refused(id, await del(roofliId, { roofliCompanyId: roofliId, mode: 'close', acting: { authUserId: owner.authUserId, role: 'crew' } }));
+      });
+
+      it('refuses someone who is not on this company\'s team', async () => {
+        const { id, roofliId } = await make({ ...live });
+        await refused(id, await del(roofliId, { roofliCompanyId: roofliId, mode: 'close', acting: { authUserId: randomUUID(), role: 'owner' } }));
+      });
+
+      it('refuses the owner of a different company', async () => {
+        const elsewhere = member(tag, 'owner');
+        await make({ members: [elsewhere], ...live });
+        const { id, roofliId } = await make({ ...live });
+        await refused(id, await del(roofliId, { roofliCompanyId: roofliId, mode: 'pause', acting: { authUserId: elsewhere.authUserId, role: 'owner' } }));
+      });
+
+      it('refuses an owner who has since left the team', async () => {
+        const gone = member(tag, 'owner');
+        const stays = member(tag, 'owner');
+        const { id, roofliId } = await make({ members: [gone, stays], ...live });
+        expect((await putMembers(roofliId, { roofliCompanyId: roofliId, members: [stays] })).status).toBe(200);
+        await refused(id, await del(roofliId, { roofliCompanyId: roofliId, mode: 'close', acting: { authUserId: gone.authUserId, role: 'owner' } }));
+      });
+
+      it('lets an admin pause, as well as an owner', async () => {
+        const admin = member(tag, 'admin');
+        const { id, roofliId } = await make({ members: [member(tag, 'owner'), admin], ...live });
+        const r = await del(roofliId, { roofliCompanyId: roofliId, mode: 'pause', acting: { authUserId: admin.authUserId, role: 'admin' } });
+        expect(r.status).toBe(200);
+        expect((await companyRow(id)).status).toBe('paused');
+      });
+
+      it('does not remember a refusal: the same key works once the person may', async () => {
+        const owner = member(tag, 'owner');
+        const riser = member(tag, 'crew');
+        const { id, roofliId } = await make({ members: [owner, riser], ...live });
+        const key = randomUUID();
+        const body = { roofliCompanyId: roofliId, mode: 'pause', acting: { authUserId: riser.authUserId, role: 'admin' } };
+        await refused(id, await del(roofliId, body, key));
+        // Roof Lee's team list, saying this person is now an admin, arrives late.
+        expect((await putMembers(roofliId, { roofliCompanyId: roofliId, members: [owner, { ...riser, role: 'admin' }] })).status).toBe(200);
+        const r = await del(roofliId, body, key);
+        expect(r.status).toBe(200);
+        expect((await companyRow(id)).status).toBe('paused');
+      });
+
+      it('answers a repeat as it did the first time, even after that person has left', async () => {
+        const asker = member(tag, 'owner');
+        const stays = member(tag, 'owner');
+        const { body: made, id, roofliId } = await make({ members: [asker, stays], ...live });
+        const key = randomUUID();
+        const pause = { roofliCompanyId: roofliId, mode: 'pause', acting: { authUserId: asker.authUserId, role: 'owner' } };
+        const first = await del(roofliId, pause, key);
+        expect(first.status).toBe(200);
+        await post({ ...made, members: [stays], ...live });
+        const repeat = await del(roofliId, pause, key);
+        expect([repeat.status, repeat.body]).toEqual([first.status, first.body]);
+        expect((await companyRow(id)).status).toBe('active');
+      });
+
+      it('still answers 404, not 403, for a company Roof Lee never made', async () => {
+        const unknown = randomUUID();
+        const r = await del(unknown, { roofliCompanyId: unknown, mode: 'close', acting: { authUserId: randomUUID(), role: 'crew' } });
+        expect(r.status).toBe(404);
+      });
+    });
+
     it('answers 404 for a company Roof Lee never made, and never reaches one by Archie\'s id', async () => {
       const unknown = randomUUID();
       expect((await del(unknown, { roofliCompanyId: unknown, mode: 'close' })).status).toBe(404);

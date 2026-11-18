@@ -13,7 +13,7 @@ import { runAsCompany } from '../tenant/context';
 import { seedCompany } from '../seed';
 import { IDEMPOTENCY_HEADER, SISTER_PREFIX, requireSister, sisterNotFound } from './door';
 import { isCloseMode, isUuid, namesCompany, parseActing, parseCompanyRequest, parseMembers } from './contract';
-import { closeCompany, findRoofLeeCompany, provisionCompany, sisterStatus } from './companies';
+import { closeCompany, findRoofLeeCompany, mayCloseCompany, provisionCompany, sisterStatus } from './companies';
 import { syncMembers } from './members';
 import { isIdempotencyKey, once } from './idempotency';
 
@@ -107,10 +107,16 @@ export function registerSisterRoutes(app: Express): void {
       if (key !== undefined && !isIdempotencyKey(key)) return res.status(400).json({ error: 'The idempotency key could not be read.' });
       const company = await companyInAddress(req);
       if (!company) return res.status(404).end();
-      const answer = await once(company.id, key, async () => ({
-        status: 200,
-        body: { companyId: company.id, status: await closeCompany(company, mode, acting.value) },
-      }));
+      const answer = await once(company.id, key, async () => {
+        // Archie's own check on the person named, made when the work is about
+        // to be done. A repeat of work already done is answered as before and
+        // never reaches here. A refusal is not kept: Roof Lee's team list may
+        // simply not have arrived yet.
+        if (!(await mayCloseCompany(company, acting.value))) {
+          return { status: 403, body: { error: 'This person may not pause or close this company.' }, remember: false };
+        }
+        return { status: 200, body: { companyId: company.id, status: await closeCompany(company, mode, acting.value) } };
+      });
       res.status(answer.status).json(answer.body);
     } catch (e) {
       failed(res, 'DELETE company', e);

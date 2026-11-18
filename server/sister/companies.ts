@@ -10,11 +10,12 @@
  * writes here are system work, each for exactly one company named by id.
  */
 import { randomBytes } from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from '../db';
-import { companies, writeLog, type Company } from '../../shared/schema';
+import { companies, teamMembers, writeLog, type Company } from '../../shared/schema';
 import type { CompanyBranding, CompanySettings } from '../../shared/company';
 import { isLiveCompany } from '../../shared/company';
+import { atLeast } from '../../shared/rbac';
 import { runAsCompany, runAsSystem } from '../tenant/context';
 import { noteRoofLeeCompany } from '../tenant/per-company';
 import { clearProfileCache } from '../tenant/profile';
@@ -22,7 +23,7 @@ import { clearSessionRevalidationCache } from '../auth/middleware';
 import { endSessionsForCompany } from '../auth/sessions';
 import { mapCompanyFacts } from './facts';
 import { syncMembers } from './members';
-import type { Acting, CloseMode, CompanyRequest, ProvisionPlan, Skipped } from './contract';
+import { ROLE_MAP, type Acting, type CloseMode, type CompanyRequest, type ProvisionPlan, type Skipped } from './contract';
 
 type Status = Company['status'];
 
@@ -162,6 +163,28 @@ export type SisterStatus = 'active' | 'paused' | 'closed';
 export function sisterStatus(status: Status): SisterStatus {
   if (status === 'cancelled') return 'closed';
   return status === 'paused' ? 'paused' : 'active';
+}
+
+/**
+ * May this person pause or close this company? Archie's own answer (contract
+ * rule 4), from its own roster: Roof Lee naming someone is not enough.
+ *
+ * They must be on this company's team right now, found by their shared
+ * sign-in id inside this company only, and hold the admin role here (an owner
+ * or admin in Roof Lee). The role the request states must agree: if Roof Lee
+ * itself says they are office or crew, the answer is no, whatever Archie
+ * still holds from before.
+ *
+ * Nobody named (a subscription simply ended) is allowed, as the contract says.
+ */
+export async function mayCloseCompany(company: Company, acting: Acting | undefined): Promise<boolean> {
+  if (!acting) return true;
+  if (ROLE_MAP[acting.role] !== 'admin') return false;
+  const [person] = await runAsCompany(company.id, () =>
+    db.select({ role: teamMembers.role, active: teamMembers.active }).from(teamMembers)
+      .where(and(eq(teamMembers.companyId, company.id), eq(teamMembers.authUserId, acting.authUserId))),
+  { loadProfile: false });
+  return !!person && person.active && atLeast(person.role, 'admin');
 }
 
 /**

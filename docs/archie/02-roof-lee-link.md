@@ -18,13 +18,39 @@ Two settings, both unset by default:
 | `SISTERS_ARCHIE_SECRET` | Every request under `/api/sister` is refused with a bare `401`. Nothing about the link runs. |
 | `SISTERS_ARCHIE_READY` | Archie answers "not ready", so Roof Lee shows no Archie button and uses no Archie tool for anyone. |
 
-Deploying this code with neither set changes nothing for any existing company.
-Migration `0006_roofli_sister.sql` only adds columns that are null for every
-existing company, and one new table.
+Once migration `0006_roofli_sister.sql` is in the database, deploying this
+code with neither setting changes nothing for any existing company. The
+migration has to be there first: see "Before deploying this code" below.
 
 `SISTERS_ARCHIE_SECRET` is a fresh secret for this pair only. It is never
 copied from another product, another repository or an older shared secret.
 Archie never reads `SISTERS_SHARED_SECRET` at all.
+
+## Before deploying this code (owner only, must come first)
+
+**Apply migration `0006_roofli_sister.sql` to the database before this code is
+deployed. Not after, and not as part of switching the link on.**
+
+This code reads the new columns every time it reads a person or a company,
+whether or not the link is switched on. Deployed against a database that does
+not have them yet, sign-in fails for everyone ("column
+team_members.auth_user_id does not exist") and so does all scheduled company
+work ("column roofli_company_id does not exist"). Nothing in the build or the
+deploy runs migrations, so this is a step a person has to do.
+
+The other order is safe. The migration only adds three columns that are null
+for every existing company and person, one index, one uniqueness rule and one
+new table. The code that is live today never names any of them, so it carries
+on exactly as before with the migration applied.
+
+1. Apply the migration as the database owner:
+   `DATABASE_URL=<owner url> npx tsx scripts/migrate.ts`
+2. Check it is there: `select auth_user_id, source from team_members limit 1`
+   and `select roofli_company_id from companies limit 1` both run without an
+   error.
+3. Only then deploy this code.
+
+If this code is ever rolled back, leave the migration in place.
 
 ## Where the code is
 
@@ -90,6 +116,13 @@ Archie's own jobs, and the "no messages of its own" gate with the
   `paused`, `close` to `cancelled`. Nobody can sign in and no scheduled work
   runs for it. A paused company comes back when Roof Lee sends it again with
   an active plan. A closed one stays closed.
+- **Archie checks who is asking.** When a pause or close names a person, that
+  person must be on this company's team in Archie right now, found by their
+  shared sign-in id inside this company, and hold the admin role here (an
+  owner or admin in Roof Lee). The role the request states must agree. Anyone
+  else is answered `403` and nothing changes. A refusal is not remembered, so
+  the same request can be sent again once the team list has caught up. A pause
+  that names nobody (a subscription ended) is allowed, as the contract says.
 - **A write sent twice is done once.** The key from the `idempotency-key`
   header is claimed per company in `sister_idempotency` before the work
   starts, and the first answer is given again to any repeat.
@@ -108,14 +141,16 @@ Archie's own jobs, and the "no messages of its own" gate with the
 
 ## Turning it on (live step, owner only)
 
-1. Apply migration `0006_roofli_sister.sql` to the database, as the owner role.
-2. Generate one fresh secret and set it as `SISTERS_ARCHIE_SECRET` in both
+Migration `0006_roofli_sister.sql` is not a step here. It was applied before
+this code was deployed ("Before deploying this code" above).
+
+1. Generate one fresh secret and set it as `SISTERS_ARCHIE_SECRET` in both
    Archie and Roof Lee.
-3. Prove the link with a throwaway test company (Summit Ridge Roofing in Cedar
+2. Prove the link with a throwaway test company (Summit Ridge Roofing in Cedar
    Falls): make it, change its team, pause it, close it. Check that the
    contract's worked examples verify against the deployed address, including
    one request with a query in its address.
-4. Only then set `SISTERS_ARCHIE_READY=true`.
+3. Only then set `SISTERS_ARCHIE_READY=true`.
 
 ## Tests
 

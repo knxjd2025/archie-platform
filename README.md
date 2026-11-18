@@ -28,6 +28,12 @@ Roof Lee can make, update, pause and close companies in Archie through signed
 requests under `/api/sister`. It is off until `SISTERS_ARCHIE_SECRET` is set.
 See docs/archie/02-roof-lee-link.md.
 
+**Before this code is deployed, apply migration `0006_roofli_sister.sql` to the
+database.** The code reads the new columns on every sign-in, link on or off, so
+deploying first breaks sign-in for every existing company. The migration is
+safe to apply under the code that is live today. Nothing in the build or deploy
+runs migrations.
+
 ## Not in this repo on purpose
 
 - `ios/` and `android/` app shells (will be regenerated with Archie's own bundle IDs)
