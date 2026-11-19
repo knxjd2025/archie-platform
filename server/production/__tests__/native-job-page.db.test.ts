@@ -463,6 +463,92 @@ describe.skipIf(!localDb)('the job page for a job Archie keeps itself', async ()
     });
   });
 
+  describe('"Start production" on the job page (A.3)', () => {
+    const start = (key: string) => post(`/api/production/${key}/pipeline/stage`, { stage: 'approved' });
+    const pipelineOf = async (c: Co, key: string) =>
+      (await runAsCompany(c.id, () => db.select().from(schema.productionPipeline).where(eq(schema.productionPipeline.jobExternalId, key))))[0];
+
+    it('puts a job Archie keeps on the Production board at Approved, and its status says so, with nothing sent anywhere', async () => {
+      const { key } = await nativeLead();
+      as(native, 'office');
+      const r = await start(key);
+      expect(r.status).toBe(200);
+      expect(r.body.pipeline.stage).toBe('approved');
+      expect((await pipelineOf(native, key))?.stage).toBe('approved');
+      // The status the rest of Archie reads moves with it, as when Roof Lee puts the job on the board.
+      expect((await leadByKey(native, key)).stage).toBe('Buyer Approved');
+
+      const page = await get(`/api/clients/${key}`);
+      expect(page.body.lead).toMatchObject({ stage: 'Buyer Approved', boardStage: { key: 'approved', label: 'Approved' } });
+      const board = await get('/api/production');
+      expect(board.body.jobs.map((j: any) => j.externalId)).toContain(key);
+      nothingLeftArchie();
+    });
+
+    it('is harmless pressed twice', async () => {
+      const { key } = await nativeLead();
+      as(native, 'office');
+      expect((await start(key)).status).toBe(200);
+      const again = await start(key);
+      expect(again.status).toBe(200);
+      expect(again.body.pipeline.stage).toBe('approved');
+      expect((await pipelineOf(native, key))?.history).toHaveLength(1);
+      expect((await leadByKey(native, key)).stage).toBe('Buyer Approved');
+      nothingLeftArchie();
+    });
+
+    it('is open to the rep who owns the job, and closed to a crew and to another rep', async () => {
+      const { key } = await nativeLead();
+      as(native, 'crew');
+      expect((await start(key)).status).toBe(404);
+      as(native, 'rep2');
+      expect((await start(key)).status).toBe(404);
+      expect(await pipelineOf(native, key)).toBeUndefined();
+      expect((await leadByKey(native, key)).stage).toBe('New Lead');
+      as(native, 'rep');
+      expect((await start(key)).status).toBe(200);
+      expect((await leadByKey(native, key)).stage).toBe('Buyer Approved');
+      nothingLeftArchie();
+    });
+
+    it('is unchanged for the original JobTread company: the status is JobTread\'s, and a real move still writes to it', async () => {
+      const { key } = await jobTreadLead();
+      as(original, 'owner');
+      const r = await start(key);
+      expect(r.status).toBe(200);
+      expect((await pipelineOf(original, key))?.stage).toBe('approved');
+      // Put on the board where it stood: nothing is written, here or to JobTread, exactly as before.
+      expect((await leadByKey(original, key)).stage).toBe('New Lead');
+      expect(calls.jobtread).toEqual([]);
+
+      const moved = await post(`/api/production/${key}/pipeline/stage`, { stage: 'waiting_dp' });
+      expect(moved.status).toBe(200);
+      expect(calls.jobtread).toEqual(['new', 'setJobStage']);
+      expect((await leadByKey(original, key)).stage).toBe('Buyer Approved');
+    });
+  });
+
+  describe('what the screens are told about the company (A.3)', () => {
+    it('says a company Roof Lee made is one, for every person in it, so the lead form leaves booking out', async () => {
+      for (const who of ['owner', 'office', 'rep', 'crew']) {
+        as(native, who);
+        const me = await get('/api/auth/me');
+        expect(me.status).toBe(200);
+        expect(me.body.profile).toMatchObject({ id: native.id, madeByRoofli: true });
+      }
+      nothingLeftArchie();
+    });
+
+    it('says the original JobTread company is not, so its screens are unchanged', async () => {
+      for (const who of ['owner', 'rep']) {
+        as(original, who);
+        const me = await get('/api/auth/me');
+        expect(me.status).toBe(200);
+        expect(me.body.profile).toMatchObject({ id: original.id, madeByRoofli: false });
+      }
+    });
+  });
+
   it('never gives the original company a lead of Archie\'s own', async () => {
     const own = await runAsCompany(original.id, () => db.select().from(schema.leads).where(and(eq(schema.leads.companyId, original.id), eq(schema.leads.source, 'archie'))));
     expect(own).toEqual([]);

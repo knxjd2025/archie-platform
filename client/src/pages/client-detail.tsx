@@ -20,6 +20,11 @@ import OpenTimes from '../components/OpenTimes';
 import JobReps from '../components/JobReps';
 import AccountEditor from '../components/AccountEditor';
 import type { AccountEdit } from '../../../shared/client-account';
+import { isPipelineStage, stageLabel } from '../../../shared/production-pipeline';
+import {
+  jobPageView, isArchieJob, photoConsentSaved,
+  PHOTO_CONSENT_LABEL, PHOTO_CONSENT_HELP, START_PRODUCTION_CONFIRM, PRODUCTION_STARTED, NOT_IN_PRODUCTION, MOVES_ON_BOARD,
+} from '../lib/own-jobs';
 
 interface Lead {
   externalId: string | null;
@@ -45,6 +50,12 @@ interface Lead {
   scheduleStart: string | null;
   scheduleEnd: string | null;
   createdAt: string | null;
+  /** Which system keeps the job: 'archie' for a job Archie keeps (a company Roof Lee made), else 'jobtread'. */
+  backend?: string | null;
+  /** A job Archie keeps only: whether the customer agreed to photos of it being used. */
+  photoConsent?: boolean;
+  /** A job Archie keeps only: where it sits on the Production board, or null when it is not on it. */
+  boardStage?: { key: string; label: string } | null;
 }
 interface Doc {
   id: number; type: string | null; amount: number | null; status: string | null; issueDate: string | null; signedAt: string | null;
@@ -68,6 +79,7 @@ export default function ClientDetail({ externalId, onBack, onOpenPlaybook }: { e
   const [busyStage, setBusyStage] = useState(false);
   const [busyNote, setBusyNote] = useState(false);
   const [busyContact, setBusyContact] = useState(false);
+  const [busyConsent, setBusyConsent] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const flash = (m: string) => { setToast(m); setTimeout(() => setToast(null), 4000); };
   const copy = (t?: string | null) => { if (t) { navigator.clipboard?.writeText(t).then(() => flash('Copied')).catch(() => {}); } };
@@ -107,7 +119,8 @@ export default function ClientDetail({ externalId, onBack, onOpenPlaybook }: { e
   const [noteOpen, setNoteOpen] = useState(false);
   const [note, setNote] = useState('');
 
-  type Msg = { source: string; channel: string; direction: string; body: string; date: number };
+  // `label` is on a note of a job Archie keeps: "Note", or "From Roof Lee".
+  type Msg = { source: string; channel: string; direction: string; body: string; date: number; label?: string };
   const [messages, setMessages] = useState<Msg[]>([]);
   const [ghlContactId, setGhlContactId] = useState<string | null>(null);
   const [msgLoading, setMsgLoading] = useState(true);
@@ -178,13 +191,49 @@ export default function ClientDetail({ externalId, onBack, onOpenPlaybook }: { e
     } finally { setBusyStage(false); }
   };
 
+  // A job Archie keeps that is not on the Production board yet: put it on, at
+  // Approved. From there it moves on the board, with the board's own checks.
+  const startProduction = async () => {
+    if (!lead?.externalId || busyStage) return;
+    if (!window.confirm(START_PRODUCTION_CONFIRM)) return;
+    setBusyStage(true);
+    try {
+      const r = await api.post<{ pipeline?: { stage: string } }>(`/api/production/${lead.externalId}/pipeline/stage`, { stage: 'approved' });
+      const key = r.pipeline?.stage || 'approved';
+      setLead((l) => (l ? { ...l, boardStage: { key, label: isPipelineStage(key) ? stageLabel(key) : key } } : l));
+      flash(PRODUCTION_STARTED);
+      // The status the checklists read moved with it; pick it up quietly.
+      api.get<{ lead: Lead }>(`/api/clients/${externalId}`).then((x) => setLead(x.lead)).catch(() => {});
+    } catch (e: any) {
+      flash(`Couldn't start production: ${e?.message || 'failed'}`);
+    } finally { setBusyStage(false); }
+  };
+
+  // Whether the customer agreed to photos of the job being used (a job Archie keeps).
+  const saveConsent = async (agreed: boolean) => {
+    if (!lead?.externalId || busyConsent) return;
+    const prev = !!lead.photoConsent;
+    setBusyConsent(true);
+    setLead((l) => (l ? { ...l, photoConsent: agreed } : l));
+    try {
+      await api.post(`/api/production/${lead.externalId}/photo-consent`, { agreed });
+      flash(photoConsentSaved(agreed));
+    } catch (e: any) {
+      setLead((l) => (l ? { ...l, photoConsent: prev } : l));
+      flash(`Couldn't save: ${e?.message || 'failed'}`);
+    } finally { setBusyConsent(false); }
+  };
+
   const saveNote = async () => {
     if (!lead?.externalId || !note.trim()) return;
     setBusyNote(true);
     try {
       await api.post(`/api/jobs/${lead.externalId}/note`, { message: note.trim() });
-      setMessages((m) => [{ source: 'jobtread', channel: 'note', direction: 'outbound', body: `You: ${note.trim()}`, date: Date.now() }, ...m]);
-      flash('Note added to your CRM'); setNote(''); setNoteOpen(false);
+      const mine: Msg = isArchieJob(lead)
+        ? { source: 'archie', channel: 'note', direction: 'internal', label: 'Note', body: `You: ${note.trim()}`, date: Date.now() }
+        : { source: 'jobtread', channel: 'note', direction: 'outbound', body: `You: ${note.trim()}`, date: Date.now() };
+      setMessages((m) => [mine, ...m]);
+      flash(jobPageView(lead).noteSaved); setNote(''); setNoteOpen(false);
     } catch (e: any) { flash(`Couldn't add note: ${e?.message || 'failed'}`); } finally { setBusyNote(false); }
   };
 
@@ -213,6 +262,9 @@ export default function ClientDetail({ externalId, onBack, onOpenPlaybook }: { e
     } catch (e: any) { flash(`Couldn't update: ${e?.message || 'failed'}`); } finally { setBusyContact(false); }
   };
 
+  // What this job's page shows: a job Archie keeps points at no outside system (lib/own-jobs.ts).
+  const view = jobPageView(lead ?? { externalId: null });
+
   return (
     <div className="space-y-5">
       <button onClick={onBack} className="text-sm text-blue-600 hover:underline py-2 px-1">← Back</button>
@@ -239,7 +291,7 @@ export default function ClientDetail({ externalId, onBack, onOpenPlaybook }: { e
               <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-gray-500">
                 {lead.jobName && lead.jobName !== lead.customer && <span>{lead.jobName}</span>}
                 {lead.insuranceClaim && <span className="text-[11px] px-1.5 py-0.5 rounded bg-sky-100 text-sky-700">Insurance Claim</span>}
-                {lead.externalId && (
+                {view.openInJobTread && (
                   <a href={`https://app.jobtread.com/jobs/${lead.externalId}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">Open in Current CRM ↗</a>
                 )}
               </div>
@@ -247,7 +299,7 @@ export default function ClientDetail({ externalId, onBack, onOpenPlaybook }: { e
             {money(lead.projectedValue) && <div className="text-right"><p className="text-xl font-bold text-emerald-700">{money(lead.projectedValue)}</p><p className="text-xs text-gray-400">projected</p></div>}
           </div>
 
-          {lead.source === 'jobtread' && <AccountEditor
+          {view.accountEditor && <AccountEditor
             externalId={externalId}
             values={{
               customer: lead.customer,
@@ -264,26 +316,28 @@ export default function ClientDetail({ externalId, onBack, onOpenPlaybook }: { e
               Text jumps to the full thread composer below when GHL has the contact. */}
           {(lead.phone || lead.email) && (
             <div className="flex flex-wrap gap-2">
-              <ContactActions externalId={externalId} phone={lead.phone} email={lead.email} size="md" onText={ghlContactId ? focusComposer : undefined} flash={flash} />
+              {/* A job Archie keeps: the phone's own call, text and email (KynexPro is Roof Lee's for this company). */}
+              <ContactActions externalId={view.contactThroughKynexPro ? externalId : null} phone={lead.phone} email={lead.email} size="md" onText={ghlContactId ? focusComposer : undefined} flash={flash} />
             </div>
           )}
 
           {/* Quick tags → GoHighLevel (can trigger your automations) */}
-          <div className="flex flex-wrap items-center gap-2">
+          {view.kynexProTags && <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-gray-400">Tag:</span>
             {['🔥 Hot', 'Follow-up', 'Not interested', 'Left voicemail'].map((t) => (
               <button key={t} onClick={() => addTag(t)} disabled={tagging === t} className="text-xs px-2.5 py-1 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50">
                 {tagging === t ? 'Tagging…' : t}
               </button>
             ))}
-          </div>
+          </div>}
 
-          {/* Schedule + payment-reminder actions */}
-          <div className="flex flex-wrap gap-2">
-            <button onClick={() => setBookOpen((v) => !v)} className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 font-medium hover:bg-gray-200">📅 Schedule inspection</button>
+          {/* Schedule + payment-reminder actions. Booking is not offered for a job
+              Archie keeps yet: its company has no calendar in Archie. */}
+          {(view.booking || ghlContactId) && <div className="flex flex-wrap gap-2">
+            {view.booking && <button onClick={() => setBookOpen((v) => !v)} className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 font-medium hover:bg-gray-200">📅 Schedule inspection</button>}
             {ghlContactId && <button onClick={paymentReminder} className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 font-medium hover:bg-gray-200">💸 Payment reminder</button>}
-          </div>
-          {bookOpen && (
+          </div>}
+          {view.booking && bookOpen && (
             <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-2">
               <OpenTimes
                 durationMins={bk.durationMins}
@@ -312,14 +366,28 @@ export default function ClientDetail({ externalId, onBack, onOpenPlaybook }: { e
 
           {/* Status / stage */}
           <div className="bg-white rounded-xl border border-gray-200 p-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div>
-              <p className="text-xs text-gray-400 mb-1">Stage</p>
-              <select value={lead.stage || ''} disabled={busyStage} onChange={(e) => changeStage(e.target.value)}
-                className="text-sm px-2 py-1 rounded bg-indigo-50 text-indigo-700 border border-indigo-100 w-full focus:ring-1 focus:ring-indigo-400">
-                {lead.stage && !STAGE_OPTIONS.includes(lead.stage) && <option value={lead.stage}>{lead.stage}</option>}
-                {STAGE_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
+            {view.stageControl === 'board' ? (
+              // A job Archie keeps moves on the Production board, with the board's checks: shown here, not changed here.
+              <div>
+                <p className="text-xs text-gray-400 mb-1">Stage</p>
+                <p className="text-sm px-2 py-1 rounded bg-indigo-50 text-indigo-700 border border-indigo-100">{lead.boardStage ? lead.boardStage.label : (lead.stage || '—')}</p>
+                <p className="text-[11px] text-gray-400 mt-1">{lead.boardStage ? MOVES_ON_BOARD : NOT_IN_PRODUCTION}</p>
+                {view.startProduction && (
+                  <button onClick={startProduction} disabled={busyStage} className="mt-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark disabled:opacity-50">
+                    {busyStage ? 'Starting…' : 'Start production'}
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div>
+                <p className="text-xs text-gray-400 mb-1">Stage</p>
+                <select value={lead.stage || ''} disabled={busyStage} onChange={(e) => changeStage(e.target.value)}
+                  className="text-sm px-2 py-1 rounded bg-indigo-50 text-indigo-700 border border-indigo-100 w-full focus:ring-1 focus:ring-indigo-400">
+                  {lead.stage && !STAGE_OPTIONS.includes(lead.stage) && <option value={lead.stage}>{lead.stage}</option>}
+                  {STAGE_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+            )}
             <JobReps
               externalId={externalId}
               repName={lead.repName}
@@ -391,7 +459,7 @@ export default function ClientDetail({ externalId, onBack, onOpenPlaybook }: { e
           {/* Note action */}
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-gray-800">Add a note to Current CRM</h3>
+              <h3 className="text-sm font-semibold text-gray-800">{view.noteHeading}</h3>
               {!noteOpen && <button onClick={() => setNoteOpen(true)} className="text-xs text-blue-600 hover:underline">＋ Note</button>}
             </div>
             {noteOpen && (
@@ -458,8 +526,31 @@ export default function ClientDetail({ externalId, onBack, onOpenPlaybook }: { e
             </div>
           )}
 
+          {/* Whether the customer agreed to photos of this job being used. Only a
+              person records it, here (a job Archie keeps). */}
+          {view.photoConsent && (
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  role="switch"
+                  aria-checked={!!lead.photoConsent}
+                  aria-describedby="photo-consent-help"
+                  checked={!!lead.photoConsent}
+                  disabled={busyConsent}
+                  onChange={(e) => saveConsent(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 flex-shrink-0"
+                />
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium text-gray-800">{PHOTO_CONSENT_LABEL}{busyConsent && <span className="ml-2 text-xs font-normal text-gray-400">Saving…</span>}</span>
+                  <span id="photo-consent-help" className="block text-xs text-gray-500 mt-0.5">{PHOTO_CONSENT_HELP}</span>
+                </span>
+              </label>
+            </div>
+          )}
+
           {/* Job photos (JobTread) — shoot from the field, feeds the reports */}
-          <JobPhotos externalId={externalId} />
+          <JobPhotos externalId={externalId} keptInArchie={isArchieJob(lead)} />
 
           {/* Pre-construction checklist — filled at the point the down payment is collected */}
           <PreConstructionChecklist jobExternalId={externalId} stage={lead.stage} />
@@ -531,6 +622,7 @@ export default function ClientDetail({ externalId, onBack, onOpenPlaybook }: { e
                     <div key={i} className="flex items-start gap-2.5 px-4 py-2.5">
                       <span className="text-base mt-0.5">{icon}</span>
                       <div className="min-w-0 flex-1">
+                        {m.label && <p className="text-[10px] uppercase tracking-wide text-gray-400">{m.label}</p>}
                         <p className="text-sm text-gray-800">
                           {out && <span className="text-gray-400">You: </span>}
                           {m.body || <span className="italic text-gray-400">(no text)</span>}
@@ -554,13 +646,13 @@ export default function ClientDetail({ externalId, onBack, onOpenPlaybook }: { e
                 {docs.map((d) => (
                   <a
                     key={d.id}
-                    href={lead.externalId ? `https://app.jobtread.com/jobs/${lead.externalId}` : undefined}
+                    href={view.documentsOpenJobTread ? `https://app.jobtread.com/jobs/${lead.externalId}` : undefined}
                     target="_blank"
                     rel="noreferrer"
                     className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50"
                   >
                     <span className="text-lg">📄</span>
-                    <div className="min-w-0 flex-1"><p className="text-sm font-medium text-gray-900 truncate">{d.type || 'Document'} <span className="text-gray-300 text-xs">↗</span></p><p className="text-xs text-gray-500">{d.signedAt ? `Signed ${fmtDate(d.signedAt)}` : d.issueDate ? `Issued ${fmtDate(d.issueDate)}` : ''}</p></div>
+                    <div className="min-w-0 flex-1"><p className="text-sm font-medium text-gray-900 truncate">{d.type || 'Document'} {!isArchieJob(lead) && <span className="text-gray-300 text-xs">↗</span>}</p><p className="text-xs text-gray-500">{d.signedAt ? `Signed ${fmtDate(d.signedAt)}` : d.issueDate ? `Issued ${fmtDate(d.issueDate)}` : ''}</p></div>
                     <div className="text-right whitespace-nowrap">{money(d.amount) && <p className="text-sm font-medium text-emerald-700">{money(d.amount)}</p>}{d.status && <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 capitalize">{d.status}</span>}</div>
                   </a>
                 ))}

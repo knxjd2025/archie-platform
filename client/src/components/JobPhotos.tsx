@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
+import { PHOTOS_SOON } from '../lib/own-jobs';
 
 interface Photo { id: string; name: string; url: string | null; description: string | null; createdAt: string | null }
 
@@ -23,7 +24,10 @@ export async function shrinkImage(file: File, maxEdge = MAX_EDGE): Promise<{ bas
 }
 
 // A job's photos, straight from JobTread — view them and add new ones from the field.
-export default function JobPhotos({ externalId, onChanged }: { externalId: string; onChanged?: () => void }) {
+// A job Archie keeps itself (`keptInArchie`, a company Roof Lee made) has no
+// JobTread and cannot use CompanyCam: until Archie stores photos itself it
+// says so plainly, and offers neither the add button nor the CompanyCam push.
+export default function JobPhotos({ externalId, onChanged, keptInArchie = false }: { externalId: string; onChanged?: () => void; keptInArchie?: boolean }) {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -46,10 +50,11 @@ export default function JobPhotos({ externalId, onChanged }: { externalId: strin
   // CompanyCam: photos already reach us via JobTread, but this shows the project
   // directly and lets a rep push photos the other way.
   useEffect(() => {
+    if (keptInArchie) { setCc(null); return; }
     api.get<{ configured: boolean; project: any; photos: any[] }>(`/api/clients/${externalId}/companycam`)
       .then((r) => setCc(r as any))
       .catch(() => {});
-  }, [externalId]);
+  }, [externalId, keptInArchie]);
 
   const pushToCompanyCam = async (createProject = false) => {
     if (pushing) return;
@@ -106,7 +111,7 @@ export default function JobPhotos({ externalId, onChanged }: { externalId: strin
       <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-gray-800">📸 Job photos{photos.length ? <span className="text-gray-400 font-normal"> · {photos.length}</span> : null}</h3>
         <div className="flex items-center gap-2">
-        {cc?.configured && photos.length > 0 && (
+        {!keptInArchie && cc?.configured && photos.length > 0 && (
           <button
             onClick={() => pushToCompanyCam(false)}
             disabled={pushing}
@@ -116,7 +121,7 @@ export default function JobPhotos({ externalId, onChanged }: { externalId: strin
             {pushing ? 'Pushing…' : '📷 → CompanyCam'}
           </button>
         )}
-        <button
+        {!keptInArchie && <button
           onClick={() => fileRef.current?.click()}
           disabled={!!busy}
           // The most-used field action in the app — sized for a thumb, the way
@@ -124,7 +129,7 @@ export default function JobPhotos({ externalId, onChanged }: { externalId: strin
           className="text-xs px-3 py-2 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark disabled:opacity-50"
         >
           {busy ? `Uploading ${busy.done}/${busy.total}…` : '＋ Add photos'}
-        </button>
+        </button>}
         </div>
         <input ref={fileRef} type="file" accept="image/*" multiple capture="environment" onChange={onPick} className="hidden" />
       </div>
@@ -139,7 +144,7 @@ export default function JobPhotos({ externalId, onChanged }: { externalId: strin
           <button onClick={load} className="mt-2 text-sm text-blue-600 hover:underline">Retry</button>
         </div>
       ) : photos.length === 0 ? (
-        <p className="px-4 py-6 text-center text-sm text-gray-400">No photos on this job yet, add some from your phone and they'll go straight into your CRM.</p>
+        <p className="px-4 py-6 text-center text-sm text-gray-400">{keptInArchie ? PHOTOS_SOON : 'No photos on this job yet, add some from your phone and they\'ll go straight into your CRM.'}</p>
       ) : (
         <div className="p-3 grid grid-cols-3 sm:grid-cols-5 gap-2">
           {photos.slice(0, 15).map((p) => (

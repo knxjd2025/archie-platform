@@ -9,7 +9,7 @@ import { PRODUCTION_STAGES } from './columns';
 import { latestWalkthroughByJob, walkthroughSummary, type WalkthroughSummary } from './walkthrough-status';
 import { PIPELINE_STAGES, TRADES, STAGE_CHECKS, moveBlocker, nextStage, type GateContext } from '../../shared/production-pipeline';
 import { recordPhotoConsent } from './native-jobs';
-import { snapshotFor, gateContexts, pipelineRows, moveStage, setTrades, completeTrade, setCheck, pipelineHistory, type PipelineSnapshot } from './pipeline';
+import { snapshotFor, gateContexts, pipelineRows, moveStage, settleNativeStatus, setTrades, completeTrade, setCheck, pipelineHistory, type PipelineSnapshot } from './pipeline';
 
 export interface ProductionJob {
   externalId: string | null;
@@ -112,10 +112,13 @@ export function registerProductionRoutes(app: Express) {
 
   // Move a job along the pipeline. Gated (409 with the reason) and mirrored
   // to JobTread's status best-effort — a JobTread outage never blocks the crew.
+  // A job Archie keeps that is not on the board yet is put on it here too
+  // ("Start production" on its page, with stage 'approved').
   app.post('/api/production/:externalId/pipeline/stage', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     const id = await guard(req, res); if (!id) return;
     const r = await moveStage(id, req.body?.stage, req.session.user!.email);
     if (!r.ok) return res.status(r.status).json({ error: r.error });
+    if (!r.moved) await settleNativeStatus(id, r.row);
     res.json({ ok: true, pipeline: snapshotFor(r.row, null), jobtread: r.jobtread });
   }));
 

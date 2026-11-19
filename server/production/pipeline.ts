@@ -107,6 +107,21 @@ async function mirrorToJobTread(externalId: string, stage: PipelineStage, trades
   return result;
 }
 
+/**
+ * A job Archie keeps (./native-jobs.ts) put on the board where it already
+ * stood ("Start production" on its page): no move was made, so nothing set
+ * the status the rest of Archie reads, and a new lead's still says New Lead.
+ * Set it once, from where the board has the job. Does nothing for any other
+ * job: a JobTread job's status is JobTread's.
+ */
+export async function settleNativeStatus(externalId: string, row: ProductionPipelineRow): Promise<void> {
+  if (!isNativeJobId(externalId)) return;
+  const stage = isPipelineStage(row.stage) ? row.stage : 'approved';
+  const status = jobtreadStatusFor(stage, normalizeTrades(row.trades.map((t) => t.key), row.trades as TradeStep[]));
+  await db.update(leads).set({ stage: status, updatedAt: new Date() })
+    .where(and(eq(leads.externalId, externalId), sql`${leads.stage} is distinct from ${status}`));
+}
+
 export type MoveResult =
   | { ok: true; row: ProductionPipelineRow; moved: boolean; jobtread: { ok: boolean; error?: string }; automation: string[] }
   | { ok: false; status: number; error: string };

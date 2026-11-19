@@ -408,9 +408,10 @@ JobTread, so Archie gives its leads keys of its own.
   (`POST /api/canvass/{id}/convert`) store the lead with source `archie` and
   call no JobTread, no KynexPro (Roof Lee owns it for this company) and no
   calendar. Each is written to the company's log (system `archie`) and told
-  to Roof Lee as `lead.created`. Booking an appointment from the lead form
-  answers "Booking is not available for your company yet." and the lead is
-  still made.
+  to Roof Lee as `lead.created`. The lead form does not offer booking for
+  such a company (the screens read `profile.madeByRoofli` from
+  `GET /api/auth/me`), and a booking sent anyway answers "Booking is not
+  available for your company yet." and the lead is still made.
 - **Who owns a new lead.** A salesperson only sees a job they are assigned.
   So a new lead is owned from the start by: the salesperson a sales leader
   picked on the form, else the rep whose door it was (canvassing), else the
@@ -452,6 +453,24 @@ JobTread, so Archie gives its leads keys of its own.
     still cannot open the page.
   For every other company these answer exactly as before, apart from the client
   carrying `backend: "jobtread"`.
+- **The client page on screen** (`client/src/pages/client-detail.tsx`, choices
+  in `client/src/lib/own-jobs.ts`), for a job Archie keeps only: no "Open in
+  Current CRM" link and no documents linking to JobTread; the stage is shown,
+  not picked, as the Production board has it, with "Start production" while
+  the job is not on the board yet (see below); the admin's corrections are
+  offered; the note says "Note saved"; call, text and email are the phone's
+  own, with no KynexPro tags and no booking (that company has no calendar in
+  Archie yet); the job's notes show "Note" or "From Roof Lee"; the photo
+  switch is on the page (below); and the photo box says adding photos is
+  coming soon, with no add button and no CompanyCam push. Every other job's
+  page is exactly as before.
+- **Start production.** `POST /api/production/{key}/pipeline/stage` with
+  `{ "stage": "approved" }`, from the client page, puts such a job on the
+  Production board at Approved, for anyone who may open the job (never a
+  crew). The status the rest of Archie reads moves with it (`Buyer Approved`),
+  as when Roof Lee puts a job on the board. Pressed twice it changes nothing.
+  For a JobTread job the route is unchanged: putting it on the board writes
+  nothing, here or to JobTread.
 - **Moving a job from Roof Lee.** `POST .../jobs/{id}/stage` with `stage` (one
   of the board's own stage keys, `approved` to `closed_out`) and `acting`. It
   is the same move a person makes in Archie, made as the person named, so the
@@ -469,7 +488,10 @@ JobTread, so Archie gives its leads keys of its own.
 - **Consent to use photos** is a yes a person records on the job:
   `POST /api/production/{job key}/photo-consent` with `{ "agreed": true }`,
   signed in to Archie. Nothing sets it by itself, and it is written to the
-  company's log. There is no button for it on a screen yet.
+  company's log. The client page has the switch, "Customer agreed to photos
+  of this job being used", with one sentence on what it allows: the
+  company's website and social posts, naming only the town, never the
+  address.
 - **Photos.** Archie stores no job photos itself. The original company's
   photos live in its JobTread, and a Roof Lee company has no JobTread. So
   there is no uploaded photo to hand over, and the photo address answers
@@ -506,9 +528,9 @@ JobTread, so Archie gives its leads keys of its own.
   nothing fills yet because the agreement has no field for them: `lat`, `lng`,
   `lead_source`, `post_ref`.
 
-Not built: a button in Archie for a person to put a lead on the board
-themselves. Today a Roof Lee company's lead gets onto the board when Roof Lee
-moves it; from there everything on the board works from inside Archie.
+A Roof Lee company's lead gets onto the board when Roof Lee moves it, or when
+a person presses "Start production" on its page; from there everything on the
+board works from inside Archie.
 
 ## One sign-in
 

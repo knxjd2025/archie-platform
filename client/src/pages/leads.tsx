@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { atLeast } from '../../../shared/rbac';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { useCompany } from '../lib/company';
+import { leadFormView, LEAD_SAVED_IN_ARCHIE } from '../lib/own-jobs';
 import { formatPhone, fmtDate } from '../lib/format';
 import { toDateInput } from '../lib/canvass';
 import { RowsSkeleton } from '../components/Skeleton';
@@ -51,6 +53,8 @@ const enteredCredit = (lead: Lead): string | null => {
 export default function Leads({ onOpenClient, initialStatus, initialNew, initialPrefill }: { onOpenClient?: (externalId: string) => void; initialStatus?: string; initialNew?: boolean; initialPrefill?: Partial<{ firstName: string; lastName: string; phone: string; email: string; address: string; notes: string }> }) {
   const { user } = useAuth();
   const isManagerPlus = !!user && atLeast(user.role, 'manager'); // admin, sales director, sales leader
+  // A company Roof Lee made keeps its leads in Archie only, with no booking yet.
+  const form = leadFormView(useCompany().madeByRoofli, user?.role);
 
   const [leads, setLeads] = useState<Lead[]>([]);
   const [reps, setReps] = useState<Rep[]>([]);
@@ -73,7 +77,7 @@ export default function Leads({ onOpenClient, initialStatus, initialNew, initial
   // tapping a real open time on the rep's calendar fills it in one tap on a phone.
   const emptyAppt = { on: false, type: 'Inspection', date: '', time: '', durationMins: 60, forEmail: null as string | null };
   const [appt, setAppt] = useState(emptyAppt);
-  const [created, setCreated] = useState<{ name: string; jobId: string | null; jobtread: string; ghl: string; appointment: any } | null>(null);
+  const [created, setCreated] = useState<{ name: string; jobId: string | null; backend?: string; jobtread: string; ghl: string; appointment: any } | null>(null);
   // A time tapped on the availability strip books it; changing only whose
   // calendar we're looking at shouldn't switch the appointment on by itself —
   // nor switch it back on after the rep deliberately unchecked the box.
@@ -114,12 +118,12 @@ export default function Leads({ onOpenClient, initialStatus, initialNew, initial
     if (appt.on && (!appt.date || !appt.time)) { flash('Pick a date and time for the appointment, or switch it off.'); return; }
     setBusy(true);
     try {
-      const r = await api.post<{ jobId?: string | null; jobtread: string; ghl: string; appointment: any }>('/api/leads/create', {
+      const r = await api.post<{ jobId?: string | null; backend?: string; jobtread: string; ghl: string; appointment: any }>('/api/leads/create', {
         ...nf,
         ...(appt.on ? { appointment: { type: appt.type, date: appt.date, time: appt.time, durationMins: appt.durationMins, notes: nf.notes, forEmail: appt.forEmail || undefined } } : {}),
       });
       const name = `${nf.firstName} ${nf.lastName}`.trim() || nf.phone || nf.email;
-      setCreated({ name, jobId: r.jobId || null, jobtread: r.jobtread, ghl: r.ghl, appointment: r.appointment });
+      setCreated({ name, jobId: r.jobId || null, backend: r.backend, jobtread: r.jobtread, ghl: r.ghl, appointment: r.appointment });
       flash(r.appointment ? (r.appointment.ok ? `${name} added and booked` : `${name} added — booking failed`) : `${name} added`);
       setNf(emptyNew); setAppt(emptyAppt);
       loadLeads();
@@ -355,15 +359,15 @@ export default function Leads({ onOpenClient, initialStatus, initialNew, initial
             <input value={nf.notes} onChange={(e) => setNf({ ...nf, notes: e.target.value })} placeholder="What they said on the call (optional)" className="text-sm border border-gray-200 rounded p-2 sm:col-span-2 lg:col-span-3 focus:ring-1 focus:ring-blue-400" />
             {isManagerPlus && (
               <select value={nf.salesRep} onChange={(e) => { setNf({ ...nf, salesRep: e.target.value }); setAppt((a) => ({ ...a, forEmail: null })); }} className="text-sm border border-gray-200 rounded p-2 text-gray-700 focus:ring-1 focus:ring-blue-400">
-                <option value="">Sales Rep (default: you)</option>
+                <option value="">{form.repPlaceholder}</option>
                 {reps.map((r) => (
                   <option key={r.id} value={r.jobtreadSalesRep || r.name}>{r.name}</option>
                 ))}
               </select>
             )}
           </div>
-          {/* Book while they're still on the phone */}
-          <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
+          {/* Book while they're still on the phone (not for a company Roof Lee made yet: no calendar in Archie) */}
+          {form.booking && <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
             <label className="flex items-center gap-2 text-sm font-medium text-gray-800">
               <input type="checkbox" checked={appt.on} onChange={(e) => setAppt({ ...appt, on: e.target.checked })} className="h-4 w-4" />
               📅 Book an appointment now
@@ -388,7 +392,7 @@ export default function Leads({ onOpenClient, initialStatus, initialNew, initial
               </div>
             )}
             <p className="text-xs text-gray-400 mt-2">Goes on that rep's Google Calendar with the address, and shows on the Schedule tab.</p>
-          </div>
+          </div>}
           <div className="flex gap-2 mt-3">
             <button onClick={createLead} disabled={busy} className="text-sm px-4 py-2 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark disabled:opacity-50">{busy ? 'Saving…' : appt.on ? 'Add lead + book' : 'Add lead'}</button>
             <button onClick={() => { setShowNew(false); setNf(emptyNew); setAppt(emptyAppt); setCreated(null); }} className="text-sm px-3 py-2 rounded-lg bg-gray-100 text-gray-600">Close</button>
@@ -396,13 +400,17 @@ export default function Leads({ onOpenClient, initialStatus, initialNew, initial
           {created && (
             <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
               <div className="font-medium">✅ {created.name} added</div>
-              <div className="text-xs text-emerald-800 mt-1">Current CRM: {created.jobtread} · KynexPro: {created.ghl}{created.appointment ? ` · Appointment: ${created.appointment.ok ? `booked on ${created.appointment.bookedOn}` : `failed (${created.appointment.error || 'calendar'})`}` : ''}</div>
+              {created.backend === 'archie' ? (
+                <div className="text-xs text-emerald-800 mt-1">{LEAD_SAVED_IN_ARCHIE}</div>
+              ) : (
+                <div className="text-xs text-emerald-800 mt-1">Current CRM: {created.jobtread} · KynexPro: {created.ghl}{created.appointment ? ` · Appointment: ${created.appointment.ok ? `booked on ${created.appointment.bookedOn}` : `failed (${created.appointment.error || 'calendar'})`}` : ''}</div>
+              )}
               {created.jobId && onOpenClient && (
                 <button onClick={() => onOpenClient(created.jobId!)} className="mt-2 text-xs px-3 py-1.5 rounded-lg bg-white border border-emerald-300 text-emerald-800 font-medium">Open {created.name} → call / text / inspection</button>
               )}
             </div>
           )}
-          <p className="text-xs text-gray-400 mt-2">Creates a job in your CRM (Status “New Lead”) + a KynexPro contact + a lead here, all in sync. The lead is yours: it shows under your name.</p>
+          <p className="text-xs text-gray-400 mt-2">{form.footer}</p>
         </div>
       )}
 
