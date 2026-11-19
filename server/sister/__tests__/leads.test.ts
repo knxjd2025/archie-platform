@@ -86,8 +86,10 @@ describe.skipIf(!localDb)('read and write for Lee', async () => {
     const rows = await leadRows(c.id);
     expect(rows).toHaveLength(1);
     expect(r.body).toEqual({ leadId: String(rows[0].id) });
+    // Its job key from the start (server/production/native-jobs.ts), so office staff can open it in Archie.
+    expect(rows[0].externalId).toMatch(/^archie-[0-9a-f]{32}$/);
     expect(rows[0]).toMatchObject({
-      source: 'roofli', externalId: null, firstName: 'Pat', lastName: 'Hollis', jobName: 'Pat Hollis',
+      source: 'roofli', stage: 'New Lead', firstName: 'Pat', lastName: 'Hollis', jobName: 'Pat Hollis',
       phone: '(319) 555-0142', email: 'pat@example.test', address: '12 Birch Lane', city: 'Cedar Falls',
       serviceType: 'replacement', notes: 'Hail damage on the north slope.', status: 'new',
       enteredBy: c.office.email, enteredByName: 'Riley Marsh', companyId: c.id,
@@ -193,7 +195,7 @@ describe.skipIf(!localDb)('read and write for Lee', async () => {
     expect(all.status).toBe(200);
     expect(all.body.jobs).toHaveLength(2);
     const listed = all.body.jobs.find((j: any) => j.id === pat);
-    expect(listed).toMatchObject({ id: pat, kind: 'lead', name: 'Pat Hollis', stage: 'new', jobType: 'replacement', town: 'Cedar Falls', phone: '(319) 555-0142', email: 'pat@example.test' });
+    expect(listed).toMatchObject({ id: pat, kind: 'lead', name: 'Pat Hollis', stage: 'New Lead', jobType: 'replacement', town: 'Cedar Falls', phone: '(319) 555-0142', email: 'pat@example.test' });
     expect(Number.isNaN(Date.parse(listed.updatedAt))).toBe(false);
     // No money and nothing internal rides along.
     expect(Object.keys(listed).sort()).toEqual(['email', 'id', 'jobType', 'kind', 'name', 'phone', 'stage', 'town', 'updatedAt']);
@@ -225,7 +227,7 @@ describe.skipIf(!localDb)('read and write for Lee', async () => {
     const r = await read(c, `/jobs/${id}`, c.office);
     expect(r.status).toBe(200);
     expect(r.body.job).toMatchObject({
-      id, kind: 'lead', name: 'Pat Hollis', stage: 'new', address: '12 Birch Lane', message: 'Hail damage on the north slope.',
+      id, kind: 'lead', name: 'Pat Hollis', stage: 'New Lead', address: '12 Birch Lane', message: 'Hail damage on the north slope.',
       photoConsent: false, photos: [],
     });
     expect(r.body.job.notes.map((n: any) => n.text).sort()).toEqual(['Booked the inspection for Tuesday.', 'Called, left a voicemail.']);

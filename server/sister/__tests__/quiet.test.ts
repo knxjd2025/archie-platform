@@ -290,7 +290,9 @@ describe.skipIf(!localDb)('no messages of its own', async () => {
     expect((await write(c, 'POST', '/leads', { name: 'Jo Later', acting: as(c.owner) })).status).toBe(409);
     expect((await write(c, 'PATCH', `/leads/${lead.body.leadId}`, { status: 'contacted', acting: as(c.owner) })).status).toBe(409);
     expect((await write(c, 'POST', `/jobs/${lead.body.leadId}/stage`, { stage: 'approved', acting: as(c.owner) })).status).toBe(409);
-    expect(await leads(c.id)).toEqual([expect.objectContaining({ jobName: 'Pat Hollis', status: 'new', externalId: null })]);
+    // Unchanged, and not put on the board (it has had its job key since it was made).
+    expect(await leads(c.id)).toEqual([expect.objectContaining({ jobName: 'Pat Hollis', status: 'new', stage: 'New Lead' })]);
+    expect(await runAsCompany(c.id, () => db.select().from(schema.productionPipeline))).toEqual([]);
     // Reading and adding a note are not held back.
     expect((await write(c, 'POST', `/leads/${lead.body.leadId}/notes`, { text: 'Called, no answer.', acting: as(c.owner) })).status).toBe(201);
     // Another company is not affected by this one.

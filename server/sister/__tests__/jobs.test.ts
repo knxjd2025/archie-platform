@@ -1,7 +1,7 @@
 /**
  * Archie's own jobs, as Roof Lee's assistant moves them: a lead Roof Lee's
- * company holds gets an Archie-made job identity and sits on the production
- * board with no JobTread behind it. Against the real test database, through
+ * company holds has an Archie-made job identity from the moment it is made,
+ * and sits on the production board with no JobTread behind it. Against the real test database, through
  * the real request path.
  *
  * What must hold (docs/sisters/contract-v2.md in the Roof Lee repository,
@@ -91,17 +91,34 @@ describe.skipIf(!localDb)('Archie\'s own jobs', async () => {
     expect(one.body.job).toMatchObject({ id, kind: 'lead', jobType: 'replacement' });
   });
 
-  it('puts a lead on the board under an identity Archie made, and calls nobody outside', async () => {
+  it('gives a new lead an identity Archie made at once, in New Lead, so office staff can open it', async () => {
     const c = await make();
     const id = await newLead(c);
-    expect((await leadRow(c, id)).externalId).toBeNull();
+    const lead = await leadRow(c, id);
+    expect(lead.externalId).toMatch(/^archie-[0-9a-f]{32}$/);
+    expect(isNativeJobId(lead.externalId)).toBe(true);
+    expect(lead).toMatchObject({ source: 'roofli', stage: 'New Lead' });
+    // A lead, not yet a job: nothing is on the board until it is moved there.
+    expect(await boardRows(c)).toEqual([]);
+    expect((await read(c, `/jobs/${id}`, c.office)).body.job).toMatchObject({ id, kind: 'lead', stage: 'New Lead' });
+    // Each lead its own.
+    const other = await leadRow(c, await newLead(c, 'Jo Burst'));
+    expect(isNativeJobId(other.externalId)).toBe(true);
+    expect(other.externalId).not.toBe(lead.externalId);
+  });
+
+  it('puts a lead on the board under the identity it already has, and calls nobody outside', async () => {
+    const c = await make();
+    const id = await newLead(c);
+    const made = (await leadRow(c, id)).externalId;
 
     const r = await move(c, id, 'approved', c.office);
     expect(r.status).toBe(200);
     expect(r.body).toEqual({ ok: true, stage: 'approved' });
     const lead = await leadRow(c, id);
-    expect(lead.externalId).toMatch(/^archie-[0-9a-f]{32}$/);
-    expect(isNativeJobId(lead.externalId)).toBe(true);
+    expect(lead.externalId).toBe(made);
+    // The status the rest of Archie reads says where it is now, not New Lead.
+    expect(lead.stage).toBe('Buyer Approved');
     const board = await boardRows(c);
     expect(board).toHaveLength(1);
     expect(board[0]).toMatchObject({ jobExternalId: lead.externalId, stage: 'approved', companyId: c.id });
@@ -126,10 +143,12 @@ describe.skipIf(!localDb)('Archie\'s own jobs', async () => {
   it('keeps the board\'s own rules: a move the board would refuse a person is refused Roof Lee too', async () => {
     const c = await make();
     const id = await newLead(c);
-    // Turned down before it was ever on the board: it is not put there, and gets no identity.
+    const made = (await leadRow(c, id)).externalId;
+    // Turned down before it was ever on the board: it is not put there, and keeps the identity it has.
     const early = await move(c, id, 'closed_out', c.office);
     expect(early.status).toBe(409);
-    expect((await leadRow(c, id)).externalId).toBeNull();
+    expect((await leadRow(c, id)).externalId).toBe(made);
+    expect((await leadRow(c, id)).stage).toBe('New Lead');
     expect(await boardRows(c)).toEqual([]);
     expect((await move(c, id, 'pre_production', c.office)).status).toBe(200);
     // Scheduling waits for the pre-construction checklist, whoever asks.
@@ -181,7 +200,8 @@ describe.skipIf(!localDb)('Archie\'s own jobs', async () => {
     // Who it is for, and a key, are both required.
     expect((await write(c, 'POST', `/jobs/${id}/stage`, { stage: 'approved' })).status).toBe(400);
     expect((await move(c, id, 'approved', c.owner, null)).status).toBe(400);
-    expect((await leadRow(c, id)).externalId).toBeNull();
+    expect(isNativeJobId((await leadRow(c, id)).externalId)).toBe(true);
+    expect((await leadRow(c, id)).stage).toBe('New Lead');
     expect(await boardRows(c)).toEqual([]);
     expect(await boardRows(d)).toEqual([]);
     // The older signature opens nothing here.
@@ -201,9 +221,14 @@ describe.skipIf(!localDb)('Archie\'s own jobs', async () => {
   it('gives an identity only in a company that keeps its own jobs', async () => {
     const c = await make();
     const id = await newLead(c);
-    const first = await runAsCompany(c.id, () => ensureJobIdentity(Number(id)));
+    // A lead made now already has one, and keeps it.
+    const made = (await leadRow(c, id)).externalId;
+    expect(await runAsCompany(c.id, () => ensureJobIdentity(Number(id)))).toBe(made);
+    // An older lead with none is given one, once.
+    const [older] = await runAsCompany(c.id, () => db.insert(schema.leads).values({ source: 'roofli', firstName: 'Old', status: 'new' } as any).returning());
+    const first = await runAsCompany(c.id, () => ensureJobIdentity(older.id));
     expect(isNativeJobId(first)).toBe(true);
-    expect(await runAsCompany(c.id, () => ensureJobIdentity(Number(id)))).toBe(first);
+    expect(await runAsCompany(c.id, () => ensureJobIdentity(older.id))).toBe(first);
     expect(await runAsCompany(c.id, () => ensureJobIdentity(987654321))).toBeNull();
 
     // A company Roof Lee did not make keeps its jobs where it always has.
@@ -211,6 +236,23 @@ describe.skipIf(!localDb)('Archie\'s own jobs', async () => {
     const [lead] = await runAsCompany(own.id, () => db.insert(schema.leads).values({ source: 'manual', firstName: 'Pat', status: 'new' } as any).returning());
     expect(await runAsCompany(own.id, () => ensureJobIdentity(lead.id))).toBeNull();
     expect((await runAsCompany(own.id, () => db.select().from(schema.leads).where(eq(schema.leads.id, lead.id))))[0].externalId).toBeNull();
+  });
+
+  it('still puts an older lead with no identity on the board, giving it one, and refuses first what the board would refuse', async () => {
+    const c = await make();
+    const older = async (name: string) => String((await runAsCompany(c.id, () => db.insert(schema.leads).values({ source: 'roofli', firstName: name, jobName: name, status: 'new' } as any).returning()))[0].id);
+    const id = await older('Old Hollis');
+    // Turned down on its very first move: not put on the board, and given no identity.
+    expect((await move(c, id, 'closed_out', c.office)).status).toBe(409);
+    expect((await leadRow(c, id)).externalId).toBeNull();
+    expect(await boardRows(c)).toEqual([]);
+    // Moved: given one, and on the board under it.
+    expect((await move(c, id, 'approved', c.office)).status).toBe(200);
+    const lead = await leadRow(c, id);
+    expect(isNativeJobId(lead.externalId)).toBe(true);
+    expect(lead.stage).toBe('Buyer Approved');
+    expect((await boardRows(c)).map((b) => b.jobExternalId)).toEqual([lead.externalId]);
+    expect(outside).toEqual([]);
   });
 
   it('runs the rest of the board for such a job without JobTread', async () => {

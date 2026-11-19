@@ -29,6 +29,9 @@ import { googleMapsKey } from '../lib/reports/google-key.js';
 import { sendFailure } from '../lib/failure';
 import { etToday } from '../../shared/schedule-board';
 import { jobTreadWriteFailStatus } from '../integrations/jobtread-connection';
+import { getCurrentCompany } from '../tenant/companies';
+import { jobBackendFor } from '../production/native-jobs';
+import { createNativeLead, jobOwnerByEmail, jobOwnerByName } from '../production/native-leads';
 
 /** Plain `fetch()` has no timeout — a hung Google response would otherwise block the request indefinitely. */
 async function fetchWithTimeout(url: string, ms = 15000): Promise<globalThis.Response> {
@@ -525,13 +528,45 @@ export function registerCanvassRoutes(app: Express) {
         return res.json({ ok: true, alreadyConverted: true, externalId: fresh?.leadExternalId || null });
       }
 
-      const { JobTreadClient } = await import('../integrations/jobtread');
       const name = (row.ownerName || '').trim();
       const [firstName, ...rest] = name.split(/\s+/).filter(Boolean);
 
       // The lead belongs to the rep who owns the door, so it lands in their
       // book (and their morning reminder) without anyone re-assigning it.
       const owner = canvassOwner(row.createdBy, found.meta?.ownerEmail);
+
+      // A company that keeps its own jobs (a company Roof Lee made): the lead
+      // is kept in Archie and nowhere else, owned by the door's rep (or the
+      // salesperson a sales leader picked). Nobody who can own jobs: no owner
+      // yet, for a manager to assign. Every other company carries on below.
+      if (jobBackendFor({ externalId: null }, await getCurrentCompany()) === 'archie') {
+        try {
+          const picked = dataScope(user.role) !== 'self' ? await jobOwnerByName(req.body?.salesRep) : null;
+          const ownedBy = picked ?? await jobOwnerByEmail(owner);
+          const { row: lead } = await createNativeLead({
+            values: {
+              firstName: firstName || null, lastName: rest.join(' ') || null, jobName: name || row.address,
+              phone: row.phone || null, email: row.email || null,
+              address: row.address, city: row.city, state: row.state, zip: row.zip,
+              status: 'new' as any, enteredBy: user.email, enteredByName: user.name || null,
+            },
+            actor: user.email, action: 'canvass_convert', summary: `Canvass door → lead: ${row.address}`,
+            ownerId: ownedBy?.id ?? null, ownerSource: 'canvass',
+            ownerEvidence: picked ? `picked by ${user.name || user.email}` : `canvassed door of ${owner}`,
+          });
+          await db.update(canvassProperties)
+            .set({ leadExternalId: lead.externalId, status: 'appointment', updatedAt: new Date() })
+            .where(eq(canvassProperties.id, row.id));
+          return res.json({ ok: true, externalId: lead.externalId });
+        } catch (e) {
+          // Release the claim so a retry can convert the door.
+          await db.update(canvassProperties).set({ leadExternalId: null, updatedAt: new Date() })
+            .where(and(eq(canvassProperties.id, row.id), eq(canvassProperties.leadExternalId, CLAIM)));
+          throw e;
+        }
+      }
+
+      const { JobTreadClient } = await import('../integrations/jobtread');
       const [ownerMember] = owner
         ? await db.select({ repName: teamMembers.jobtreadSalesRep }).from(teamMembers)
           .where(sql`lower(${teamMembers.email}) = ${owner}`)

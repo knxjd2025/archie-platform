@@ -4,11 +4,16 @@
  *
  * The boards are keyed on a job key (leads.external_id), which for the
  * original company is JobTread's id for the job. A company that keeps its own
- * jobs has no JobTread, so a lead of its gets a key Archie makes itself the
- * first time it is put on a board: 'archie-' and 32 hex characters. The key
- * names nothing outside Archie, and nothing is ever sent to JobTread, or to
- * any other outside system, for a job that has one (server/production/pipeline.ts
+ * jobs has no JobTread, so a lead of its gets a key Archie makes itself:
+ * 'archie-' and 32 hex characters, given when the lead is made (newJobKey: the
+ * lead form and a canvassed door, server/production/native-leads.ts, and a lead
+ * Roof Lee adds, server/sister/leads.ts). An older lead with none is given one
+ * the first time it is put on a board (ensureJobIdentity). The key names
+ * nothing outside Archie, and nothing is ever sent to JobTread, or to any
+ * other outside system, for a job that has one (server/production/pipeline.ts
  * and server/sales/store.ts check isNativeJobId before they would).
+ *
+ * jobBackendFor is the one place that answers "which system keeps this job".
  *
  * WHO KEEPS THEIR OWN JOBS: only a company Roof Lee made (keepsOwnJobs). For
  * every other company nothing here ever writes anything, so its leads and
@@ -40,6 +45,40 @@ export function keepsOwnJobs(company: Pick<Company, 'roofliCompanyId'> | null | 
   return !!company?.roofliCompanyId;
 }
 
+/** Where a new lead of Archie's own starts: the first step of the Sales board (shared/sales-pipeline.ts SALES_BAND). */
+export const NEW_LEAD_STAGE = 'New Lead';
+
+/** A new job key of Archie's own: 'archie-' and 32 hex characters. Names nothing outside Archie. */
+export function newJobKey(): string {
+  return `${NATIVE_JOB_PREFIX}${randomBytes(16).toString('hex')}`;
+}
+
+/** The system that keeps a job: Archie itself, or JobTread. */
+export type JobBackend = 'archie' | 'jobtread';
+
+/**
+ * Which system keeps this job. THE ONE SEAM: every "do we tell JobTread, or
+ * keep it here?" decision asks this, so another job system can be plugged in
+ * later in one place (a connector lookup instead of these two rules).
+ *
+ *   - a key Archie made itself: Archie, in any company;
+ *   - no key yet, in a company that keeps its own jobs: Archie (it gets one
+ *     of Archie's own keys, never anyone else's);
+ *   - anything else: JobTread, exactly as before. That includes a lead with
+ *     no key in the original company (the JobTread sync gives it one) and a
+ *     job another system keeps in a company Roof Lee made.
+ *
+ * Ask it with `{ externalId: null }` for a job that is about to be made.
+ */
+export function jobBackendFor(
+  lead: { externalId?: string | null },
+  company: Pick<Company, 'roofliCompanyId'> | null | undefined,
+): JobBackend {
+  if (isNativeJobId(lead.externalId)) return 'archie';
+  if (!lead.externalId && keepsOwnJobs(company)) return 'archie';
+  return 'jobtread';
+}
+
 /**
  * The job key for one of the current company's leads, made now if the lead
  * has none. Null when there is no such lead here, or when this company does
@@ -52,7 +91,7 @@ export async function ensureJobIdentity(leadId: number): Promise<string | null> 
   if (!lead) return null;
   if (lead.externalId) return lead.externalId;
   if (!keepsOwnJobs(await getCurrentCompany())) return null;
-  const made = `${NATIVE_JOB_PREFIX}${randomBytes(16).toString('hex')}`;
+  const made = newJobKey();
   // Only if it still has none: of two requests arriving together, one key wins and both get it.
   const [mine] = await db.update(leads).set({ externalId: made })
     .where(and(eq(leads.id, leadId), isNull(leads.externalId))).returning({ externalId: leads.externalId });

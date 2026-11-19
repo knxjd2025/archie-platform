@@ -205,7 +205,8 @@ request from Roof Lee with a refusal, which is why they go in the same step.
 | `server/sister/capabilities.ts` | What Archie says it can do for one company. |
 | `server/sister/quiet.ts` | The messages Archie sends a customer by itself, and the one switch that says whether it may. |
 | `server/integrations/ghl/new-contact.ts` | What happens when a new contact arrives from KynexPro. Skips a contact Roof Lee made. |
-| `server/production/native-jobs.ts` | Archie's own jobs: the job identity Archie makes, who gets one, and the record of a customer agreeing to photos. |
+| `server/production/native-jobs.ts` | Archie's own jobs: the job identity Archie makes, who gets one, which system keeps a job (`jobBackendFor`, the one seam), and the record of a customer agreeing to photos. |
+| `server/production/native-leads.ts` | A lead made in Archie (the lead form, a canvassed door) for a company that keeps its own jobs: its key, its first owner, the log line and the news. |
 | `server/sister/events.ts` | News going back to Roof Lee: the outbox, the signing, the sending and the retries. |
 
 Both entry files (`server/index.ts` and `api/index.ts`) keep the raw body for
@@ -303,8 +304,10 @@ and jobs, add a lead, change one and add a note.
   caught up.
 - **A lead Roof Lee adds stays in Archie.** It is stored with source `roofli`,
   with no call to JobTread, KynexPro or anything else, and no message to
-  anyone. Every change is written to the company's log under the person it
-  was for.
+  anyone. It gets its job key at once and starts in `New Lead` (so its
+  `stage` in an answer reads `New Lead` until it is moved), which lets office
+  staff open it in Archie. Every change is written to the company's log under
+  the person it was for.
 - **Ids** are Archie's own row numbers, as digits. Leads and jobs share one
   list; a record is a `job` once it sits on the production board and a `lead`
   until then.
@@ -377,16 +380,42 @@ How it is kept:
 
 Archie's boards are keyed on a job key (`leads.external_id`). For the original
 company that is JobTread's id for the job. A company Roof Lee made has no
-JobTread, so its leads had no key and could never sit on a board.
+JobTread, so Archie gives its leads keys of its own.
 
-- **An identity Archie makes.** The first time one of such a company's leads
-  is put on the production board it is given a key of Archie's own: `archie-`
-  and 32 hex characters. The lead keeps it for good. The id Roof Lee uses for
-  the record (the row's number) does not change when a lead becomes a job.
+- **An identity Archie makes.** A lead of such a company is given a key of
+  Archie's own when it is made: `archie-` and 32 hex characters. That holds
+  for a lead Roof Lee adds, a lead typed into Archie's lead form, and a
+  canvassed door turned into a lead. It starts in `New Lead`, so it shows on
+  the Sales board and opens like any other client. An older lead with no key
+  is given one the first time it is put on the production board. The lead
+  keeps its key for good. The id Roof Lee uses for the record (the row's
+  number) does not change when a lead becomes a job.
 - **Only for a company Roof Lee made.** `keepsOwnJobs` in
   `server/production/native-jobs.ts` is the one switch. The `jobs.native`
   capability and the code that makes an identity both read it. No other
   company's lead is ever given one, so nothing changes for it.
+- **Which system keeps a job** is answered in one place, `jobBackendFor` in
+  the same file: Archie for a key of Archie's own, or for a job with no key
+  yet in a company that keeps its own jobs; JobTread for everything else,
+  exactly as before. Code that would tell JobTread something asks it first.
+- **Leads made in Archie.** For such a company the lead form
+  (`POST /api/leads/create`) and turning a canvassed door into a lead
+  (`POST /api/canvass/{id}/convert`) store the lead with source `archie` and
+  call no JobTread, no KynexPro (Roof Lee owns it for this company) and no
+  calendar. Each is written to the company's log (system `archie`) and told
+  to Roof Lee as `lead.created`. Booking an appointment from the lead form
+  answers "Booking is not available for your company yet." and the lead is
+  still made.
+- **Who owns a new lead.** A salesperson only sees a job they are assigned.
+  So a new lead is owned from the start by: the salesperson a sales leader
+  picked on the form, else the rep whose door it was (canvassing), else the
+  person who typed it in when they would not otherwise see it (a rep, or a
+  sales leader who sees only their team). Never a crew member, because owning
+  a job opens its money. Anyone else's new lead (office staff, an admin) has
+  no owner yet and waits on the Assignments page, where a manager gives it to
+  a salesperson. In such a company everyone active who can own jobs is
+  offered there under their own name (nobody has a JobTread rep name), no
+  owner is worked out from JobTread, and nothing is written back to it.
 - **Nothing goes to JobTread for such a job.** Every place that would tell
   JobTread about a move (the production, sales and claim boards) checks the
   key first and, for one of Archie's own, keeps the status in Archie instead.
@@ -398,7 +427,7 @@ JobTread, so its leads had no key and could never sit on a board.
   pre-construction checklist, the final walkthrough, a ticked box) answers
   `409` with the reason in plain words, and the same request can be sent again
   later. A lead that is turned down on its very first move is not put on the
-  board and gets no identity. An unknown stage answers `400`. Crew cannot move a job this way
+  board (an older lead with no key is not given one either). An unknown stage answers `400`. Crew cannot move a job this way
   (`403`), the same as they cannot see leads. A job that another system keeps
   answers `409` and is left alone. Each move is written to the company's log
   under the person it was for.

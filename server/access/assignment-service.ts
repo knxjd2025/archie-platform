@@ -13,9 +13,16 @@ import { JobTreadClient } from '../integrations/jobtread';
 import { inferOwner, type JobEvidence, type RepIdentity, type Suggestion } from './infer-owner';
 import { matchAppointment } from '../storage/appointment-link';
 import { atLeast, type TeamRole } from '../../shared/rbac';
+import { getCurrentCompany } from '../tenant/companies';
+import { jobBackendFor, keepsOwnJobs, type JobBackend } from '../production/native-jobs';
 
 /** Roles that can own a job. Production staff and customer service cannot. */
-const OWNING_ROLES: TeamRole[] = ['admin', 'sales_director', 'manager', 'sales'];
+export const OWNING_ROLES: TeamRole[] = ['admin', 'sales_director', 'manager', 'sales'];
+
+/** Can someone in this role own a job? Never a crew (production): owning a job opens its money. */
+export function canOwnJobs(role: string | null | undefined): boolean {
+  return OWNING_ROLES.includes(role as TeamRole);
+}
 
 /**
  * Who can be an owner, and who counts as a field rep.
@@ -23,14 +30,20 @@ const OWNING_ROLES: TeamRole[] = ['admin', 'sales_director', 'manager', 'sales']
  * Field reps are the people who actually run jobs — role `sales`. The owner is
  * an admin who also carries jobs, which is exactly why a field rep must beat
  * him when both appear on one job.
+ *
+ * A company that keeps its own jobs (a company Roof Lee made) has no JobTread,
+ * so nobody there has a JobTread rep name: everyone active in a role that can
+ * own jobs is offered, under their own name. Every other company still needs
+ * the JobTread name, exactly as before.
  */
 export async function loadRepIdentities(): Promise<RepIdentity[]> {
-  const rows = await db.select().from(teamMembers);
+  const [rows, company] = await Promise.all([db.select().from(teamMembers), getCurrentCompany()]);
+  const ownJobs = keepsOwnJobs(company);
   return rows
-    .filter((m) => m.active && OWNING_ROLES.includes(m.role as TeamRole) && !!m.jobtreadSalesRep)
+    .filter((m) => m.active && canOwnJobs(m.role) && (ownJobs || !!m.jobtreadSalesRep))
     .map((m) => ({
       teamMemberId: m.id,
-      repName: m.jobtreadSalesRep as string,
+      repName: (ownJobs ? m.jobtreadSalesRep || m.name : m.jobtreadSalesRep) as string,
       email: m.email,
       isFieldRep: m.role === 'sales',
     }));
@@ -38,6 +51,8 @@ export async function loadRepIdentities(): Promise<RepIdentity[]> {
 
 export interface UnassignedJob {
   externalId: string;
+  /** Which system keeps it: Archie's own job has nothing to open in another system. */
+  backend: JobBackend;
   jobName: string | null;
   customerName: string;
   stage: string | null;
@@ -65,18 +80,22 @@ export async function findUnassigned(opts: { activeOnly?: boolean; limit?: numbe
     clauses.push(or(isNull(leads.stage), sql`${leads.stage} not in ${DONE}`)!);
   }
 
-  const rows = await db
-    .select({
-      externalId: leads.externalId, jobName: leads.jobName, stage: leads.stage,
-      firstName: leads.firstName, lastName: leads.lastName,
-      address: leads.address, createdAt: leads.createdAt,
-    })
-    .from(leads)
-    .where(and(...clauses))
-    .limit(Math.min(opts.limit || 200, 500));
+  const [rows, company] = await Promise.all([
+    db
+      .select({
+        externalId: leads.externalId, jobName: leads.jobName, stage: leads.stage,
+        firstName: leads.firstName, lastName: leads.lastName,
+        address: leads.address, createdAt: leads.createdAt,
+      })
+      .from(leads)
+      .where(and(...clauses))
+      .limit(Math.min(opts.limit || 200, 500)),
+    getCurrentCompany(),
+  ]);
 
   return rows.map((r) => ({
     externalId: r.externalId as string,
+    backend: jobBackendFor({ externalId: r.externalId }, company),
     jobName: r.jobName,
     customerName: [r.firstName, r.lastName]
       .filter((x) => x && String(x).toLowerCase() !== 'null')
@@ -150,16 +169,23 @@ export interface JobSuggestion extends UnassignedJob {
   suggestion: Suggestion;
 }
 
-/** Suggest owners for unassigned jobs. Read-only — applies nothing. */
+/**
+ * Suggest owners for unassigned jobs. Read-only: applies nothing.
+ *
+ * Archie's own jobs (backend 'archie') have nothing in JobTread to read: their
+ * only evidence is the calendar, and JobTread is never asked about them.
+ */
 export async function suggestOwners(opts: { activeOnly?: boolean; limit?: number } = {}): Promise<JobSuggestion[]> {
   const [jobs, reps] = await Promise.all([findUnassigned(opts), loadRepIdentities()]);
   if (!jobs.length) return [];
   const calendarIndex = await buildCalendarIndex(jobs);
-  const jt = new JobTreadClient();
+  let jt: JobTreadClient | null = null;
 
   const out: JobSuggestion[] = [];
   for (const job of jobs) {
-    const ev = await gatherEvidence(job, jt, calendarIndex);
+    const ev = job.backend === 'archie'
+      ? { taskAssignees: [], commenters: [], calendarMailboxes: calendarIndex.get(job.externalId) || [], jtSalesRep: null }
+      : await gatherEvidence(job, (jt ??= new JobTreadClient()), calendarIndex);
     out.push({ ...job, suggestion: inferOwner(ev, reps) });
   }
   // Confident suggestions first: those are the quick accepts.

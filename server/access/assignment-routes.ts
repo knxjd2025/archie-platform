@@ -16,6 +16,7 @@ import {
 import { logWrite } from '../writes/log';
 import { JobTreadClient } from '../integrations/jobtread';
 import { sendFailure } from '../lib/failure';
+import { isNativeJobId } from '../production/native-jobs';
 
 export function registerAssignmentRoutes(app: Express): void {
   /**
@@ -106,8 +107,9 @@ export function registerAssignmentRoutes(app: Express): void {
 
       // Best-effort: push the primary to JobTread's "Sales Rep" field too, so
       // it's 2-way. Non-blocking — the in-app assignment stands regardless.
+      // One of Archie's own jobs has nothing in JobTread to tell.
       const primaryRepName = found.find((m) => m.id === primary)?.jobtreadSalesRep;
-      if (primaryRepName) {
+      if (primaryRepName && !isNativeJobId(jobExternalId)) {
         const r = await new JobTreadClient().setJobSalesRep(jobExternalId, primaryRepName);
         await logWrite({
           actor: user.email, system: 'jobtread', action: 'set_sales_rep',

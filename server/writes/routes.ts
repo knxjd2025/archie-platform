@@ -18,9 +18,12 @@ import { bookingCalendarFor, visibleCalendarsFor } from '../calendar/access';
 import { canBookOn } from '../calendar/board';
 import { applyAssignment } from '../access/assignment-service';
 import { sendFailure } from '../lib/failure';
-import { dataScope } from '../../shared/rbac';
+import { dataScope, isNarrowed } from '../../shared/rbac';
 import { jobTreadWriteFailStatus } from '../integrations/jobtread-connection';
 import { emitLeadCreated } from '../sister/events';
+import { getCurrentCompany } from '../tenant/companies';
+import { jobBackendFor } from '../production/native-jobs';
+import { createNativeLead, jobOwnerByEmail, jobOwnerByName } from '../production/native-leads';
 
 
 export interface AppointmentSlot { date: string; time: string; durationMins: number; type: string; notes: string }
@@ -100,6 +103,55 @@ export function normalizeReplyChannel(channel: unknown): 'sms' | 'email' | null 
 // GHL, and the local leads table in one fan-out.
 const PHONE_RE = /^[\d\s()+.-]{7,20}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Said when someone tries to book from the lead form in a company that keeps its own jobs. */
+export const NATIVE_BOOKING_UNAVAILABLE = 'Booking is not available for your company yet.';
+
+/**
+ * The lead form for a company that keeps its own jobs (server/production/native-leads.ts).
+ * No JobTread, no KynexPro (Roof Lee owns it for this company) and no calendar.
+ *
+ * Who owns it from the start, so the right people can see it:
+ *   - the salesperson a sales leader picked on the form (the dropdown sends
+ *     the person's name: such a company has no JobTread rep names);
+ *   - else the person who typed it in, when they would otherwise not see it
+ *     (a rep, or a sales leader who sees only their own team). Never a crew
+ *     member: owning a job opens its money;
+ *   - else nobody yet. Office staff and admins see every lead already, and a
+ *     lead nobody owns waits on the Assignments page for a manager.
+ */
+async function createLeadInArchie(
+  b: any,
+  typed: { firstName: string; lastName: string; phone: string; email: string; address: string },
+  user: SessionUser,
+) {
+  const { firstName, lastName, phone, email, address } = typed;
+  const actor = user.email;
+  const picked = dataScope(user.role) !== 'self' ? await jobOwnerByName(b.salesRep) : null;
+  const owner = picked ?? (isNarrowed(user.role) ? await jobOwnerByEmail(actor) : null);
+  const clientName = `${firstName} ${lastName}`.trim() || phone || email;
+  const { row } = await createNativeLead({
+    values: {
+      firstName: firstName || null, lastName: lastName || null,
+      email: email || null, phone: phone || null,
+      address: address || null, city: String(b.city || '').trim() || null,
+      state: String(b.state || '').trim() || null, zip: String(b.zip || '').trim() || null,
+      serviceType: String(b.serviceType || '').trim() || null, status: 'new' as any,
+      jobName: firstName || lastName || null,
+      enteredBy: actor, enteredByName: user.name || null,
+      ...(String(b.notes || '').trim() ? { notes: String(b.notes).trim().slice(0, 2000) } : {}),
+    },
+    actor, action: 'create_lead', summary: clientName,
+    ownerId: owner?.id ?? null, ownerSource: 'created',
+    ownerEvidence: picked ? `picked on the lead form by ${user.name || actor}` : `entered by ${user.name || actor}`,
+  });
+  return {
+    ok: true, id: row.id, jobId: row.externalId, backend: 'archie' as const,
+    jobtread: 'not used', ghl: 'not used',
+    // Booking needs the company's own calendar, which comes later.
+    appointment: parseAppointment(b.appointment) ? { ok: false, error: NATIVE_BOOKING_UNAVAILABLE } : null,
+  };
+}
 
 export function registerWriteRoutes(app: Express) {
   // Move a job's pipeline stage (writes the JobTread "Status" field).
@@ -282,6 +334,7 @@ export function registerWriteRoutes(app: Express) {
 
   // Create a new lead across all systems: JobTread (account→contact→location→job,
   // Status="New Lead" + Sales Rep) + GoHighLevel contact + a local lead row.
+  // A company that keeps its own jobs keeps the lead in Archie only (createLeadInArchie).
   app.post('/api/leads/create', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     const b = req.body || {};
     const firstName = String(b.firstName || '').trim();
@@ -294,6 +347,13 @@ export function registerWriteRoutes(app: Express) {
     if (!firstName && !phone && !email) return res.status(400).json({ error: 'Provide at least a name, phone, or email' });
     if (phone && !PHONE_RE.test(phone)) return res.status(400).json({ error: 'That phone number doesn\'t look right.' });
     if (email && !EMAIL_RE.test(email)) return res.status(400).json({ error: 'That email address doesn\'t look right.' });
+
+    // A company that keeps its own jobs (a company Roof Lee made): the lead is
+    // kept in Archie and nowhere else. Every other company carries on below,
+    // exactly as before.
+    if (jobBackendFor({ externalId: null }, await getCurrentCompany()) === 'archie') {
+      return res.json(await createLeadInArchie(b, { firstName, lastName, phone, email, address }, user as SessionUser));
+    }
 
     // Booking for someone else (the availability board): their calendar, and
     // — unless a rep was chosen explicitly — their JobTread rep name on the lead.

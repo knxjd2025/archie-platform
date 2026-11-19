@@ -10,8 +10,10 @@
  * Archie keeps leads and jobs in one table. A row is a "job" once it sits on
  * the production board, and a "lead" until then. The id Roof Lee is given is
  * the row's own number, as digits, and stays the same when a lead becomes a
- * job. A lead of a company that keeps its own jobs is put on the board under
- * a job identity Archie makes itself (server/production/native-jobs.ts).
+ * job. A lead Roof Lee adds is given a job identity Archie makes itself
+ * (server/production/native-jobs.ts) when it is made, so office staff can
+ * open it in Archie; it is put on the board under that identity. An older
+ * lead with none is given one the first time it is moved.
  */
 import { and, desc, eq, ilike, inArray, or, type SQL } from 'drizzle-orm';
 import { db } from '../db';
@@ -20,9 +22,9 @@ import { requireCompanyId } from '../tenant/context';
 import { leadScopeFor, type ActingMember } from './acting';
 import type { LeadChange, NewLead } from './contract';
 import { rememberWithin, type SisterAnswer } from './idempotency';
-import { isPipelineStage, jobtreadStatusFor, moveBlocker, normalizeTrades, type TradeStep } from '../../shared/production-pipeline';
-import { ensureJobIdentity, isNativeJobId } from '../production/native-jobs';
-import { moveStage } from '../production/pipeline';
+import { isPipelineStage, jobtreadStatusFor, moveBlocker, normalizeTrades, stageForJobtreadStatus, type TradeStep } from '../../shared/production-pipeline';
+import { ensureJobIdentity, isNativeJobId, NEW_LEAD_STAGE, newJobKey } from '../production/native-jobs';
+import { gateContexts, moveStage } from '../production/pipeline';
 
 type LeadRow = typeof leads.$inferSelect;
 
@@ -140,13 +142,17 @@ const logEntry = (member: ActingMember, action: string, targetId: string, summar
  * A new lead, kept in Archie and nowhere else. `key` is the request's
  * idempotency key: the lead and the answer to that key are saved together, so
  * the same key can never make a second lead.
+ *
+ * It is given its job key now (the company keeps its own jobs: only a company
+ * Roof Lee made is ever reached here) and sits in New Lead, so office staff
+ * can open it in Archie and it shows on the Sales board.
  */
 export async function createLead(member: ActingMember, lead: NewLead, key: string | undefined): Promise<SisterAnswer> {
   const companyId = requireCompanyId();
   const [first, ...rest] = lead.name.split(/\s+/);
   return db.transaction(async (tx) => {
     const [row] = await tx.insert(leads).values({
-      source: ROOFLI_LEAD_SOURCE,
+      source: ROOFLI_LEAD_SOURCE, externalId: newJobKey(), stage: NEW_LEAD_STAGE,
       firstName: first, lastName: rest.join(' ') || null, jobName: lead.name,
       phone: lead.phone ?? null, email: lead.email ?? null,
       address: lead.address ?? null, city: lead.town ?? null,
@@ -216,11 +222,14 @@ export async function moveJob(member: ActingMember, id: number, stage: unknown):
   if (row.externalId && !isNativeJobId(row.externalId)) {
     return { status: 409, body: { error: 'This job is kept in another system, so Archie cannot move it from here.' }, remember: false };
   }
-  if (!row.externalId) {
-    // Not on any board yet. It would start at Approved: if the board would
-    // refuse the move from there, refuse now, before the lead is given an
-    // identity and put on the board by a request that was turned down.
-    const blocker = moveBlocker(stage, { stage: 'approved', trades: normalizeTrades(['roofing']), checks: {} }, { preconSubmitted: false, walkthroughSubmitted: false });
+  if (!row.externalId || !(await boardStages([row])).has(row.externalId)) {
+    // Not on the board yet. It would start where its status puts it (Approved
+    // for a new lead): if the board would refuse the move from there, refuse
+    // now, before a request that was turned down puts it on the board (or
+    // gives an older lead with none an identity).
+    const start = stageForJobtreadStatus(row.stage) ?? 'approved';
+    const gates = row.externalId ? (await gateContexts([row.externalId])).get(row.externalId)! : { preconSubmitted: false, walkthroughSubmitted: false };
+    const blocker = moveBlocker(stage, { stage: start, trades: normalizeTrades(['roofing']), checks: {} }, gates);
     if (blocker) return { status: 409, body: { error: blocker }, remember: false };
   }
   const key = row.externalId ?? await ensureJobIdentity(row.id);
@@ -228,8 +237,9 @@ export async function moveJob(member: ActingMember, id: number, stage: unknown):
   const moved = await moveStage(key, stage, member.email);
   if (!moved.ok) return { status: moved.status, body: { error: moved.error }, remember: false };
   // Put on the board where it already stood: no move was made, so nothing set
-  // the status the rest of Archie reads. Set it once, here.
-  if (!moved.moved && !row.stage) {
+  // the status the rest of Archie reads (a new lead's is still New Lead). Set
+  // it once, here, unless it already says where the job is.
+  if (!moved.moved && stageForJobtreadStatus(row.stage) !== moved.row.stage) {
     await db.update(leads).set({ stage: jobtreadStatusFor(stage, normalizeTrades(moved.row.trades.map((t) => t.key), moved.row.trades as TradeStep[])), updatedAt: new Date() })
       .where(eq(leads.id, row.id));
   }

@@ -20,6 +20,8 @@ interface Suggestion {
 }
 interface Job {
   externalId: string;
+  /** 'archie' for a job Archie keeps itself: there is nothing to open in another system. */
+  backend?: 'archie' | 'jobtread';
   jobName: string | null;
   customerName: string;
   stage: string | null;
@@ -202,10 +204,12 @@ export default function Assignments({ onOpenClient }: { onOpenClient?: (external
                 className="text-sm px-3 py-2 rounded-lg bg-brand text-on-brand font-medium hover:bg-brand-dark disabled:opacity-50">
                 {busy === j.externalId ? 'Saving…' : 'Assign'}
               </button>
-              <a href={`https://app.jobtread.com/jobs/${j.externalId}`} target="_blank" rel="noopener noreferrer"
-                className="text-sm px-3 py-2 rounded-lg bg-gray-100 text-gray-700 font-medium hover:bg-gray-200">
-                Current CRM ↗
-              </a>
+              {j.backend !== 'archie' && (
+                <a href={`https://app.jobtread.com/jobs/${j.externalId}`} target="_blank" rel="noopener noreferrer"
+                  className="text-sm px-3 py-2 rounded-lg bg-gray-100 text-gray-700 font-medium hover:bg-gray-200">
+                  Current CRM ↗
+                </a>
+              )}
             </div>
           </div>
         );
