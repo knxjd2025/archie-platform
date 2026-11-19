@@ -8,6 +8,7 @@ import type { AreaShape } from '../../../shared/canvass-areas';
 import { SUGGESTED_LABELS, labelMeta } from '../../../shared/canvass-labels';
 import { api } from '../lib/api';
 import { useCompany } from '../lib/company';
+import { companyWords } from '../lib/own-jobs';
 import { assessLead } from '../../../shared/canvass-intelligence';
 import {
   STATUS_META, STATUS_ORDER, DOT_COLOR, isFollowUpDue,
@@ -27,6 +28,8 @@ interface CanvassList { properties: Property[]; truncated?: boolean; canManage?:
 
 export default function Canvass() {
   const company = useCompany();
+  // A company Roof Lee made keeps its leads in Archie: no CRM in the words.
+  const words = companyWords(company.madeByRoofli);
   const [items, setItems] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -252,10 +255,10 @@ export default function Canvass() {
   };
 
   const convert = async (p: Property) => {
-    if (!window.confirm(`Create a lead in your CRM for ${p.address}?`)) return;
+    if (!window.confirm(words.canvassConvertAsk(p.address))) return;
     try {
       await api.post(`/api/canvass/${p.id}/convert`, {});
-      flash('Lead created in your CRM ✅');
+      flash(words.canvassConverted);
       await load();
     } catch (e: any) { flash(`Couldn't create the lead: ${e?.message || 'failed'}`); }
   };
@@ -482,7 +485,7 @@ export default function Canvass() {
                       {[p.ownerName, p.city].filter(Boolean).join(' · ') || 'No contact yet'}
                       {p.stormSummary?.totalEvents ? ` · ⛈ ${p.stormSummary.totalEvents} storms` : ''}
                       {p.measurements ? ` · 📐 ${p.measurements.measuredSquares} sq` : ''}
-                      {p.leadExternalId ? ' · ✅ in Current CRM' : ''}
+                      {p.leadExternalId ? words.canvassIsLead : ''}
                       {due ? ' · 🔁 follow up today' : ''}
                       {canManage && p.ownerRepName ? ` · 👤 ${p.ownerRepName}` : ''}
                     </p>

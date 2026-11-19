@@ -99,10 +99,10 @@ describe.skipIf(!localDb)('the job page for a job Archie keeps itself', async ()
   beforeAll(async () => {
     native = await company('Summit Ridge Roofing', true, [
       ['owner', 'admin', null], ['office', 'customer_service', null], ['rep', 'sales', null],
-      ['rep2', 'sales', null], ['crew', 'production', null],
+      ['rep2', 'sales', null], ['crew', 'production', null], ['leader', 'manager', null],
     ]);
     original = await company('Cedar Falls Exteriors', false, [
-      ['owner', 'admin', 'Owner Cedar'], ['rep', 'sales', 'Rep Cedar'],
+      ['owner', 'admin', 'Owner Cedar'], ['rep', 'sales', 'Rep Cedar'], ['leader', 'manager', null],
     ]);
 
     const app = express();
@@ -332,7 +332,7 @@ describe.skipIf(!localDb)('the job page for a job Archie keeps itself', async ()
       const r = await patch(`/api/clients/${key}/account`, { jobName: 'New Name', fields: { carrier: 'Acme Mutual' } });
       expect(r.status).toBe(400);
       expect(r.body.error).toBe('Insurance details like the carrier, claim number and adjuster can\'t be saved for this job yet.');
-      expect(await leadByKey(native, key)).toMatchObject({ jobName: 'Pat' });
+      expect(await leadByKey(native, key)).toMatchObject({ jobName: 'Pat Hollis' });
       // Still checked like every other edit.
       expect((await patch(`/api/clients/${key}/account`, { color: 'red' })).status).toBe(400);
       nothingLeftArchie();
@@ -344,7 +344,7 @@ describe.skipIf(!localDb)('the job page for a job Archie keeps itself', async ()
       expect((await patch(`/api/clients/${key}/account`, { jobName: 'Office Rename' })).status).toBe(403);
       as(native, 'crew');
       expect((await patch(`/api/clients/${key}/account`, { jobName: 'Crew Rename' })).status).toBe(403);
-      expect(await leadByKey(native, key)).toMatchObject({ jobName: 'Pat' });
+      expect(await leadByKey(native, key)).toMatchObject({ jobName: 'Pat Hollis' });
     });
 
     it('offers only the fields Archie can keep, and asks JobTread nothing', async () => {
@@ -546,6 +546,28 @@ describe.skipIf(!localDb)('the job page for a job Archie keeps itself', async ()
         expect(me.status).toBe(200);
         expect(me.body.profile).toMatchObject({ id: original.id, madeByRoofli: false });
       }
+    });
+  });
+
+  describe('the people a job\'s reps can be changed to (JobReps)', () => {
+    it('for a company Roof Lee made: everyone who can own a job, a sales leader included, never a crew member or office staff', async () => {
+      as(native, 'owner');
+      const r = await get('/api/team/reps');
+      expect(r.status).toBe(200);
+      const ids = r.body.reps.map((p: any) => p.id);
+      const { owner, leader, rep, rep2, crew, office } = native.people;
+      expect(ids).toEqual(expect.arrayContaining([owner.id, leader.id, rep.id, rep2.id]));
+      expect(ids).not.toContain(crew.id);
+      expect(ids).not.toContain(office.id);
+      // Named by their own name: such a company has no JobTread rep names.
+      expect(r.body.reps.find((p: any) => p.id === leader.id)).toMatchObject({ name: leader.name });
+      nothingLeftArchie();
+    });
+
+    it('for the original JobTread company: as before, salespeople and anyone with a JobTread rep name', async () => {
+      as(original, 'owner');
+      const ids = (await get('/api/team/reps')).body.reps.map((p: any) => p.id);
+      expect(ids.sort()).toEqual([original.people.owner.id, original.people.rep.id].sort());
     });
   });
 

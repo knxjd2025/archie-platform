@@ -22,7 +22,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import express from 'express';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 
 /**
  * Every JobTread and KynexPro client, watched. In 'throw' mode every method
@@ -84,7 +84,7 @@ describe.skipIf(!localDb)('outside systems for a company Roof Lee made', async (
   const { clearProfileCache } = await import('../../tenant/profile');
   const { clearSessionRevalidationCache } = await import('../../auth/middleware');
   const { registerRoutes } = await import('../../routes');
-  const { isNativeJobId, OTHER_JOB_SOFTWARE_SOON, NATIVE_PHOTOS_SOON, NATIVE_SEND_ELSEWHERE_SOON } = await import('../native-jobs');
+  const { isNativeJobId, OTHER_JOB_SOFTWARE_SOON, NATIVE_PHOTOS_SOON, NATIVE_SEND_ELSEWHERE_SOON, KYNEXPRO_IS_ROOF_LEES, COMPANYCAM_NOT_FOR_YOU, NATIVE_STATEMENT_NOT_FILED } = await import('../native-jobs');
   const { handleGhlNewContact } = await import('../../integrations/ghl/new-contact');
   const { resolveJobTreadCredentials } = await import('../../integrations/jobtread-connection');
   const { companyCamConnectionStatus } = await import('../../integrations/companycam-connection');
@@ -301,7 +301,11 @@ describe.skipIf(!localDb)('outside systems for a company Roof Lee made', async (
       const { key } = await nativeLead();
       const [commission] = await runAsCompany(native.id, () => db.insert(schema.jobCommissions).values({ jobExternalId: key, jobName: 'Pat Hollis', createdBy: 'test' } as any).returning());
       as(native, 'owner');
-      expect(await post(`/api/job-commissions/${commission.id}/pdf`, {})).toEqual({ status: 409, body: { error: NATIVE_SEND_ELSEWHERE_SOON } });
+      // Said for what was asked (saving the statement on the job), and pointing at Preview, which still opens it.
+      expect(await post(`/api/job-commissions/${commission.id}/pdf`, {})).toEqual({ status: 409, body: { error: NATIVE_STATEMENT_NOT_FILED } });
+      expect(NATIVE_STATEMENT_NOT_FILED).toMatch(/Preview/);
+      expect(NATIVE_STATEMENT_NOT_FILED).not.toMatch(/job software|[—–]/);
+      expect((await get(`/api/job-commissions/${commission.id}/pdf`)).status).toBe(200);
       as(native, 'rep');
       expect(await post(`/api/clients/${key}/reports/${randomUUID()}/to-jobtread`, {})).toEqual({ status: 409, body: { error: NATIVE_SEND_ELSEWHERE_SOON } });
       nothingLeftArchie();
@@ -333,13 +337,35 @@ describe.skipIf(!localDb)('outside systems for a company Roof Lee made', async (
       nothingLeftArchie();
     });
 
-    it('cannot connect other job software, CompanyCam or KynexPro, and is told so plainly (A1-m)', async () => {
+    it('cannot connect other job software, CompanyCam or KynexPro, and is told so plainly, each in its own words (A1-m)', async () => {
       as(native, 'owner');
-      const refused = { status: 409, body: { error: OTHER_JOB_SOFTWARE_SOON } };
-      expect(await put('/api/integrations/crm/connection', { provider: 'jobtread', grantKey: 'not-a-real-key' })).toEqual(refused);
-      expect(await put('/api/integrations/companycam/connection', { token: 'not-a-real-token' })).toEqual(refused);
-      expect(await put('/api/integrations/ghl/connection', { locationId: 'abcdefghij12', token: 'not-a-real-token' })).toEqual(refused);
+      expect(await put('/api/integrations/crm/connection', { provider: 'jobtread', grantKey: 'not-a-real-key' })).toEqual({ status: 409, body: { error: OTHER_JOB_SOFTWARE_SOON } });
+      // CompanyCam is a photo tool and KynexPro is Roof Lee's: neither is job software, and neither is promised.
+      expect(await put('/api/integrations/companycam/connection', { token: 'not-a-real-token' })).toEqual({ status: 409, body: { error: COMPANYCAM_NOT_FOR_YOU } });
+      expect(await put('/api/integrations/ghl/connection', { locationId: 'abcdefghij12', token: 'not-a-real-token' })).toEqual({ status: 409, body: { error: KYNEXPRO_IS_ROOF_LEES } });
+      for (const said of [KYNEXPRO_IS_ROOF_LEES, COMPANYCAM_NOT_FOR_YOU]) expect(said).not.toMatch(/soon|job software|[—–]/);
       expect(await runAsCompany(native.id, () => db.select().from(schema.companyIntegrations))).toEqual([]);
+      nothingLeftArchie();
+    });
+
+    it('tells the screens that Roof Lee looks after its KynexPro, so nobody is asked to connect it', async () => {
+      as(native, 'owner');
+      const r = await get('/api/integrations/ghl/connection');
+      expect(r.status).toBe(200);
+      expect(r.body).toMatchObject({ connected: false, heldByRoofLee: true, webhook: null });
+      // No webhook secret is made for a KynexPro Archie does not connect to.
+      expect(await post('/api/integrations/ghl/webhook-secret/rotate', {})).toEqual({ status: 409, body: { error: KYNEXPRO_IS_ROOF_LEES } });
+      const saved = process.env.ARCHIE_SECRETS_KEY;
+      process.env.ARCHIE_SECRETS_KEY = randomBytes(32).toString('base64');
+      try {
+        as(original, 'owner');
+        const before = await get('/api/integrations/ghl/connection');
+        expect(before.status).toBe(200);
+        expect(before.body).toMatchObject({ connected: false, heldByRoofLee: false, webhook: { header: 'x-webhook-secret' } });
+        expect(before.body.webhook.secret).toEqual(expect.any(String));
+      } finally {
+        if (saved === undefined) delete process.env.ARCHIE_SECRETS_KEY; else process.env.ARCHIE_SECRETS_KEY = saved;
+      }
       nothingLeftArchie();
     });
 

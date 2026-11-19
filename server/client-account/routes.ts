@@ -17,7 +17,7 @@ import { JobTreadClient } from '../integrations/jobtread';
 import { logWrite } from '../writes/log';
 import { sendFailure } from '../lib/failure';
 import { parseAddress } from '../sync/leads-sync';
-import { ACCOUNT_JOB_FIELDS, jobFieldWrites, parseAccountEdit, type AccountEdit } from '../../shared/client-account';
+import { ACCOUNT_JOB_FIELDS, NATIVE_ACCOUNT_FIELD_KEYS, jobFieldWrites, parseAccountEdit, type AccountEdit } from '../../shared/client-account';
 import { jobTreadWriteFailStatus } from '../integrations/jobtread-connection';
 import { getCurrentCompany } from '../tenant/companies';
 import { jobBackendFor, keepsOwnJobs } from '../production/native-jobs';
@@ -38,7 +38,7 @@ export function leadMirror(edit: AccountEdit): Partial<typeof leads.$inferInsert
 }
 
 /** The job fields a job Archie keeps has a place for on the lead (leadMirror). The rest live only in JobTread. */
-export const NATIVE_ACCOUNT_FIELDS: ReadonlySet<string> = new Set(['projectManager', 'isClaim']);
+export const NATIVE_ACCOUNT_FIELDS: ReadonlySet<string> = new Set(NATIVE_ACCOUNT_FIELD_KEYS);
 
 export const NATIVE_CLAIM_DETAILS_REFUSED = 'Insurance details like the carrier, claim number and adjuster can\'t be saved for this job yet.';
 

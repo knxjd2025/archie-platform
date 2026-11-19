@@ -3,7 +3,7 @@ import { atLeast } from '../../../shared/rbac';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useCompany } from '../lib/company';
-import { leadFormView, LEAD_SAVED_IN_ARCHIE } from '../lib/own-jobs';
+import { leadFormView, LEAD_SAVED_IN_ARCHIE, companyWords } from '../lib/own-jobs';
 import { formatPhone, fmtDate } from '../lib/format';
 import { toDateInput } from '../lib/canvass';
 import { RowsSkeleton } from '../components/Skeleton';
@@ -54,7 +54,9 @@ export default function Leads({ onOpenClient, initialStatus, initialNew, initial
   const { user } = useAuth();
   const isManagerPlus = !!user && atLeast(user.role, 'manager'); // admin, sales director, sales leader
   // A company Roof Lee made keeps its leads in Archie only, with no booking yet.
-  const form = leadFormView(useCompany().madeByRoofli, user?.role);
+  const { madeByRoofli } = useCompany();
+  const form = leadFormView(madeByRoofli, user?.role);
+  const words = companyWords(madeByRoofli);
 
   const [leads, setLeads] = useState<Lead[]>([]);
   const [reps, setReps] = useState<Rep[]>([]);
@@ -436,7 +438,7 @@ export default function Leads({ onOpenClient, initialStatus, initialNew, initial
                     {q.trim() ? (
                       <>No leads match "{q}".</>
                     ) : (
-                      <>📭 No leads yet. New leads from KynexPro and your CRM show up here automatically.</>
+                      <>{words.leadsEmpty}</>
                     )}
                   </td>
                 </tr>

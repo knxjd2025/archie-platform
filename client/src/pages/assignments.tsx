@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../lib/api';
+import { useCompany } from '../lib/company';
+import { companyWords } from '../lib/own-jobs';
 
 /**
  * Triage for clients nobody owns.
@@ -36,6 +38,8 @@ const CONF: Record<string, { chip: string; label: string }> = {
 };
 
 export default function Assignments({ onOpenClient }: { onOpenClient?: (externalId: string) => void }) {
+  // A company Roof Lee made: nothing is read from a CRM, a manager picks the salesperson.
+  const { madeByRoofli } = useCompany();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [reps, setReps] = useState<Rep[]>([]);
   const [counts, setCounts] = useState<{ total: number; active: number } | null>(null);
@@ -133,9 +137,7 @@ export default function Assignments({ onOpenClient }: { onOpenClient?: (external
         <div className="bg-white rounded-xl border border-gray-200 p-6 text-sm text-gray-600">
           <p className="font-medium text-gray-900">How this works</p>
           <p className="mt-1 text-gray-500">
-            We read who has tasks on each CRM job, who commented on it, and whose calendar the
-            appointment landed on. A field rep on the job is the rep; if you're on it alone it's yours.
-            Nothing is assigned until you accept it.
+            {companyWords(madeByRoofli).assignmentsHow}
           </p>
           <p className="mt-3 text-gray-500">
             {/* This is a real JobTread read per job, so it's not run automatically on page

@@ -202,6 +202,8 @@ describe.skipIf(!localDb)('leads made in Archie for a company that keeps its own
         id: r.body.id, source: 'archie', externalId: key, stage: 'New Lead', status: 'new',
         firstName: 'Pat', lastName: 'Hollis', city: 'Cedar Falls', notes: 'Hail on the north slope.',
         enteredBy: rep.email, jtSalesRep: null,
+        // The whole name, the same as the page's customer, so no stray first name shows under it.
+        jobName: 'Pat Hollis',
       });
 
       const owners = await ownersOf(native, key);
@@ -285,6 +287,23 @@ describe.skipIf(!localDb)('leads made in Archie for a company that keeps its own
       // Booking on rep2's calendar would have handed rep2 the lead; with no booking it stays the rep's.
       expect(await ownersOf(native, r.body.jobId)).toEqual([expect.objectContaining({ teamMemberId: native.people.rep.id, role: 'primary' })]);
       nothingLeftArchie();
+    });
+
+    it('does not book an existing job Archie keeps either: refused plainly, the calendar is not touched', async () => {
+      as(native, 'rep');
+      const key = (await post('/api/leads/create', { firstName: 'Ella', lastName: 'Booker', phone: '319-555-0178' })).body.jobId as string;
+      const r = await post(`/api/clients/${key}/appointment`, { date: '2026-12-01', time: '10:00', type: 'Inspection', forEmail: native.people.rep.email });
+      expect(r).toEqual({ status: 409, body: { error: 'Booking is not available for your company yet.' } });
+      nothingLeftArchie();
+
+      // The original JobTread company still books its jobs on the calendar, as before.
+      const jt = `jt-${randomUUID().slice(0, 12)}`;
+      await runAsCompany(original.id, () => db.insert(schema.leads).values({ source: 'jobtread', externalId: jt, firstName: 'Old Booker', jtSalesRep: 'Rep Cedar', stage: 'New Lead', status: 'new' } as any));
+      as(original, 'rep');
+      const booked = await post(`/api/clients/${jt}/appointment`, { date: '2026-12-01', time: '10:00', type: 'Inspection' });
+      expect(booked.status).toBe(200);
+      expect(booked.body).toMatchObject({ ok: true, eventId: 'evt-1' });
+      expect(calls.calendar.length).toBeGreaterThan(0);
     });
 
     it('still checks what was typed', async () => {
@@ -454,6 +473,26 @@ describe.skipIf(!localDb)('leads made in Archie for a company that keeps its own
       } finally {
         await runAsCompany(native.id, () => db.update(schema.teamMembers).set({ jobtreadSalesRep: null }).where(eq(schema.teamMembers.id, leader.id)));
       }
+    });
+
+    it('never makes a crew member (or anyone who cannot own jobs) an owner or sharer, because owning a job opens its money', async () => {
+      as(native, 'office');
+      const key = (await post('/api/leads/create', { firstName: 'Yul', lastName: 'Crewless', phone: '319-555-0164' })).body.jobId as string;
+      as(native, 'owner');
+      for (const body of [
+        { jobExternalId: key, primaryTeamMemberId: native.people.crew.id },
+        { jobExternalId: key, primaryTeamMemberId: native.people.rep.id, secondaryTeamMemberIds: [native.people.crew.id] },
+        { jobExternalId: key, primaryTeamMemberId: native.people.office.id },
+      ]) {
+        const r = await post('/api/assignments', body);
+        expect(r.status).toBe(400);
+        expect(r.body.error).toBe('Only people who sell can own or share a job.');
+      }
+      expect(await ownersOf(native, key)).toEqual([]);
+      expect(await sees(native, 'crew', key)).toBe(false);
+      // A salesperson is still accepted.
+      expect((await post('/api/assignments', { jobExternalId: key, primaryTeamMemberId: native.people.rep.id })).status).toBe(200);
+      nothingLeftArchie();
     });
 
     it('is unchanged for the original JobTread company: evidence from JobTread, only people with a JobTread rep name, and the rep written back', async () => {

@@ -4,12 +4,15 @@
  */
 import { useEffect, useState, type FormEvent } from 'react';
 import { api } from '../../lib/api';
+import { KYNEXPRO_HELD_BY_ROOF_LEE } from '../../lib/own-jobs';
 import { announceConnectionsChanged, CopyRow, Field, FormError, IntegrationCard, PrimaryButton, SecondaryButton, StatusPill } from './ui';
 
 interface KynexProStatus {
   connected: boolean;
+  /** A company Roof Lee made: Roof Lee looks after its KynexPro, and Archie does not connect to it. */
+  heldByRoofLee?: boolean;
   locationId: string | null;
-  webhook: { url: string; header: string; secret: string };
+  webhook: { url: string; header: string; secret: string } | null;
 }
 
 export default function KynexProCard() {
@@ -54,13 +57,21 @@ export default function KynexProCard() {
     setRotating(true);
     try {
       const r = await api.post<{ secret: string }>('/api/integrations/ghl/webhook-secret/rotate');
-      setStatus((s) => (s ? { ...s, webhook: { ...s.webhook, secret: r.secret } } : s));
+      setStatus((s) => (s?.webhook ? { ...s, webhook: { ...s.webhook, secret: r.secret } } : s));
     } catch (err: any) {
       setError(err?.message || 'Could not make a new secret.');
     } finally {
       setRotating(false);
     }
   };
+
+  if (status?.heldByRoofLee) {
+    return (
+      <IntegrationCard id="kynexpro" title="KynexPro" summary={KYNEXPRO_HELD_BY_ROOF_LEE}>
+        <p className="text-sm text-gray-700">Texts, email and calls to your customers go through Roof Lee.</p>
+      </IntegrationCard>
+    );
+  }
 
   const connected = !!status?.connected;
   const showForm = status && (!connected || editing);
@@ -75,7 +86,7 @@ export default function KynexProCard() {
     >
       <FormError message={loadError} />
 
-      {connected && !editing && (
+      {connected && !editing && status?.webhook && (
         <div className="space-y-4">
           <p className="text-sm text-gray-700">
             {accountName ? <>Connected to <strong>{accountName}</strong></> : 'Connected'}
@@ -86,9 +97,9 @@ export default function KynexProCard() {
             <p className="text-sm text-gray-500">
               In KynexPro, add a Webhook action to your workflows: paste the address as the URL, and the header name and secret as a custom header.
             </p>
-            <CopyRow label="Webhook address" value={status!.webhook.url} />
-            <CopyRow label="Header name" value={status!.webhook.header} />
-            <CopyRow label="Secret" value={status!.webhook.secret} secret />
+            <CopyRow label="Webhook address" value={status.webhook.url} />
+            <CopyRow label="Header name" value={status.webhook.header} />
+            <CopyRow label="Secret" value={status.webhook.secret} secret />
             <div className="flex flex-wrap gap-2 pt-1">
               <SecondaryButton onClick={rotate} busy={rotating} busyLabel="Rotating...">Rotate secret</SecondaryButton>
               <SecondaryButton onClick={() => { setEditing(true); setError(null); }}>Change account</SecondaryButton>

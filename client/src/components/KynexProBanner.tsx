@@ -1,9 +1,11 @@
 /**
  * For admins only: a slim reminder at the top of the app while the company
  * has not connected KynexPro. It blocks nothing, and goes away once connected.
+ * A company Roof Lee made never sees it: Roof Lee looks after its KynexPro.
  */
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { kynexProBannerShows, type KynexProStatusLike } from '../lib/own-jobs';
 import { CONNECTIONS_CHANGED_EVENT } from '../pages/integrations/ui';
 
 export default function KynexProBanner({ isAdmin, onConnect }: { isAdmin: boolean; onConnect: () => void }) {
@@ -12,8 +14,8 @@ export default function KynexProBanner({ isAdmin, onConnect }: { isAdmin: boolea
   useEffect(() => {
     if (!isAdmin) { setMissing(false); return; }
     let live = true;
-    const check = () => api.get<{ connected: boolean }>('/api/integrations/ghl/connection')
-      .then((r) => { if (live) setMissing(!r.connected); })
+    const check = () => api.get<KynexProStatusLike>('/api/integrations/ghl/connection')
+      .then((r) => { if (live) setMissing(kynexProBannerShows(r)); })
       .catch(() => { /* say nothing rather than nag on a failed check */ });
     void check();
     window.addEventListener(CONNECTIONS_CHANGED_EVENT, check);

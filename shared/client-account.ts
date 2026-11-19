@@ -35,6 +35,13 @@ export const ACCOUNT_JOB_FIELDS = [
 
 export type AccountFieldKey = (typeof ACCOUNT_JOB_FIELDS)[number]['key'];
 
+/**
+ * The job fields a job Archie keeps itself has a place for on the lead. The
+ * rest (the claim details) live only in JobTread, so for such a job they are
+ * neither offered nor saved (server/client-account/routes.ts).
+ */
+export const NATIVE_ACCOUNT_FIELD_KEYS: readonly AccountFieldKey[] = ['projectManager', 'isClaim'];
+
 export interface AccountEdit {
   customer?: string;
   jobName?: string;

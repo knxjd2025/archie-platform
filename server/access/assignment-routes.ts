@@ -11,12 +11,16 @@ import { db } from '../db';
 import { teamMembers, repAssignments } from '../../shared/schema';
 import { eq, inArray } from 'drizzle-orm';
 import {
-  suggestOwners, findUnassigned, applyAssignment, unassignedCount, loadRepIdentities,
+  suggestOwners, findUnassigned, applyAssignment, unassignedCount, loadRepIdentities, canOwnJobs,
 } from './assignment-service';
 import { logWrite } from '../writes/log';
 import { JobTreadClient } from '../integrations/jobtread';
 import { sendFailure } from '../lib/failure';
-import { isNativeJobId } from '../production/native-jobs';
+import { isNativeJobId, keepsOwnJobs } from '../production/native-jobs';
+import { getCurrentCompany } from '../tenant/companies';
+
+/** Said when someone who cannot own jobs (a crew member, office staff) is picked as an owner or sharer. */
+export const ONLY_SELLERS_OWN_JOBS = 'Only people who sell can own or share a job.';
 
 export function registerAssignmentRoutes(app: Express): void {
   /**
@@ -83,10 +87,17 @@ export function registerAssignmentRoutes(app: Express): void {
       if (ids.length > 3) {
         return res.status(400).json({ error: 'A job can have at most 3 reps (1 primary + up to 2 shared).' });
       }
-      const found = await db.select({ id: teamMembers.id, active: teamMembers.active, jobtreadSalesRep: teamMembers.jobtreadSalesRep })
+      const found = await db.select({ id: teamMembers.id, active: teamMembers.active, role: teamMembers.role, jobtreadSalesRep: teamMembers.jobtreadSalesRep })
         .from(teamMembers).where(inArray(teamMembers.id, ids));
       if (found.length !== ids.length || found.some((m) => !m.active)) {
         return res.status(400).json({ error: 'One of those people is not an active team member.' });
+      }
+      // A company Roof Lee made, or a job Archie keeps: an owner or sharer sees
+      // the job's money, so only someone in a role that can own jobs may be one
+      // (never a crew member), the same rule as a new lead's owner
+      // (server/production/native-leads.ts). Every other company is unchanged.
+      if ((isNativeJobId(jobExternalId) || keepsOwnJobs(await getCurrentCompany())) && found.some((m) => !canOwnJobs(m.role))) {
+        return res.status(400).json({ error: ONLY_SELLERS_OWN_JOBS });
       }
 
       await applyAssignment({

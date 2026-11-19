@@ -47,17 +47,34 @@ export function keepsOwnJobs(company: Pick<Company, 'roofliCompanyId'> | null | 
 
 /**
  * Said when a company that keeps its own jobs tries to connect other job
- * software, CompanyCam or KynexPro (server/integrations/connection-routes.ts,
- * server/integrations/ghl/routes.ts). Until other systems plug in through
- * jobBackendFor, such a company keeps every job in Archie, never a mix.
+ * software (server/integrations/connection-routes.ts). Until other systems
+ * plug in through jobBackendFor, such a company keeps every job in Archie,
+ * never a mix.
  */
 export const OTHER_JOB_SOFTWARE_SOON = 'Connecting other job software is coming soon for your company.';
+
+/**
+ * Said when a company that keeps its own jobs tries to connect KynexPro
+ * (server/integrations/ghl/routes.ts). Its KynexPro is Roof Lee's, and Archie
+ * never connects to it: a fact, not a promise of anything to come.
+ */
+export const KYNEXPRO_IS_ROOF_LEES = 'Roof Lee looks after your KynexPro, so Archie does not connect to it.';
+
+/** Said when a company that keeps its own jobs tries to connect CompanyCam (server/integrations/connection-routes.ts). Promises nothing. */
+export const COMPANYCAM_NOT_FOR_YOU = 'CompanyCam can\'t be connected for your company.';
 
 /** Said when a photo is added to a job Archie keeps, until Archie keeps photos itself (server/photos/routes.ts). */
 export const NATIVE_PHOTOS_SOON = 'Adding photos to jobs is coming soon for your company.';
 
 /** Said when a file or a proposal of a job Archie keeps would be sent to other job software. */
 export const NATIVE_SEND_ELSEWHERE_SOON = 'Sending this to other job software is coming soon for your company.';
+
+/**
+ * Said when a commission statement would be saved on a job Archie keeps
+ * (server/job-commissions/routes.ts): Archie has nowhere to file it on the
+ * job yet. Preview still opens it.
+ */
+export const NATIVE_STATEMENT_NOT_FILED = 'Saving files to a job is coming soon for your company. Open the statement with Preview instead.';
 
 /** Where a new lead of Archie's own starts: the first step of the Sales board (shared/sales-pipeline.ts SALES_BAND). */
 export const NEW_LEAD_STAGE = 'New Lead';

@@ -3,12 +3,17 @@
  * customer and job names, the address, the project manager and every
  * insurance-claim detail. Saves to JobTread, the source of truth. Reps,
  * stage, contact info and commission each have their own control on the page.
+ *
+ * A job Archie keeps itself (`archie`) is saved on the job in Archie and
+ * nowhere else, offers only what the job has a place for, and its words name
+ * no CRM (lib/own-jobs.ts accountEditorWords).
  */
 import { useState } from 'react';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { atLeast } from '../../../shared/rbac';
-import { ACCOUNT_JOB_FIELDS, type AccountEdit, type AccountFieldKey } from '../../../shared/client-account';
+import { ACCOUNT_JOB_FIELDS, NATIVE_ACCOUNT_FIELD_KEYS, type AccountEdit, type AccountFieldKey } from '../../../shared/client-account';
+import { accountEditorWords } from '../lib/own-jobs';
 
 interface FieldWithOptions { key: AccountFieldKey; label: string; kind: string; options: string[] }
 
@@ -24,15 +29,19 @@ interface Props {
   values: AccountValues;
   onSaved: (edit: AccountEdit) => void;
   flash: (m: string) => void;
+  /** A job Archie keeps itself: no CRM behind it. */
+  archie?: boolean;
 }
 
 const asText = (v: string | boolean | null | undefined) => (typeof v === 'string' ? v : '');
 
-export default function AccountEditor({ externalId, values, onSaved, flash }: Props) {
+export default function AccountEditor({ externalId, values, onSaved, flash, archie = false }: Props) {
   const { user } = useAuth();
+  const words = accountEditorWords(archie);
+  const offered = archie ? ACCOUNT_JOB_FIELDS.filter((f) => NATIVE_ACCOUNT_FIELD_KEYS.includes(f.key)) : ACCOUNT_JOB_FIELDS;
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [defs, setDefs] = useState<FieldWithOptions[]>(ACCOUNT_JOB_FIELDS.map((f) => ({ ...f, options: [] })));
+  const [defs, setDefs] = useState<FieldWithOptions[]>(offered.map((f) => ({ ...f, options: [] })));
   const [customer, setCustomer] = useState('');
   const [jobName, setJobName] = useState('');
   const [address, setAddress] = useState('');
@@ -44,7 +53,7 @@ export default function AccountEditor({ externalId, values, onSaved, flash }: Pr
     setCustomer(values.customer || '');
     setJobName(values.jobName || '');
     setAddress(values.address || '');
-    setFields(Object.fromEntries(ACCOUNT_JOB_FIELDS.map((f) => [f.key, f.kind === 'boolean' ? values.fields[f.key] === true : asText(values.fields[f.key])])));
+    setFields(Object.fromEntries(offered.map((f) => [f.key, f.kind === 'boolean' ? values.fields[f.key] === true : asText(values.fields[f.key])])));
     setOpen(true);
     api.get<{ fields: FieldWithOptions[] }>('/api/jobtread/account-fields')
       .then((r) => { if (r.fields?.length) setDefs(r.fields); })
@@ -58,7 +67,7 @@ export default function AccountEditor({ externalId, values, onSaved, flash }: Pr
     if (jobName.trim() !== (values.jobName || '').trim()) edit.jobName = jobName;
     if (address.trim() !== (values.address || '').trim()) edit.address = address;
     const changed: NonNullable<AccountEdit['fields']> = {};
-    for (const f of ACCOUNT_JOB_FIELDS) {
+    for (const f of offered) {
       const now = fields[f.key];
       if (f.kind === 'boolean') {
         if ((now === true) !== (values.fields[f.key] === true)) changed[f.key] = now === true;
@@ -77,7 +86,7 @@ export default function AccountEditor({ externalId, values, onSaved, flash }: Pr
     try {
       await api.patch(`/api/clients/${externalId}/account`, edit);
       onSaved(edit);
-      flash('Account saved to your CRM ✅');
+      flash(words.saved);
       setOpen(false);
     } catch (e: any) { flash(`Couldn't save: ${e?.message || 'failed'}`); }
     finally { setSaving(false); }
@@ -133,10 +142,10 @@ export default function AccountEditor({ externalId, values, onSaved, flash }: Pr
         })}
       </div>
       <div className="flex gap-2">
-        <button onClick={save} disabled={saving} className="text-sm px-3 py-1.5 rounded-lg bg-blue-600 text-white font-medium disabled:opacity-50">{saving ? 'Saving…' : 'Save to Current CRM'}</button>
+        <button onClick={save} disabled={saving} className="text-sm px-3 py-1.5 rounded-lg bg-blue-600 text-white font-medium disabled:opacity-50">{saving ? 'Saving…' : words.save}</button>
         <button onClick={() => setOpen(false)} disabled={saving} className="text-sm px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600">Cancel</button>
       </div>
-      <p className="text-[11px] text-gray-400">Projected value and the schedule come from the estimate and tasks in your CRM, so they're changed there. Reps, stage, phone/email and commission each have their own edit on this page.</p>
+      <p className="text-[11px] text-gray-400">{words.footnote}</p>
     </div>
   );
 }

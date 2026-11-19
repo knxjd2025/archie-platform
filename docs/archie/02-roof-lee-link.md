@@ -411,7 +411,13 @@ JobTread, so Archie gives its leads keys of its own.
   to Roof Lee as `lead.created`. The lead form does not offer booking for
   such a company (the screens read `profile.madeByRoofli` from
   `GET /api/auth/me`), and a booking sent anyway answers "Booking is not
-  available for your company yet." and the lead is still made.
+  available for your company yet." and the lead is still made. Booking an
+  existing job of Archie's own (`POST /api/clients/{key}/appointment`)
+  answers `409` in the same words, with no calendar touched, and the
+  Schedule's availability board offers no booking to such a company (it
+  shows the times and says booking is not available yet), so an open time
+  never makes a new lead on every try. A lead made on the form keeps the
+  customer's whole name as its job name, the way a lead Roof Lee adds does.
 - **Who owns a new lead.** A salesperson only sees a job they are assigned.
   So a new lead is owned from the start by: the salesperson a sales leader
   picked on the form, else the rep whose door it was (canvassing), else the
@@ -421,7 +427,13 @@ JobTread, so Archie gives its leads keys of its own.
   no owner yet and waits on the Assignments page, where a manager gives it to
   a salesperson. In such a company everyone active who can own jobs is
   offered there under their own name (nobody has a JobTread rep name), no
-  owner is worked out from JobTread, and nothing is written back to it.
+  owner is worked out from JobTread, and nothing is written back to it. The
+  same people are offered when reps are changed on the client page
+  (`GET /api/team/reps`), and the assignment itself (`POST /api/assignments`)
+  refuses anyone who cannot own a job (a crew member, office staff) as owner
+  or sharer: "Only people who sell can own or share a job." It does so in such
+  a company and for any job of Archie's own; for every other company the
+  route is unchanged.
 - **Nothing goes to JobTread for such a job.** Every place that would tell
   JobTread about a move (the production, sales and claim boards) checks the
   key first and, for one of Archie's own, keeps the status in Archie instead.
@@ -462,8 +474,19 @@ JobTread, so Archie gives its leads keys of its own.
   own, with no KynexPro tags and no booking (that company has no calendar in
   Archie yet); the job's notes show "Note" or "From Roof Lee"; the photo
   switch is on the page (below); and the photo box says adding photos is
-  coming soon, with no add button and no CompanyCam push. Every other job's
-  page is exactly as before.
+  coming soon, with no add button and no CompanyCam push. The account editor
+  says "Save" and "Account saved", offers only what the job can keep, and
+  names no CRM; a roof report has no "→ Current CRM" button and no CRM in its
+  words; the commission box has no "Save PDF to job" (Preview still opens the
+  statement); and changing reps does not claim to update a CRM. Every other
+  job's page is exactly as before.
+- **Call, text and email on every screen** (the Leads list, a canvassed door,
+  the schedule and the client page) are the phone's own for a job of
+  Archie's own, because its company's KynexPro is Roof Lee's
+  (`contactRouteKey` in `client/src/lib/own-jobs.ts`, read by
+  `ContactActions`). The schedule shows no JobTread link for such a job. The
+  canvassing screen, the Leads list's empty state, the Assignments page and
+  a Production board card name no CRM for such a company or job.
 - **Start production.** `POST /api/production/{key}/pipeline/stage` with
   `{ "stage": "approved" }`, from the client page, puts such a job on the
   Production board at Approved, for anyone who may open the job (never a
@@ -503,15 +526,25 @@ JobTread, so Archie gives its leads keys of its own.
   form, a follow-up and the choice of rep are saved and do their board moves
   as for any job, and none of them is copied to JobTread. A signed
   certificate or signed document stays in Archie, the report context and the
-  insurance letter read nothing from JobTread, and saving a commission
-  statement or sending a proposal to other job software answers `409`
-  "Sending this to other job software is coming soon for your company."
+  insurance letter read nothing from JobTread. Sending a proposal to other
+  job software answers `409` "Sending this to other job software is coming
+  soon for your company.", and saving a commission statement on the job
+  answers `409` "Saving files to a job is coming soon for your company. Open
+  the statement with Preview instead."
 - **No other job software, CompanyCam or KynexPro can be connected** by such
-  a company (`PUT /api/integrations/crm/connection`,
-  `PUT /api/integrations/companycam/connection`,
-  `PUT /api/integrations/ghl/connection`): each answers `409` "Connecting other
-  job software is coming soon for your company." and nothing is checked or
-  saved. So the company never holds a mix of JobTread jobs and its own, and
+  a company, and nothing is checked or saved. Each says so in its own words,
+  promising only what is planned: other job software
+  (`PUT /api/integrations/crm/connection`) answers `409` "Connecting other job
+  software is coming soon for your company."; CompanyCam
+  (`PUT /api/integrations/companycam/connection`) "CompanyCam can't be
+  connected for your company."; and KynexPro
+  (`PUT /api/integrations/ghl/connection`, and making a new webhook secret)
+  "Roof Lee looks after your KynexPro, so Archie does not connect to it."
+  `GET /api/integrations/ghl/connection` says `heldByRoofLee: true` with no
+  webhook (no secret is made), so the admin is never shown the "Connect
+  KynexPro" reminder and the KynexPro card says who looks after it. Every
+  other company's status carries `heldByRoofLee: false` and is otherwise
+  unchanged. So the company never holds a mix of JobTread jobs and its own, and
   Archie's buttons cannot message its customers outside Roof Lee's approvals.
   With no connection of its own, and the deployment's keys belonging to the
   original company alone, every JobTread or KynexPro call made for it stops

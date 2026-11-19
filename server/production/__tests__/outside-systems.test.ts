@@ -55,7 +55,7 @@ const JOBTREAD: Record<string, Decision> = {
   'server/followups/routes.ts': { native: 'native-path', why: 'a follow-up on a job Archie keeps stays in Archie' },
   'server/inspections/routes.ts': { native: 'native-path', why: 'the inspection form of a job Archie keeps is not copied to JobTread' },
   'server/insurance-letters/routes.ts': { native: 'native-path', why: 'claim details of a job Archie keeps come from the claim record only, and no JobTread files are fetched' },
-  'server/job-commissions/routes.ts': { native: 'refused', why: 'saving the statement to other job software is refused for a job Archie keeps' },
+  'server/job-commissions/routes.ts': { native: 'refused', why: 'saving the statement on a job Archie keeps is refused (nowhere to file it yet); Preview still opens it' },
   'server/jobtread-archive/runner.ts': { native: 'not-reachable', why: NO_JOBTREAD },
   'server/photos/routes.ts': { native: 'refused', why: 'adding a photo to a job Archie keeps is refused until Archie stores photos; the lists answer empty' },
   'server/preconstruction/routes.ts': { native: 'native-path', why: 'the checklist of a job Archie keeps is not copied to JobTread' },
@@ -90,7 +90,7 @@ const KYNEXPRO: Record<string, Decision> = {
 /** What a native-path file must ask before it would reach the outside system. */
 const ASKS_NATIVE = /\b(isNativeJobId|jobBackendFor|keepsOwnJobs|backendOf)\s*\(|source\s*!==\s*'jobtread'/;
 /** The refusals: plain words a person reads (server/production/native-jobs.ts), or new-contact's own outcome. */
-const REFUSES = /\b(OTHER_JOB_SOFTWARE_SOON|NATIVE_PHOTOS_SOON|NATIVE_SEND_ELSEWHERE_SOON)\b|'roofli_company'/;
+const REFUSES = /\b(OTHER_JOB_SOFTWARE_SOON|NATIVE_PHOTOS_SOON|NATIVE_SEND_ELSEWHERE_SOON|NATIVE_STATEMENT_NOT_FILED|KYNEXPRO_IS_ROOF_LEES|COMPANYCAM_NOT_FOR_YOU)\b|'roofli_company'/;
 
 const root = join(__dirname, '..', '..', '..');
 const sources: Array<{ file: string; text: string }> = [];

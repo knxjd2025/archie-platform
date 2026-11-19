@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useCompany } from '../lib/company';
+import { availabilityBoardView } from '../lib/own-jobs';
 import {
   DAY_END_HOUR, DAY_START_HOUR, SLOT_MINS, addDays, conflictsFor, etInstant, etParts, etToday, label12, layoutDay, minutesToHhmm, openSlots,
 } from '../../../shared/schedule-board';
@@ -33,6 +34,8 @@ const firstName = (n: string) => n.split(/\s+/)[0];
  * client. Built for whoever books for the team: the call center and the office.
  */
 export default function AvailabilityBoard({ onOpenClient }: { onOpenClient?: (externalId: string) => void }) {
+  // A company Roof Lee made has no calendar in Archie yet: its board shows times and books nothing.
+  const view = availabilityBoardView(useCompany().madeByRoofli);
   const [date, setDate] = useState(etToday());
   const [everyone, setEveryone] = useState(false);
   const [duration, setDuration] = useState(60);
@@ -104,7 +107,7 @@ export default function AvailabilityBoard({ onOpenClient }: { onOpenClient?: (ex
 
       <div className="flex flex-wrap items-center gap-3 text-[11px] text-gray-500">
         {(['google', 'ghl', 'both'] as const).map((s) => <span key={s} className="flex items-center gap-1"><span className={`w-3 h-3 rounded-sm border-l-4 ${SOURCE_STYLE[s].box}`} />{SOURCE_STYLE[s].label}</span>)}
-        <span>Click an open time to book it.</span>
+        <span>{view.hint}</span>
       </div>
 
       {toast && <div className="rounded-lg bg-gray-900 text-white text-sm px-3 py-2">{toast}</div>}
@@ -141,7 +144,9 @@ export default function AvailabilityBoard({ onOpenClient }: { onOpenClient?: (ex
                       <span className={`text-[10px] px-1 rounded ${p.ghl ? 'bg-purple-50 text-purple-700' : 'bg-gray-100 text-gray-400 line-through'}`} title={p.ghl ? 'KynexPro user matched by email' : 'No KynexPro user with this email'}>KynexPro</span>
                       <span className="text-[10px] text-gray-400 ml-auto">{mine.filter((e) => !e.allDay).length} booked</span>
                     </div>
-                    {open.length > 0 ? (
+                    {open.length > 0 && !view.booking ? (
+                      <p className="mt-1.5 text-[11px] text-gray-500 px-2 py-1 truncate">Next open: {label12(Number(open[0].slice(0, 2)) * 60 + Number(open[0].slice(3)))}</p>
+                    ) : open.length > 0 ? (
                       <button onClick={() => setSlot({ person: p, date, time: open[0] })} className="mt-1.5 w-full text-[11px] px-2 py-1 rounded-md bg-emerald-50 text-emerald-800 hover:bg-emerald-100 font-medium text-left truncate">
                         Next open: {label12(Number(open[0].slice(0, 2)) * 60 + Number(open[0].slice(3)))} →
                       </button>
@@ -170,6 +175,9 @@ export default function AvailabilityBoard({ onOpenClient }: { onOpenClient?: (ex
                     {slotStarts.map((m) => {
                       const t = minutesToHhmm(m);
                       const past = isPastDay || (nowMins !== null && m < nowMins);
+                      if (!view.booking) {
+                        return <div key={m} className={`absolute left-0 right-0 border-t ${m % 60 === 0 ? 'border-gray-200' : 'border-gray-50'} ${past ? 'bg-gray-50/80' : ''}`} style={{ top: (m - DAY_START_HOUR * 60) * PX_PER_MIN, height: SLOT_MINS * PX_PER_MIN }} />;
+                      }
                       return (
                         <button
                           key={m}
@@ -212,7 +220,7 @@ export default function AvailabilityBoard({ onOpenClient }: { onOpenClient?: (ex
       )}
 
       {detail && <EventDetail event={detail} person={people.find((p) => p.email === detail.person)} onClose={() => setDetail(null)} />}
-      {slot && (
+      {slot && view.booking && (
         <BookingDialog
           slot={slot}
           people={people}

@@ -105,7 +105,7 @@ export function normalizeReplyChannel(channel: unknown): 'sms' | 'email' | null 
 const PHONE_RE = /^[\d\s()+.-]{7,20}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/** Said when someone tries to book from the lead form in a company that keeps its own jobs. */
+/** Said when someone tries to book in a company that keeps its own jobs: from the lead form, or for one of its jobs. */
 export const NATIVE_BOOKING_UNAVAILABLE = 'Booking is not available for your company yet.';
 
 /** Said when the job page's stage control is used on a job Archie keeps: the Production board moves it, with its checks. */
@@ -146,7 +146,9 @@ async function createLeadInArchie(
       address: address || null, city: String(b.city || '').trim() || null,
       state: String(b.state || '').trim() || null, zip: String(b.zip || '').trim() || null,
       serviceType: String(b.serviceType || '').trim() || null, status: 'new' as any,
-      jobName: firstName || lastName || null,
+      // The whole name, as a lead Roof Lee adds has it: the page shows the customer's
+      // whole name, and a job name that differs from it is printed under it.
+      jobName: `${firstName} ${lastName}`.trim() || null,
       enteredBy: actor, enteredByName: user.name || null,
       ...(String(b.notes || '').trim() ? { notes: String(b.notes).trim().slice(0, 2000) } : {}),
     },
@@ -353,6 +355,8 @@ export function registerWriteRoutes(app: Express) {
     const slot = parseAppointment(req.body);
     if (!externalId || !slot) return res.status(400).json({ error: 'date and time are required' });
     if (!(await ownsLead(user as SessionUser, externalId))) return res.status(404).json({ error: 'not found' });
+    // A job Archie keeps: its company has no calendar in Archie yet (the same answer as the lead form's).
+    if (await backendOf(externalId) === 'archie') return res.status(409).json({ error: NATIVE_BOOKING_UNAVAILABLE });
 
     const target = await resolveBookOn(user as SessionUser, req.body?.forEmail);
     if (target.error) return res.status(403).json({ error: target.error });

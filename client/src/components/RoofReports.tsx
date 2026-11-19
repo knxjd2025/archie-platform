@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
+import { roofReportsView } from '../lib/own-jobs';
 import ReportEditor from '../pages/report-editor';
 import { fmtDate } from '../lib/format';
 import ReportRefineChat from './ReportRefineChat';
@@ -85,6 +86,8 @@ const statusChip = (s: string) =>
 
 // Roof reports for a client — generated in-process and served from /r/<token>.
 export default function RoofReports({ externalId }: { externalId: string; defaultEmail?: string | null }) {
+  // A job Archie keeps: nothing to read from or send to job software, and no CRM in the words.
+  const view = roofReportsView(externalId);
   const [cfg, setCfg] = useState<{ configured: boolean; missing?: string[] }>({ configured: true });
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
@@ -467,10 +470,10 @@ export default function RoofReports({ externalId }: { externalId: string; defaul
                 ))}
               </div>
               {/* What we'll pull from this job in JobTread */}
-              <label className="flex items-start gap-2 text-sm text-gray-700 bg-gray-50 rounded-lg p-2.5 cursor-pointer">
+              {view.jobFileLabel && <label className="flex items-start gap-2 text-sm text-gray-700 bg-gray-50 rounded-lg p-2.5 cursor-pointer">
                 <input type="checkbox" checked={useJobFiles} onChange={(e) => setUseJobFiles(e.target.checked)} className="mt-0.5" />
                 <span className="min-w-0">
-                  <span className="font-medium">Use this job's Current CRM file</span>
+                  <span className="font-medium">{view.jobFileLabel}</span>
                   <span className="block text-xs text-gray-500">
                     {ctxLoading ? 'Checking what\'s on the job…'
                       : ctx ? [
@@ -482,7 +485,7 @@ export default function RoofReports({ externalId }: { externalId: string; defaul
                       : 'Photos, messages, documents and daily logs'}
                   </span>
                 </span>
-              </label>
+              </label>}
               <p className="text-xs text-gray-500 -mt-1">
                 {type === 'inspection' && commercialJob
                   ? 'The commercial condition report: the building, the roof layer by layer, every rated component, and a live diagram of what a coating, a recover or a new roof would do. The photos you pick are read and described; the ratings always come from the checklist.'
@@ -799,7 +802,7 @@ export default function RoofReports({ externalId }: { externalId: string; defaul
                           </select>
                         </div>
                       </div>
-                      <p className="text-[11px] text-gray-500">All three show on the document as a comparison; the tier you pick here is the one priced and pushed to your CRM.</p>
+                      <p className="text-[11px] text-gray-500">{view.tierNote}</p>
 
                       {/* Specialty scope on top of the roof system — skylights,
                           chimney work, decking, ventilation, gutters, a low-slope
@@ -882,7 +885,7 @@ export default function RoofReports({ externalId }: { externalId: string; defaul
               </div>
               <p className="text-xs text-gray-400">{reusesPrior
                 ? 'Builds from this job\u2019s most recent report, so the findings and pricing match what the customer has already seen. Ready in a few seconds.'
-                : 'Pulls the job\u2019s photos, notes and documents from your CRM, analyses the photos for damage, and builds the report here. Takes 2\u20135 minutes \u2014 you can leave this page and come back.'}</p>
+                : view.footnote}</p>
             </div>
           )}
 
@@ -921,7 +924,7 @@ export default function RoofReports({ externalId }: { externalId: string; defaul
                       <span className="flex items-center gap-2">
                         {r.reportUrl && <a href={r.reportUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">View</a>}
                         {r.pdfUrl && <a href={r.pdfUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">PDF</a>}
-                        <button
+                        {view.sendToJobSoftware && <button
                           onClick={() => toJobTread(r.reportId)}
                           disabled={pushing === r.reportId || r.jobtread?.locked}
                           title={
@@ -946,7 +949,7 @@ export default function RoofReports({ externalId }: { externalId: string; defaul
                               : r.jobtread?.pushed
                                 ? '✓ In Current CRM'
                                 : '→ Current CRM'}
-                        </button>
+                        </button>}
                         <button
                           onClick={() => setBuilding(r.reportId)}
                           title="Edit anything — layout, photos, findings, pricing, text — with a live preview"

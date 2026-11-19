@@ -309,6 +309,7 @@ export default function ClientDetail({ externalId, onBack, onOpenPlaybook }: { e
             }}
             onSaved={applyAccountEdit}
             flash={flash}
+            archie={isArchieJob(lead)}
           />}
 
           {/* Quick actions — Call/Text/Email through GoHighLevel (business number,

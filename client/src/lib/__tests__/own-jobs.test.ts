@@ -3,6 +3,9 @@ import {
   jobPageView, isArchieJob, leadFormView, photoConsentSaved,
   PHOTO_CONSENT_HELP, PHOTO_CONSENT_LABEL, PHOTOS_SOON, START_PRODUCTION_CONFIRM, PRODUCTION_STARTED,
   NOT_IN_PRODUCTION, MOVES_ON_BOARD, LEAD_SAVED_IN_ARCHIE,
+  kynexProBannerShows, KYNEXPRO_HELD_BY_ROOF_LEE,
+  accountEditorWords, isArchieJobKey, contactRouteKey, availabilityBoardView, BOOKING_NOT_YET,
+  roofReportsView, commissionView, companyWords, boardCardWords, jobRepsNote,
 } from '../own-jobs';
 
 const KEY = `archie-${'a'.repeat(32)}`;
@@ -122,5 +125,141 @@ describe('the words the server uses', () => {
     const { join } = await import('node:path');
     const server = readFileSync(join(__dirname, '..', '..', '..', '..', 'server', 'production', 'native-jobs.ts'), 'utf8');
     expect(server).toContain(`NATIVE_PHOTOS_SOON = '${PHOTOS_SOON}'`);
+  });
+});
+
+describe('KynexPro for a company Roof Lee made', () => {
+  it('never asks its admin to connect KynexPro, which Roof Lee looks after', () => {
+    expect(kynexProBannerShows({ connected: false, heldByRoofLee: true })).toBe(false);
+    expect(kynexProBannerShows({ connected: true, heldByRoofLee: true })).toBe(false);
+  });
+
+  it('still reminds every other company\'s admin until it is connected, as before', () => {
+    expect(kynexProBannerShows({ connected: false, heldByRoofLee: false })).toBe(true);
+    expect(kynexProBannerShows({ connected: false })).toBe(true);
+    expect(kynexProBannerShows({ connected: true, heldByRoofLee: false })).toBe(false);
+  });
+
+  it('says why in the same words the server refuses with, promising nothing', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const server = readFileSync(join(__dirname, '..', '..', '..', '..', 'server', 'production', 'native-jobs.ts'), 'utf8');
+    expect(server).toContain(`KYNEXPRO_IS_ROOF_LEES = '${KYNEXPRO_HELD_BY_ROOF_LEE}'`);
+    expect(KYNEXPRO_HELD_BY_ROOF_LEE).not.toMatch(/soon|job software|[—–]/);
+  });
+});
+
+describe('the account editor', () => {
+  it('for a job Archie keeps: saves to the job, with no CRM, estimate or tasks to change things in', () => {
+    const w = accountEditorWords(true);
+    expect(w.save).toBe('Save');
+    expect(w.saved).toBe('Account saved ✅');
+    for (const s of [w.save, w.saved, w.footnote]) expect(s).not.toMatch(/CRM|JobTread|KynexPro|estimate|tasks|[—–]/);
+    expect(w.footnote).toMatch(/Production board/);
+  });
+
+  it('for every other job: exactly as before', () => {
+    expect(accountEditorWords(false)).toEqual({
+      save: 'Save to Current CRM',
+      saved: 'Account saved to your CRM ✅',
+      footnote: 'Projected value and the schedule come from the estimate and tasks in your CRM, so they\'re changed there. Reps, stage, phone/email and commission each have their own edit on this page.',
+    });
+  });
+});
+
+describe('call, text and email', () => {
+  it('knows a key Archie made, exactly as the server does', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const server = readFileSync(join(__dirname, '..', '..', '..', '..', 'server', 'production', 'native-jobs.ts'), 'utf8');
+    expect(server).toContain('const NATIVE_JOB_RE = /^archie-[0-9a-f]{32}$/;');
+    expect(isArchieJobKey(KEY)).toBe(true);
+    for (const k of [null, undefined, '', 'jt-123', 'archie-', `archie-${'A'.repeat(32)}`, `archie-${'a'.repeat(31)}`, `x${KEY}`]) expect(isArchieJobKey(k)).toBe(false);
+  });
+
+  it('use the phone\'s own apps for a job Archie keeps (its KynexPro is Roof Lee\'s), on every screen', () => {
+    expect(contactRouteKey(KEY)).toBeNull();
+  });
+
+  it('still go through KynexPro for every other job, as before', () => {
+    expect(contactRouteKey('jt-123')).toBe('jt-123');
+    expect(contactRouteKey(null)).toBeNull();
+    expect(contactRouteKey(undefined)).toBeNull();
+  });
+});
+
+describe('the Schedule\'s availability board', () => {
+  it('offers no booking to a company Roof Lee made, so an open time never makes a lead it cannot book', () => {
+    expect(availabilityBoardView(true)).toEqual({ booking: false, hint: BOOKING_NOT_YET });
+  });
+
+  it('still books for every other company, as before', () => {
+    expect(availabilityBoardView(false)).toEqual({ booking: true, hint: 'Click an open time to book it.' });
+  });
+
+  it('says so in the same words the server refuses a booking with', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const server = readFileSync(join(__dirname, '..', '..', '..', '..', 'server', 'writes', 'routes.ts'), 'utf8');
+    expect(server).toContain(`NATIVE_BOOKING_UNAVAILABLE = '${BOOKING_NOT_YET}'`);
+  });
+});
+
+describe('roof reports on a job', () => {
+  it('for a job Archie keeps: no button to send it to job software the company does not have, and no CRM in the words', () => {
+    const v = roofReportsView(KEY);
+    expect(v.sendToJobSoftware).toBe(false);
+    expect(v.jobFileLabel).toBeNull();
+    for (const s of [v.footnote, v.tierNote]) expect(s).not.toMatch(/CRM|JobTread|KynexPro|[—–]/);
+  });
+
+  it('for every other job: exactly as before', () => {
+    expect(roofReportsView('jt-123')).toEqual({
+      sendToJobSoftware: true,
+      jobFileLabel: 'Use this job\'s Current CRM file',
+      footnote: 'Pulls the job\u2019s photos, notes and documents from your CRM, analyses the photos for damage, and builds the report here. Takes 2\u20135 minutes \u2014 you can leave this page and come back.',
+      tierNote: 'All three show on the document as a comparison; the tier you pick here is the one priced and pushed to your CRM.',
+    });
+  });
+});
+
+describe('a job\'s commission statement', () => {
+  it('for a job Archie keeps: no "Save PDF to job" (there is nowhere to save it yet); Preview still opens it', () => {
+    expect(commissionView(KEY)).toEqual({ savePdfToJob: false });
+  });
+
+  it('for every other job: as before', () => {
+    expect(commissionView('jt-123')).toEqual({ savePdfToJob: true });
+  });
+});
+
+describe('the words on screens a company Roof Lee made now reaches', () => {
+  const NO_CRM = /CRM|JobTread|KynexPro|[—–]/;
+
+  it('canvassing, the leads list and the Assignments page name no CRM for such a company', () => {
+    const w = companyWords(true);
+    for (const s of [w.canvassConvertAsk('7 Elm Ct'), w.canvassConverted, w.canvassIsLead, w.leadsEmpty, w.assignmentsHow]) expect(s).not.toMatch(NO_CRM);
+    expect(w.canvassConvertAsk('7 Elm Ct')).toMatch(/7 Elm Ct/);
+    expect(w.canvassConverted).toMatch(/Sales board/);
+  });
+
+  it('are exactly as before for every other company', () => {
+    const w = companyWords(false);
+    expect(w.canvassConvertAsk('7 Elm Ct')).toBe('Create a lead in your CRM for 7 Elm Ct?');
+    expect(w.canvassConverted).toBe('Lead created in your CRM ✅');
+    expect(w.canvassIsLead).toBe(' · ✅ in Current CRM');
+    expect(w.leadsEmpty).toBe('📭 No leads yet. New leads from KynexPro and your CRM show up here automatically.');
+    expect(w.assignmentsHow).toBe('We read who has tasks on each CRM job, who commented on it, and whose calendar the appointment landed on. A field rep on the job is the rep; if you\'re on it alone it\'s yours. Nothing is assigned until you accept it.');
+  });
+
+  it('a Production board card for a job Archie keeps shows no CRM status and no CRM in the note box', () => {
+    expect(boardCardWords(KEY)).toEqual({ showOtherStatus: false, notePlaceholder: 'Add a note…' });
+    expect(boardCardWords('jt-123')).toEqual({ showOtherStatus: true, notePlaceholder: 'Add a note to Current CRM…' });
+  });
+
+  it('changing reps on a job Archie keeps does not claim to update a CRM', () => {
+    expect(jobRepsNote(KEY)).not.toMatch(NO_CRM);
+    expect(jobRepsNote(KEY)).toMatch(/commission box/);
+    expect(jobRepsNote('jt-123')).toBe('Also updates the Sales Rep in your CRM. An existing commission record keeps its reps, adjust those in the commission box below.');
   });
 });

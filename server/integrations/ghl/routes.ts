@@ -11,11 +11,13 @@
  * A company Roof Lee made cannot connect one: its KynexPro is Roof Lee's, and
  * a connected one would let Archie's buttons message customers outside Roof
  * Lee's approvals. It is told so in plain words and nothing is checked or saved.
+ * The status says so too (`heldByRoofLee`), so the screens never ask its admin
+ * to connect it, and no webhook secret is made for it.
  */
 import type { Express, Request, Response } from 'express';
 import { requireAuth, requireRole } from '../../auth/middleware';
 import { getCurrentCompany } from '../../tenant/companies';
-import { keepsOwnJobs, OTHER_JOB_SOFTWARE_SOON } from '../../production/native-jobs';
+import { keepsOwnJobs, KYNEXPRO_IS_ROOF_LEES } from '../../production/native-jobs';
 import { sendFailure } from '../../lib/failure';
 import { GhlLocationTakenError, hasGhlConnection, saveGhlConnection, verifyGhlCredentials } from './connection';
 import { ensureGhlWebhookSecret } from './webhook-secret';
@@ -26,8 +28,12 @@ export function registerGhlConnectionRoutes(app: Express) {
   app.get('/api/integrations/ghl/connection', requireAuth, requireRole('admin'), async (req: Request, res: Response) => {
     try {
       const company = await getCurrentCompany();
+      if (keepsOwnJobs(company)) {
+        return res.json({ connected: await hasGhlConnection(), heldByRoofLee: true, locationId: company?.ghlLocationId ?? null, webhook: null });
+      }
       res.json({
         connected: await hasGhlConnection(),
+        heldByRoofLee: false,
         locationId: company?.ghlLocationId ?? null,
         webhook: { url: webhookUrl(req), header: 'x-webhook-secret', secret: await ensureGhlWebhookSecret() },
       });
@@ -38,7 +44,7 @@ export function registerGhlConnectionRoutes(app: Express) {
 
   app.put('/api/integrations/ghl/connection', requireAuth, requireRole('admin'), async (req: Request, res: Response) => {
     try {
-      if (keepsOwnJobs(await getCurrentCompany())) return res.status(409).json({ error: OTHER_JOB_SOFTWARE_SOON });
+      if (keepsOwnJobs(await getCurrentCompany())) return res.status(409).json({ error: KYNEXPRO_IS_ROOF_LEES });
       const locationId = String(req.body?.locationId ?? '').trim();
       const token = String(req.body?.token ?? '').trim();
       if (!locationId || !token) return res.status(400).json({ error: 'Both the Location ID and the Private Integration Token are needed.' });
@@ -54,6 +60,7 @@ export function registerGhlConnectionRoutes(app: Express) {
 
   app.post('/api/integrations/ghl/webhook-secret/rotate', requireAuth, requireRole('admin'), async (_req: Request, res: Response) => {
     try {
+      if (keepsOwnJobs(await getCurrentCompany())) return res.status(409).json({ error: KYNEXPRO_IS_ROOF_LEES });
       res.json({ secret: await ensureGhlWebhookSecret(true) });
     } catch (e) {
       return sendFailure(res, e, 'POST /api/integrations/ghl/webhook-secret/rotate');

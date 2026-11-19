@@ -79,7 +79,8 @@ import { registerCompanyRoutes } from './company/routes';
 import { registerSisterRoutes } from './sister/routes';
 import { currentGhlLocationId, ghlAppBase } from './integrations/ghl/connection';
 import { getCompanyByGhlLocation, getCurrentCompany } from './tenant/companies';
-import { jobBackendFor } from './production/native-jobs';
+import { jobBackendFor, keepsOwnJobs } from './production/native-jobs';
+import { canOwnJobs } from './access/assignment-service';
 import { boardStageFor, noteMessagesFor } from './production/native-job-page';
 import { runAsCompany } from './tenant/context';
 import { redactGhlConversation, withoutPasswordLinkMessages, withoutPasswordLinkMessagesIn } from './auth/password-link-filter';
@@ -802,6 +803,18 @@ export function registerRoutes(app: Express) {
   // Reps list for the manager assign-rep dropdown.
   app.get('/api/team/reps', requireAuth, requireRole('manager'), async (_req: Request, res: Response) => {
     try {
+      // A company Roof Lee made has no JobTread rep names: everyone active who
+      // can own a job (a sales leader included, never a crew member or office
+      // staff), the same people the Assignments page offers and POST
+      // /api/assignments accepts. Every other company: as below, unchanged.
+      if (keepsOwnJobs(await getCurrentCompany())) {
+        const reps = (await db
+          .select({ id: teamMembers.id, name: teamMembers.name, email: teamMembers.email, role: teamMembers.role, jobtreadSalesRep: teamMembers.jobtreadSalesRep })
+          .from(teamMembers).where(eq(teamMembers.active, true)))
+          .filter((m) => canOwnJobs(m.role))
+          .map(({ role: _role, ...m }) => m);
+        return res.json({ reps });
+      }
       // Anyone who sells: role=sales, OR anyone (incl. the owner/admins) mapped to
       // a JobTread "Sales Rep" name so they can own/be-assigned jobs too.
       const reps = await db

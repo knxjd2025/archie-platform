@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api';
+import { commissionView } from '../lib/own-jobs';
 import { useAuth } from '../lib/auth';
 import { fmtDate } from '../lib/format';
 import { canSeeMoney } from '../../../shared/rbac';
@@ -582,10 +583,11 @@ export default function JobCommission({ externalId }: { externalId: string }) {
                 {busy === 'reopen' ? '…' : 'Reopen to edit'}
               </button>
             )}
-            <button onClick={savePdf} disabled={!!busy || moneyDirty} title={moneyDirty ? 'Save the numbers first' : 'Save this statement as a PDF on the job'}
+            {/* A job Archie keeps has nowhere to file it yet; Preview still opens it. */}
+            {commissionView(externalId).savePdfToJob && <button onClick={savePdf} disabled={!!busy || moneyDirty} title={moneyDirty ? 'Save the numbers first' : 'Save this statement as a PDF on the job'}
               className="text-sm px-3 py-2 rounded-lg bg-gray-100 text-gray-700 font-medium hover:bg-gray-200 disabled:opacity-50">
               {busy === 'pdf' ? 'Saving…' : '📄 Save PDF to job'}
-            </button>
+            </button>}
             <a href={`/api/job-commissions/${rec.id}/pdf`} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">Preview</a>
 
           </div>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { api } from '../lib/api';
+import { boardCardWords } from '../lib/own-jobs';
 import PipelineBoard, { MoveControls, StageChecks, money, daysSince, type BoardStage } from '../components/PipelineBoard';
 
 /**
@@ -311,7 +312,8 @@ export default function Production({ onOpenClient }: { onOpenClient?: (externalI
                   onBack={() => { const prev = stages[colIdx - 1]; if (prev) moveTo(j, prev.key); }}
                   onAdvance={() => { const next = stages[colIdx + 1]; if (next) moveTo(j, next.key); }}
                   advanceLabel={advanceLabel(j)} lastLabel="Closed out" />
-                {j.jtStage && <p className="mt-1 text-[10px] text-gray-300 truncate" title="Current CRM status">CRM: {j.jtStage}</p>}
+                {/* A job Archie keeps has no status in other job software. */}
+                {j.jtStage && boardCardWords(j.externalId).showOtherStatus && <p className="mt-1 text-[10px] text-gray-300 truncate" title="Current CRM status">CRM: {j.jtStage}</p>}
 
                 {noteFor === j.externalId ? (
                   <div className="mt-2">
@@ -320,7 +322,7 @@ export default function Production({ onOpenClient }: { onOpenClient?: (externalI
                       value={noteText}
                       onChange={(e) => setNoteText(e.target.value)}
                       rows={2}
-                      placeholder="Add a note to Current CRM…"
+                      placeholder={boardCardWords(j.externalId).notePlaceholder}
                       className="w-full text-xs border border-gray-200 rounded p-1.5 focus:ring-1 focus:ring-blue-400"
                     />
                     <div className="flex gap-1.5 mt-1">

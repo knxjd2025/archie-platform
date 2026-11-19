@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
 import { formatPhone } from '../lib/format';
 import ContactActions from '../components/ContactActions';
+import { isArchieJobKey } from '../lib/own-jobs';
 import AvailabilityBoard from '../components/AvailabilityBoard';
 
 interface ApptClient {
@@ -215,11 +216,14 @@ function Agenda({ onOpenClient }: { onOpenClient?: (externalId: string) => void 
                                 <ContactActions externalId={a.client.externalId} phone={a.client.phone} size="sm" showEmail={false} />
                               </span>
                             )}
-                            <a href={`https://app.jobtread.com/jobs/${a.client.externalId}`}
-                               target="_blank" rel="noopener noreferrer"
-                               className="text-xs px-2 py-1 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200">
-                              Current CRM ↗
-                            </a>
+                            {/* A job Archie keeps has nothing in JobTread to open. */}
+                            {!isArchieJobKey(a.client.externalId) && (
+                              <a href={`https://app.jobtread.com/jobs/${a.client.externalId}`}
+                                 target="_blank" rel="noopener noreferrer"
+                                 className="text-xs px-2 py-1 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200">
+                                Current CRM ↗
+                              </a>
+                            )}
                           </div>
                         )}
                       </div>

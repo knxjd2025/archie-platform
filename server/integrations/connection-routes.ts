@@ -24,7 +24,7 @@ import { sendFailure } from '../lib/failure';
 import { rateLimit } from '../lib/rate-limit';
 import { deleteCompanyCredentials, saveCompanyCredentials } from '../tenant/company-credentials';
 import { getCurrentCompany } from '../tenant/companies';
-import { keepsOwnJobs, OTHER_JOB_SOFTWARE_SOON } from '../production/native-jobs';
+import { COMPANYCAM_NOT_FOR_YOU, keepsOwnJobs, OTHER_JOB_SOFTWARE_SOON } from '../production/native-jobs';
 import {
   JOBTREAD_PROVIDER, jobTreadConnectionStatus, verifyJobTreadCredentials, type JobTreadCredentials,
 } from './jobtread-connection';
@@ -103,7 +103,7 @@ export function registerConnectionRoutes(app: Express) {
 
   app.put('/api/integrations/companycam/connection', ...admin, saveLimit, async (req: Request, res: Response) => {
     try {
-      if (await keepsItsOwnJobs()) return res.status(409).json({ error: OTHER_JOB_SOFTWARE_SOON });
+      if (await keepsItsOwnJobs()) return res.status(409).json({ error: COMPANYCAM_NOT_FOR_YOU });
       const token = field(req.body?.token);
       if (!token) return res.status(400).json({ error: 'The API token is needed.' });
       if (token.length > MAX_SECRET_LENGTH) return res.status(400).json({ error: 'That API token is too long.' });

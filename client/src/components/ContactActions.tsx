@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api } from '../lib/api';
 import { openExternal } from '../lib/native';
+import { contactRouteKey } from '../lib/own-jobs';
 
 /**
  * Call / Text / Email buttons that go through GoHighLevel — the business
@@ -14,8 +15,9 @@ import { openExternal } from '../lib/native';
  *   app on a desktop, the LeadConnector app on a phone when the server knows
  *   its deep link, else GHL mobile web. The server then notes the call on the
  *   contact. "from my phone" stays as the explicit fallback (tel:).
- * - With no `externalId` (a canvass property that isn't a lead yet) the
- *   buttons are plain tel:/sms:/mailto links.
+ * - With no `externalId` (a canvass property that isn't a lead yet), or for a
+ *   job Archie keeps (its company's KynexPro is Roof Lee's: lib/own-jobs.ts
+ *   contactRouteKey), the buttons are plain tel:/sms:/mailto links.
  */
 
 type Size = 'xs' | 'sm' | 'md';
@@ -41,8 +43,10 @@ const SIZES: Record<Size, { btn: string; primary: string; secondary: string; fal
   md: { btn: 'text-sm px-3 py-1.5 rounded-lg font-medium', primary: 'bg-green-600 text-white', secondary: 'bg-gray-100 text-gray-700 hover:bg-gray-200', fallback: 'text-[11px]' },
 };
 
-export default function ContactActions({ externalId, phone, email, size = 'sm', onText, flash, showEmail = true }: Props) {
+export default function ContactActions({ externalId: given, phone, email, size = 'sm', onText, flash, showEmail = true }: Props) {
   const s = SIZES[size];
+  // Only a job KynexPro may be asked about; anything else gets the phone's own apps.
+  const externalId = contactRouteKey(given);
   const [contact, setContact] = useState<GhlContact | null>(null);
   const [busy, setBusy] = useState(false);
   const [composer, setComposer] = useState<'sms' | 'email' | null>(null);
