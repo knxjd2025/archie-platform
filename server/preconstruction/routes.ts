@@ -14,6 +14,8 @@ import { isScoped, ownsLead, teamMemberIdByEmail, type SessionUser } from '../ac
 import { PRECON_CHECKLIST_FIELDS, missingRequiredPreconFields } from '../../shared/preconstruction-checklist';
 import { JobTreadClient } from '../integrations/jobtread';
 import { isNativeJobId } from '../production/native-jobs';
+import { allReadyPhotosOfJob, CHECKLIST_PHOTO_NOT_SAVED } from '../photos/native';
+import { photoAnswerIds } from '../../shared/job-photos';
 import { sendFailure } from '../lib/failure';
 import { mergeAnswers } from '../../shared/form-answers';
 
@@ -161,8 +163,16 @@ export function registerPreConstructionRoutes(app: Express) {
       if (!existing) return res.status(404).json({ error: 'Checklist not found.' });
       if (existing.status !== 'draft') return res.json({ ok: true, checklist: existing }); // idempotent
 
-      const missing = missingRequiredPreconFields((existing.answers as Record<string, any>) || {});
+      const answers = (existing.answers as Record<string, any>) || {};
+      const missing = missingRequiredPreconFields(answers);
       if (missing.length) return res.status(400).json({ error: 'Missing required fields.', missing });
+      // A job Archie keeps (server/production/native-jobs.ts): every photo the
+      // checklist names must be one of the job's own saved photos. A JobTread
+      // job's photos are JobTread's, and are not checked here.
+      if (isNativeJobId(existing.jobExternalId)
+        && !(await allReadyPhotosOfJob(existing.jobExternalId, photoAnswerIds(PRECON_CHECKLIST_FIELDS, answers)))) {
+        return res.status(400).json({ error: CHECKLIST_PHOTO_NOT_SAVED });
+      }
 
       // Only a draft can be submitted. Two taps on Submit both passed the
       // status check above, so both posted to JobTread and fired the board

@@ -23,7 +23,9 @@ import type { Company } from '../../shared/schema';
 import { isLiveCompany } from '../../shared/company';
 import { findActingMember, mayWorkLeads, type ActingMember } from './acting';
 import { capabilitiesFor, type Capability } from './capabilities';
-import { addNote, createLead, getJob, listJobs, moveJob, updateLead } from './leads';
+import { addNote, createLead, getJob, jobPhotoFile, listJobs, moveJob, updateLead } from './leads';
+import { photoStore } from '../photos/store';
+import { PHOTO_STORE_OFF } from '../photos/native';
 import { runEventDelivery } from './events';
 import { timingSafeEqualStr } from '../security-config';
 
@@ -66,6 +68,18 @@ function send(res: Response, answer: SisterAnswer): void {
   if (answer.retryAfter !== undefined) res.set('Retry-After', String(answer.retryAfter));
   if (answer.body === null) res.status(answer.status).end();
   else res.status(answer.status).json(answer.body);
+}
+
+/** A file a read hands over: the bytes themselves, never a link to somewhere else. */
+interface SisterFile { status: 200; file: Buffer; contentType: string }
+
+function sendFile(res: Response, f: SisterFile): void {
+  res.status(f.status);
+  res.setHeader('Content-Type', f.contentType);
+  res.setHeader('Content-Length', String(f.file.length));
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.end(f.file);
 }
 
 /** Every refused sign-in: one status, one plain sentence, no session and no reason. */
@@ -265,8 +279,11 @@ export function registerSisterRoutes(app: Express): void {
     };
   }
 
-  /** One read. `work` is given the person it is for, or undefined when Roof Lee named nobody. */
-  function leeRead(what: string, work: (member: ActingMember | undefined, req: Request) => Promise<SisterAnswer>, opts: { needsPerson: boolean }) {
+  /**
+   * One read. `work` is given the person it is for, or undefined when Roof
+   * Lee named nobody. It answers JSON, or a file sent as its own bytes.
+   */
+  function leeRead(what: string, work: (member: ActingMember | undefined, req: Request) => Promise<SisterAnswer | SisterFile>, opts: { needsPerson: boolean }) {
     return async (req: Request, res: Response) => {
       try {
         const acting = parseActingQuery(req.query as Record<string, unknown>);
@@ -275,13 +292,14 @@ export function registerSisterRoutes(app: Express): void {
         const company = await liveCompany(req, res);
         if (!company) return;
         const who = acting.value;
-        const answer = await runAsCompany(company.id, async () => {
+        const answer = await runAsCompany(company.id, async (): Promise<SisterAnswer | SisterFile> => {
           if (!who) return work(undefined, req);
           const member = await findActingMember(who);
           if (!member) return NOT_ALLOWED;
           return work(member, req);
         }, { loadProfile: false });
-        send(res, answer);
+        if ('file' in answer) sendFile(res, answer);
+        else send(res, answer);
       } catch (e) {
         failed(res, what, e);
       }
@@ -347,11 +365,20 @@ export function registerSisterRoutes(app: Express): void {
     return (id === null ? null : await moveJob(member, id, req.sister?.body?.stage)) ?? NO_SUCH;
   }));
 
-  // One uploaded photo of a job, as a file. The photos Archie keeps of its
-  // own jobs are not handed to Roof Lee yet (Stage A4: a job's `photos` list
-  // is always empty), so there is never one to hand over: not found, and
-  // never a link to somewhere else.
-  app.get(`${COMPANIES}/:roofliCompanyId/jobs/:id/photos/:photoId`, requireSister(2), leeRead('GET job photo', async () => NO_SUCH, { needsPerson: false }));
+  // One photo of a job Archie keeps, as a file: its working copy, a JPEG with
+  // no location or other metadata in it, sent as its own bytes and never as
+  // a link to somewhere else. Only once a person recorded the customer's
+  // agreement (./leads.ts jobPhotoFile). A deleted photo, another job's or
+  // company's, a job with no consent and anything this person may not see
+  // are all simply not found. Named nobody (the scheduled run): the
+  // company's own job. With the photo store switched off: said plainly.
+  app.get(`${COMPANIES}/:roofliCompanyId/jobs/:id/photos/:photoId`, requireSister(2), leeRead('GET job photo', async (member, req) => {
+    const id = parseRecordId(req.params.id);
+    if (id === null || (member && !mayWorkLeads(member))) return NO_SUCH;
+    const photo = await jobPhotoFile(id, req.params.photoId, member, photoStore());
+    if (photo.found) return { status: 200, file: photo.jpeg, contentType: 'image/jpeg' };
+    return photo.storeOff ? { status: 503, body: { error: PHOTO_STORE_OFF }, remember: false } : NO_SUCH;
+  }, { needsPerson: false }));
 
   // Last: whatever no route above answered.
   app.use(SISTER_PREFIX, sisterNotFound());

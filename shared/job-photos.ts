@@ -6,6 +6,7 @@
  * The phases are the same three words Roof Lee files its photos under, so a
  * photo moves between the two with its meaning intact.
  */
+import type { ChecklistField } from './preconstruction-checklist';
 
 export const PHOTO_PHASES = ['before', 'during', 'after'] as const;
 export type PhotoPhase = typeof PHOTO_PHASES[number];
@@ -65,4 +66,30 @@ export function photoDisplayName(p: { caption?: string | null; phase?: string | 
   const caption = (p.caption || '').trim();
   if (caption) return caption.length > 80 ? `${caption.slice(0, 77)}...` : caption;
   return isPhotoPhase(p.phase) ? `${PHASE_LABEL[p.phase]} photo` : 'Job photo';
+}
+
+/**
+ * Every photo id a checklist's answers name (the pre-construction checklist
+ * and the final walkthrough), from its photo fields only, in the order given.
+ * A photo answer is a list of `{ fileId, name }`. An entry with no id of its
+ * own is given as '' so it can never pass as a saved photo; a photo field
+ * that holds no list names nothing.
+ *
+ * For a job Archie keeps, each of these must be one of the job's own ready
+ * photos before the checklist is accepted (server/photos/native.ts
+ * allReadyPhotosOfJob).
+ */
+export function photoAnswerIds(fields: readonly ChecklistField[], answers: Record<string, unknown> | null | undefined): string[] {
+  if (!answers || typeof answers !== 'object') return [];
+  const ids: string[] = [];
+  for (const field of fields) {
+    if (field.type !== 'photo') continue;
+    const value = answers[field.name];
+    if (!Array.isArray(value)) continue;
+    for (const item of value) {
+      const id = item && typeof item === 'object' ? (item as { fileId?: unknown }).fileId : undefined;
+      ids.push(typeof id === 'string' ? id : '');
+    }
+  }
+  return ids;
 }

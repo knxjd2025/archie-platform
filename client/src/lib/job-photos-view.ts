@@ -5,9 +5,10 @@
  * CRM or CompanyCam. Every other job's photo box is exactly as before.
  */
 import {
-  CATEGORY_LABEL, PHASE_LABEL, PHOTO_CATEGORIES, PHOTO_PAGE_SIZE, PHOTO_PHASES,
+  CATEGORY_LABEL, MAX_CAPTION_CHARS, PHASE_LABEL, PHOTO_CATEGORIES, PHOTO_PAGE_SIZE, PHOTO_PHASES,
   type PhotoCategory, type PhotoPhase,
 } from '../../../shared/job-photos';
+import { isArchieJobKey } from './own-jobs';
 
 export { CATEGORY_LABEL, PHASE_LABEL, PHOTO_CATEGORIES, PHOTO_PHASES, PHOTO_PAGE_SIZE };
 export type { PhotoCategory, PhotoPhase };
@@ -94,4 +95,18 @@ export function photoDetails(p: Pick<ArchiePhoto, 'phase' | 'category' | 'takenA
     p.takenAt ? `Taken ${when(p.takenAt)}` : null,
     `Added ${when(p.createdAt)}${p.uploadedByName ? ` by ${p.uploadedByName}` : ''}`,
   ].filter(Boolean).join(' · ');
+}
+
+/**
+ * How a photo taken for a checklist is filed (components/PreConstructionChecklist.tsx
+ * PhotoField, which the final walkthrough uses too). For a job Archie keeps:
+ * a checklist photo, Before for the pre-construction checklist and After for
+ * the walkthrough, captioned with the field it was taken for, so it reads
+ * right on the job's photo box and the checklist can name it (the server
+ * accepts the checklist only when each photo it names is one of the job's own
+ * saved photos). Null for every other job, which sends what it always did.
+ */
+export function checklistPhotoFiling(externalId: string, phase: PhotoPhase, fieldName: string): { phase: PhotoPhase; category: PhotoCategory; caption: string } | null {
+  if (!isArchieJobKey(externalId)) return null;
+  return { phase, category: 'checklist', caption: fieldName.trim().slice(0, MAX_CAPTION_CHARS) };
 }

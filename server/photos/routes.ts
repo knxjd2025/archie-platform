@@ -10,13 +10,13 @@ import { logWrite } from '../writes/log';
 import { sendFailure } from '../lib/failure';
 import { getCurrentCompany } from '../tenant/companies';
 import { isNativeJobId, jobBackendFor } from '../production/native-jobs';
-import { addNativePhoto, deleteNativePhoto, editNativePhoto, keyFor, listNativePhotos, readyPhoto, PHOTO_STORE_OFF } from './native';
+import { addNativePhoto, deleteNativePhoto, editNativePhoto, keyFor, listNativePhotos, readyPhoto, MAX_PHOTO_BYTES, PHOTO_STORE_OFF } from './native';
 import { photoStore } from './store';
 import { MAX_PHOTO_PAGE } from '../../shared/job-photos';
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
 /** Server-side ceiling. The client downscales first, so real uploads are far smaller. */
-export const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
+export const MAX_UPLOAD_BYTES = MAX_PHOTO_BYTES;
 
 /** Strip an optional data-URL prefix and decode. Returns null if it isn't valid base64. */
 export function decodeImagePayload(base64: string): Buffer | null {

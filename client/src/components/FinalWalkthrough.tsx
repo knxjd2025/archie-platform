@@ -68,7 +68,7 @@ function VerifyField({ value, onChange, disabled }: { value: any; onChange: (v: 
 function FieldInput({ jobExternalId, field, value, onChange, disabled, id }: { jobExternalId: string; field: ChecklistField; value: any; onChange: (v: any) => void; disabled: boolean; id?: string }) {
   const base = 'w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:ring-1 focus:ring-blue-400';
   if (field.type === 'verify') return <VerifyField value={value} onChange={onChange} disabled={disabled} />;
-  if (field.type === 'photo') return <PhotoField jobExternalId={jobExternalId} field={field} value={value} onChange={onChange} disabled={disabled} prefix="Walkthrough" description="Final Walkthrough" />;
+  if (field.type === 'photo') return <PhotoField jobExternalId={jobExternalId} field={field} value={value} onChange={onChange} disabled={disabled} prefix="Walkthrough" description="Final Walkthrough" phase="after" />;
   if (field.type === 'checkbox') {
     return (
       <label className="flex items-center gap-2 text-sm text-gray-700">

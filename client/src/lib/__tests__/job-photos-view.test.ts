@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { PHASE_FILTERS, PHOTO_WORDS, photoDetails, photoPagePath, uploadSummary } from '../job-photos-view';
+import { PHASE_FILTERS, PHOTO_WORDS, checklistPhotoFiling, photoDetails, photoPagePath, uploadSummary } from '../job-photos-view';
 
 const KEY = `archie-${'b'.repeat(32)}`;
 
@@ -31,5 +31,18 @@ describe('the photo box for a job Archie keeps', () => {
       expect(w).not.toMatch(/[—–]|CRM|JobTread|CompanyCam|KynexPro|soon|_/);
     }
     expect(PHOTO_WORDS.saving).toBe('Saving...');
+  });
+});
+
+describe('a photo taken for a checklist', () => {
+  it('is filed for a job Archie keeps as a checklist photo, Before or After, captioned with its field', () => {
+    expect(checklistPhotoFiling(KEY, 'before', 'Dumpster location')).toEqual({ phase: 'before', category: 'checklist', caption: 'Dumpster location' });
+    expect(checklistPhotoFiling(KEY, 'after', 'Site after cleanup')).toEqual({ phase: 'after', category: 'checklist', caption: 'Site after cleanup' });
+    expect(checklistPhotoFiling(KEY, 'after', 'x'.repeat(600))!.caption).toHaveLength(500);
+  });
+
+  it('adds nothing for any other job, so it sends exactly what it always did', () => {
+    expect(checklistPhotoFiling('jt-123', 'before', 'Dumpster location')).toBeNull();
+    expect(checklistPhotoFiling(`archie-${'g'.repeat(32)}`, 'before', 'Dumpster location')).toBeNull();
   });
 });

@@ -3,6 +3,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { fmtDate } from '../lib/format';
 import { shrinkImage } from './JobPhotos';
+import { checklistPhotoFiling, type PhotoPhase } from '../lib/job-photos-view';
 import {
 
   PRECON_CHECKLIST_FIELDS,
@@ -29,10 +30,12 @@ interface Checklist {
   createdAt: string | null;
 }
 
-export function PhotoField({ jobExternalId, field, value, onChange, disabled, prefix = 'Precon', description = 'Pre-Construction Checklist' }: {
+export function PhotoField({ jobExternalId, field, value, onChange, disabled, prefix = 'Precon', description = 'Pre-Construction Checklist', phase = 'before' }: {
   /** Uploaded file name prefix / JobTread description — the final walkthrough passes its own. */
   prefix?: string;
   description?: string;
+  /** For a job Archie keeps, the phase its photos are filed under: Before here, After for the walkthrough. */
+  phase?: PhotoPhase;
   jobExternalId: string;
   field: ChecklistField;
   value: ChecklistPhotoAnswer[] | undefined;
@@ -64,6 +67,8 @@ export function PhotoField({ jobExternalId, field, value, onChange, disabled, pr
           base64,
           contentType,
           description: `${description} — ${field.name}`,
+          // A job Archie keeps files it as a checklist photo; any other job sends what it always did.
+          ...checklistPhotoFiling(jobExternalId, phase, field.name),
         });
         added.push({ fileId: r.fileId, name: file.name });
       } catch (err: any) {

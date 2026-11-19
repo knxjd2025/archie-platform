@@ -107,8 +107,9 @@ Archie never reads `SISTERS_SHARED_SECRET`. Do not set it in Archie.
    instead of `401`.
 6. Make the throwaway test company (Summit Ridge Roofing in Cedar Falls) from
    Roof Lee. Check: it appears in Archie with its team; change its team, and
-   the change shows in Archie; its capabilities answer lists both
-   `messages.quiet` and `jobs.native`.
+   the change shows in Archie; its capabilities answer lists
+   `messages.quiet` and `jobs.native`, and `photos.native` once the four photo
+   settings are in (with any of them missing it is left out).
 7. Set `ROOFLI_EVENTS_URL` (only once Roof Lee is ready to receive news). Add a
    lead by hand in the test company in Archie. Check: Roof Lee shows a
    `lead.created` for it within a minute or two.
@@ -118,6 +119,13 @@ Archie never reads `SISTERS_SHARED_SECRET`. Do not set it in Archie.
    someone taken off the team, and no text or email went to the test customer.
    On that job's page, add a Before photo with a caption, open it large, and
    save the large copy: it opens, and it carries no location (no Exif block).
+   Fill in its pre-construction checklist with photos from the phone and
+   submit it: the job moves to Schedule Job. Turn on "Customer agreed to
+   photos of this job being used", then ask Archie for the job from Roof Lee
+   (signed `GET .../jobs/{id}`): its `photos` list the photo with its phase
+   and caption, and the signed photo address gives back a JPEG with no
+   location in it. Turn the switch off again: the list is empty and the photo
+   address answers `404`.
    Then pause and close the test company and check nobody can sign in to it.
 9. Only now set `SISTERS_ARCHIE_READY=true`. Check: the signed
    `GET /api/sister/v1/ready` answers ready, and Roof Lee shows its Archie
@@ -225,7 +233,7 @@ request from Roof Lee with a refusal, which is why they go in the same step.
 | `server/sister/ticket.ts` | Roof Lee's sign-in ticket reader, pasted word for word. Do not edit here. |
 | `server/sister/sso.ts` | One sign-in: spends a ticket and says who it signs in. |
 | `server/sister/acting.ts` | Finds the person a request is for on the company's own team, and applies Archie's role rules to them. |
-| `server/sister/leads.ts` | Leads, jobs and notes as Roof Lee's assistant reads and changes them. |
+| `server/sister/leads.ts` | Leads, jobs and notes as Roof Lee's assistant reads and changes them, and a job's photos, with the customer's agreement only. |
 | `server/sister/capabilities.ts` | What Archie says it can do for one company. |
 | `server/sister/quiet.ts` | The messages Archie sends a customer by itself, and the one switch that says whether it may. |
 | `server/integrations/ghl/new-contact.ts` | What happens when a new contact arrives from KynexPro. Skips a contact Roof Lee made. |
@@ -234,10 +242,10 @@ request from Roof Lee with a refusal, which is why they go in the same step.
 | `server/production/native-job-page.ts` | The client page for a job Archie keeps: its notes, a corrected phone or email, its messages and where it sits on the Production board. |
 | `server/sister/events.ts` | News going back to Roof Lee: the outbox, the signing, the sending and the retries. |
 | `server/photos/routes.ts` | A job's photos: from JobTread for a JobTread job (as before), from Archie's own store for a job Archie keeps (asks `jobBackendFor`). |
-| `server/photos/native.ts` | Photos of a job Archie keeps: adding, listing, changing and deleting them, and who may. |
+| `server/photos/native.ts` | Photos of a job Archie keeps: adding, listing, changing and deleting them, and who may; the check that a checklist names only the job's own photos; the list Roof Lee is told. |
 | `server/photos/store.ts` | Archie's private photo store (Kynex's R2 bucket, S3-compatible). The only place its settings are read. Never a public address. |
-| `server/photos/jpeg-clean.ts` | Takes every metadata block (location included) out of a JPEG before it is stored, and checks its own work. |
-| `shared/job-photos.ts` | The phases, the categories and the caption limit, shared by the server and the screens. |
+| `server/photos/jpeg-clean.ts` | Takes every metadata block (location included) out of a JPEG before it is stored, and again before one is handed to Roof Lee, and checks its own work. |
+| `shared/job-photos.ts` | The phases, the categories and the caption limit, shared by the server and the screens, and `photoAnswerIds` (the photos a checklist names). |
 
 Both entry files (`server/index.ts` and `api/index.ts`) keep the raw body for
 `/api/sister` ahead of `express.json`. The signature is over the bytes as they
@@ -296,7 +304,7 @@ any other part of Archie:
 | `PATCH` | `/api/sister/v1/companies/{roofliCompanyId}/leads/{id}` | version 2 |
 | `POST` | `/api/sister/v1/companies/{roofliCompanyId}/leads/{id}/notes` | version 2 |
 | `POST` | `/api/sister/v1/companies/{roofliCompanyId}/jobs/{id}/stage` | version 2 |
-| `GET` | `/api/sister/v1/companies/{roofliCompanyId}/jobs/{id}/photos/{photoId}` | version 2 (always `404` today, see "Archie's own jobs") |
+| `GET` | `/api/sister/v1/companies/{roofliCompanyId}/jobs/{id}/photos/{photoId}` | version 2 (with the customer's agreement only, see "Photos" below) |
 
 Each address takes exactly one form of signature and never the other. Anything
 else under `/api/sister` answers `404` to a signed request and a bare `401` to
@@ -345,20 +353,74 @@ and jobs, add a lead, change one and add a note.
   `PATCH` replaces when it sends `notes`. `notes` in an answer is the list of
   notes added one at a time (`lead_notes`, migration `0013`), newest first.
   No money is ever in an answer.
-- **Photos.** `photoConsent` is `true` only when a person recorded, in
-  Archie, that the customer agreed. `photos` is always empty and the photo
-  address always answers `404`: Archie now keeps the photos of its own jobs
-  (see "Archie's own jobs"), but none is handed to Roof Lee until the
-  agreement says how (Stage A4: with consent only, location-free, phase and
-  caption included).
+- **Photos** (Stage A4, Archie's side). `photoConsent` is `true` only when a
+  person recorded, in Archie, that the customer agreed (the switch on the
+  job's page). Only then, and only for a job Archie keeps, `photos` lists the
+  job's own photos (`server/sister/leads.ts` `getJob`, `photosForRoofLee` in
+  `server/photos/native.ts`), and the photo address hands one over
+  (`jobPhotoFile`):
+  - **The list.** Ready photos only (never one that is deleted or never
+    finished saving), Before, then During, then After, then any with no
+    phase, oldest first within each (by when it was added to Archie), at most
+    40, because Roof Lee keeps at most 40 a job. Each is exactly
+    `{ id, phase, caption, takenAt }`: nothing about who added it, where it is
+    kept or how big it is.
+  - **One photo.** The job's working copy (up to 1600 pixels), sent as the
+    file's own bytes with `content-type: image/jpeg`, never a redirect and
+    never a link. It was cleaned of every metadata block when it was taken in,
+    and it is cleaned and checked again on the way out
+    (`server/photos/jpeg-clean.ts`), so a copy that reached the store some
+    other way still carries no location; one that is not a whole JPEG is not
+    handed over at all.
+  - **Not found.** `404`, exactly as for a photo that is not there, when the
+    job has no recorded agreement (including one taken back), the photo is
+    deleted or never finished saving, it is another job's or another
+    company's, the job is one this person may not see (a crew sees none, a
+    salesperson only their own), or the id is not one of Archie's photo ids.
+    With the photo store switched off, a photo that would otherwise be handed
+    over is answered `503` with "Photo storage isn't switched on yet. Please
+    try again later."
+  - The scheduled run, which names nobody, reads the company's own job.
 - **Capabilities.** Each is worked out in `server/sister/capabilities.ts` from
   the switch the feature itself reads, never typed as a fixed answer.
   `jobs.native` and `messages.quiet` are both reported for every company Roof
-  Lee made. Roof Lee adds and changes no lead and moves no job until it has
-  heard `messages.quiet`, and Archie holds itself to the same rule: adding a
-  lead, changing one and moving a job answer `409` for a company that is not
-  quiet (moving a job also needs `jobs.native`). Reading and adding a note are
-  not held back.
+  Lee made. `photos.native` is reported for such a company only while the
+  photo store is switched on (all four `ARCHIE_PHOTOS_*` settings present,
+  `photoStoreConfigured`), the same switch that lets a photo be added. Roof
+  Lee adds and changes no lead and moves no job until it has heard
+  `messages.quiet`, and Archie holds itself to the same rule: adding a lead,
+  changing one and moving a job answer `409` for a company that is not quiet
+  (moving a job also needs `jobs.native`). Reading and adding a note are not
+  held back.
+
+### The agreement's photo section, as Archie holds to it
+
+Archie keeps no copy of `docs/sisters/contract-v2.md` itself (the Roof Lee
+repository holds the one copy, and that copy is the authority). This is the
+wording of its photo section that this code is built to, and the change it
+needs there:
+
+> - `GET .../jobs/{id}`: `{ "job": { ...the same fields, "address", "message",
+>   "notes": [ { "text", "at" } ], "photoConsent", "photos": [ { "id",
+>   "phase", "caption", "takenAt" } ] } }`. `id` must be the one asked for.
+>   `photoConsent` is `true` only when the customer agreed to their photos
+>   being used; `photos` lists uploaded photos only, and is left empty
+>   without that consent. `phase` is `before`, `during`, `after` or `null`;
+>   `caption` is the caption a person gave it, or `null`; `takenAt` is when
+>   the photo was taken, or `null` when that is not known. The list is in
+>   this order: Before, then During, then After, then any with no phase,
+>   oldest first within each (by when it was added to Archie), and holds at
+>   most 40.
+> - `GET .../jobs/{id}/photos/{photoId}`: the file itself, a JPEG with no
+>   location data in it (at most 30 MB), with its `content-type`. `404` when
+>   the job has no recorded consent, or the photo is not an uploaded photo of
+>   that job. Never a redirect and never a link to somewhere else: Roof Lee
+>   does not follow one.
+>
+> **Photos of a finished job.** Roof Lee fetches them only when the
+> `job.finished` event said `photoConsent: true` and `GET .../jobs/{id}` still
+> says so when asked. Each is kept as a private copy in Roof Lee. Nothing is
+> made public or published because of the event.
 
 ## No messages of its own
 
@@ -615,11 +677,32 @@ JobTread, so Archie gives its leads keys of its own.
     CompanyCam push.
   - **An insurance letter** for such a job carries the photos picked for it
     straight from the store; it has no documents on file yet.
+  - **The checklists use the job's own photos** (Stage A3). A photo taken in
+    the pre-construction checklist is filed as a Before photo, one taken in
+    the final walkthrough as an After photo, both under the category
+    `checklist` and captioned with the checklist item it was taken for
+    (`checklistPhotoFiling` in `client/src/lib/job-photos-view.ts`), so it
+    shows in the job's photo box too. "Use a photo already on the job" picks
+    from the same photos. On submit, every photo the checklist names
+    (`photoAnswerIds` in `shared/job-photos.ts`, photo items only) must be
+    one of this job's own ready photos (`allReadyPhotosOfJob` in
+    `server/photos/native.ts`, asked as the company); a made-up id, another
+    job's or another company's photo, a deleted one or one that never
+    finished saving is refused with `400` "One of the photos didn't finish
+    saving. Please add it again." and the checklist stays a draft. Asked only
+    when the key is one of Archie's own (`isNativeJobId`): a JobTread job's
+    checklist names JobTread file ids and is accepted exactly as before. The
+    board's own gates (`entryBlocker`, `STAGE_CHECKS`) are the same for every
+    company. With its photos accepted, the checklist moves the board as
+    before: Schedule Job, then Final Invoice after the walkthrough.
+  - **Roof Lee** is told about a job's photos, and can fetch one, only with
+    the customer's recorded agreement: see "Read and write for Lee", Photos.
   - **Not yet:** the phone sending the full-size original straight to the
     bucket (A2b: it needs a CORS rule on the bucket, and the private original
-    is never served); the pre-construction checklist and final walkthrough
-    checking that each photo id is one of the job's own ready photos (A3);
-    handing photos to Roof Lee (A4); reports reading these photos (Stage C).
+    is never served); reports reading these photos (Stage C); a sweep that
+    clears old pending and deleted rows and their stored copies; Roof Lee's
+    own side of A4 (reading `phase`, `caption` and `takenAt`, and storing the
+    phase), which is in the Roof Lee repository.
 - **The job's forms stay in Archie.** The pre-construction checklist, the
   final walkthrough (and the follow-ups its issues become), the inspection
   form, a follow-up and the choice of rep are saved and do their board moves
@@ -822,6 +905,10 @@ board in Archie; and confirm no text or email reached the test customer.
     scripts/test-db.sh
     eval "$(scripts/test-db.sh --env)"
     SESSION_SECRET=test npx vitest run server/sister server/tenant server/production server/photos
+
+The photo tests are `server/photos/__tests__` (the photo routes, and the
+checklists using the job's own photos in `checklist-photos.db.test.ts`) and
+`server/sister/__tests__/photos.test.ts` (what Roof Lee is told and handed).
 
 The database tests skip themselves unless `DATABASE_URL` points at a local
 database. Fixtures use the fictional Summit Ridge Roofing in Cedar Falls. The

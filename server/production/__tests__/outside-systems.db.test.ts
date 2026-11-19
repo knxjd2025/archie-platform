@@ -208,6 +208,28 @@ describe.skipIf(!localDb)('outside systems for a company Roof Lee made', async (
     'Homeowner present': 'Yes', 'Homeowner signature': 'data:image/png;base64,iVBORw0KGgo=', ...over,
   });
 
+  /**
+   * A job Archie keeps names its own photos in its checklists (A3), so each
+   * required photo field gets one photo added to the job, into a fake store:
+   * no test ever makes a real store client (server/photos/store.ts).
+   */
+  const ownPhotoAnswers = async (key: string, fields: Field[], phase: 'before' | 'after') => {
+    const kept = new Map<string, Buffer>();
+    setPhotoStoreForTests({ put: async (k, body) => { kept.set(k, body); }, get: async () => null });
+    try {
+      const answers: Record<string, unknown> = {};
+      for (const f of fields) {
+        if (f.type !== 'photo' || !f.isRequired) continue;
+        const add = await post(`/api/clients/${key}/photos`, { base64: makeJpeg().toString('base64'), contentType: 'image/jpeg', phase, category: 'checklist', caption: f.name });
+        expect(add.status).toBe(200);
+        answers[f.name] = [{ fileId: add.body.fileId, name: 'site.jpg' }];
+      }
+      return answers;
+    } finally {
+      setPhotoStoreForTests(null);
+    }
+  };
+
   /** A fresh lead of the Roof Lee company, made on the lead form by its rep (so the rep owns it). */
   const nativeLead = async () => {
     as(native, 'rep');
@@ -241,7 +263,8 @@ describe.skipIf(!localDb)('outside systems for a company Roof Lee made', async (
 
     it('finishes its pre-construction checklist without telling JobTread (A1-l)', async () => {
       const { key } = await nativeLead();
-      const draft = await post('/api/preconstruction', { jobExternalId: key, answers: filled(PRECON_CHECKLIST_FIELDS as Field[]) });
+      const photos = await ownPhotoAnswers(key, PRECON_CHECKLIST_FIELDS as Field[], 'before');
+      const draft = await post('/api/preconstruction', { jobExternalId: key, answers: filled(PRECON_CHECKLIST_FIELDS as Field[], photos) });
       expect(draft.status).toBe(200);
       const done = await post(`/api/preconstruction/${draft.body.checklist.id}/submit`, {});
       expect(done.status).toBe(200);
@@ -251,8 +274,9 @@ describe.skipIf(!localDb)('outside systems for a company Roof Lee made', async (
 
     it('is walked through, and its issue becomes a follow-up kept in Archie (A1-l)', async () => {
       const { key } = await nativeLead();
+      const photos = await ownPhotoAnswers(key, WALKTHROUGH_FIELDS as Field[], 'after');
       const draft = await post('/api/final-walkthrough', {
-        jobExternalId: key, answers: walked({ [firstVerify]: { state: 'issue', note: 'Nails by the driveway.' } }),
+        jobExternalId: key, answers: walked({ ...photos, [firstVerify]: { state: 'issue', note: 'Nails by the driveway.' } }),
       });
       expect(draft.status).toBe(200);
       const done = await post(`/api/final-walkthrough/${draft.body.walkthrough.id}/submit`, {});

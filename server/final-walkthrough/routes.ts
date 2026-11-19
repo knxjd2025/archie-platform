@@ -22,6 +22,8 @@ import {
 } from '../../shared/final-walkthrough';
 import { JobTreadClient } from '../integrations/jobtread';
 import { isNativeJobId } from '../production/native-jobs';
+import { allReadyPhotosOfJob, CHECKLIST_PHOTO_NOT_SAVED } from '../photos/native';
+import { photoAnswerIds } from '../../shared/job-photos';
 import { sendFailure } from '../lib/failure';
 import { etPlusDays } from '../../shared/et-periods';
 import { mergeAnswers } from '../../shared/form-answers';
@@ -179,6 +181,13 @@ export function registerFinalWalkthroughRoutes(app: Express) {
       const answers = (existing.answers as Record<string, any>) || {};
       const missing = missingRequiredWalkthroughFields(answers);
       if (missing.length) return res.status(400).json({ error: 'Missing required items.', missing });
+      // A job Archie keeps (server/production/native-jobs.ts): every photo the
+      // walkthrough names must be one of the job's own saved photos. A
+      // JobTread job's photos are JobTread's, and are not checked here.
+      if (isNativeJobId(existing.jobExternalId)
+        && !(await allReadyPhotosOfJob(existing.jobExternalId, photoAnswerIds(WALKTHROUGH_FIELDS, answers)))) {
+        return res.status(400).json({ error: CHECKLIST_PHOTO_NOT_SAVED });
+      }
 
       const issues = walkthroughIssues(answers);
       // Only a draft can be submitted. Two taps on Submit both passed the

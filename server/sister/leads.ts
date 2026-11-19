@@ -25,6 +25,9 @@ import { rememberWithin, type SisterAnswer } from './idempotency';
 import { isPipelineStage, jobtreadStatusFor, moveBlocker, normalizeTrades, stageForJobtreadStatus, type TradeStep } from '../../shared/production-pipeline';
 import { ensureJobIdentity, isNativeJobId, NEW_LEAD_STAGE, newJobKey } from '../production/native-jobs';
 import { gateContexts, moveStage } from '../production/pipeline';
+import { MAX_PHOTO_BYTES, photosForRoofLee, readyPhoto, workingCopyBytes, type RoofLeePhoto } from '../photos/native';
+import { cleanJpeg } from '../photos/jpeg-clean';
+import type { PhotoStore } from '../photos/store';
 
 type LeadRow = typeof leads.$inferSelect;
 
@@ -53,11 +56,12 @@ export interface SisterJobDetail extends SisterJob {
   /** True only when a person recorded that the customer agreed to their photos being used. */
   photoConsent: boolean;
   /**
-   * Uploaded photos of the job that Archie itself holds. Archie keeps photos
-   * of its own jobs now (server/photos/native.ts), but none is handed to Roof
-   * Lee until the contract says how (Stage A4), so: empty.
+   * The job's own photos, kept by Archie (server/photos/native.ts), only once
+   * a person recorded the customer's agreement and only for a job Archie
+   * keeps: ready ones, Before, During, After, then any with no phase, oldest
+   * first within each, at most 40 (photosForRoofLee). Empty otherwise.
    */
-  photos: Array<{ id: string }>;
+  photos: RoofLeePhoto[];
 }
 
 const nameOf = (r: LeadRow): string | null =>
@@ -124,17 +128,50 @@ export async function getJob(id: number, member: ActingMember | undefined): Prom
   if (!row) return null;
   const notes = await db.select({ text: leadNotes.text, at: leadNotes.createdAt }).from(leadNotes)
     .where(eq(leadNotes.leadId, row.id)).orderBy(desc(leadNotes.createdAt), desc(leadNotes.id)).limit(MOST_NOTES);
+  // Only what a person recorded (recordPhotoConsent). Without it no photo is
+  // listed, and none is ever handed over (jobPhotoFile).
+  const photoConsent = row.photoConsent === true;
   return {
     ...toJob(row, await boardStages([row])),
     address: row.address,
     message: row.notes,
     notes: notes.map((n) => ({ text: n.text, at: n.at.toISOString() })),
-    // Only what a person recorded (recordPhotoConsent). The photos Archie
-    // keeps of its own jobs (server/photos/native.ts) are not handed to Roof
-    // Lee yet (Stage A4), so there is none to list, with or without consent.
-    photoConsent: row.photoConsent === true,
-    photos: [],
+    photoConsent,
+    photos: photoConsent && isNativeJobId(row.externalId) ? await photosForRoofLee(row.externalId) : [],
   };
+}
+
+/** One photo for Roof Lee: the file, or why there is none to give. */
+export type SisterPhotoFile =
+  | { found: true; jpeg: Buffer }
+  | { found: false; storeOff?: true };
+
+/**
+ * One photo of a job, for Roof Lee: the job's working copy as a JPEG with no
+ * metadata in it. Found only when this person may see the job, a person
+ * recorded the customer's agreement, the job is one Archie keeps, and the
+ * photo is one of its own ready photos. Anything else is simply not found,
+ * the same as a photo that is not there.
+ *
+ * The copy was cleaned when it was taken in (server/photos/jpeg-clean.ts).
+ * It is cleaned and checked again here, on the way out, so nothing that ever
+ * reached the store some other way can carry a location to Roof Lee. A copy
+ * that is not one whole JPEG is not handed over at all.
+ */
+export async function jobPhotoFile(id: number, photoId: string, member: ActingMember | undefined, store: PhotoStore | null): Promise<SisterPhotoFile> {
+  const row = await findRow(id, member);
+  if (!row || row.photoConsent !== true || !isNativeJobId(row.externalId)) return { found: false };
+  const photo = await readyPhoto(photoId);
+  if (!photo || photo.jobKey !== row.externalId) return { found: false };
+  if (!store) return { found: false, storeOff: true };
+  const bytes = await workingCopyBytes(photo, store, MAX_PHOTO_BYTES);
+  if (!bytes) return { found: false };
+  const clean = cleanJpeg(bytes);
+  if (!clean.ok) {
+    console.warn(`[sister] photo ${photo.id.slice(0, 8)} was not handed over: ${clean.reason}`);
+    return { found: false };
+  }
+  return { found: true, jpeg: clean.jpeg };
 }
 
 /** Who did it, in the company's own log. */

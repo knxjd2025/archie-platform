@@ -16,7 +16,7 @@
  * (./jpeg-clean.ts), so no location ever reaches the store. The browser
  * sends one it drew itself; anything else is refused.
  */
-import { and, count, desc, eq, lt, or } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, lt, or, sql } from 'drizzle-orm';
 import { db } from '../db';
 import { jobPhotos, leads, type JobPhoto } from '../../shared/schema';
 import { atLeast, type TeamRole } from '../../shared/rbac';
@@ -42,6 +42,11 @@ export const CAPTION_TOO_LONG = `A caption can be at most ${MAX_CAPTION_CHARS} c
 export const CAPTION_NOT_TEXT = 'A caption must be text.';
 export const EDIT_NOT_ALLOWED = 'Only the person who added this photo, or a manager, can change it.';
 export const DELETE_NOT_ALLOWED = 'Only a manager can delete this photo. The person who added it can delete it on the day they added it.';
+/** Said when a checklist of a job Archie keeps names a photo that is not one of the job's own saved photos. */
+export const CHECKLIST_PHOTO_NOT_SAVED = 'One of the photos didn\'t finish saving. Please add it again.';
+
+/** The largest photo Archie takes in, and so the largest working copy it ever hands on. The phone shrinks each one first, so real ones are far smaller. */
+export const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
 
 /** The person asking, as the session has them. */
 export interface PhotoUser { email: string; name: string; role: TeamRole }
@@ -276,14 +281,29 @@ export async function readyPhoto(id: string): Promise<JobPhoto | null> {
 }
 
 /**
- * A ready photo's working copy as bytes, for a letter that carries it
- * (server/insurance-letters/routes.ts). Null when it is not a ready photo of
- * this job, the store has lost it, or it is larger than allowed. Throws when
- * the store cannot be read.
+ * True when every id is one of this job's own ready photos: the photos a
+ * checklist names (shared/job-photos.ts photoAnswerIds), for a job Archie
+ * keeps, before the pre-construction checklist or the final walkthrough is
+ * accepted. A made-up id, another job's photo, a deleted one and one that
+ * never finished saving are all false. Runs as the company, so another
+ * company's photo is simply not there. No ids at all is true: whether a photo
+ * was required is the checklist's own question.
  */
-export async function nativePhotoBytes(jobKey: string, photoId: string, store: PhotoStore, maxBytes: number): Promise<{ bytes: Buffer; name: string; caption: string | null } | null> {
-  const photo = await readyPhoto(photoId);
-  if (!photo || photo.jobKey !== jobKey || !photo.workingKey) return null;
+export async function allReadyPhotosOfJob(jobKey: string, ids: readonly string[]): Promise<boolean> {
+  const wanted = [...new Set(ids)];
+  if (!wanted.length) return true;
+  if (!wanted.every(isPhotoId)) return false;
+  const found = await db.select({ id: jobPhotos.id }).from(jobPhotos)
+    .where(and(eq(jobPhotos.jobKey, jobKey), eq(jobPhotos.status, 'ready'), inArray(jobPhotos.id, wanted)));
+  return found.length === wanted.length;
+}
+
+/**
+ * A ready photo's working copy as bytes. Null when it has none, the store has
+ * lost it, or it is larger than allowed. Throws when the store cannot be read.
+ */
+export async function workingCopyBytes(photo: JobPhoto, store: PhotoStore, maxBytes: number): Promise<Buffer | null> {
+  if (photo.status !== 'ready' || !photo.workingKey) return null;
   const object = await store.get(photo.workingKey);
   if (!object) return null;
   const chunks: Buffer[] = [];
@@ -294,7 +314,49 @@ export async function nativePhotoBytes(jobKey: string, photoId: string, store: P
     if (total > maxBytes) { object.body.destroy(); return null; }
     chunks.push(b);
   }
-  return { bytes: Buffer.concat(chunks), name: `${photoDisplayName(photo)}.jpg`, caption: photo.caption };
+  return Buffer.concat(chunks);
+}
+
+/**
+ * A ready photo's working copy as bytes, for a letter that carries it
+ * (server/insurance-letters/routes.ts). Null when it is not a ready photo of
+ * this job, the store has lost it, or it is larger than allowed. Throws when
+ * the store cannot be read.
+ */
+export async function nativePhotoBytes(jobKey: string, photoId: string, store: PhotoStore, maxBytes: number): Promise<{ bytes: Buffer; name: string; caption: string | null } | null> {
+  const photo = await readyPhoto(photoId);
+  if (!photo || photo.jobKey !== jobKey) return null;
+  const bytes = await workingCopyBytes(photo, store, maxBytes);
+  if (!bytes) return null;
+  return { bytes, name: `${photoDisplayName(photo)}.jpg`, caption: photo.caption };
+}
+
+/** The most photos of one job Roof Lee is told about: Roof Lee keeps at most 40 a job. */
+export const MOST_PHOTOS_FOR_ROOF_LEE = 40;
+
+/** One photo of a job as Roof Lee is told about it: what it is, nothing about who added it or where it is kept. */
+export interface RoofLeePhoto { id: string; phase: PhotoPhase | null; caption: string | null; takenAt: string | null }
+
+/**
+ * The photos of a job Archie keeps that Roof Lee is told about
+ * (server/sister/leads.ts, only once the customer's agreement is recorded):
+ * ready ones only, Before, then During, then After, then any with no phase,
+ * oldest first (by when they were added) within each, at most 40. Before
+ * comes first so the cap, if it bites, keeps the start of the job's story.
+ */
+export async function photosForRoofLee(jobKey: string): Promise<RoofLeePhoto[]> {
+  const phaseOrder = sql`case ${jobPhotos.phase} when 'before' then 0 when 'during' then 1 when 'after' then 2 else 3 end`;
+  const rows = await db.select({ id: jobPhotos.id, phase: jobPhotos.phase, caption: jobPhotos.caption, takenAt: jobPhotos.takenAt })
+    .from(jobPhotos)
+    .where(and(eq(jobPhotos.jobKey, jobKey), eq(jobPhotos.status, 'ready')))
+    .orderBy(phaseOrder, asc(jobPhotos.createdAt), asc(jobPhotos.id))
+    .limit(MOST_PHOTOS_FOR_ROOF_LEE);
+  return rows.map((r) => ({
+    id: r.id,
+    phase: isPhotoPhase(r.phase) ? r.phase : null,
+    caption: r.caption,
+    takenAt: r.takenAt ? r.takenAt.toISOString() : null,
+  }));
 }
 
 /** The stored key for a variant. A photo with no small copy of its own shows its working copy. */
