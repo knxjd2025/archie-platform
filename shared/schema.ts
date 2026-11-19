@@ -1095,6 +1095,58 @@ export const leadNotes = pgTable('lead_notes', {
 
 export type LeadNote = typeof leadNotes.$inferSelect;
 
+/**
+ * Photos of a job Archie keeps itself (server/photos/native.ts,
+ * docs/archie/02-roof-lee-link.md "Archie's own jobs"), stored privately in
+ * Archie's own photo store (server/photos/store.ts).
+ *
+ * Keyed on the job key (`leads.external_id`, an `archie-` key), never on
+ * `leads.id`: the JobTread sync deletes and re-inserts leads, so a row id is
+ * not a lasting name for a job. A foreign key would also skip row level
+ * security, so the code looks the job up as the company before it inserts.
+ *
+ * The stored copies are JPEGs with every metadata block taken out (no
+ * location, no camera, no comments: server/photos/jpeg-clean.ts). There is no
+ * location column on purpose. Every object key sits under the company's own
+ * prefix `c/<company_id>/p/`, which the database checks.
+ */
+export const jobPhotos = pgTable('job_photos', {
+  companyId: companyId(),
+  /** Also the photo's id everywhere it is shown or fetched. */
+  id: uuid('id').primaryKey().defaultRandom(),
+  jobKey: text('job_key').notNull(),
+  phase: text('phase'),                         // before | during | after
+  category: text('category'),                   // one of shared/job-photos.ts PHOTO_CATEGORIES
+  caption: text('caption'),
+  source: text('source').notNull().default('archie_app'),
+  status: text('status').notNull().default('pending'),
+  /** A private original (A2b, later). Never served. */
+  originalKey: text('original_key'),
+  workingKey: text('working_key'),
+  thumbKey: text('thumb_key'),
+  width: integer('width'),
+  height: integer('height'),
+  takenAt: timestamp('taken_at'),
+  uploadedBy: text('uploaded_by').notNull(),    // email of the person who added it
+  uploadedByName: text('uploaded_by_name'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  deletedAt: timestamp('deleted_at'),
+  deletedBy: text('deleted_by'),
+}, (t) => ({
+  jobIdx: index('job_photos_company_job_idx').on(t.companyId, t.jobKey, t.createdAt.desc()),
+  phaseCheck: check('job_photos_phase_check', sql`${t.phase} IN ('before','during','after')`),
+  captionCheck: check('job_photos_caption_check', sql`char_length(${t.caption}) <= 500`),
+  sourceCheck: check('job_photos_source_check', sql`${t.source} IN ('archie_app','roofli','companycam')`),
+  statusCheck: check('job_photos_status_check', sql`${t.status} IN ('pending','ready','deleted')`),
+  keysInCompany: check('job_photos_keys_in_company', sql`(${t.originalKey} IS NULL OR ${t.originalKey} LIKE 'c/' || ${t.companyId}::text || '/p/%')
+    AND (${t.workingKey} IS NULL OR ${t.workingKey} LIKE 'c/' || ${t.companyId}::text || '/p/%')
+    AND (${t.thumbKey} IS NULL OR ${t.thumbKey} LIKE 'c/' || ${t.companyId}::text || '/p/%')`),
+  readyHasCopy: check('job_photos_ready_has_copy', sql`${t.status} <> 'ready' OR ${t.workingKey} IS NOT NULL`),
+}));
+
+export type JobPhoto = typeof jobPhotos.$inferSelect;
+
 // Agent Tasks - work items for agents
 export const agentTasks = pgTable('agent_tasks', {
   companyId: companyId(),

@@ -27,6 +27,8 @@ import { sendAsMailboxWithAttachments, type MailAttachment } from '../integratio
 import { memberByEmail } from '../access/team-scope';
 import { sendingMailboxFor } from '../calendar/access';
 import { decodeImagePayload, MAX_UPLOAD_BYTES } from '../photos/routes';
+import { nativePhotoBytes } from '../photos/native';
+import { photoStore } from '../photos/store';
 import { jobCertificates } from '../../shared/schema';
 import { certificatePdf } from '../certificates/pdf';
 import { signaturesOf } from '../certificates/routes';
@@ -115,8 +117,9 @@ interface AttachmentRequest {
  * gets refused by the carrier weeks later.
  *
  * A job Archie keeps (server/production/native-jobs.ts) has nothing in
- * JobTread, so JobTread is not asked: any id named comes back as skipped, and
- * uploads still travel.
+ * JobTread, so JobTread is not asked: its photos are read from Archie's own
+ * private store (server/photos/native.ts), it has no documents on file yet
+ * (a document id comes back as skipped), and uploads still travel.
  */
 async function collectAttachments(externalId: string, req: AttachmentRequest): Promise<{ attachments: MailAttachment[]; images: LetterImage[]; skipped: string[] }> {
   const attachments: MailAttachment[] = [];
@@ -144,7 +147,15 @@ async function collectAttachments(externalId: string, req: AttachmentRequest): P
 
   const wanted = [...req.photoIds.slice(0, MAX_PHOTOS), ...req.documentIds.slice(0, MAX_DOCS)];
   if (wanted.length && isNativeJobId(externalId)) {
-    for (const id of wanted) skipped.push(`${req.documentIds.includes(id) ? 'document' : 'photo'} ${id} (not on the job any more)`);
+    const store = photoStore();
+    for (const id of req.photoIds.slice(0, MAX_PHOTOS)) {
+      if (!store) { skipped.push(`photo ${id} (photos can't be read just now)`); continue; }
+      const photo = await nativePhotoBytes(externalId, id, store, MAX_UPLOAD_BYTES).catch(() => undefined);
+      if (photo === undefined) { skipped.push(`photo ${id} (photos can't be read just now)`); continue; }
+      if (!photo) { skipped.push(`photo ${id} (not on the job any more)`); continue; }
+      addPhoto(photo.bytes, 'image/jpeg', photo.name, photo.caption || undefined);
+    }
+    for (const id of req.documentIds.slice(0, MAX_DOCS)) skipped.push(`document ${id} (not on the job any more)`);
   } else if (wanted.length) {
     const { files } = await new JobTreadClient().getJobFiles(externalId, 100, 1600);
     for (const id of wanted) {

@@ -347,9 +347,10 @@ export function registerSisterRoutes(app: Express): void {
     return (id === null ? null : await moveJob(member, id, req.sister?.body?.stage)) ?? NO_SUCH;
   }));
 
-  // One uploaded photo of a job, as a file. Archie holds no uploaded photo of
-  // its own for any job yet (a job's `photos` list is always empty), so there
-  // is never one to hand over: not found, and never a link to somewhere else.
+  // One uploaded photo of a job, as a file. The photos Archie keeps of its
+  // own jobs are not handed to Roof Lee yet (Stage A4: a job's `photos` list
+  // is always empty), so there is never one to hand over: not found, and
+  // never a link to somewhere else.
   app.get(`${COMPANIES}/:roofliCompanyId/jobs/:id/photos/:photoId`, requireSister(2), leeRead('GET job photo', async () => NO_SUCH, { needsPerson: false }));
 
   // Last: whatever no route above answered.

@@ -52,7 +52,11 @@ export interface SisterJobDetail extends SisterJob {
   notes: Array<{ text: string; at: string }>;
   /** True only when a person recorded that the customer agreed to their photos being used. */
   photoConsent: boolean;
-  /** Uploaded photos of the job that Archie itself holds. It holds none yet, so: empty. */
+  /**
+   * Uploaded photos of the job that Archie itself holds. Archie keeps photos
+   * of its own jobs now (server/photos/native.ts), but none is handed to Roof
+   * Lee until the contract says how (Stage A4), so: empty.
+   */
   photos: Array<{ id: string }>;
 }
 
@@ -125,9 +129,9 @@ export async function getJob(id: number, member: ActingMember | undefined): Prom
     address: row.address,
     message: row.notes,
     notes: notes.map((n) => ({ text: n.text, at: n.at.toISOString() })),
-    // Only what a person recorded (recordPhotoConsent). Archie holds no
-    // uploaded photo of its own for a job (the original company's photos live
-    // in its JobTread), so there is none to list, with or without consent.
+    // Only what a person recorded (recordPhotoConsent). The photos Archie
+    // keeps of its own jobs (server/photos/native.ts) are not handed to Roof
+    // Lee yet (Stage A4), so there is none to list, with or without consent.
     photoConsent: row.photoConsent === true,
     photos: [],
   };

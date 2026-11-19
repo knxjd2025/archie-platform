@@ -4,11 +4,13 @@
  * NOT WIRED UP. Every function here has zero callers, and the R2_REPORTS_*
  * keys are deliberately unset — the roof colour renders that were to use it
  * were declined on 2026-09-19 (see roof-color-renders.ts), and reports are
- * served from /r/:token rather than an R2 link. `@aws-sdk/client-s3` is not a
- * dependency, and installing it changes nothing while nothing calls this.
+ * served from /r/:token rather than an R2 link. `@aws-sdk/client-s3` is a
+ * dependency now, for Archie's PRIVATE job photo store (server/photos/store.ts,
+ * its own bucket and its own ARCHIE_PHOTOS_* keys); that changes nothing here
+ * while nothing calls this and its R2_REPORTS_* keys are unset. Never store job
+ * photos through this file: everything it writes has a public address.
  *
- * Kept because the intent may come back: reports on a public R2 link. If it
- * does, install the SDK then — not before. The S3 client is loaded dynamically so
+ * Kept because the intent may come back: reports on a public R2 link. The S3 client is loaded dynamically so
  * importing this never breaks boot/build when R2 isn't configured, and every
  * call degrades to `null` so the caller can fall back to Vercel Blob / a local
  * link.

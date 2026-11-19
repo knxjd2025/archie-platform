@@ -22,7 +22,7 @@ Three settings, all unset by default:
 One optional setting, `ROOFLI_JOB_FINISHED_STAGE`, says which stage of the
 production board means "job finished" for Roof Lee. Unset, it is `closed_out`.
 
-Once migrations `0011_roofli_sister.sql` to `0015_archie_native_jobs.sql` are
+Once migrations `0011_roofli_sister.sql` to `0016_job_photos.sql` are
 in the database, deploying this code with none of these settings changes
 nothing for any existing company.
 The one visible difference is a new scheduled knock every ten minutes at
@@ -33,6 +33,14 @@ migrations have to be there first: see "Before deploying this code" below.
 `SISTERS_ARCHIE_SECRET` is a fresh secret for this pair only. It is never
 copied from another product, another repository or an older shared secret.
 Archie never reads `SISTERS_SHARED_SECRET` at all.
+
+Archie's own private photo store (the job photos of a company Roof Lee made,
+"Photos" under "Archie's own jobs" below) has four settings of its own:
+`ARCHIE_PHOTOS_ACCOUNT_ID`, `ARCHIE_PHOTOS_ACCESS_KEY_ID`,
+`ARCHIE_PHOTOS_SECRET_ACCESS_KEY` and `ARCHIE_PHOTOS_BUCKET`. With any of them
+unset the store is off: adding a photo to such a job answers "Photo storage
+isn't switched on yet. Please try again later." and nothing else changes. No
+other company's photos ever go there.
 
 ## Go-live checklist (owner only, in this order)
 
@@ -47,17 +55,22 @@ deployed. Stop at any step that does not check out.
    database owner. They must show: the applied list ends at
    `0010_company_job_leases.sql`; `0008` is in force (not reverted); no
    company already holds two leads with the same `archie-` id.
-2. From a checkout of this branch, apply the five migrations as the owner, in
+2. From a checkout of this branch, apply the six migrations as the owner, in
    this exact order (the command does the order for you, one transaction each):
    1. `0011_roofli_sister.sql`
    2. `0012_roofli_sso.sql`
    3. `0013_roofli_lead_notes.sql`
    4. `0014_roofli_events.sql`
    5. `0015_archie_native_jobs.sql`
+   6. `0016_job_photos.sql`
+
+   (The numbers are provisional: they are renumbered after the Archie team's
+   own migrations when the two branches meet. Apply whatever numbers this
+   branch holds at the time, in order.)
 
    `DATABASE_URL=<owner url> npx tsx scripts/migrate.ts`
 3. Check it worked: step 4 of "Before deploying this code" (three small reads
-   that must not error, and four tables each showing
+   that must not error, and five tables each showing
    `{company_isolation,company_system}`).
 
 **B. Deploy the code, with the link still off**
@@ -76,6 +89,14 @@ deployed. Stop at any step that does not check out.
 | `ROOFLI_EVENTS_URL` | Archie's hosting | Roof Lee's own `https://` address (its `APP_BASE_URL`). Set at step 7, not before. |
 | `ROOFLI_JOB_FINISHED_STAGE` | Archie's hosting, optional | Which production board stage means "job finished". Leave unset for `closed_out`. |
 | `SISTERS_ARCHIE_READY` | Archie's hosting | `true`. Set **last**, at step 9. |
+| `ARCHIE_PHOTOS_ACCOUNT_ID` | Archie's hosting (already set) | The Kynex Cloudflare account that holds the photo bucket. Never the Best Roofing Now account. |
+| `ARCHIE_PHOTOS_BUCKET` | Archie's hosting (already set) | `archie-job-photos` on Production, `archie-job-photos-test` on Preview. Both private, with no public address. |
+| `ARCHIE_PHOTOS_ACCESS_KEY_ID` | Archie's hosting, entered by James | An R2 key limited to that one bucket (read and write objects, nothing else). |
+| `ARCHIE_PHOTOS_SECRET_ACCESS_KEY` | Archie's hosting, entered by James | Its secret. Never pasted anywhere else. |
+
+The photo store needs no CORS rule yet: the phone sends each photo to Archie,
+and Archie puts it in the bucket. (A rule letting phones send the full-size
+original straight to the bucket comes with that later work, A2b.)
 
 Archie never reads `SISTERS_SHARED_SECRET`. Do not set it in Archie.
 
@@ -95,6 +116,8 @@ Archie never reads `SISTERS_SHARED_SECRET`. Do not set it in Archie.
    company's owner. Check: the lead is on Archie's production board, the
    sign-in lands in the right company, the same button does nothing for
    someone taken off the team, and no text or email went to the test customer.
+   On that job's page, add a Before photo with a caption, open it large, and
+   save the large copy: it opens, and it carries no location (no Exif block).
    Then pause and close the test company and check nobody can sign in to it.
 9. Only now set `SISTERS_ARCHIE_READY=true`. Check: the signed
    `GET /api/sister/v1/ready` answers ready, and Roof Lee shows its Archie
@@ -106,7 +129,7 @@ using Archie), or unset `SISTERS_ARCHIE_SECRET` (everything under
 
 ## Before deploying this code (owner only, must come first)
 
-**Apply migrations `0011` to `0015` to the database before this code is
+**Apply migrations `0011` to `0016` to the database before this code is
 deployed. Not after, and not as part of switching the link on.**
 
 | Migration | What it adds | When |
@@ -116,6 +139,7 @@ deployed. Not after, and not as part of switching the link on.**
 | `0013_roofli_lead_notes.sql` | the table `lead_notes` | Same step. Nothing touches it until the link is on. |
 | `0014_roofli_events.sql` | the table `outbound_events` | Same step. Nothing touches it until the link is on. |
 | `0015_archie_native_jobs.sql` | six columns on `leads`, one partial unique index | **Before deploy.** The code reads these columns on every read of a lead. |
+| `0016_job_photos.sql` | the table `job_photos` | Same step. Only the photos of a job of Archie's own read or write it, and only a company Roof Lee made has one. The number is provisional (renumbered when the branches meet). |
 
 Why the order matters. This code reads the new columns every time it reads a
 person, a company or a lead, whether or not the link is switched on. Deployed
@@ -126,12 +150,12 @@ screen that shows a lead. Nothing in the build or the deploy runs migrations,
 so this is a step a person has to do.
 
 The other order is safe. The code that is live today names none of the new
-columns or tables, so it carries on exactly as before with all five applied:
+columns or tables, so it carries on exactly as before with all six applied:
 the new columns are null (and `photo_consent` false) for every existing row,
 the new index is empty, and the new tables are empty.
 
 **How this sits with `0006` to `0010`.** Those five are main's and are already
-in the live database; these five come after them and change none of them.
+in the live database; these six come after them and change none of them.
 They need `0008` (the system role) to be there, because each new table gets
 its row level security from `archie_protect_company_table()`, which `0008`
 created: the company's own rows for everyone, every row for the
@@ -163,15 +187,15 @@ hold at once because the code that is live already has `0008`.
    checkout of this branch** (the command applies the files in the folder it
    is run from; run from main it finds nothing new, says so and exits clean):
    `DATABASE_URL=<owner url> npx tsx scripts/migrate.ts`
-   It skips the eleven already applied and runs `0011` to `0015` in order,
+   It skips the eleven already applied and runs `0011` to `0016` in order,
    each in its own transaction. Each takes its locks for milliseconds and
    waits at most 5 seconds for one (`lock_timeout`); if one fails on the
    timeout, run the command again.
 4. Check they are there: `select auth_user_id, source from team_members limit 1`,
    `select roofli_company_id from companies limit 1` and
    `select job_type, photo_consent from leads limit 1` all run without an
-   error, and this returns four rows, each with `{company_isolation,company_system}`:
-   `select tablename, array_agg(policyname::text order by policyname) from pg_policies where tablename in ('sister_idempotency','sister_sso_tickets','lead_notes','outbound_events') group by 1;`
+   error, and this returns five rows, each with `{company_isolation,company_system}`:
+   `select tablename, array_agg(policyname::text order by policyname) from pg_policies where tablename in ('sister_idempotency','sister_sso_tickets','lead_notes','outbound_events','job_photos') group by 1;`
 5. Only then deploy this code. Merging this branch into main IS the deploy,
    so steps 1 to 4 come before the merge. A preview build of this branch, if
    previews use the same database, fails sign-in and lead screens until then;
@@ -209,6 +233,11 @@ request from Roof Lee with a refusal, which is why they go in the same step.
 | `server/production/native-leads.ts` | A lead made in Archie (the lead form, a canvassed door) for a company that keeps its own jobs: its key, its first owner, the log line and the news. |
 | `server/production/native-job-page.ts` | The client page for a job Archie keeps: its notes, a corrected phone or email, its messages and where it sits on the Production board. |
 | `server/sister/events.ts` | News going back to Roof Lee: the outbox, the signing, the sending and the retries. |
+| `server/photos/routes.ts` | A job's photos: from JobTread for a JobTread job (as before), from Archie's own store for a job Archie keeps (asks `jobBackendFor`). |
+| `server/photos/native.ts` | Photos of a job Archie keeps: adding, listing, changing and deleting them, and who may. |
+| `server/photos/store.ts` | Archie's private photo store (Kynex's R2 bucket, S3-compatible). The only place its settings are read. Never a public address. |
+| `server/photos/jpeg-clean.ts` | Takes every metadata block (location included) out of a JPEG before it is stored, and checks its own work. |
+| `shared/job-photos.ts` | The phases, the categories and the caption limit, shared by the server and the screens. |
 
 Both entry files (`server/index.ts` and `api/index.ts`) keep the raw body for
 `/api/sister` ahead of `express.json`. The signature is over the bytes as they
@@ -220,8 +249,8 @@ production entry, to prove it.
 The rules are in docs/archie/01-multi-company.md. The link follows them like
 any other part of Archie:
 
-- **Its four tables** (`sister_idempotency`, `sister_sso_tickets`,
-  `lead_notes`, `outbound_events`) are company tables: each has a
+- **Its five tables** (`sister_idempotency`, `sister_sso_tickets`,
+  `lead_notes`, `outbound_events`, `job_photos`) are company tables: each has a
   `company_id` and is protected in its migration with
   `archie_protect_company_table()`, so it has exactly the two policies every
   company table has. `isolation.test.ts` and `system-role.test.ts` find them
@@ -318,8 +347,10 @@ and jobs, add a lead, change one and add a note.
   No money is ever in an answer.
 - **Photos.** `photoConsent` is `true` only when a person recorded, in
   Archie, that the customer agreed. `photos` is always empty and the photo
-  address always answers `404`, because Archie holds no uploaded photo of its
-  own for any job (see "Archie's own jobs").
+  address always answers `404`: Archie now keeps the photos of its own jobs
+  (see "Archie's own jobs"), but none is handed to Roof Lee until the
+  agreement says how (Stage A4: with consent only, location-free, phase and
+  caption included).
 - **Capabilities.** Each is worked out in `server/sister/capabilities.ts` from
   the switch the feature itself reads, never typed as a fixed answer.
   `jobs.native` and `messages.quiet` are both reported for every company Roof
@@ -473,8 +504,8 @@ JobTread, so Archie gives its leads keys of its own.
   offered; the note says "Note saved"; call, text and email are the phone's
   own, with no KynexPro tags and no booking (that company has no calendar in
   Archie yet); the job's notes show "Note" or "From Roof Lee"; the photo
-  switch is on the page (below); and the photo box says adding photos is
-  coming soon, with no add button and no CompanyCam push. The account editor
+  switch is on the page (below); and the photo box keeps the job's photos in
+  Archie (Photos, below), with no CompanyCam push. The account editor
   says "Save" and "Account saved", offers only what the job can keep, and
   names no CRM; a roof report has no "→ Current CRM" button and no CRM in its
   words; the commission box has no "Save PDF to job" (Preview still opens the
@@ -515,12 +546,80 @@ JobTread, so Archie gives its leads keys of its own.
   of this job being used", with one sentence on what it allows: the
   company's website and social posts, naming only the town, never the
   address.
-- **Photos.** Archie stores no job photos itself. The original company's
-  photos live in its JobTread, and a Roof Lee company has no JobTread. So
-  there is no uploaded photo to hand over, and the photo address answers
-  `404`. Roof Lee is the place a Roof Lee company's job photos are uploaded.
-  In Archie, such a job's photo and file lists are empty and adding a photo
-  answers `409` "Adding photos to jobs is coming soon for your company."
+- **Photos.** The original company's photos live in its JobTread, exactly as
+  before. A job Archie keeps has its photos kept by Archie itself, in Kynex's
+  own private photo store (a Cloudflare R2 bucket with no public address;
+  `server/photos/store.ts`), with a row each in `job_photos` (migration `0016`):
+  - **Keyed on the job key** (`job_photos.job_key`, the `archie-` key), never
+    on the lead's row number, which the JobTread sync can change. A foreign
+    key would skip row level security, so the job is looked up as the company
+    just before a row is written.
+  - **No location, anywhere.** The phone reads only the date the photo was
+    taken (Exif `DateTimeOriginal`) before redrawing it as a plain JPEG; the
+    server then takes out every metadata block (APP1 to APP15, comments, and
+    anything after the end of the picture) and checks its own work: it starts
+    `FFD8`, ends `FFD9`, holds no APP1 and nowhere the bytes `Exif\0\0`
+    (`server/photos/jpeg-clean.ts`). Anything that is not a whole JPEG (a PNG,
+    a WebP, a HEIC, a cut-off file) is refused. The table has no location
+    column.
+  - **Stored under the company's own prefix.** A copy's address in the bucket
+    is built on the server from the row alone:
+    `c/<company id>/p/<photo id>/working.jpg` (up to 1600 pixels) and
+    `thumb.jpg` (up to 400). The database refuses any other company's prefix
+    (`job_photos_keys_in_company`), and a photo is `ready` only once its
+    working copy is stored (`job_photos_ready_has_copy`). A failure part way
+    leaves a `pending` row, never a stored copy with no row. Deleted and
+    pending rows keep their copies for now; a later sweep clears them.
+  - **The routes** (each asks `jobBackendFor` first; a JobTread job takes
+    exactly its old path):
+    - `GET /api/clients/{key}/photos?limit=&before=&phase=`: ready photos,
+      newest first, a page at a time (30, at most 100), in the old shape
+      (`id, name, url, description, createdAt`) plus `thumbUrl, phase,
+      category, caption, takenAt, width, height, uploadedByName, mayEdit,
+      mayDelete`, with `totalFiles` and `nextBefore` (the id to pass as
+      `before` for the next page). `url` is `/api/photos/{id}/working`.
+    - `GET /api/clients/{key}/files`: the same photos as files, each
+      `isImage: true`. Documents come later.
+    - `POST /api/clients/{key}/photos` with `{ base64, thumbBase64?,
+      contentType: 'image/jpeg', phase?, category?, caption?, takenAt? }`:
+      answers `{ ok, fileId, name }`, the shape the pre-construction
+      checklist already reads. Written to the company's log (system `archie`,
+      `upload_photo`). With the store switched off it answers `503` "Photo
+      storage isn't switched on yet. Please try again later." and writes
+      nothing.
+    - `GET /api/photos/{id}/{thumb|working}`: the copy, streamed through
+      Archie as `image/jpeg` with `Cache-Control: private, max-age=300`.
+      Never a redirect, never a public address.
+    - `PATCH /api/photos/{id}` with `{ caption?, phase?, category? }`: the
+      person who added it, or a sales leader and up. Logged (`edit_photo`).
+    - `DELETE /api/photos/{id}`: the person who added it, on the same day in
+      the company's time zone, or a sales leader and up. The row is marked
+      deleted with who and when. Logged (`delete_photo`).
+  - **Who.** Anyone who may open the job (`ownsLead`) sees and adds its
+    photos; everyone else, another company included, gets `404` on every one
+    of these, the same as a photo that is not there. A crew (`production`)
+    gets `404` too, even with an assignment row on the job: crews get no job
+    access through `ownsLead` here, and adding crew photos waits for crews to
+    be put on jobs (Stage D).
+  - **Phases and categories.** Before, During or After (Roof Lee's own three
+    words), an optional category from a fixed list (`shared/job-photos.ts`,
+    including `checklist`), and an optional caption of at most 500
+    characters.
+  - **On screen** (`client/src/components/JobPhotos.tsx`, words in
+    `client/src/lib/job-photos-view.ts`): a Before, During or After picker
+    and an optional category and caption, chosen before the camera opens;
+    every photo, a page at a time, with a phase filter; each new photo shows
+    "Saving..." until it lands (a failed one says so and can be tapped to try
+    again); tap a photo to see it large; edit its caption, phase and category,
+    and Delete with a confirm, offered only to the people allowed. No
+    CompanyCam push.
+  - **An insurance letter** for such a job carries the photos picked for it
+    straight from the store; it has no documents on file yet.
+  - **Not yet:** the phone sending the full-size original straight to the
+    bucket (A2b: it needs a CORS rule on the bucket, and the private original
+    is never served); the pre-construction checklist and final walkthrough
+    checking that each photo id is one of the job's own ready photos (A3);
+    handing photos to Roof Lee (A4); reports reading these photos (Stage C).
 - **The job's forms stay in Archie.** The pre-construction checklist, the
   final walkthrough (and the follow-ups its issues become), the inspection
   form, a follow-up and the choice of rep are saved and do their board moves
@@ -691,7 +790,7 @@ first feature that does must send it.
 
 ## Turning it on (live step, owner only)
 
-The migrations (`0011` to `0015`) are not a step here. They were applied
+The migrations (`0011` to `0016`) are not a step here. They were applied
 before this code was deployed ("Before deploying this code" above).
 
 1. Generate one fresh secret and set it as `SISTERS_ARCHIE_SECRET` in both
@@ -722,7 +821,9 @@ board in Archie; and confirm no text or email reached the test customer.
 
     scripts/test-db.sh
     eval "$(scripts/test-db.sh --env)"
-    SESSION_SECRET=test npx vitest run server/sister server/tenant server/production
+    SESSION_SECRET=test npx vitest run server/sister server/tenant server/production server/photos
 
 The database tests skip themselves unless `DATABASE_URL` points at a local
-database. Fixtures use the fictional Summit Ridge Roofing in Cedar Falls.
+database. Fixtures use the fictional Summit Ridge Roofing in Cedar Falls. The
+photo tests never make a real photo store client: they hand in an in-memory
+one (`setPhotoStoreForTests`), so no test talks to Cloudflare.

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   jobPageView, isArchieJob, leadFormView, photoConsentSaved,
-  PHOTO_CONSENT_HELP, PHOTO_CONSENT_LABEL, PHOTOS_SOON, START_PRODUCTION_CONFIRM, PRODUCTION_STARTED,
+  PHOTO_CONSENT_HELP, PHOTO_CONSENT_LABEL, START_PRODUCTION_CONFIRM, PRODUCTION_STARTED,
   NOT_IN_PRODUCTION, MOVES_ON_BOARD, LEAD_SAVED_IN_ARCHIE,
   kynexProBannerShows, KYNEXPRO_HELD_BY_ROOF_LEE,
   accountEditorWords, isArchieJobKey, contactRouteKey, availabilityBoardView, BOOKING_NOT_YET,
@@ -51,7 +51,7 @@ describe('the client page for a job Archie keeps', () => {
 
   it('uses plain words with no codes, internal names or long dashes', () => {
     for (const s of [
-      PHOTO_CONSENT_LABEL, PHOTO_CONSENT_HELP, PHOTOS_SOON, START_PRODUCTION_CONFIRM, PRODUCTION_STARTED,
+      PHOTO_CONSENT_LABEL, PHOTO_CONSENT_HELP, START_PRODUCTION_CONFIRM, PRODUCTION_STARTED,
       NOT_IN_PRODUCTION, MOVES_ON_BOARD, LEAD_SAVED_IN_ARCHIE, photoConsentSaved(true), photoConsentSaved(false),
     ]) {
       expect(s).not.toMatch(/[—–]|CRM|JobTread|KynexPro|archie-|backend|_/);
@@ -120,11 +120,13 @@ describe('the lead form', () => {
 });
 
 describe('the words the server uses', () => {
-  it('says photos are coming soon in the same words the server refuses with', async () => {
+  it('no longer says photos are coming soon anywhere: Archie keeps them now', async () => {
     const { readFileSync } = await import('node:fs');
     const { join } = await import('node:path');
-    const server = readFileSync(join(__dirname, '..', '..', '..', '..', 'server', 'production', 'native-jobs.ts'), 'utf8');
-    expect(server).toContain(`NATIVE_PHOTOS_SOON = '${PHOTOS_SOON}'`);
+    const root = join(__dirname, '..', '..', '..', '..');
+    for (const file of ['server/production/native-jobs.ts', 'server/photos/routes.ts', 'client/src/lib/own-jobs.ts', 'client/src/components/JobPhotos.tsx']) {
+      expect(readFileSync(join(root, file), 'utf8'), file).not.toMatch(/photos to jobs is coming soon|NATIVE_PHOTOS_SOON|PHOTOS_SOON/);
+    }
   });
 });
 

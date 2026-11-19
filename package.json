@@ -19,6 +19,7 @@
     "cap:android": "npx cap open android"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.919.0",
     "@capacitor/android": "^8.5.1",
     "@capacitor/app": "^8.1.1",
     "@capacitor/browser": "^8.0.4",

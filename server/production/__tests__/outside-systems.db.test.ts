@@ -84,7 +84,7 @@ describe.skipIf(!localDb)('outside systems for a company Roof Lee made', async (
   const { clearProfileCache } = await import('../../tenant/profile');
   const { clearSessionRevalidationCache } = await import('../../auth/middleware');
   const { registerRoutes } = await import('../../routes');
-  const { isNativeJobId, OTHER_JOB_SOFTWARE_SOON, NATIVE_PHOTOS_SOON, NATIVE_SEND_ELSEWHERE_SOON, KYNEXPRO_IS_ROOF_LEES, COMPANYCAM_NOT_FOR_YOU, NATIVE_STATEMENT_NOT_FILED } = await import('../native-jobs');
+  const { isNativeJobId, OTHER_JOB_SOFTWARE_SOON, NATIVE_SEND_ELSEWHERE_SOON, KYNEXPRO_IS_ROOF_LEES, COMPANYCAM_NOT_FOR_YOU, NATIVE_STATEMENT_NOT_FILED } = await import('../native-jobs');
   const { handleGhlNewContact } = await import('../../integrations/ghl/new-contact');
   const { resolveJobTreadCredentials } = await import('../../integrations/jobtread-connection');
   const { companyCamConnectionStatus } = await import('../../integrations/companycam-connection');
@@ -93,6 +93,8 @@ describe.skipIf(!localDb)('outside systems for a company Roof Lee made', async (
   const { PRECON_CHECKLIST_FIELDS } = await import('../../../shared/preconstruction-checklist');
   const { WALKTHROUGH_FIELDS } = await import('../../../shared/final-walkthrough');
   const { INSPECTION_FORM_FIELDS } = await import('../../../shared/inspection-form');
+  const { setPhotoStoreForTests } = await import('../../photos/store');
+  const { makeJpeg } = await import('../../photos/__tests__/jpeg-fixtures');
 
   const tag = `outside-${process.pid}-${Date.now()}`;
   type Role = 'admin' | 'customer_service' | 'sales' | 'manager' | 'production';
@@ -288,12 +290,25 @@ describe.skipIf(!localDb)('outside systems for a company Roof Lee made', async (
       nothingLeftArchie();
     });
 
-    it('has no photos to list yet, and adding one is refused in plain words', async () => {
+    it('keeps its photos in Archie\'s own store: added, listed and opened with nothing sent elsewhere', async () => {
       const { key } = await nativeLead();
-      expect(await get(`/api/clients/${key}/photos`)).toEqual({ status: 200, body: { photos: [], totalFiles: 0 } });
-      expect(await get(`/api/clients/${key}/files`)).toEqual({ status: 200, body: { files: [], totalFiles: 0 } });
-      const add = await post(`/api/clients/${key}/photos`, { base64: Buffer.from('not really a photo').toString('base64'), contentType: 'image/jpeg' });
-      expect(add).toEqual({ status: 409, body: { error: NATIVE_PHOTOS_SOON } });
+      // A fake store: no test ever makes a real store client (server/photos/store.ts).
+      const kept = new Map<string, Buffer>();
+      setPhotoStoreForTests({
+        put: async (k, body) => { kept.set(k, body); },
+        get: async (k) => (kept.has(k) ? { body: (await import('node:stream')).Readable.from(kept.get(k)!), length: kept.get(k)!.length } : null),
+      });
+      try {
+        expect(await get(`/api/clients/${key}/photos`)).toEqual({ status: 200, body: { photos: [], totalFiles: 0, nextBefore: null } });
+        const add = await post(`/api/clients/${key}/photos`, { base64: makeJpeg({ exif: true }).toString('base64'), contentType: 'image/jpeg', phase: 'before' });
+        expect(add).toEqual({ status: 200, body: { ok: true, fileId: expect.any(String), name: 'Before photo' } });
+        expect((await get(`/api/clients/${key}/photos`)).body.photos.map((p: any) => p.id)).toEqual([add.body.fileId]);
+        expect((await get(`/api/clients/${key}/files`)).body.files).toEqual([expect.objectContaining({ id: add.body.fileId, isImage: true })]);
+        expect((await fetch(`${base}/api/photos/${add.body.fileId}/working`)).status).toBe(200);
+        expect([...kept.keys()].every((k) => k.startsWith(`c/${native.id}/p/`))).toBe(true);
+      } finally {
+        setPhotoStoreForTests(null);
+      }
       nothingLeftArchie();
     });
 

@@ -16,9 +16,5 @@ declare module 'pdf-parse' {
   export default parse;
 }
 
-// Only used by the (disabled) R2 upload path for roof colour renders; report
-// HTML is stored in our own database instead.
-declare module '@aws-sdk/client-s3' {
-  export const S3Client: any;
-  export const PutObjectCommand: any;
-}
+// @aws-sdk/client-s3 is a real dependency now (Archie's private job photo
+// store, server/photos/store.ts), with its own types, so it needs no shim.

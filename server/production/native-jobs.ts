@@ -63,9 +63,6 @@ export const KYNEXPRO_IS_ROOF_LEES = 'Roof Lee looks after your KynexPro, so Arc
 /** Said when a company that keeps its own jobs tries to connect CompanyCam (server/integrations/connection-routes.ts). Promises nothing. */
 export const COMPANYCAM_NOT_FOR_YOU = 'CompanyCam can\'t be connected for your company.';
 
-/** Said when a photo is added to a job Archie keeps, until Archie keeps photos itself (server/photos/routes.ts). */
-export const NATIVE_PHOTOS_SOON = 'Adding photos to jobs is coming soon for your company.';
-
 /** Said when a file or a proposal of a job Archie keeps would be sent to other job software. */
 export const NATIVE_SEND_ELSEWHERE_SOON = 'Sending this to other job software is coming soon for your company.';
 

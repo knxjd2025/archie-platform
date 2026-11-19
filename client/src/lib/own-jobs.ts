@@ -85,9 +85,6 @@ export const NOT_IN_PRODUCTION = 'Not in production yet';
 /** Under the stage of a job Archie keeps that is on the Production board: it moves there, with the board's checks. */
 export const MOVES_ON_BOARD = 'Moves on the Production board';
 
-/** Said when photos cannot be added to a job Archie keeps yet (the server says the same: NATIVE_PHOTOS_SOON). */
-export const PHOTOS_SOON = 'Adding photos to jobs is coming soon for your company.';
-
 export interface LeadFormView {
   /** "Book an appointment now": needs a calendar a company Roof Lee made does not have in Archie yet. */
   booking: boolean;
@@ -213,7 +210,7 @@ export interface RoofReportsView {
 
 /**
  * A job Archie keeps has no job software behind it to read from or send to
- * (and no photos of its own yet), so the report is built and kept here, with
+ * (and its own stored photos are not read into a report yet), so the report is built and kept here, with
  * no CRM in the words. Every other job: as before.
  */
 export function roofReportsView(externalId: string | null | undefined): RoofReportsView {
