@@ -21,16 +21,22 @@ export type RoofliRole = (typeof ROOFLI_ROLES)[number];
  * A person's role in Archie, from their role in Roof Lee. Archie applies its
  * own rules to the role it holds, never to a role named in a request.
  *
- * A sales manager is Archie's sales leader (`manager`): their own book and
- * their direct reports'. A salesperson is Archie's sales rep (`sales`): only
- * their own leads and jobs, in reads and writes alike (shared/rbac.ts).
+ * A sales manager works like the office (Roof Lee's own words: "Like the
+ * office, and can approve reports, proposals and messages to customers"; the
+ * approving happens in Roof Lee, per kind of request, never as a wider tier),
+ * so Archie holds them as office staff (`customer_service`): every customer
+ * and lead, owned or not, and no money. Not Archie's sales leader (`manager`):
+ * that role sees only its own leads and its direct reports', a reporting line
+ * Roof Lee never sends, so a sales manager would lose every lead nobody owns.
+ * A salesperson is Archie's sales rep (`sales`): only their own leads and
+ * jobs, in reads and writes alike (shared/rbac.ts).
  */
 export const ROLE_MAP: Record<RoofliRole, TeamRole> = {
   owner: 'admin',
   admin: 'admin',
   office: 'customer_service',
   crew: 'production',
-  sales_manager: 'manager',
+  sales_manager: 'customer_service',
   salesperson: 'sales',
 };
 

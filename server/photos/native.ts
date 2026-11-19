@@ -288,12 +288,17 @@ export async function readyPhoto(id: string): Promise<JobPhoto | null> {
  * never finished saving are all false. Runs as the company, so another
  * company's photo is simply not there. No ids at all is true: whether a photo
  * was required is the checklist's own question.
+ *
+ * `q` is the transaction the checklist is locked in, so the check reads on
+ * the same connection as the answers it is checking.
  */
-export async function allReadyPhotosOfJob(jobKey: string, ids: readonly string[]): Promise<boolean> {
+export async function allReadyPhotosOfJob(
+  jobKey: string, ids: readonly string[], q: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0] = db,
+): Promise<boolean> {
   const wanted = [...new Set(ids)];
   if (!wanted.length) return true;
   if (!wanted.every(isPhotoId)) return false;
-  const found = await db.select({ id: jobPhotos.id }).from(jobPhotos)
+  const found = await q.select({ id: jobPhotos.id }).from(jobPhotos)
     .where(and(eq(jobPhotos.jobKey, jobKey), eq(jobPhotos.status, 'ready'), inArray(jobPhotos.id, wanted)));
   return found.length === wanted.length;
 }

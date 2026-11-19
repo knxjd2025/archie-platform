@@ -4,7 +4,8 @@
  *
  * What must hold (docs/sisters/contract-v2.md in the Roof Lee repository,
  * "Roles each product is told" and "Archie"):
- *   - Roof Lee's `sales_manager` is Archie's sales leader (`manager`) and its
+ *   - Roof Lee's `sales_manager` works like the office, so Archie holds them
+ *     as office staff (`customer_service`: every lead, no money), and its
  *     `salesperson` is Archie's sales rep (`sales`), wherever a role is read:
  *     a team list, an `acting` block, `actingRole` in an address, a sign-in
  *     ticket. Neither is skipped, so neither loses access;
@@ -28,6 +29,7 @@ import { TEST_SECRET, companyBody, dropSecret, localDb, makeTicket, member, sist
 import { SISTER_PREFIX, sisterRawBody } from '../door';
 import { ROLE_MAP, ROOFLI_ROLES, parseActing, parseActingQuery, parseMembers } from '../contract';
 import { readTicket } from '../ticket';
+import { canSeeMoney, dataScope } from '../../../shared/rbac';
 
 vi.mock('../../seed', () => ({ seedCompany: async () => {}, seedAll: async () => {}, SEED_JOB: 'seed-company', seedVersion: () => 'test' }));
 vi.mock('@vercel/functions', () => ({ waitUntil: () => {} }));
@@ -35,12 +37,16 @@ vi.mock('@vercel/functions', () => ({ waitUntil: () => {} }));
 describe('the six Roof Lee roles, as Archie reads them', () => {
   const id = '7d1c1d0a-3f0e-4b53-8a44-0d6d7f1f2a10';
 
-  it('maps a sales manager to a sales leader and a salesperson to a sales rep, and the first four as before', () => {
+  it('maps a sales manager like the office and a salesperson to a sales rep, and the first four as before', () => {
     expect([...ROOFLI_ROLES].sort()).toEqual(['admin', 'crew', 'office', 'owner', 'sales_manager', 'salesperson']);
     expect(ROLE_MAP).toEqual({
       owner: 'admin', admin: 'admin', office: 'customer_service', crew: 'production',
-      sales_manager: 'manager', salesperson: 'sales',
+      sales_manager: 'customer_service', salesperson: 'sales',
     });
+    // Like the office, never a wider tier: every lead, and no money.
+    expect(dataScope(ROLE_MAP.sales_manager)).toBe('all');
+    expect(canSeeMoney(ROLE_MAP.sales_manager, 'ar')).toBe(false);
+    expect(canSeeMoney(ROLE_MAP.sales_manager, 'commissions')).toBe(false);
   });
 
   it('takes both into a team list, and still leaves out a role it does not know', () => {
@@ -51,7 +57,7 @@ describe('the six Roof Lee roles, as Archie reads them', () => {
     ]);
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
-    expect(parsed.value.members.map((m) => [m.email, m.role])).toEqual([['morgan@example.test', 'manager'], ['jo@example.test', 'sales']]);
+    expect(parsed.value.members.map((m) => [m.email, m.role])).toEqual([['morgan@example.test', 'customer_service'], ['jo@example.test', 'sales']]);
     expect(parsed.value.skipped).toHaveLength(1);
   });
 
@@ -205,17 +211,17 @@ describe.skipIf(!localDb)('sales roles and the team list, through the real reque
     return { status: res.status, body: await res.json().catch(() => null) as any };
   };
 
-  it('takes a sales manager and a salesperson as a sales leader and a sales rep, with access, and keeps them on every later list', async () => {
+  it('takes a sales manager as office staff and a salesperson as a sales rep, with access, and keeps them on every later list', async () => {
     const c = await make();
-    expect(await rowOf(c, c.leader)).toMatchObject({ role: 'manager', name: 'Morgan Reyes', active: true, canLogin: true, source: 'roofli' });
+    expect(await rowOf(c, c.leader)).toMatchObject({ role: 'customer_service', name: 'Morgan Reyes', active: true, canLogin: true, source: 'roofli' });
     expect(await rowOf(c, c.rep)).toMatchObject({ role: 'sales', name: 'Jo Ames', active: true, canLogin: true, source: 'roofli' });
 
     // The whole team again, with Jo moved up to sales manager: nobody is skipped or switched off.
     const r = await putTeam(c, [c.owner, c.office, c.leader, { ...c.rep, role: 'sales_manager' }, c.rep2, c.crew]);
     expect(r.status).toBe(200);
     expect(r.body?.skipped ?? []).toEqual([]);
-    expect(await rowOf(c, c.rep)).toMatchObject({ role: 'manager', active: true, canLogin: true });
-    expect(await rowOf(c, c.leader)).toMatchObject({ role: 'manager', active: true, canLogin: true });
+    expect(await rowOf(c, c.rep)).toMatchObject({ role: 'customer_service', active: true, canLogin: true });
+    expect(await rowOf(c, c.leader)).toMatchObject({ role: 'customer_service', active: true, canLogin: true });
     // And back down again.
     await putTeam(c, [c.owner, c.office, c.leader, c.rep, c.rep2, c.crew]);
     expect(await rowOf(c, c.rep)).toMatchObject({ role: 'sales', active: true, canLogin: true });
@@ -252,37 +258,60 @@ describe.skipIf(!localDb)('sales roles and the team list, through the real reque
     expect((await write(c, 'POST', `/jobs/${mine}/stage`, { stage: 'approved', acting: as(c.rep) })).status).toBe(200);
   });
 
-  it('gives a lead a salesperson or sales manager adds through Roof Lee to them, so they can see it, and nobody else\'s', async () => {
+  it('gives a lead a salesperson adds through Roof Lee to them, so they can see it, and nobody else\'s', async () => {
     const c = await make();
     const reps = await newLead(c, c.rep, 'Ray Okafor');
     expect(await ownersOf(c, reps)).toEqual([expect.objectContaining({ teamMemberId: (await rowOf(c, c.rep)).id, role: 'primary' })]);
     expect(await listed(c, c.rep)).toEqual([reps]);
     expect(await listed(c, c.rep2)).toEqual([]);
 
+    // A sales manager and office staff see every lead already: theirs waits
+    // for someone to give it out, as before.
     const leaders = await newLead(c, c.leader, 'Ana Diaz');
-    expect(await ownersOf(c, leaders)).toEqual([expect.objectContaining({ teamMemberId: (await rowOf(c, c.leader)).id, role: 'primary' })]);
-    expect(await listed(c, c.leader)).toEqual([leaders]);
-
-    // Office staff see every lead already: theirs waits for a manager to give it out, as before.
+    expect(await ownersOf(c, leaders)).toEqual([]);
     const offices = await newLead(c, c.office, 'Bo Hart');
     expect(await ownersOf(c, offices)).toEqual([]);
+    expect(await listed(c, c.leader)).toEqual([reps, leaders, offices].sort());
   });
 
-  it('lets a sales manager see their own reps\' jobs and nobody else\'s', async () => {
+  it('lets office staff made a sales manager keep every lead, owned or not, and work any of them, with no money', async () => {
+    // Roof Lee tells the owner a sales manager is "like the office, and can
+    // approve reports, proposals and messages to customers". Riley is office
+    // staff; the owner makes her a sales manager so she can approve messages.
     const c = await make();
-    const leaderRow = await rowOf(c, c.leader);
-    // Jo reports to Morgan; Kim does not.
-    const jo = await rowOf(c, c.rep);
-    await runAsCompany(c.id, () => db.update(schema.teamMembers).set({ reportsTo: leaderRow.id }).where(eq(schema.teamMembers.id, jo.id)));
-    const jos = await newLead(c, c.office, 'Pat Hollis');
-    const kims = await newLead(c, c.office, 'Jo Burst');
+    const riley = { ...c.office, role: 'sales_manager' };
+    const unowned = await newLead(c, c.office, 'Pat Hollis');
+    const website = await newLead(c, c.owner, 'Lee Brandt');
+    const jos = await newLead(c, c.office, 'Jo Burst');
     await give(c, jos, c.rep);
-    await give(c, kims, c.rep2);
-    expect(await listed(c, c.leader)).toEqual([jos]);
-    expect((await read(c, `/jobs/${kims}`, c.leader)).status).toBe(404);
-    // A later team list does not undo the reporting line.
-    await putTeam(c, [c.owner, c.office, c.leader, c.rep, c.rep2, c.crew]);
-    expect(await listed(c, c.leader)).toEqual([jos]);
+    const before = await listed(c, c.office);
+    expect(before).toEqual([unowned, website, jos].sort());
+
+    const r = await putTeam(c, [c.owner, riley, c.leader, c.rep, c.rep2, c.crew]);
+    expect(r.status).toBe(200);
+    expect(await rowOf(c, riley)).toMatchObject({ role: 'customer_service', active: true, canLogin: true });
+
+    // Nothing she could see or do as office staff is gone: no reporting line
+    // is needed, and nobody has to own a lead for her to reach it.
+    expect(await listed(c, riley)).toEqual(before);
+    for (const lead of [unowned, website, jos]) {
+      expect((await read(c, `/jobs/${lead}`, riley)).status).toBe(200);
+      expect((await write(c, 'POST', `/leads/${lead}/notes`, { text: 'Called back.', acting: as(riley) })).status).toBe(201);
+    }
+    expect((await write(c, 'PATCH', `/leads/${unowned}`, { status: 'contacted', acting: as(riley) })).status).toBe(200);
+    expect((await write(c, 'POST', `/jobs/${unowned}/stage`, { stage: 'approved', acting: as(riley) })).status).toBe(200);
+
+    // Opened from Roof Lee, Archie holds her as office staff: every job, no money.
+    const signedIn = await present(makeTicket({ roofliCompanyId: c.roofliId, authUserId: riley.authUserId, role: 'sales_manager' }));
+    expect(signedIn.status).toBe(303);
+    const me = (await get('/whoami', signedIn.cookie)).body.user;
+    expect(me).toMatchObject({ role: 'customer_service', companyId: c.id });
+    expect(canSeeMoney(me.role, 'ar')).toBe(false);
+    const board = await get('/api/sales', signedIn.cookie);
+    expect(board.status).toBe(200);
+    const keys = await Promise.all([unowned, website, jos].map((l) => keyOf(c, l)));
+    const onBoard = JSON.stringify(board.body);
+    for (const k of keys.filter((k) => k !== keys[0])) expect(onBoard).toContain(k);
   });
 
   it('goes by the lower role: an owner Roof Lee calls a salesperson sees nothing of their own here', async () => {
@@ -325,7 +354,7 @@ describe.skipIf(!localDb)('sales roles and the team list, through the real reque
 
     const leader = await present(makeTicket({ roofliCompanyId: c.roofliId, authUserId: c.leader.authUserId, role: 'sales_manager' }));
     expect(leader.status).toBe(303);
-    expect((await get('/whoami', leader.cookie)).body.user).toMatchObject({ role: 'manager' });
+    expect((await get('/whoami', leader.cookie)).body.user).toMatchObject({ role: 'customer_service' });
 
     // The office sees both.
     const office = await present(makeTicket({ roofliCompanyId: c.roofliId, authUserId: c.office.authUserId, role: 'office' }));

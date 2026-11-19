@@ -333,15 +333,16 @@ and jobs, add a lead, change one and add a note.
   states a lower role than Archie holds, the lower one counts. Someone not on
   the team, or added in Archie rather than sent by Roof Lee, is answered
   `403`.
-- **What each role gets.** Owners, admins and office staff can see and work
-  every lead. A salesperson (a sales rep here) sees and changes only their
-  own leads and jobs, in reads and writes alike: anyone else's is answered
-  `404`, exactly as if it did not exist, whether it is read, changed, noted
-  or moved. A sales manager (a sales leader here) sees their own and their
-  direct reports' (the reporting line is set in Archie; Roof Lee's team list
-  does not change it). Crew (the production role here) cannot see leads in
-  Archie at all: a list comes back empty, one lead answers `404`, a write
-  `403`.
+- **What each role gets.** Owners, admins, office staff and sales managers
+  can see and work every lead, owned or not. A sales manager works like the
+  office (Roof Lee's own words), so Archie holds them as office staff
+  (`customer_service`): every customer and lead, no money, and no reporting
+  line needed. Their approving happens in Roof Lee. A salesperson (a sales
+  rep here) sees and changes only their own leads and jobs, in reads and
+  writes alike: anyone else's is answered `404`, exactly as if it did not
+  exist, whether it is read, changed, noted or moved. Crew (the production
+  role here) cannot see leads in Archie at all: a list comes back empty, one
+  lead answers `404`, a write `403`.
 - **A write is done once.** Every write must carry an `idempotency-key`. A new
   lead, and a new note, are saved in the same transaction as the answer to
   that key, so the same key can never make a second one. A refusal is not
@@ -351,11 +352,11 @@ and jobs, add a lead, change one and add a note.
   with no call to JobTread, KynexPro or anything else, and no message to
   anyone. It gets its job key at once and starts in `New Lead` (so its
   `stage` in an answer reads `New Lead` until it is moved), which lets office
-  staff open it in Archie. A lead added for a salesperson, or for a sales
-  manager, is theirs from the start (one `rep_assignments` row, written with
-  the lead), so they can open it straight away, the same rule as Archie's own
-  lead form. Anyone else's has no owner yet and waits on the Assignments
-  page. Every change is written to the company's log under the person it was
+  staff open it in Archie. A lead added for a salesperson is theirs from the
+  start (one `rep_assignments` row, written with the lead), so they can open
+  it straight away, the same rule as Archie's own lead form. Anyone else's,
+  a sales manager's included, has no owner yet and waits on the Assignments
+  page; they see it already. Every change is written to the company's log under the person it was
   for.
 - **Ids** are Archie's own row numbers, as digits. Leads and jobs share one
   list; a record is a `job` once it sits on the production board and a `lead`
@@ -629,12 +630,23 @@ JobTread, so Archie gives its leads keys of its own.
     just before a row is written.
   - **No location, anywhere.** The phone reads only the date the photo was
     taken (Exif `DateTimeOriginal`) before redrawing it as a plain JPEG; the
-    server then takes out every metadata block (APP1 to APP15, comments, and
-    anything after the end of the picture) and checks its own work: it starts
-    `FFD8`, ends `FFD9`, holds no APP1 and nowhere the bytes `Exif\0\0`
-    (`server/photos/jpeg-clean.ts`). Anything that is not a whole JPEG (a PNG,
-    a WebP, a HEIC, a cut-off file) is refused. The table has no location
-    column.
+    server then keeps only the blocks a picture needs and drops every other
+    one, whatever it is called (`server/photos/jpeg-clean.ts`). Kept: the
+    start and end, one APP0 only when it is a bare JFIF header straight after
+    the start, the quantisation and Huffman tables, the frame header, the
+    restart interval, the line count, and each scan with its data. Dropped:
+    APP1 to APP15, any other APP0, comments, the JPGn and reserved markers,
+    and anything after the end of the picture. A kept block that carries
+    anything past what its own fields say (a packet tucked after the tables)
+    is refused, and so are the arithmetic and hierarchical tables (DAC, DHP,
+    EXP), which the browser never makes and which cannot be dropped without
+    changing the picture. It then checks its own work on a fresh walk: it
+    starts `FFD8`, ends `FFD9`, holds only those blocks, and nowhere holds a
+    mark of Exif, XMP, Photoshop or a GPS tag name (`Exif\0\0`, the XMP
+    namespace and packet, `GPSLatitude` and the like), the scan's own data
+    included. The same function cleans the copy again on its way to Roof Lee.
+    Anything that is not a whole JPEG (a PNG, a WebP, a HEIC, a cut-off file)
+    is refused. The table has no location column.
   - **Stored under the company's own prefix.** A copy's address in the bucket
     is built on the server from the row alone:
     `c/<company id>/p/<photo id>/working.jpg` (up to 1600 pixels) and
@@ -700,7 +712,15 @@ JobTread, so Archie gives its leads keys of its own.
     `server/photos/native.ts`, asked as the company); a made-up id, another
     job's or another company's photo, a deleted one or one that never
     finished saving is refused with `400` "One of the photos didn't finish
-    saving. Please add it again." and the checklist stays a draft. Asked only
+    saving. Please add it again." and the checklist stays a draft. The
+    checklist row is locked (`select ... for update`) before its answers are
+    checked and stays locked until it is submitted, so the answers checked
+    are the answers locked, and the walkthrough's follow-ups come from those
+    same answers: an autosave that lands meanwhile waits, then finds it
+    submitted and answers `404`, and a second tap on Submit waits and answers
+    as before. (The lock is taken for every company, since the required-items
+    check had the same gap; a JobTread company's submit gives the same answer
+    as before.) Asked only
     when the key is one of Archie's own (`isNativeJobId`): a JobTread job's
     checklist names JobTread file ids and is accepted exactly as before. The
     board's own gates (`entryBlocker`, `STAGE_CHECKS`) are the same for every
@@ -900,12 +920,24 @@ Roof Lee sends it.
 | admin | admin | Everything. |
 | office | customer_service | Every customer and lead, no money. |
 | crew | production | No leads at all, no money. |
-| sales_manager | manager (Sales Leader) | Their own leads and jobs and their direct reports'. |
+| sales_manager | customer_service | Like the office: every customer and lead, owned or not, no money. |
 | salesperson | sales (Sales Rep) | Only their own leads and jobs, through Roof Lee and in Archie alike. |
 
 Where Roof Lee states a role lower than the one Archie holds, the lower one
 counts, and someone held to their own book by that lower role sees nothing of
 their own (the list may not have caught up yet).
+
+Why a sales manager is not Archie's Sales Leader (`manager`): that role sees
+only its own leads and its direct reports', worked out from a reporting line
+(`team_members.reports_to`) that Roof Lee never sends and the team list never
+sets. Leads the office or the website add through Roof Lee have no owner, so
+a sales manager held as a Sales Leader would see none of them, and office
+staff promoted to sales manager would lose every lead. Roof Lee tells the
+owner the role is "Like the office, and can approve reports, proposals and
+messages to customers", with approving decided per kind of request, never as
+a wider tier, so Archie holds them exactly like the office. Roof Lee's
+contract (`contract-v2.md`, "Archie") still names `manager` for this line and
+needs the same change on its side.
 
 ## Turning it on (live step, owner only)
 

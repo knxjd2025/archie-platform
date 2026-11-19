@@ -174,34 +174,42 @@ export function registerFinalWalkthroughRoutes(app: Express) {
       const id = Number(req.params.id);
       const clauses = [eq(finalWalkthroughs.id, id)];
       if (isScoped(user)) clauses.push(eq(finalWalkthroughs.createdBy, user.email));
-      const [existing] = await db.select().from(finalWalkthroughs).where(and(...clauses));
-      if (!existing) return res.status(404).json({ error: 'Walkthrough not found.' });
-      if (existing.status !== 'draft') return res.json({ ok: true, walkthrough: existing, followUps: 0 }); // idempotent
 
-      const answers = (existing.answers as Record<string, any>) || {};
-      const missing = missingRequiredWalkthroughFields(answers);
-      if (missing.length) return res.status(400).json({ error: 'Missing required items.', missing });
-      // A job Archie keeps (server/production/native-jobs.ts): every photo the
-      // walkthrough names must be one of the job's own saved photos. A
-      // JobTread job's photos are JobTread's, and are not checked here.
-      if (isNativeJobId(existing.jobExternalId)
-        && !(await allReadyPhotosOfJob(existing.jobExternalId, photoAnswerIds(WALKTHROUGH_FIELDS, answers)))) {
-        return res.status(400).json({ error: CHECKLIST_PHOTO_NOT_SAVED });
-      }
+      // The row is locked before its answers are checked, and stays locked
+      // until it is submitted, so the answers checked are the answers locked,
+      // and the follow-ups below come from those same answers. An autosave
+      // (the PATCH above takes the same lock) that lands meanwhile waits, then
+      // finds the walkthrough submitted and changes nothing. A second tap on
+      // Submit waits the same way, then answers as the idempotent case, so the
+      // follow-ups, JobTread and the board move happen once.
+      const outcome = await db.transaction(async (tx) => {
+        const [existing] = await tx.select().from(finalWalkthroughs).where(and(...clauses)).for('update');
+        if (!existing) return { kind: 'not_found' as const };
+        if (existing.status !== 'draft') return { kind: 'done' as const, row: existing }; // idempotent
 
-      const issues = walkthroughIssues(answers);
-      // Only a draft can be submitted. Two taps on Submit both passed the
-      // status check above, so both created the follow-ups, posted to
-      // JobTread and moved the board; the one that loses this update now
-      // answers as the idempotent case and does none of that.
-      const [row] = await db.update(finalWalkthroughs)
-        .set({ status: 'submitted', issueCount: issues.length, submittedAt: new Date(), updatedAt: new Date() })
-        .where(and(eq(finalWalkthroughs.id, id), eq(finalWalkthroughs.status, 'draft')))
-        .returning();
-      if (!row) {
-        const [now] = await db.select().from(finalWalkthroughs).where(eq(finalWalkthroughs.id, id));
-        return res.json({ ok: true, walkthrough: now ?? existing, followUps: 0 });
-      }
+        const answers = (existing.answers as Record<string, any>) || {};
+        const missing = missingRequiredWalkthroughFields(answers);
+        if (missing.length) return { kind: 'missing' as const, missing };
+        // A job Archie keeps (server/production/native-jobs.ts): every photo the
+        // walkthrough names must be one of the job's own saved photos. A
+        // JobTread job's photos are JobTread's, and are not checked here.
+        if (isNativeJobId(existing.jobExternalId)
+          && !(await allReadyPhotosOfJob(existing.jobExternalId, photoAnswerIds(WALKTHROUGH_FIELDS, answers), tx))) {
+          return { kind: 'photo' as const };
+        }
+
+        const issues = walkthroughIssues(answers);
+        const [row] = await tx.update(finalWalkthroughs)
+          .set({ status: 'submitted', issueCount: issues.length, submittedAt: new Date(), updatedAt: new Date() })
+          .where(and(eq(finalWalkthroughs.id, id), eq(finalWalkthroughs.status, 'draft')))
+          .returning();
+        return { kind: 'submitted' as const, existing, row, answers, issues };
+      });
+      if (outcome.kind === 'not_found') return res.status(404).json({ error: 'Walkthrough not found.' });
+      if (outcome.kind === 'done') return res.json({ ok: true, walkthrough: outcome.row, followUps: 0 });
+      if (outcome.kind === 'missing') return res.status(400).json({ error: 'Missing required items.', missing: outcome.missing });
+      if (outcome.kind === 'photo') return res.status(400).json({ error: CHECKLIST_PHOTO_NOT_SAVED });
+      const { existing, row, answers, issues } = outcome;
 
       // One follow-up per issue, on the person who walked it. Best-effort:
       // the walkthrough is already locked; a failed follow-up is logged, not fatal.

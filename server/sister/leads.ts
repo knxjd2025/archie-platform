@@ -197,12 +197,12 @@ function ownsWhatTheyAdd(member: ActingMember): boolean {
  *
  * Who owns it from the start follows the lead form (server/writes/routes.ts):
  * the person it was made for, when they would otherwise not see it (a
- * salesperson, or a sales manager who sees only their own team), so they can
- * open it straight away. Never a crew member, who cannot add a lead anyway
- * and must never own one (owning a job opens its money), and never someone
- * whose role Roof Lee stated lower than Archie holds (they see nothing of
- * their own here: ./acting.ts). Anyone else's lead has no owner yet and waits
- * on the Assignments page, as before.
+ * salesperson; a sales manager is held like the office and sees every lead
+ * already), so they can open it straight away. Never a crew member, who
+ * cannot add a lead anyway and must never own one (owning a job opens its
+ * money), and never someone whose role Roof Lee stated lower than Archie
+ * holds (they see nothing of their own here: ./acting.ts). Anyone else's lead
+ * has no owner yet and waits on the Assignments page, as before.
  */
 export async function createLead(member: ActingMember, lead: NewLead, key: string | undefined): Promise<SisterAnswer> {
   const companyId = requireCompanyId();

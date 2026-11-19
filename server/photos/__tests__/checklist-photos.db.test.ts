@@ -58,6 +58,23 @@ vi.mock('../../integrations/gohighlevel', async (importOriginal) => {
   const real = await importOriginal<typeof import('../../integrations/gohighlevel')>();
   return { ...real, GoHighLevelClient: calls.watched('kynexPro') };
 });
+/**
+ * The photo check, with a hook that runs while a submit is inside it: how a
+ * test lands an autosave between the check and the lock of the answers.
+ */
+const photoCheck = vi.hoisted(() => ({ during: null as null | (() => Promise<void>) }));
+vi.mock('../native', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../native')>();
+  return {
+    ...real,
+    allReadyPhotosOfJob: async (...args: Parameters<typeof real.allReadyPhotosOfJob>) => {
+      const during = photoCheck.during;
+      photoCheck.during = null;
+      if (during) await during();
+      return real.allReadyPhotosOfJob(...args);
+    },
+  };
+});
 vi.mock('@vercel/functions', () => ({ waitUntil: () => {} }));
 vi.mock('../../seed', () => ({ seedCompany: async () => {}, seedAll: async () => {}, SEED_JOB: 'seed-company', seedVersion: () => 'test' }));
 
@@ -135,6 +152,7 @@ describe.skipIf(!localDb)('the checklists of a job Archie keeps use its own phot
   afterAll(() => { setPhotoStoreForTests(null); server?.close(); });
 
   beforeEach(() => {
+    photoCheck.during = null;
     calls.state.jobtread.length = 0; calls.state.kynexPro.length = 0; calls.state.mode = 'throw';
     setPhotoStoreForTests(fakeStore);
     const real = globalThis.fetch;
@@ -220,6 +238,22 @@ describe.skipIf(!localDb)('the checklists of a job Archie keeps use its own phot
   const walkRow = async (c: Co, id: number) =>
     (await runAsCompany(c.id, () => db.select().from(schema.finalWalkthroughs).where(eq(schema.finalWalkthroughs.id, id))))[0];
 
+  /**
+   * Submits, and while the submit is checking the photos, autosaves the draft
+   * with `answers`. The save is given every chance to land in between: it is
+   * waited for, up to half a second, before the check goes on.
+   */
+  const submitWhileSaving = async (form: 'preconstruction' | 'final-walkthrough', id: number, answers: Record<string, unknown>) => {
+    let saving: Promise<{ status: number; body: any }> | undefined;
+    photoCheck.during = async () => {
+      saving = patch(`/api/${form}/${id}`, { answers });
+      await Promise.race([saving, new Promise((resolve) => setTimeout(resolve, 500))]);
+    };
+    const submitted = await post(`/api/${form}/${id}/submit`, {});
+    expect(saving, 'the photo check ran').toBeDefined();
+    return { submitted, saved: await saving! };
+  };
+
   // ---------------------------------------------------------------- pre-construction
 
   describe('the pre-construction checklist', () => {
@@ -291,6 +325,28 @@ describe.skipIf(!localDb)('the checklists of a job Archie keeps use its own phot
       nothingLeftArchie();
     });
 
+    it('checks the answers it locks: a save landing while it checks waits, and cannot slip a photo past it', async () => {
+      const key = await nativeLead();
+      const photos = await ownPhotos(key, PRECON_CHECKLIST_FIELDS as Field[], 'before');
+      const field = firstPhotoField(PRECON_CHECKLIST_FIELDS as Field[]);
+      as(a, 'rep');
+      const draft = await post('/api/preconstruction', { jobExternalId: key, answers: filled(PRECON_CHECKLIST_FIELDS as Field[], photos) });
+      const id = draft.body.checklist.id as number;
+      const madeUp = { fileId: randomUUID(), name: 'made up.jpg' };
+
+      const { submitted, saved } = await submitWhileSaving('preconstruction', id, { [field]: [madeUp] });
+      expect(submitted.status).toBe(200);
+      // The save waited for the submit, then found the checklist locked.
+      expect(saved.status).toBe(404);
+      const row = await preconRow(a, id);
+      expect(row.status).toBe('submitted');
+      expect(JSON.stringify(row.answers)).not.toContain(madeUp.fileId);
+      expect(row.answers).toEqual(filled(PRECON_CHECKLIST_FIELDS as Field[], photos));
+      expect(submitted.body.checklist.answers).toEqual(row.answers);
+      expect(await boardStage(a, key)).toBe('schedule');
+      nothingLeftArchie();
+    });
+
     it('says it in plain words, with no codes and no dashes', () => {
       expect(CHECKLIST_PHOTO_NOT_SAVED).toBe('One of the photos didn\'t finish saving. Please add it again.');
       expect(CHECKLIST_PHOTO_NOT_SAVED).not.toMatch(/[—–]|\bids?\b|error|code/i);
@@ -333,6 +389,34 @@ describe.skipIf(!localDb)('the checklists of a job Archie keeps use its own phot
       expect(walk.status).toBe(200);
       expect(await post(`/api/final-walkthrough/${walk.body.walkthrough.id}/submit`, {})).toEqual({ status: 400, body: { error: CHECKLIST_PHOTO_NOT_SAVED } });
       expect(await walkRow(a, walk.body.walkthrough.id)).toMatchObject({ status: 'draft', submittedAt: null });
+      expect(await runAsCompany(a.id, () => db.select().from(schema.followUps).where(eq(schema.followUps.jobExternalId, key)))).toEqual([]);
+      nothingLeftArchie();
+    });
+  });
+
+  describe('the final walkthrough, while it is being saved', () => {
+    it('checks the answers it locks: a save landing while it checks waits, and cannot slip a photo or an issue past it', async () => {
+      const key = await nativeLead();
+      const after = await ownPhotos(key, WALKTHROUGH_FIELDS as Field[], 'after');
+      const field = firstPhotoField(WALKTHROUGH_FIELDS as Field[]);
+      const firstVerify = (WALKTHROUGH_FIELDS as Field[]).find((f) => f.type === 'verify')!.name;
+      as(a, 'rep');
+      const walk = await post('/api/final-walkthrough', { jobExternalId: key, answers: walkedWith(after) });
+      const id = walk.body.walkthrough.id as number;
+      const madeUp = { fileId: randomUUID(), name: 'made up.jpg' };
+
+      const { submitted, saved } = await submitWhileSaving('final-walkthrough', id, {
+        [field]: [madeUp], [firstVerify]: { state: 'issue', note: 'Nails by the driveway.' },
+      });
+      expect(submitted.status).toBe(200);
+      expect(saved.status).toBe(404);
+      const row = await walkRow(a, id);
+      expect(row.status).toBe('submitted');
+      expect(JSON.stringify(row.answers)).not.toContain(madeUp.fileId);
+      expect(row.answers).toEqual(walkedWith(after));
+      // The follow-ups and the count come from the same answers that were checked and locked.
+      expect(row.issueCount).toBe(0);
+      expect(submitted.body.followUps).toBe(0);
       expect(await runAsCompany(a.id, () => db.select().from(schema.followUps).where(eq(schema.followUps.jobExternalId, key)))).toEqual([]);
       nothingLeftArchie();
     });

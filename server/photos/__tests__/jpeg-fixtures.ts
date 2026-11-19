@@ -4,7 +4,8 @@
  * they carry exactly the blocks a phone photo can carry, location included.
  */
 
-const seg = (marker: number, payload: Buffer | number[]): Buffer => {
+/** One segment: its marker, its length and what it carries. */
+export const seg = (marker: number, payload: Buffer | number[]): Buffer => {
   const body = Buffer.isBuffer(payload) ? payload : Buffer.from(payload);
   const head = Buffer.alloc(4);
   head[0] = 0xff; head[1] = marker; head.writeUInt16BE(body.length + 2, 2);
@@ -34,18 +35,18 @@ export function exifWithGps(): Buffer {
 }
 
 /** A JFIF header (APP0): kept, it says how to read the pixels. */
-const jfif = () => seg(0xe0, Buffer.from([0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00]));
-const dqt = () => seg(0xdb, Buffer.concat([Buffer.from([0x00]), Buffer.alloc(64, 1)]));
+export const jfif = () => seg(0xe0, Buffer.from([0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00]));
+export const dqt = () => seg(0xdb, Buffer.concat([Buffer.from([0x00]), Buffer.alloc(64, 1)]));
 /** Baseline frame header: 8 bit, the given size, one component. */
-const sof0 = (width: number, height: number) => {
+export const sof0 = (width: number, height: number) => {
   const b = Buffer.alloc(9);
   b[0] = 8; b.writeUInt16BE(height, 1); b.writeUInt16BE(width, 3); b[5] = 1; b[6] = 1; b[7] = 0x11; b[8] = 0;
   return seg(0xc0, b);
 };
-const dht = () => seg(0xc4, Buffer.concat([Buffer.from([0x00]), Buffer.from([0, 1, ...Array(14).fill(0)]), Buffer.from([0])]));
-const sos = () => seg(0xda, Buffer.from([1, 1, 0x00, 0, 63, 0]));
+export const dht = () => seg(0xc4, Buffer.concat([Buffer.from([0x00]), Buffer.from([0, 1, ...Array(14).fill(0)]), Buffer.from([0])]));
+export const sos = () => seg(0xda, Buffer.from([1, 1, 0x00, 0, 63, 0]));
 /** Entropy-coded data with a stuffed 0xFF00 and a restart marker in it, as real scans have. */
-const scan = () => Buffer.from([0x12, 0x34, 0xff, 0x00, 0x56, 0xff, 0xd0, 0x78, 0x9a]);
+export const scan = () => Buffer.from([0x12, 0x34, 0xff, 0x00, 0x56, 0xff, 0xd0, 0x78, 0x9a]);
 
 export interface FixtureOptions {
   exif?: boolean;
@@ -68,6 +69,24 @@ export function makeJpeg(o: FixtureOptions = {}): Buffer {
   if (o.trailing) parts.push(Buffer.from([0xff, 0xd8]), exifWithGps(), Buffer.from([0xff, 0xd9]));
   return Buffer.concat(parts);
 }
+
+/**
+ * A JPEG put together from the given segments, in order, between its start
+ * and its end: for building one with a block in an unusual place.
+ */
+export const jpegOf = (...parts: Buffer[]): Buffer => Buffer.concat([Buffer.from([0xff, 0xd8]), ...parts, Buffer.from([0xff, 0xd9])]);
+
+/** The segments a clean picture is made of, after its start: JFIF header, tables, frame, scan. */
+export const pictureParts = (width = 1600, height = 1200) => [jfif(), dqt(), sof0(width, height), dht(), sos(), scan()];
+
+/**
+ * An XMP packet with a GPS position in it, the way photo apps write one. It
+ * can be put in any block, so it is the test of every block the cleaner keeps.
+ */
+export const xmpWithGps = () => Buffer.from(
+  '<?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?><x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF>'
+  + '<rdf:Description xmlns:exif="http://ns.adobe.com/exif/1.0/" exif:GPSLatitude="42,32.09N" exif:GPSLongitude="92,26.72W"/>'
+  + '</rdf:RDF></x:xmpmeta><?xpacket end="w"?>', 'latin1');
 
 /** A clean JPEG, the shape the browser's canvas makes. */
 export const cleanJpegFixture = (width = 1600, height = 1200) => makeJpeg({ width, height });

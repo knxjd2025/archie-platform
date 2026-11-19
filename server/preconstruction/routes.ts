@@ -159,33 +159,40 @@ export function registerPreConstructionRoutes(app: Express) {
         const selfId = await teamMemberIdByEmail(user.email);
         clauses.push(selfId != null ? eq(preConstructionChecklists.teamMemberId, selfId) : eq(preConstructionChecklists.createdBy, user.email));
       }
-      const [existing] = await db.select().from(preConstructionChecklists).where(and(...clauses));
-      if (!existing) return res.status(404).json({ error: 'Checklist not found.' });
-      if (existing.status !== 'draft') return res.json({ ok: true, checklist: existing }); // idempotent
 
-      const answers = (existing.answers as Record<string, any>) || {};
-      const missing = missingRequiredPreconFields(answers);
-      if (missing.length) return res.status(400).json({ error: 'Missing required fields.', missing });
-      // A job Archie keeps (server/production/native-jobs.ts): every photo the
-      // checklist names must be one of the job's own saved photos. A JobTread
-      // job's photos are JobTread's, and are not checked here.
-      if (isNativeJobId(existing.jobExternalId)
-        && !(await allReadyPhotosOfJob(existing.jobExternalId, photoAnswerIds(PRECON_CHECKLIST_FIELDS, answers)))) {
-        return res.status(400).json({ error: CHECKLIST_PHOTO_NOT_SAVED });
-      }
+      // The row is locked before its answers are checked, and stays locked
+      // until it is submitted, so the answers checked are the answers locked.
+      // An autosave (the PATCH above takes the same lock) that lands meanwhile
+      // waits, then finds the checklist submitted and changes nothing. A
+      // second tap on Submit waits the same way, then answers as the
+      // idempotent case, so JobTread and the board move happen once.
+      const outcome = await db.transaction(async (tx) => {
+        const [existing] = await tx.select().from(preConstructionChecklists).where(and(...clauses)).for('update');
+        if (!existing) return { kind: 'not_found' as const };
+        if (existing.status !== 'draft') return { kind: 'done' as const, row: existing }; // idempotent
 
-      // Only a draft can be submitted. Two taps on Submit both passed the
-      // status check above, so both posted to JobTread and fired the board
-      // move; the one that loses this update now answers as the idempotent
-      // case and does neither.
-      const [row] = await db.update(preConstructionChecklists)
-        .set({ status: 'submitted', submittedAt: new Date(), updatedAt: new Date() })
-        .where(and(eq(preConstructionChecklists.id, id), eq(preConstructionChecklists.status, 'draft')))
-        .returning();
-      if (!row) {
-        const [now] = await db.select().from(preConstructionChecklists).where(eq(preConstructionChecklists.id, id));
-        return res.json({ ok: true, checklist: now ?? existing });
-      }
+        const answers = (existing.answers as Record<string, any>) || {};
+        const missing = missingRequiredPreconFields(answers);
+        if (missing.length) return { kind: 'missing' as const, missing };
+        // A job Archie keeps (server/production/native-jobs.ts): every photo the
+        // checklist names must be one of the job's own saved photos. A JobTread
+        // job's photos are JobTread's, and are not checked here.
+        if (isNativeJobId(existing.jobExternalId)
+          && !(await allReadyPhotosOfJob(existing.jobExternalId, photoAnswerIds(PRECON_CHECKLIST_FIELDS, answers), tx))) {
+          return { kind: 'photo' as const };
+        }
+
+        const [row] = await tx.update(preConstructionChecklists)
+          .set({ status: 'submitted', submittedAt: new Date(), updatedAt: new Date() })
+          .where(and(eq(preConstructionChecklists.id, id), eq(preConstructionChecklists.status, 'draft')))
+          .returning();
+        return { kind: 'submitted' as const, row };
+      });
+      if (outcome.kind === 'not_found') return res.status(404).json({ error: 'Checklist not found.' });
+      if (outcome.kind === 'done') return res.json({ ok: true, checklist: outcome.row });
+      if (outcome.kind === 'missing') return res.status(400).json({ error: 'Missing required fields.', missing: outcome.missing });
+      if (outcome.kind === 'photo') return res.status(400).json({ error: CHECKLIST_PHOTO_NOT_SAVED });
+      const row = outcome.row;
 
       syncToJobTread(id, row.jobExternalId, (row.answers as Record<string, any>) || {});
       // The checklist is done at deposit time: the production board moves the job to Schedule.
