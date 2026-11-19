@@ -24,6 +24,7 @@ import { emitLeadCreated } from '../sister/events';
 import { getCurrentCompany } from '../tenant/companies';
 import { jobBackendFor } from '../production/native-jobs';
 import { createNativeLead, jobOwnerByEmail, jobOwnerByName } from '../production/native-leads';
+import { addNativeNote, MAX_NOTE_CHARS, NOTE_TOO_LONG, parseNativeContact, updateNativeContact } from '../production/native-job-page';
 
 
 export interface AppointmentSlot { date: string; time: string; durationMins: number; type: string; notes: string }
@@ -107,6 +108,14 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** Said when someone tries to book from the lead form in a company that keeps its own jobs. */
 export const NATIVE_BOOKING_UNAVAILABLE = 'Booking is not available for your company yet.';
 
+/** Said when the job page's stage control is used on a job Archie keeps: the Production board moves it, with its checks. */
+export const NATIVE_STAGE_ON_BOARD = 'Move this job on the Production board.';
+
+/** Which system keeps this job (server/production/native-jobs.ts, the one seam), for the current company. */
+async function backendOf(externalId: string) {
+  return jobBackendFor({ externalId }, await getCurrentCompany());
+}
+
 /**
  * The lead form for a company that keeps its own jobs (server/production/native-leads.ts).
  * No JobTread, no KynexPro (Roof Lee owns it for this company) and no calendar.
@@ -161,6 +170,9 @@ export function registerWriteRoutes(app: Express) {
     const actor = req.session.user!.email;
     if (!externalId || !stage) return res.status(400).json({ error: 'externalId and stage are required' });
     if (!(await ownsLead(req.session.user! as SessionUser, externalId))) return res.status(404).json({ error: 'not found' });
+    // A job Archie keeps has no JobTread status to write: it moves on the
+    // Production board, where the board's own checks apply.
+    if (await backendOf(externalId) === 'archie') return res.status(409).json({ error: NATIVE_STAGE_ON_BOARD });
     if (!isValidJobStatus(stage)) return res.status(400).json({ error: `Invalid stage "${stage}"` });
 
     // Current stage (for the log summary + so we can revert client-side on failure).
@@ -188,13 +200,21 @@ export function registerWriteRoutes(app: Express) {
     res.json({ ok: true, stage });
   }));
 
-  // Add an internal note/comment to a job.
+  // Add an internal note/comment to a job (JobTread's comments, or Archie's
+  // own notes for a job Archie keeps).
   app.post('/api/jobs/:externalId/note', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     const { externalId } = req.params;
     const message = String(req.body?.message || '').trim();
     const actor = req.session.user!.email;
     if (!externalId || !message) return res.status(400).json({ error: 'externalId and message are required' });
     if (!(await ownsLead(req.session.user! as SessionUser, externalId))) return res.status(404).json({ error: 'not found' });
+
+    // A job Archie keeps: the note is kept here (lead_notes), where Roof Lee reads it too.
+    if (await backendOf(externalId) === 'archie') {
+      if (message.length > MAX_NOTE_CHARS) return res.status(400).json({ error: NOTE_TOO_LONG });
+      if (!(await addNativeNote(externalId, message, req.session.user!))) return res.status(404).json({ error: 'not found' });
+      return res.json({ ok: true });
+    }
 
     const jt = new JobTreadClient();
     const result = await jt.addJobComment(externalId, message, `Note from ${req.session.user!.name}`);
@@ -253,6 +273,7 @@ export function registerWriteRoutes(app: Express) {
   }));
 
   // Edit a customer's email/phone → JobTread (source of truth) + local mirror.
+  // A job Archie keeps is corrected on the lead alone.
   app.patch('/api/leads/:externalId/contact', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     const { externalId } = req.params;
     const email = req.body?.email !== undefined ? String(req.body.email).trim() : undefined;
@@ -264,6 +285,15 @@ export function registerWriteRoutes(app: Express) {
     // Rewriting a client's contact details on someone else's job is a
     // lead-theft primitive, not just an integrity problem.
     if (!(await ownsLead(req.session.user! as SessionUser, externalId))) return res.status(404).json({ error: 'not found' });
+
+    // A job Archie keeps: the lead itself is the record. No JobTread, and no
+    // KynexPro (Roof Lee owns it for this company).
+    if (await backendOf(externalId) === 'archie') {
+      const parsed = parseNativeContact({ email, phone });
+      if (!parsed.ok) return res.status(400).json({ error: parsed.error });
+      if (!(await updateNativeContact(externalId, parsed.change, actor))) return res.status(404).json({ error: 'not found' });
+      return res.json({ ok: true });
+    }
 
     const jt = new JobTreadClient();
     const result = await jt.updateJobContact(externalId, { email, phone });

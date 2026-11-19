@@ -78,7 +78,9 @@ import { registerConnectionRoutes } from './integrations/connection-routes';
 import { registerCompanyRoutes } from './company/routes';
 import { registerSisterRoutes } from './sister/routes';
 import { currentGhlLocationId, ghlAppBase } from './integrations/ghl/connection';
-import { getCompanyByGhlLocation } from './tenant/companies';
+import { getCompanyByGhlLocation, getCurrentCompany } from './tenant/companies';
+import { jobBackendFor } from './production/native-jobs';
+import { boardStageFor, noteMessagesFor } from './production/native-job-page';
 import { runAsCompany } from './tenant/context';
 import { redactGhlConversation, withoutPasswordLinkMessages, withoutPasswordLinkMessagesIn } from './auth/password-link-filter';
 
@@ -816,12 +818,18 @@ export function registerRoutes(app: Express) {
 
   // A client's message thread: their GoHighLevel conversation (matched by phone)
   // + the JobTread job's comment feed, merged newest-first. Rep-scoped.
+  // A job Archie keeps has neither: its thread is the team's notes on it.
   app.get('/api/clients/:externalId/messages', requireAuth, async (req: Request, res: Response) => {
     try {
       const user = req.session.user!;
       const [lead] = await db.select().from(leads).where(eq(leads.externalId, req.params.externalId));
       if (!lead) return res.status(404).json({ error: 'not found' });
       if (!(await ownsLead(user, lead.externalId))) return res.status(404).json({ error: 'not found' });
+
+      // No JobTread behind it, and the company's KynexPro is Roof Lee's: nothing outside is asked.
+      if (jobBackendFor(lead, await getCurrentCompany()) === 'archie') {
+        return res.json({ contactId: null, ghlContactUrl: null, messages: await noteMessagesFor(lead.id) });
+      }
 
       const chan = (t: string): string => {
         const s = String(t || '').toUpperCase();
@@ -948,11 +956,23 @@ export function registerRoutes(app: Express) {
         ? await new JobTreadClient().getJobInsurance(lead.externalId).catch(() => ({}))
         : {};
 
+      // Which system keeps the job. For a job Archie keeps, also whether the
+      // customer agreed to photos and where it sits on the Production board
+      // (its stage only: nothing about money is added here).
+      const backend = jobBackendFor(lead, await getCurrentCompany());
+      const ownJob = backend === 'archie'
+        ? {
+          photoConsent: lead.photoConsent === true,
+          boardStage: lead.externalId ? await boardStageFor(lead.externalId) : null,
+        }
+        : {};
+
       res.json({
         insurance,
         lead: {
           externalId: lead.externalId,
-          customer: lead.firstName,
+          // Such a lead keeps the first and last name apart; the JobTread sync puts the whole name in firstName.
+          customer: backend === 'archie' ? ([lead.firstName, lead.lastName].filter(Boolean).join(' ') || lead.firstName) : lead.firstName,
           jobName: lead.jobName,
           email: lead.email,
           phone: lead.phone,
@@ -970,6 +990,8 @@ export function registerRoutes(app: Express) {
           scheduleStart: lead.scheduleStart ? lead.scheduleStart.toISOString() : null,
           scheduleEnd: lead.scheduleEnd ? lead.scheduleEnd.toISOString() : null,
           createdAt: lead.createdAt ? lead.createdAt.toISOString() : null,
+          backend,
+          ...ownJob,
         },
         documents: docs.map((d) => ({
           id: d.id, type: d.type, amount: d.amount != null ? Number(d.amount) : null,

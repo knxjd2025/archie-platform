@@ -207,6 +207,7 @@ request from Roof Lee with a refusal, which is why they go in the same step.
 | `server/integrations/ghl/new-contact.ts` | What happens when a new contact arrives from KynexPro. Skips a contact Roof Lee made. |
 | `server/production/native-jobs.ts` | Archie's own jobs: the job identity Archie makes, who gets one, which system keeps a job (`jobBackendFor`, the one seam), and the record of a customer agreeing to photos. |
 | `server/production/native-leads.ts` | A lead made in Archie (the lead form, a canvassed door) for a company that keeps its own jobs: its key, its first owner, the log line and the news. |
+| `server/production/native-job-page.ts` | The client page for a job Archie keeps: its notes, a corrected phone or email, its messages and where it sits on the Production board. |
 | `server/sister/events.ts` | News going back to Roof Lee: the outbox, the signing, the sending and the retries. |
 
 Both entry files (`server/index.ts` and `api/index.ts`) keep the raw body for
@@ -420,6 +421,33 @@ JobTread, so Archie gives its leads keys of its own.
   JobTread about a move (the production, sales and claim boards) checks the
   key first and, for one of Archie's own, keeps the status in Archie instead.
   No outside call, and no failed-call line in the company's log.
+- **The client page for such a job.** Everything on it is kept in Archie, and
+  nothing on it asks JobTread or KynexPro anything:
+  - a note (`POST /api/jobs/{key}/note`) is kept in `lead_notes` with who wrote
+    it (system `archie`) and written to the company's log. Roof Lee reads it
+    with the job's other notes. A note is at most 2000 characters, like one
+    Roof Lee adds;
+  - a corrected phone or email (`PATCH /api/leads/{key}/contact`) is written to
+    the lead and logged. A blank one clears it; one that does not look right is
+    refused in plain words;
+  - the stage control on the page (`POST /api/production/{key}/stage`) answers
+    `409` "Move this job on the Production board.": such a job has no JobTread
+    status, and the board moves it with its own checks;
+  - an admin's corrections (`PATCH /api/clients/{key}/account`) change the
+    customer's name, the job name, the address, the project manager and the
+    insurance-claim tick on the lead, and are logged. The claim details kept
+    only in JobTread (carrier, claim and policy numbers, adjuster and the rest)
+    are refused in plain words, not dropped, and the list of fields offered
+    (`GET /api/jobtread/account-fields`) holds only the two the lead can keep;
+  - the client's messages (`GET /api/clients/{key}/messages`) are the job's
+    notes, newest first, each labelled "Note", or "From Roof Lee" for one that
+    came through Roof Lee;
+  - the client (`GET /api/clients/{key}`) also says `backend` (`archie`), and,
+    for such a job only, `photoConsent` and `boardStage` (the Production board
+    stage's key and label, or null). Nothing about money is added, and a crew
+    still cannot open the page.
+  For every other company these answer exactly as before, apart from the client
+  carrying `backend: "jobtread"`.
 - **Moving a job from Roof Lee.** `POST .../jobs/{id}/stage` with `stage` (one
   of the board's own stage keys, `approved` to `closed_out`) and `acting`. It
   is the same move a person makes in Archie, made as the person named, so the
