@@ -34,6 +34,76 @@ migrations have to be there first: see "Before deploying this code" below.
 copied from another product, another repository or an older shared secret.
 Archie never reads `SISTERS_SHARED_SECRET` at all.
 
+## Go-live checklist (owner only, in this order)
+
+The whole job on one page. The sections below explain each step; this list is
+what to tick off. Nothing here has been done for you: no migration has been
+applied to a hosted database, no setting has been set, nothing has been
+deployed. Stop at any step that does not check out.
+
+**A. Database, before anything is deployed**
+
+1. Run the four checks in step 1 of "Before deploying this code" below, as the
+   database owner. They must show: the applied list ends at
+   `0010_company_job_leases.sql`; `0008` is in force (not reverted); no
+   company already holds two leads with the same `archie-` id.
+2. From a checkout of this branch, apply the five migrations as the owner, in
+   this exact order (the command does the order for you, one transaction each):
+   1. `0011_roofli_sister.sql`
+   2. `0012_roofli_sso.sql`
+   3. `0013_roofli_lead_notes.sql`
+   4. `0014_roofli_events.sql`
+   5. `0015_archie_native_jobs.sql`
+
+   `DATABASE_URL=<owner url> npx tsx scripts/migrate.ts`
+3. Check it worked: step 4 of "Before deploying this code" (three small reads
+   that must not error, and four tables each showing
+   `{company_isolation,company_system}`).
+
+**B. Deploy the code, with the link still off**
+
+4. Merge this branch into main (that is the deploy). Set no new setting yet.
+   Check: people still sign in, leads still show, and
+   `GET /api/sister/v1/ready` answers a bare `401` (the link is off).
+
+**C. Settings, by name, and where each one goes**
+
+| Setting | Where | Value |
+|---|---|---|
+| `SISTERS_ARCHIE_SECRET` | Archie's hosting **and** Roof Lee's hosting | One freshly made random secret, the same on both sides, used for nothing else. Never copied from another product. |
+| `SISTERS_ARCHIE_URL` | Roof Lee's hosting only | Archie's own `https://` address, nothing after it. |
+| `CRON_SECRET` | Archie's hosting | Already there for Archie's other scheduled jobs; just check it is set. |
+| `ROOFLI_EVENTS_URL` | Archie's hosting | Roof Lee's own `https://` address (its `APP_BASE_URL`). Set at step 7, not before. |
+| `ROOFLI_JOB_FINISHED_STAGE` | Archie's hosting, optional | Which production board stage means "job finished". Leave unset for `closed_out`. |
+| `SISTERS_ARCHIE_READY` | Archie's hosting | `true`. Set **last**, at step 9. |
+
+Archie never reads `SISTERS_SHARED_SECRET`. Do not set it in Archie.
+
+**D. Switch on and prove it with a test company**
+
+5. Set `SISTERS_ARCHIE_SECRET` on both sides and `SISTERS_ARCHIE_URL` in Roof
+   Lee. Check: `GET /api/sister/v1/ready`, signed, now answers "not ready"
+   instead of `401`.
+6. Make the throwaway test company (Summit Ridge Roofing in Cedar Falls) from
+   Roof Lee. Check: it appears in Archie with its team; change its team, and
+   the change shows in Archie; its capabilities answer lists both
+   `messages.quiet` and `jobs.native`.
+7. Set `ROOFLI_EVENTS_URL` (only once Roof Lee is ready to receive news). Add a
+   lead by hand in the test company in Archie. Check: Roof Lee shows a
+   `lead.created` for it within a minute or two.
+8. From Roof Lee: add a lead, move it to Approved, open Archie as the test
+   company's owner. Check: the lead is on Archie's production board, the
+   sign-in lands in the right company, the same button does nothing for
+   someone taken off the team, and no text or email went to the test customer.
+   Then pause and close the test company and check nobody can sign in to it.
+9. Only now set `SISTERS_ARCHIE_READY=true`. Check: the signed
+   `GET /api/sister/v1/ready` answers ready, and Roof Lee shows its Archie
+   button.
+
+**To switch it off again**: unset `SISTERS_ARCHIE_READY` (Roof Lee stops
+using Archie), or unset `SISTERS_ARCHIE_SECRET` (everything under
+`/api/sister` refuses at once). Leave the migrations in place either way.
+
 ## Before deploying this code (owner only, must come first)
 
 **Apply migrations `0011` to `0015` to the database before this code is
