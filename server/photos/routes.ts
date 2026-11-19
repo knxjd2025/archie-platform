@@ -8,6 +8,7 @@ import { JobTreadClient } from '../integrations/jobtread';
 import { isImage } from '../reports/job-context';
 import { logWrite } from '../writes/log';
 import { sendFailure } from '../lib/failure';
+import { isNativeJobId, NATIVE_PHOTOS_SOON } from '../production/native-jobs';
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
 /** Server-side ceiling. The client downscales first, so real uploads are far smaller. */
@@ -25,6 +26,12 @@ export function decodeImagePayload(base64: string): Buffer | null {
   }
 }
 
+/**
+ * A job's photos and files live in JobTread. A job Archie keeps
+ * (server/production/native-jobs.ts) has no JobTread behind it and Archie
+ * keeps no photos of its own yet: its lists are empty and adding one is
+ * refused in plain words. JobTread is never asked about it.
+ */
 export function registerPhotoRoutes(app: Express) {
   // A client's job photos (newest first) — used by the gallery + report picker.
   app.get('/api/clients/:externalId/photos', requireAuth, async (req: Request, res: Response) => {
@@ -33,6 +40,7 @@ export function registerPhotoRoutes(app: Express) {
       const [lead] = await db.select().from(leads).where(eq(leads.externalId, req.params.externalId));
       if (!lead) return res.status(404).json({ error: 'not found' });
       if (!(await ownsLead(user, lead.externalId))) return res.status(404).json({ error: 'not found' });
+      if (isNativeJobId(lead.externalId)) return res.json({ photos: [], totalFiles: 0 });
 
       const { files, total } = await new JobTreadClient().getJobFiles(req.params.externalId, 60, 1200);
       const photos = files
@@ -55,6 +63,7 @@ export function registerPhotoRoutes(app: Express) {
       const [lead] = await db.select().from(leads).where(eq(leads.externalId, req.params.externalId));
       if (!lead) return res.status(404).json({ error: 'not found' });
       if (!(await ownsLead(user, lead.externalId))) return res.status(404).json({ error: 'not found' });
+      if (isNativeJobId(lead.externalId)) return res.json({ files: [], totalFiles: 0 });
 
       const { files, total } = await new JobTreadClient().getJobFiles(req.params.externalId, 100, 1200);
       res.json({
@@ -76,6 +85,7 @@ export function registerPhotoRoutes(app: Express) {
       const [lead] = await db.select().from(leads).where(eq(leads.externalId, req.params.externalId));
       if (!lead) return res.status(404).json({ error: 'not found' });
       if (!(await ownsLead(user, lead.externalId))) return res.status(404).json({ error: 'not found' });
+      if (isNativeJobId(lead.externalId)) return res.status(409).json({ error: NATIVE_PHOTOS_SOON });
 
       const contentType = String(req.body?.contentType || 'image/jpeg').toLowerCase();
       if (!ALLOWED_TYPES.includes(contentType)) {

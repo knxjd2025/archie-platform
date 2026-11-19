@@ -13,12 +13,18 @@
  * before they are saved, sealed at rest, and never sent back. `source` says
  * whether the company's own credentials are in use ('company') or the
  * deployment's env account, which only its owning company can use ('shared').
+ *
+ * A company Roof Lee made keeps its jobs in Archie (server/production/native-jobs.ts)
+ * and cannot connect either one yet: it is told so in plain words and nothing
+ * is checked or saved. So it never holds a mix of JobTread jobs and its own.
  */
 import type { Express, Request, Response } from 'express';
 import { requireAuth, requireRole } from '../auth/middleware';
 import { sendFailure } from '../lib/failure';
 import { rateLimit } from '../lib/rate-limit';
 import { deleteCompanyCredentials, saveCompanyCredentials } from '../tenant/company-credentials';
+import { getCurrentCompany } from '../tenant/companies';
+import { keepsOwnJobs, OTHER_JOB_SOFTWARE_SOON } from '../production/native-jobs';
 import {
   JOBTREAD_PROVIDER, jobTreadConnectionStatus, verifyJobTreadCredentials, type JobTreadCredentials,
 } from './jobtread-connection';
@@ -42,6 +48,9 @@ export const MAX_ORGANIZATION_ID_LENGTH = 64;
  */
 const saveLimit = rateLimit(10, 10 * 60_000, undefined, (req) => `integration-save:${req.ip || 'unknown'}`);
 
+/** A company that keeps its own jobs connects no other job software (yet). */
+const keepsItsOwnJobs = async () => keepsOwnJobs(await getCurrentCompany());
+
 export function registerConnectionRoutes(app: Express) {
   const admin = [requireAuth, requireRole('admin')];
 
@@ -55,6 +64,7 @@ export function registerConnectionRoutes(app: Express) {
 
   app.put('/api/integrations/crm/connection', ...admin, saveLimit, async (req: Request, res: Response) => {
     try {
+      if (await keepsItsOwnJobs()) return res.status(409).json({ error: OTHER_JOB_SOFTWARE_SOON });
       const provider = field(req.body?.provider) || 'jobtread';
       if (!(CRM_PROVIDERS as readonly string[]).includes(provider)) return res.status(400).json({ error: 'That CRM cannot be connected yet.' });
       const grantKey = field(req.body?.grantKey);
@@ -93,6 +103,7 @@ export function registerConnectionRoutes(app: Express) {
 
   app.put('/api/integrations/companycam/connection', ...admin, saveLimit, async (req: Request, res: Response) => {
     try {
+      if (await keepsItsOwnJobs()) return res.status(409).json({ error: OTHER_JOB_SOFTWARE_SOON });
       const token = field(req.body?.token);
       if (!token) return res.status(400).json({ error: 'The API token is needed.' });
       if (token.length > MAX_SECRET_LENGTH) return res.status(400).json({ error: 'That API token is too long.' });

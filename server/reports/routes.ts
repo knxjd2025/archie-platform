@@ -65,6 +65,7 @@ import { unchangedSince } from './unchanged-since';
 import { ANALYZE_LIMIT } from './photo-selection';
 import { gatherJobContext } from './job-context';
 import { JobTreadClient } from '../integrations/jobtread';
+import { isNativeJobId, NATIVE_SEND_ELSEWHERE_SOON } from '../production/native-jobs';
 import { logWrite } from '../writes/log';
 import { googleMapsConfigured, googleMapsKeySource } from '../lib/reports/google-key.js';
 import { getLatestInspectionContext } from '../inspections/lookup';
@@ -1146,12 +1147,14 @@ export function registerRoofReportRoutes(app: Express) {
   });
 
   // Push a finished report into JobTread: proposal + budget + material order.
+  // A job Archie keeps (server/production/native-jobs.ts) has no JobTread to push to.
   app.post('/api/clients/:externalId/reports/:reportId/to-jobtread', requireAuth, async (req: Request, res: Response) => {
     try {
       const user = req.session.user! as SessionUser;
       const [lead] = await db.select().from(leads).where(eq(leads.externalId, req.params.externalId));
       if (!lead) return res.status(404).json({ error: 'not found' });
       if (!(await ownsLead(user, lead.externalId))) return res.status(404).json({ error: 'not found' });
+      if (isNativeJobId(lead.externalId)) return res.status(409).json({ error: NATIVE_SEND_ELSEWHERE_SOON });
 
       const [row] = await db.select().from(clientReports).where(
         // Both keys, not just the report id: ownsLead above authorizes the JOB

@@ -30,6 +30,7 @@ import { memberByEmail } from '../access/team-scope';
 import { officeMailbox, sendingMailboxFor } from '../calendar/access';
 import { GoHighLevelClient } from '../integrations/gohighlevel';
 import { JobTreadClient } from '../integrations/jobtread';
+import { isNativeJobId } from '../production/native-jobs';
 import {
   escapeHtml, isOpen, signatureBlockHtml,
   type SignatureRequestView, type SignatureSourceKind, type SignatureStatus, type SignerGeo, type SignerRole, type SignerView,
@@ -430,8 +431,11 @@ async function finishSigned(requestId: number, fresh: boolean): Promise<void> {
   const recipients = Array.from(new Set(
     signers.map((s) => s.email).filter((e): e is string => !!e && EMAIL_RE.test(e)),
   ));
+  // A job Archie keeps (server/production/native-jobs.ts) has no JobTread job
+  // to file the signed copy on: it stays in Archie, and the copies still go out.
+  const filesElsewhere = !request.jobtreadFileId && !isNativeJobId(request.jobExternalId);
   const steps: Step[] = [
-    ...(request.jobtreadFileId ? [] : [{ action: 'signature_filed' as const, summary: filedKey(requestId, filename) }]),
+    ...(filesElsewhere ? [{ action: 'signature_filed' as const, summary: filedKey(requestId, filename) }] : []),
     ...recipients.map((to) => ({ action: 'signature_copy_sent' as const, summary: copyKey(requestId, to), to })),
   ];
   const todo = steps.filter((s) => pendingStep(state(s)));

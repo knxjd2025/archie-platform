@@ -7,10 +7,15 @@
  *
  * Admin only. The token is checked against the location before it is saved,
  * sealed at rest, and never sent back.
+ *
+ * A company Roof Lee made cannot connect one: its KynexPro is Roof Lee's, and
+ * a connected one would let Archie's buttons message customers outside Roof
+ * Lee's approvals. It is told so in plain words and nothing is checked or saved.
  */
 import type { Express, Request, Response } from 'express';
 import { requireAuth, requireRole } from '../../auth/middleware';
 import { getCurrentCompany } from '../../tenant/companies';
+import { keepsOwnJobs, OTHER_JOB_SOFTWARE_SOON } from '../../production/native-jobs';
 import { sendFailure } from '../../lib/failure';
 import { GhlLocationTakenError, hasGhlConnection, saveGhlConnection, verifyGhlCredentials } from './connection';
 import { ensureGhlWebhookSecret } from './webhook-secret';
@@ -33,6 +38,7 @@ export function registerGhlConnectionRoutes(app: Express) {
 
   app.put('/api/integrations/ghl/connection', requireAuth, requireRole('admin'), async (req: Request, res: Response) => {
     try {
+      if (keepsOwnJobs(await getCurrentCompany())) return res.status(409).json({ error: OTHER_JOB_SOFTWARE_SOON });
       const locationId = String(req.body?.locationId ?? '').trim();
       const token = String(req.body?.token ?? '').trim();
       if (!locationId || !token) return res.status(400).json({ error: 'Both the Location ID and the Private Integration Token are needed.' });

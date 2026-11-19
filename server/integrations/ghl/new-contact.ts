@@ -10,11 +10,22 @@ import { toAgentConfig } from '../../agents/base-agent';
 import { CMOAgent } from '../../agents/cmo-agent';
 import { getTeamMemberByEmail } from '../../storage/team';
 import { isRoofLeeContact } from '../../sister/quiet';
+import { getCurrentCompany } from '../../tenant/companies';
+import { keepsOwnJobs } from '../../production/native-jobs';
 import { GoHighLevelClient } from '../gohighlevel';
 
-export type NewContactOutcome = 'roofli' | 'team_member' | 'no_advisor' | 'lead';
+export type NewContactOutcome = 'roofli_company' | 'roofli' | 'team_member' | 'no_advisor' | 'lead';
 
 export async function handleGhlNewContact(data: any): Promise<NewContactOutcome> {
+  // A company Roof Lee made: Roof Lee's lead hub is the only way a lead comes
+  // in, and its KynexPro is Roof Lee's. Taking a contact in here would make a
+  // lead Roof Lee never saw, keyed to KynexPro, and send it back as news. So:
+  // nothing at all, whoever made the contact.
+  if (keepsOwnJobs(await getCurrentCompany())) {
+    console.log('[webhook] new GHL contact for a company Roof Lee made; not taken in as a lead');
+    return 'roofli_company';
+  }
+
   // A contact Roof Lee made is already Roof Lee's lead. Taking it in here
   // would make a second lead, send it straight back to Roof Lee as news, and
   // text the customer. So: nothing at all.

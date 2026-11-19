@@ -18,6 +18,7 @@ import {
 import { ownsLead, scopedLeadWhere } from '../access/rep-scope';
 import { fetchSchedule } from '../storage/reports';
 import { JobTreadClient } from '../integrations/jobtread';
+import { isNativeJobId } from '../production/native-jobs';
 import { PRODUCTION_STAGES } from '../production/columns';
 import { jobCommissionBlockers, type ChecksState } from '../../shared/job-commission';
 import { figuresOf } from '../job-commissions/service';
@@ -205,7 +206,8 @@ export function createFollowUpTool(viewer?: AgentViewer): Tool {
           jobExternalId, clientName: p.clientName ? String(p.clientName).slice(0, 200) : null,
           note: note.slice(0, 1000), dueDate, assignedTo: viewer?.teamMemberId ?? null, createdBy: su.email,
         }).returning();
-        if (jobExternalId) {
+        // A job Archie keeps (server/production/native-jobs.ts) has nothing in JobTread to mirror to.
+        if (jobExternalId && !isNativeJobId(jobExternalId)) {
           try { await new JobTreadClient().addJobComment(jobExternalId, `📌 Follow-up${dueDate ? ` (due ${dueDate})` : ''}: ${note}`, su.name); } catch { /* best-effort mirror */ }
         }
         return { ok: true, followUp: { id: row.id, note: row.note, dueDate: row.dueDate, clientName: row.clientName, jobExternalId: row.jobExternalId } };

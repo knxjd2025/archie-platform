@@ -31,6 +31,7 @@ import { commissionStatementFilename, commissionStatementPdf } from './statement
 import { JobTreadClient } from '../integrations/jobtread';
 import { logWrite } from '../writes/log';
 import { sendFailure } from '../lib/failure';
+import { isNativeJobId, NATIVE_SEND_ELSEWHERE_SOON } from '../production/native-jobs';
 
 /** Non-negative dollar amount — a negative cost only exists to inflate profit. */
 const nonNegNum = (v: unknown): number => Math.max(0, num(v));
@@ -529,6 +530,9 @@ async function ownTotals(me: Viewer): Promise<Array<{ status: string; count: num
       const user = req.session.user!;
       const [row] = await db.select().from(jobCommissions).where(eq(jobCommissions.id, Number(req.params.id)));
       if (!row) return res.status(404).json({ error: 'Not found' });
+      // A job Archie keeps (server/production/native-jobs.ts) has no other
+      // system to save it to; the statement still opens here (GET below).
+      if (isNativeJobId(row.jobExternalId)) return res.status(409).json({ error: NATIVE_SEND_ELSEWHERE_SOON });
 
       const pdf = commissionStatementPdf(row, user.email);
       const name = commissionStatementFilename(row);

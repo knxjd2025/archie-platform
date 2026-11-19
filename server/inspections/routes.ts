@@ -14,6 +14,7 @@ import { isScoped, ownsLead, teamMemberIdByEmail, type SessionUser } from '../ac
 import { INSPECTION_FORM_FIELDS, missingRequiredFields } from '../../shared/inspection-form';
 import { COMMERCIAL_INSPECTION_FIELDS, missingRequiredCommercialFields } from '../../shared/commercial-inspection-form';
 import { JobTreadClient } from '../integrations/jobtread';
+import { isNativeJobId } from '../production/native-jobs';
 import { generateStormReport } from '../lib/reports/storm-history-service';
 import { parseUsAddress } from '../lib/reports/address-utils';
 import { googleMapsKey } from '../lib/reports/google-key';
@@ -38,8 +39,13 @@ function formatAnswersForJobTread(answers: Record<string, any>, kind: Inspection
   return lines.join('\n');
 }
 
-/** Best-effort — a JobTread outage should never block the rep's submission. */
+/**
+ * Best-effort — a JobTread outage should never block the rep's submission.
+ * A job Archie keeps (server/production/native-jobs.ts) has nothing in
+ * JobTread: the form stays in Archie, where reports read it.
+ */
 async function syncToJobTread(id: number, jobExternalId: string, answers: Record<string, any>, kind: InspectionFormKind = 'residential') {
+  if (isNativeJobId(jobExternalId)) return;
   try {
     const client = new JobTreadClient();
     const summary = formatAnswersForJobTread(answers, kind);

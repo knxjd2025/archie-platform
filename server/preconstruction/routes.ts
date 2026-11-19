@@ -13,6 +13,7 @@ import { requireAuth } from '../auth/middleware';
 import { isScoped, ownsLead, teamMemberIdByEmail, type SessionUser } from '../access/rep-scope';
 import { PRECON_CHECKLIST_FIELDS, missingRequiredPreconFields } from '../../shared/preconstruction-checklist';
 import { JobTreadClient } from '../integrations/jobtread';
+import { isNativeJobId } from '../production/native-jobs';
 import { sendFailure } from '../lib/failure';
 import { mergeAnswers } from '../../shared/form-answers';
 
@@ -29,8 +30,13 @@ function formatAnswersForJobTread(answers: Record<string, any>): string {
   return lines.join('\n');
 }
 
-/** Best-effort — a JobTread outage should never block the rep's submission. */
+/**
+ * Best-effort — a JobTread outage should never block the rep's submission.
+ * A job Archie keeps (server/production/native-jobs.ts) has nothing in
+ * JobTread: the checklist stays in Archie, where the job page reads it.
+ */
 async function syncToJobTread(id: number, jobExternalId: string, answers: Record<string, any>) {
+  if (isNativeJobId(jobExternalId)) return;
   try {
     const client = new JobTreadClient();
     const summary = formatAnswersForJobTread(answers);

@@ -22,6 +22,7 @@ import {
   type ClaimLetterFields, type InsuranceLetterKind, type LetterImage,
 } from '../../shared/insurance-letters';
 import { JobTreadClient } from '../integrations/jobtread';
+import { isNativeJobId } from '../production/native-jobs';
 import { sendAsMailboxWithAttachments, type MailAttachment } from '../integrations/company-mail';
 import { memberByEmail } from '../access/team-scope';
 import { sendingMailboxFor } from '../calendar/access';
@@ -112,6 +113,10 @@ interface AttachmentRequest {
  * Nothing is silently dropped: whatever can't be sent comes back in `skipped`
  * for the sender to see, because a depreciation request missing its invoice
  * gets refused by the carrier weeks later.
+ *
+ * A job Archie keeps (server/production/native-jobs.ts) has nothing in
+ * JobTread, so JobTread is not asked: any id named comes back as skipped, and
+ * uploads still travel.
  */
 async function collectAttachments(externalId: string, req: AttachmentRequest): Promise<{ attachments: MailAttachment[]; images: LetterImage[]; skipped: string[] }> {
   const attachments: MailAttachment[] = [];
@@ -138,7 +143,9 @@ async function collectAttachments(externalId: string, req: AttachmentRequest): P
   };
 
   const wanted = [...req.photoIds.slice(0, MAX_PHOTOS), ...req.documentIds.slice(0, MAX_DOCS)];
-  if (wanted.length) {
+  if (wanted.length && isNativeJobId(externalId)) {
+    for (const id of wanted) skipped.push(`${req.documentIds.includes(id) ? 'document' : 'photo'} ${id} (not on the job any more)`);
+  } else if (wanted.length) {
     const { files } = await new JobTreadClient().getJobFiles(externalId, 100, 1600);
     for (const id of wanted) {
       const asDoc = req.documentIds.includes(id);
@@ -239,8 +246,9 @@ export function registerInsuranceLetterRoutes(app: Express) {
     // Plenty of claims never make it onto the board but do have the carrier,
     // claim number and adjuster filled in on the JobTread job. Use those to
     // fill any blank the claim record left — a letter typed from scratch is
-    // how claim numbers get transposed.
-    const jt = (lead.insuranceClaim || claim)
+    // how claim numbers get transposed. A job Archie keeps has no JobTread
+    // job: its details come from the claim record alone.
+    const jt = (lead.insuranceClaim || claim) && !isNativeJobId(externalId)
       ? await new JobTreadClient().getJobInsurance(externalId).catch(() => ({} as Record<string, string | boolean | null>))
       : ({} as Record<string, string | boolean | null>);
     const jtText = (k: string): string => {

@@ -9,6 +9,7 @@
  * Everything else becomes a compact `inspector_notes` briefing.
  */
 import { JobTreadClient } from '../integrations/jobtread';
+import { isNativeJobId } from '../production/native-jobs';
 import { extractMeasurementsFromFiles, isMeasurementDiagram } from '../lib/reports/measurement-doc.js';
 
 /**
@@ -43,14 +44,24 @@ const short = (s: string, n = 220) => {
 };
 const day = (s?: string | null) => (s ? new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '');
 
+/** What a job with nothing on file gives: no photos, notes, files or documents. */
+const emptyContext = (): JobContext => ({
+  photos: [], notes: '', counts: { photos: 0, files: 0, messages: 0, documents: 0, dailyLogs: 0 }, measurementDoc: null,
+});
+
 /**
  * Gather a job's context. Every source is best-effort: a failure in one
  * (or an empty job) never blocks report generation.
+ *
+ * A job Archie keeps (server/production/native-jobs.ts) has no JobTread
+ * files, notes or documents, and Archie keeps no photos of its own yet, so it
+ * gathers an empty context and JobTread is never asked.
  */
 export async function gatherJobContext(
   jobId: string,
   opts: { maxPhotos?: number } = {},
 ): Promise<JobContext> {
+  if (isNativeJobId(jobId)) return emptyContext();
   const jt = new JobTreadClient();
   const maxPhotos = Math.min(Math.max(opts.maxPhotos ?? MAX_PHOTOS, 0), 400);
 

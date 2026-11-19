@@ -5,6 +5,7 @@ import { followUps, teamMembers } from '../../shared/schema';
 import { requireAuth } from '../auth/middleware';
 import { teamMemberIdByEmail, type SessionUser } from '../access/rep-scope';
 import { JobTreadClient } from '../integrations/jobtread';
+import { isNativeJobId } from '../production/native-jobs';
 import { sendFailure } from '../lib/failure';
 import { etToday } from '../../shared/schedule-board';
 import { isIsoDate } from '../../shared/et-periods';
@@ -80,7 +81,8 @@ export function registerFollowUpRoutes(app: Express) {
   });
 
   // Create a follow-up. Defaults assignee to the creator. Mirrors a note to
-  // JobTread (best-effort) so it's visible there too.
+  // JobTread (best-effort) so it's visible there too. A job Archie keeps has
+  // nothing in JobTread: its follow-ups stay in Archie.
   app.post('/api/follow-ups', requireAuth, async (req: Request, res: Response) => {
     try {
       const user = req.session.user! as SessionUser;
@@ -107,7 +109,7 @@ export function registerFollowUpRoutes(app: Express) {
         .returning();
 
       // Best-effort mirror to JobTread so the office sees it on the job too.
-      if (jobExternalId) {
+      if (jobExternalId && !isNativeJobId(jobExternalId)) {
         try {
           const due = checked.dueDate ? ` (due ${checked.dueDate})` : '';
           await new JobTreadClient().addJobComment(jobExternalId, `📌 Follow-up${due}: ${String(note).trim()}`, user.name);

@@ -371,6 +371,10 @@ How it is kept:
   contact it makes `roofli`. When such a contact arrives at
   `/api/webhooks/gohighlevel` it is not taken in: no second lead, no news back
   to Roof Lee, no text. This holds for every company.
+- **A company Roof Lee made takes in no KynexPro contact at all**, whoever made
+  it (`handleGhlNewContact` answers `roofli_company` first). Roof Lee's lead
+  hub is the only way a lead comes in for such a company, so no lead keyed to
+  KynexPro appears in Archie and nothing echoes back to Roof Lee as news.
 - **New code that sends must say which kind it is.** A test
   (`server/sister/__tests__/quiet.test.ts`) lists every file that hands a
   text or an email to a provider. A new file that starts sending fails the
@@ -470,6 +474,33 @@ JobTread, so Archie gives its leads keys of its own.
   photos live in its JobTread, and a Roof Lee company has no JobTread. So
   there is no uploaded photo to hand over, and the photo address answers
   `404`. Roof Lee is the place a Roof Lee company's job photos are uploaded.
+  In Archie, such a job's photo and file lists are empty and adding a photo
+  answers `409` "Adding photos to jobs is coming soon for your company."
+- **The job's forms stay in Archie.** The pre-construction checklist, the
+  final walkthrough (and the follow-ups its issues become), the inspection
+  form, a follow-up and the choice of rep are saved and do their board moves
+  as for any job, and none of them is copied to JobTread. A signed
+  certificate or signed document stays in Archie, the report context and the
+  insurance letter read nothing from JobTread, and saving a commission
+  statement or sending a proposal to other job software answers `409`
+  "Sending this to other job software is coming soon for your company."
+- **No other job software, CompanyCam or KynexPro can be connected** by such
+  a company (`PUT /api/integrations/crm/connection`,
+  `PUT /api/integrations/companycam/connection`,
+  `PUT /api/integrations/ghl/connection`): each answers `409` "Connecting other
+  job software is coming soon for your company." and nothing is checked or
+  saved. So the company never holds a mix of JobTread jobs and its own, and
+  Archie's buttons cannot message its customers outside Roof Lee's approvals.
+  With no connection of its own, and the deployment's keys belonging to the
+  original company alone, every JobTread or KynexPro call made for it stops
+  with "not connected" before anything leaves Archie.
+- **Every place that makes a JobTread or KynexPro client is listed** in
+  `server/production/__tests__/outside-systems.test.ts`, with what it does for
+  a job Archie keeps: an Archie path of its own, a plain refusal, or the reason
+  a Roof Lee company can never reach it. That test is permanent: a new place
+  fails it until someone decides. `outside-systems.db.test.ts` walks a job
+  Archie keeps through every one of these steps with clients that throw on any
+  call, and checks the original JobTread company still reaches JobTread.
 - **New columns on `leads`** (migration `0015`): `job_type` (what Roof Lee
   called the job, also kept in `service_type`), `photo_consent`, and four that
   nothing fills yet because the agreement has no field for them: `lat`, `lng`,
@@ -636,7 +667,7 @@ board in Archie; and confirm no text or email reached the test customer.
 
     scripts/test-db.sh
     eval "$(scripts/test-db.sh --env)"
-    SESSION_SECRET=test npx vitest run server/sister server/tenant
+    SESSION_SECRET=test npx vitest run server/sister server/tenant server/production
 
 The database tests skip themselves unless `DATABASE_URL` points at a local
 database. Fixtures use the fictional Summit Ridge Roofing in Cedar Falls.

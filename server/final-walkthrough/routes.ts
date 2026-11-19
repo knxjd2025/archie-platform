@@ -21,6 +21,7 @@ import {
   WALKTHROUGH_FIELDS, missingRequiredWalkthroughFields, walkthroughIssues, walkthroughTally, verifyAnswer, VERIFY_LABELS,
 } from '../../shared/final-walkthrough';
 import { JobTreadClient } from '../integrations/jobtread';
+import { isNativeJobId } from '../production/native-jobs';
 import { sendFailure } from '../lib/failure';
 import { etPlusDays } from '../../shared/et-periods';
 import { mergeAnswers } from '../../shared/form-answers';
@@ -69,8 +70,13 @@ export function cleanAnswers(raw: unknown): Record<string, any> {
   return out;
 }
 
-/** Best-effort — a JobTread outage should never block the submission. */
+/**
+ * Best-effort — a JobTread outage should never block the submission. A job
+ * Archie keeps (server/production/native-jobs.ts) has nothing in JobTread:
+ * the walkthrough and its follow-ups stay in Archie.
+ */
 async function syncToJobTread(id: number, jobExternalId: string, answers: Record<string, any>) {
+  if (isNativeJobId(jobExternalId)) return;
   try {
     const result = await new JobTreadClient().addJobComment(jobExternalId, formatWalkthroughForJobTread(answers), 'Final Walkthrough');
     if (result.ok) {

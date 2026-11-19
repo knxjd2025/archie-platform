@@ -45,6 +45,20 @@ export function keepsOwnJobs(company: Pick<Company, 'roofliCompanyId'> | null | 
   return !!company?.roofliCompanyId;
 }
 
+/**
+ * Said when a company that keeps its own jobs tries to connect other job
+ * software, CompanyCam or KynexPro (server/integrations/connection-routes.ts,
+ * server/integrations/ghl/routes.ts). Until other systems plug in through
+ * jobBackendFor, such a company keeps every job in Archie, never a mix.
+ */
+export const OTHER_JOB_SOFTWARE_SOON = 'Connecting other job software is coming soon for your company.';
+
+/** Said when a photo is added to a job Archie keeps, until Archie keeps photos itself (server/photos/routes.ts). */
+export const NATIVE_PHOTOS_SOON = 'Adding photos to jobs is coming soon for your company.';
+
+/** Said when a file or a proposal of a job Archie keeps would be sent to other job software. */
+export const NATIVE_SEND_ELSEWHERE_SOON = 'Sending this to other job software is coming soon for your company.';
+
 /** Where a new lead of Archie's own starts: the first step of the Sales board (shared/sales-pipeline.ts SALES_BAND). */
 export const NEW_LEAD_STAGE = 'New Lead';
 

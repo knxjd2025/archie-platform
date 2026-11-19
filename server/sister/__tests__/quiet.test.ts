@@ -247,7 +247,8 @@ describe.skipIf(!localDb)('no messages of its own', async () => {
     const c = await roofLeeCompany();
     await advisor(c.id, 'cmo');
     const contact = { id: 'ghl-contact-1', firstName: 'Pat', lastName: 'Hollis', phone: pat.phone, email: pat.email };
-    expect(await runAsCompany(c.id, () => handleGhlNewContact({ ...contact, tags: ['roofli', 'replacement'] }))).toBe('roofli');
+    // A company Roof Lee made is asked about first: it takes in no KynexPro contact at all.
+    expect(await runAsCompany(c.id, () => handleGhlNewContact({ ...contact, tags: ['roofli', 'replacement'] }))).toBe('roofli_company');
     expect(await leads(c.id)).toEqual([]);
     expect(texts).toEqual([]);
 
@@ -258,12 +259,13 @@ describe.skipIf(!localDb)('no messages of its own', async () => {
     expect(texts).toEqual([]);
   });
 
-  it('takes in a contact Roof Lee did not make: a lead either way, a text only outside Roof Lee', async () => {
+  it('takes in a contact Roof Lee did not make only outside Roof Lee: there a lead and a text, in a Roof Lee company nothing', async () => {
     const contact = { id: `ghl-${randomUUID().slice(0, 8)}`, firstName: 'Pat', lastName: 'Hollis', phone: pat.phone, email: pat.email, city: 'Cedar Falls', tags: ['replacement'] };
     const c = await roofLeeCompany();
     await advisor(c.id, 'cmo');
-    expect(await runAsCompany(c.id, () => handleGhlNewContact(contact))).toBe('lead');
-    expect(await leads(c.id)).toEqual([expect.objectContaining({ source: 'gohighlevel', firstName: 'Pat', serviceType: 'replacement' })]);
+    // Roof Lee's lead hub is the only way in for such a company (A1-g).
+    expect(await runAsCompany(c.id, () => handleGhlNewContact(contact))).toBe('roofli_company');
+    expect(await leads(c.id)).toEqual([]);
     expect(texts).toEqual([]);
 
     const id = await ownCompany();

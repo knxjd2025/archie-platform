@@ -33,6 +33,7 @@ import { sendAsMailbox } from '../integrations/company-mail';
 import { memberByEmail } from '../access/team-scope';
 import { sendingMailboxFor } from '../calendar/access';
 import { JobTreadClient } from '../integrations/jobtread';
+import { isNativeJobId } from '../production/native-jobs';
 import { rateLimit } from '../lib/rate-limit';
 import { certificateLinkCompany } from '../tenant/public-links';
 
@@ -474,10 +475,14 @@ function readyToSign(row: typeof jobCertificates.$inferSelect): boolean {
 const notReadyPage = () => publicPage('Not ready yet',
   "<h1>This certificate isn't ready to sign yet</h1><p>Your roofer still has to finish it. Ask your rep to send it to you when it's ready.</p>");
 
-/** Upload the signed certificate to the JobTread job, so it lives with the job's paperwork. */
+/**
+ * Upload the signed certificate to the JobTread job, so it lives with the
+ * job's paperwork. A job Archie keeps (server/production/native-jobs.ts) has
+ * no JobTread job: the signed certificate stays in Archie, where its PDF opens.
+ */
 async function fileSignedCertificate(id: number): Promise<void> {
   const [row] = await db.select().from(jobCertificates).where(eq(jobCertificates.id, id));
-  if (!row || row.jobtreadFileId) return;
+  if (!row || row.jobtreadFileId || isNativeJobId(row.jobExternalId)) return;
   const pdf = certificatePdf(row.data as CertificateData, signaturesOf(row));
   const saved = await new JobTreadClient().uploadJobFile(row.jobExternalId, {
     name: 'Certificate of completion (signed).pdf',
