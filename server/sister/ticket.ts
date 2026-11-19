@@ -24,7 +24,7 @@ export interface TicketPayload {
   roofliCompanyId: string;
   authUserId: string;
   email: string;
-  role: 'owner' | 'admin' | 'office' | 'crew';
+  role: 'owner' | 'admin' | 'office' | 'crew' | 'sales_manager' | 'salesperson';
   iat: number;
   exp: number;
 }
@@ -34,7 +34,11 @@ const LIFETIME_SECONDS = 60;
 /** Far longer than any real ticket. Anything bigger is not read at all. */
 const MAX_TICKET_LENGTH = 4096;
 const PRODUCTS: readonly string[] = ['archie', 'roofn', 'kontentfire'];
-const ROLES: readonly string[] = ['owner', 'admin', 'office', 'crew'];
+/**
+ * Every Roof Lee role. A ticket carries the role as its product is told it
+ * (roleStatedTo in contract.ts): only Archie is ever sent a sales role.
+ */
+const ROLES: readonly string[] = ['owner', 'admin', 'office', 'crew', 'sales_manager', 'salesperson'];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const JTI = /^[0-9a-f]{32}$/;
 

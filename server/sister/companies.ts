@@ -22,7 +22,7 @@ import { clearProfileCache } from '../tenant/profile';
 import { clearSessionRevalidationCache } from '../auth/middleware';
 import { endSessionsForCompany } from '../auth/sessions';
 import { mapCompanyFacts } from './facts';
-import { syncMembers } from './members';
+import { ROOFLI_SOURCE, syncMembers } from './members';
 import { ROLE_MAP, type Acting, type CloseMode, type CompanyRequest, type ProvisionPlan, type Skipped } from './contract';
 
 type Status = Company['status'];
@@ -169,11 +169,12 @@ export function sisterStatus(status: Status): SisterStatus {
  * May this person pause or close this company? Archie's own answer (contract
  * rule 4), from its own roster: Roof Lee naming someone is not enough.
  *
- * They must be on this company's team right now, found by their shared
- * sign-in id inside this company only, and hold the admin role here (an owner
- * or admin in Roof Lee). The role the request states must agree: if Roof Lee
- * itself says they are office or crew, the answer is no, whatever Archie
- * still holds from before.
+ * They must be on this company's team right now, as someone Roof Lee sent,
+ * found by their shared sign-in id inside this company only, and hold the
+ * admin role here (an owner or admin in Roof Lee). Someone the company added
+ * in Archie itself never acts for Roof Lee. The role the request states must
+ * agree: if Roof Lee itself says they are office, crew or a sales role, the
+ * answer is no, whatever Archie still holds from before.
  *
  * Nobody named (a subscription simply ended) is allowed, as the contract says.
  */
@@ -182,7 +183,7 @@ export async function mayCloseCompany(company: Company, acting: Acting | undefin
   if (ROLE_MAP[acting.role] !== 'admin') return false;
   const [person] = await runAsCompany(company.id, () =>
     db.select({ role: teamMembers.role, active: teamMembers.active }).from(teamMembers)
-      .where(and(eq(teamMembers.companyId, company.id), eq(teamMembers.authUserId, acting.authUserId))),
+      .where(and(eq(teamMembers.companyId, company.id), eq(teamMembers.authUserId, acting.authUserId), eq(teamMembers.source, ROOFLI_SOURCE))),
   { loadProfile: false });
   return !!person && person.active && atLeast(person.role, 'admin');
 }

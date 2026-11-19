@@ -17,7 +17,9 @@
  */
 import { and, desc, eq, ilike, inArray, or, type SQL } from 'drizzle-orm';
 import { db } from '../db';
-import { leadNotes, leads, productionPipeline, writeLog } from '../../shared/schema';
+import { leadNotes, leads, productionPipeline, repAssignments, writeLog } from '../../shared/schema';
+import { isNarrowed } from '../../shared/rbac';
+import { canOwnJobs } from '../access/assignment-service';
 import { requireCompanyId } from '../tenant/context';
 import { leadScopeFor, type ActingMember } from './acting';
 import type { LeadChange, NewLead } from './contract';
@@ -179,6 +181,11 @@ const logEntry = (member: ActingMember, action: string, targetId: string, summar
   actor: member.email, system: 'roofli', action, targetId, summary: summary.slice(0, 300), ok: true,
 });
 
+/** Would this person not see a lead they add unless it were theirs, and may they own one? */
+function ownsWhatTheyAdd(member: ActingMember): boolean {
+  return isNarrowed(member.role) && member.role === member.heldRole && canOwnJobs(member.heldRole);
+}
+
 /**
  * A new lead, kept in Archie and nowhere else. `key` is the request's
  * idempotency key: the lead and the answer to that key are saved together, so
@@ -187,13 +194,23 @@ const logEntry = (member: ActingMember, action: string, targetId: string, summar
  * It is given its job key now (the company keeps its own jobs: only a company
  * Roof Lee made is ever reached here) and sits in New Lead, so office staff
  * can open it in Archie and it shows on the Sales board.
+ *
+ * Who owns it from the start follows the lead form (server/writes/routes.ts):
+ * the person it was made for, when they would otherwise not see it (a
+ * salesperson, or a sales manager who sees only their own team), so they can
+ * open it straight away. Never a crew member, who cannot add a lead anyway
+ * and must never own one (owning a job opens its money), and never someone
+ * whose role Roof Lee stated lower than Archie holds (they see nothing of
+ * their own here: ./acting.ts). Anyone else's lead has no owner yet and waits
+ * on the Assignments page, as before.
  */
 export async function createLead(member: ActingMember, lead: NewLead, key: string | undefined): Promise<SisterAnswer> {
   const companyId = requireCompanyId();
   const [first, ...rest] = lead.name.split(/\s+/);
+  const jobKey = newJobKey();
   return db.transaction(async (tx) => {
     const [row] = await tx.insert(leads).values({
-      source: ROOFLI_LEAD_SOURCE, externalId: newJobKey(), stage: NEW_LEAD_STAGE,
+      source: ROOFLI_LEAD_SOURCE, externalId: jobKey, stage: NEW_LEAD_STAGE,
       firstName: first, lastName: rest.join(' ') || null, jobName: lead.name,
       phone: lead.phone ?? null, email: lead.email ?? null,
       address: lead.address ?? null, city: lead.town ?? null,
@@ -201,6 +218,12 @@ export async function createLead(member: ActingMember, lead: NewLead, key: strin
       status: 'new',
       enteredBy: member.email, enteredByName: member.name,
     }).returning({ id: leads.id });
+    if (ownsWhatTheyAdd(member)) {
+      await tx.insert(repAssignments).values({
+        jobExternalId: jobKey, teamMemberId: member.id, role: 'primary', source: 'created',
+        confidence: 'high', evidence: `added through Roof Lee for ${member.name}`, assignedBy: member.email,
+      });
+    }
     await tx.insert(writeLog).values(logEntry(member, 'create_lead', String(row.id), lead.name));
     const answer: SisterAnswer = { status: 201, body: { leadId: String(row.id) } };
     await rememberWithin(tx, companyId, key, answer);

@@ -6,18 +6,32 @@
  */
 import type { TeamRole } from '../../shared/rbac';
 
-export const ROOFLI_ROLES = ['owner', 'admin', 'office', 'crew'] as const;
+/**
+ * Every role Roof Lee sends Archie. Archie is told the two sales roles (added
+ * in Roof Lee on 2026-11-19) as they are, wherever a role is sent: a team
+ * list, an `acting` block, `actingRole` in an address and a sign-in ticket.
+ * A role missing here would be skipped in a team list, and the person would
+ * lose their access, so a new Roof Lee role must be added here before Roof Lee
+ * sends it.
+ */
+export const ROOFLI_ROLES = ['owner', 'admin', 'office', 'crew', 'sales_manager', 'salesperson'] as const;
 export type RoofliRole = (typeof ROOFLI_ROLES)[number];
 
 /**
  * A person's role in Archie, from their role in Roof Lee. Archie applies its
  * own rules to the role it holds, never to a role named in a request.
+ *
+ * A sales manager is Archie's sales leader (`manager`): their own book and
+ * their direct reports'. A salesperson is Archie's sales rep (`sales`): only
+ * their own leads and jobs, in reads and writes alike (shared/rbac.ts).
  */
 export const ROLE_MAP: Record<RoofliRole, TeamRole> = {
   owner: 'admin',
   admin: 'admin',
   office: 'customer_service',
   crew: 'production',
+  sales_manager: 'manager',
+  salesperson: 'sales',
 };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

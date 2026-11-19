@@ -224,10 +224,10 @@ request from Roof Lee with a refusal, which is why they go in the same step.
 | `server/sister/verify.ts` | Roof Lee's signing code, pasted word for word. Do not edit here. |
 | `server/sister/door.ts` | Checks the signature on every request before anything else runs. |
 | `server/sister/routes.ts` | The endpoints. |
-| `server/sister/contract.ts` | Reads what Roof Lee sends. Maps roles. |
+| `server/sister/contract.ts` | Reads what Roof Lee sends. Maps its six roles to Archie's. |
 | `server/sister/companies.ts` | Makes, updates, pauses and closes a company. |
 | `server/sister/setup.ts` | Sets a new company up (advisors, knowledge base) once, and records it the way the seed cron does. |
-| `server/sister/members.ts` | Makes the team exactly the list Roof Lee sent. |
+| `server/sister/members.ts` | Makes the people Roof Lee sent exactly the list it sent, and leaves the people the company added in Archie alone. |
 | `server/sister/facts.ts` | What Archie takes from a company's confirmed facts. |
 | `server/sister/idempotency.ts` | Does a write once, however many times it arrives. |
 | `server/sister/ticket.ts` | Roof Lee's sign-in ticket reader, pasted word for word. Do not edit here. |
@@ -331,10 +331,17 @@ and jobs, add a lead, change one and add a note.
   on the company's own team by their shared sign-in id and applies its own
   role rules (`shared/rbac.ts`) to the role it holds for them. Where Roof Lee
   states a lower role than Archie holds, the lower one counts. Someone not on
-  the team is answered `403`.
+  the team, or added in Archie rather than sent by Roof Lee, is answered
+  `403`.
 - **What each role gets.** Owners, admins and office staff can see and work
-  every lead. Crew (the production role here) cannot see leads in Archie at
-  all: a list comes back empty, one lead answers `404`, a write `403`.
+  every lead. A salesperson (a sales rep here) sees and changes only their
+  own leads and jobs, in reads and writes alike: anyone else's is answered
+  `404`, exactly as if it did not exist, whether it is read, changed, noted
+  or moved. A sales manager (a sales leader here) sees their own and their
+  direct reports' (the reporting line is set in Archie; Roof Lee's team list
+  does not change it). Crew (the production role here) cannot see leads in
+  Archie at all: a list comes back empty, one lead answers `404`, a write
+  `403`.
 - **A write is done once.** Every write must carry an `idempotency-key`. A new
   lead, and a new note, are saved in the same transaction as the answer to
   that key, so the same key can never make a second one. A refusal is not
@@ -344,8 +351,12 @@ and jobs, add a lead, change one and add a note.
   with no call to JobTread, KynexPro or anything else, and no message to
   anyone. It gets its job key at once and starts in `New Lead` (so its
   `stage` in an answer reads `New Lead` until it is moved), which lets office
-  staff open it in Archie. Every change is written to the company's log under
-  the person it was for.
+  staff open it in Archie. A lead added for a salesperson, or for a sales
+  manager, is theirs from the start (one `rep_assignments` row, written with
+  the lead), so they can open it straight away, the same rule as Archie's own
+  lead form. Anyone else's has no owner yet and waits on the Assignments
+  page. Every change is written to the company's log under the person it was
+  for.
 - **Ids** are Archie's own row numbers, as digits. Leads and jobs share one
   list; a record is a `job` once it sits on the production board and a `lead`
   until then.
@@ -768,7 +779,10 @@ sixty seconds and works once. Archie then:
    and sends the browser to `/`.
 
 The role in the ticket grants nothing: the person gets the role Archie holds
-for them from the last team list. Every refusal is the same page, with one
+for them from the last team list. A ticket may carry any of Roof Lee's six
+roles (the reader, pasted from Roof Lee, knows all six). Only people Roof Lee
+sent come in this way; someone the company added in Archie signs in by email
+as before. Every refusal is the same page, with one
 plain sentence, status `401`, no session and no reason. The ticket is read
 from the form body only, never from the address, and is never logged.
 
@@ -828,9 +842,17 @@ first feature that does must send it.
   slug. Nothing that already existed is attached, whatever name, slug or email
   matches. A person whose email already belongs to someone else in Archie is
   left out and named in the answer, never moved or merged.
-- **The team list is the whole truth.** Exactly the people in it have access.
-  Anyone else in that company is switched off and their sessions are ended at
-  once. Rows are kept, so their history stays.
+- **The team list is the whole truth for people Roof Lee sent.** Exactly the
+  people in it have access through Roof Lee. Someone Roof Lee sent before and
+  now leaves out is switched off and their sessions are ended at once. Rows
+  are kept, so their history stays.
+- **Not everyone signs in to Roof Lee.** Someone the company added in Archie
+  itself (on the Team page: no source, no shared sign-in id) is not on Roof
+  Lee's list and is not Roof Lee's to remove. Whatever list arrives, they keep
+  their access, their role and their email sign-in, and stay signed in. They
+  never act for Roof Lee: a request naming them, even by a matching sign-in
+  id, is answered `403`, and a team list naming that id leaves the person out
+  (`skipped`) rather than taking the row over.
 - **People Roof Lee sent have no email sign-in.** They have no password, and
   the lookup every email sign-in starts with (`findSignInMember`) never finds
   them. Their only way in is Roof Lee's hand-off ("One sign-in" below).
@@ -846,9 +868,10 @@ first feature that does must send it.
   runs for it. A paused company comes back when Roof Lee sends it again with
   an active plan. A closed one stays closed.
 - **Archie checks who is asking.** When a pause or close names a person, that
-  person must be on this company's team in Archie right now, found by their
-  shared sign-in id inside this company, and hold the admin role here (an
-  owner or admin in Roof Lee). The role the request states must agree. Anyone
+  person must be on this company's team in Archie right now, as someone Roof
+  Lee sent, found by their shared sign-in id inside this company, and hold the
+  admin role here (an owner or admin in Roof Lee). A sales manager or a
+  salesperson never can. The role the request states must agree. Anyone
   else is answered `403` and nothing changes. A refusal is not remembered, so
   the same request can be sent again once the team list has caught up. A pause
   that names nobody (a subscription ended) is allowed, as the contract says.
@@ -864,12 +887,25 @@ first feature that does must send it.
 
 ## Role map
 
-| Roof Lee | Archie |
-|---|---|
-| owner | admin |
-| admin | admin |
-| office | customer_service |
-| crew | production |
+Roof Lee has six roles and tells Archie each of them as it is, wherever a role
+is sent: a team list, an `acting` block, `actingRole` in an address, and a
+sign-in ticket. Archie takes all six (`ROLE_MAP` in `server/sister/contract.ts`).
+A role Archie did not know would leave that person out of a team list
+(`skipped`), with no access, so a new Roof Lee role must be added here before
+Roof Lee sends it.
+
+| Roof Lee | Archie | What it means in Archie |
+|---|---|---|
+| owner | admin | Everything. |
+| admin | admin | Everything. |
+| office | customer_service | Every customer and lead, no money. |
+| crew | production | No leads at all, no money. |
+| sales_manager | manager (Sales Leader) | Their own leads and jobs and their direct reports'. |
+| salesperson | sales (Sales Rep) | Only their own leads and jobs, through Roof Lee and in Archie alike. |
+
+Where Roof Lee states a role lower than the one Archie holds, the lower one
+counts, and someone held to their own book by that lower role sees nothing of
+their own (the list may not have caught up yet).
 
 ## Turning it on (live step, owner only)
 
@@ -905,6 +941,13 @@ board in Archie; and confirm no text or email reached the test customer.
     scripts/test-db.sh
     eval "$(scripts/test-db.sh --env)"
     SESSION_SECRET=test npx vitest run server/sister server/tenant server/production server/photos
+
+The roles and the team list are tested in
+`server/sister/__tests__/roles.test.ts`: both sales roles kept on every list
+and in a sign-in, a salesperson held to their own leads and jobs through Roof
+Lee and in Archie, someone added in Archie surviving every list with their
+email sign-in, someone Roof Lee left out switched off, and the original
+company exactly as before.
 
 The photo tests are `server/photos/__tests__` (the photo routes, and the
 checklists using the job's own photos in `checklist-photos.db.test.ts`) and
