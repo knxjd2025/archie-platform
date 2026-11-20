@@ -137,7 +137,7 @@ using Archie), or unset `SISTERS_ARCHIE_SECRET` (everything under
 
 ## Before deploying this code (owner only, must come first)
 
-**Apply migrations `0011` to `0016` to the database before this code is
+**Apply migrations `0011` to `0017` to the database before this code is
 deployed. Not after, and not as part of switching the link on.**
 
 | Migration | What it adds | When |
@@ -148,6 +148,7 @@ deployed. Not after, and not as part of switching the link on.**
 | `0014_roofli_events.sql` | the table `outbound_events` | Same step. Nothing touches it until the link is on. |
 | `0015_archie_native_jobs.sql` | six columns on `leads`, one partial unique index | **Before deploy.** The code reads these columns on every read of a lead. |
 | `0016_job_photos.sql` | the table `job_photos` | Same step. Only the photos of a job of Archie's own read or write it, and only a company Roof Lee made has one. The number is provisional (renumbered when the branches meet). |
+| `0017_crews.sql` | the tables `crews`, `crew_members`, `crew_assignments`, `job_milestones` | Same step. Only the crew and install routes read or write them, and they answer 404 to every company Roof Lee did not make. Provisional number, like `0016`. |
 
 Why the order matters. This code reads the new columns every time it reads a
 person, a company or a lead, whether or not the link is switched on. Deployed
@@ -158,12 +159,12 @@ screen that shows a lead. Nothing in the build or the deploy runs migrations,
 so this is a step a person has to do.
 
 The other order is safe. The code that is live today names none of the new
-columns or tables, so it carries on exactly as before with all six applied:
+columns or tables, so it carries on exactly as before with all seven applied:
 the new columns are null (and `photo_consent` false) for every existing row,
 the new index is empty, and the new tables are empty.
 
 **How this sits with `0006` to `0010`.** Those five are main's and are already
-in the live database; these six come after them and change none of them.
+in the live database; these seven come after them and change none of them.
 They need `0008` (the system role) to be there, because each new table gets
 its row level security from `archie_protect_company_table()`, which `0008`
 created: the company's own rows for everyone, every row for the
@@ -195,15 +196,15 @@ hold at once because the code that is live already has `0008`.
    checkout of this branch** (the command applies the files in the folder it
    is run from; run from main it finds nothing new, says so and exits clean):
    `DATABASE_URL=<owner url> npx tsx scripts/migrate.ts`
-   It skips the eleven already applied and runs `0011` to `0016` in order,
+   It skips the eleven already applied and runs `0011` to `0017` in order,
    each in its own transaction. Each takes its locks for milliseconds and
    waits at most 5 seconds for one (`lock_timeout`); if one fails on the
    timeout, run the command again.
 4. Check they are there: `select auth_user_id, source from team_members limit 1`,
    `select roofli_company_id from companies limit 1` and
    `select job_type, photo_consent from leads limit 1` all run without an
-   error, and this returns five rows, each with `{company_isolation,company_system}`:
-   `select tablename, array_agg(policyname::text order by policyname) from pg_policies where tablename in ('sister_idempotency','sister_sso_tickets','lead_notes','outbound_events','job_photos') group by 1;`
+   error, and this returns nine rows, each with `{company_isolation,company_system}`:
+   `select tablename, array_agg(policyname::text order by policyname) from pg_policies where tablename in ('sister_idempotency','sister_sso_tickets','lead_notes','outbound_events','job_photos','crews','crew_members','crew_assignments','job_milestones') group by 1;`
 5. Only then deploy this code. Merging this branch into main IS the deploy,
    so steps 1 to 4 come before the merge. A preview build of this branch, if
    previews use the same database, fails sign-in and lead screens until then;
@@ -246,6 +247,11 @@ request from Roof Lee with a refusal, which is why they go in the same step.
 | `server/photos/store.ts` | Archie's private photo store (Kynex's R2 bucket, S3-compatible). The only place its settings are read. Never a public address. |
 | `server/photos/jpeg-clean.ts` | Takes every metadata block (location included) out of a JPEG before it is stored, and again before one is handed to Roof Lee, and checks its own work. |
 | `shared/job-photos.ts` | The phases, the categories and the caption limit, shared by the server and the screens, and `photoAnswerIds` (the photos a checklist names). |
+| `shared/crews.ts` | Crews and install dates: the booking check in plain words, company calendar dates and weeks, the crew's forward-only steps, the milestones, and `isCrewSeat` for billing. |
+| `server/crews/access.ts` | `crewJobFor`, the one crew check: a job booked for this person's crew. Never `ownsLead`. |
+| `server/crews/view.ts` | `crewJobView`, the allow-list of what a crew sees about a job. No money. |
+| `server/crews/store.ts` | Crews, their people, a job's install, the crew week and the milestones, in the database. |
+| `server/crews/routes.ts` | The office's crew and install routes and the crew's phone routes. 404 for every company Roof Lee did not make. |
 
 Both entry files (`server/index.ts` and `api/index.ts`) keep the raw body for
 `/api/sister` ahead of `express.json`. The signature is over the bytes as they
@@ -683,9 +689,11 @@ JobTread, so Archie gives its leads keys of its own.
   - **Who.** Anyone who may open the job (`ownsLead`) sees and adds its
     photos; everyone else, another company included, gets `404` on every one
     of these, the same as a photo that is not there. A crew (`production`)
-    gets `404` too, even with an assignment row on the job: crews get no job
-    access through `ownsLead` here, and adding crew photos waits for crews to
-    be put on jobs (Stage D).
+    gets `404` on these routes too, even with a rep assignment row on the job:
+    crews get no job access through `ownsLead`. A crew adds and sees a job's
+    photos through its own routes instead, only for a job booked for its crew
+    (see "Crews and install dates"), and may open one photo's copy
+    (`GET /api/photos/{id}/{thumb|working}`) through the same crew check.
   - **Phases and categories.** Before, During or After (Roof Lee's own three
     words), an optional category from a fixed list (`shared/job-photos.ts`,
     including `checklist`), and an optional caption of at most 500
@@ -777,6 +785,94 @@ JobTread, so Archie gives its leads keys of its own.
 A Roof Lee company's lead gets onto the board when Roof Lee moves it, or when
 a person presses "Start production" on its page; from there everything on the
 board works from inside Archie.
+
+## Crews and install dates
+
+Stage D, for a company Roof Lee made only (`keepsOwnJobs`). Every route below
+answers `404` to any other company, for every role, and none of its screens
+change (`crewScreensFor` in `client/src/lib/crews-view.ts`). Homeowner
+appointments are not here: Roof Lee books them in Kynex Pro.
+
+- **The tables** (migration `0017`, provisional number): `crews` (a name, a
+  colour, switched on or off; no rates or prices), `crew_members` (who is on
+  which crew, one crew per person), `crew_assignments` (a job's install: crew,
+  first day, optional last day, optional start time, a note for the crew, and
+  status `scheduled`, `in_progress` or `done`; one per job, keyed on the job
+  key like `job_photos`) and `job_milestones`. Each is behind
+  `archie_protect_company_table`. A crew member row and an install name their
+  crew through `(company_id, crew_id)`, so a row can never name another
+  company's crew. A person is checked as the company before they are put on a
+  crew (there is no foreign key to `team_members`).
+- **Dates are the company's own.** An install is a plain calendar date
+  (`YYYY-MM-DD`), never an instant, and "today" and "this week" come from the
+  company's time zone (`shared/company.ts` `timeZone`, through `etToday`),
+  never Eastern time written in. Weeks run Monday to Sunday. Pure rules are in
+  `shared/crews.ts`.
+- **Crew members are a kind of team member billing can count.** A crew
+  member is a team member on the Production role. `isCrewSeat` and
+  `countCrewSeats` in `shared/crews.ts` answer "is this a crew sign-in"
+  (active, may sign in, Production) for the Archie team's billing, which is
+  not built here.
+- **The office** (office staff and up: `mayScheduleCrews`, never a salesperson
+  or a crew; for one job, someone who may open it):
+  - `GET /api/crews` the crews with who is on each, and everyone who can be on
+    one; `POST /api/crews` `{ name, color? }`; `PATCH /api/crews/{id}`
+    `{ name?, color?, active? }` (a crew with installs still ahead cannot be
+    switched off); `PUT /api/crews/{id}/members` `{ memberIds }` (Production
+    people only, "Only people on the Production role can be on a crew."; a
+    person on another crew moves).
+  - `GET /api/crews/week?week=YYYY-MM-DD` the week holding that date: each
+    install on every day it covers, and the jobs on the production board
+    (Approved to Install) still waiting for one. Names, towns and dates only:
+    old Archie's board selected the approved price and the map pin, and this
+    one never does.
+  - `GET|PUT|DELETE /api/jobs/{key}/install` a job's booking
+    (`{ crewId, installDate, endDate?, startTime?, notes? }`, refused in plain
+    words); it can come off the schedule only while the crew has not started.
+    `POST /api/jobs/{key}/install/status` `{ status }` lets the office set any
+    status.
+  - On screen: an Install box on the job's page and on its Production board
+    card, and a "Crew week" view beside the board, with the jobs waiting and
+    the crews and their people.
+- **The crew's phone.** A crew member of such a company lands on their crew's
+  jobs instead of Home (`client/src/pages/crew-home.tsx`): today and late
+  ones first, then coming up, then finished in the last two weeks. Each job
+  shows the customer's name, the address with a Directions link, the day and
+  start time, the office's note, the work as a tick for each trade, Start and
+  Done, and During or After photos. The routes:
+  - `GET /api/crew/jobs`, `GET /api/crew/jobs/{key}`;
+  - `POST /api/crew/jobs/{key}/status` `{ status }`, forward one step at a
+    time (Scheduled, then Working on it, then Done);
+  - `POST /api/crew/jobs/{key}/trade-done` `{ trade }`, the same tick the
+    production board makes (`completeTrade`);
+  - `GET|POST /api/crew/jobs/{key}/photos`, into `job_photos` with phase
+    During (the default) or After, cleaned of location like every photo.
+- **One crew check, never `ownsLead`.** Every crew route asks one question,
+  `crewJobFor` in `server/crews/access.ts`: is the person on the Production
+  role, on an active crew, and is this job booked for that crew? Anything
+  else is `404`, the same as a job that is not there. `ownsLead` is not
+  widened for crews, because two routes that return money check only
+  `ownsLead` (a job's estimates and daily logs).
+- **Crews never see money.** What a crew is shown is built by `crewJobView`
+  (`server/crews/view.ts`), an allow-list: no projected value, estimate,
+  invoice, deposit, payment tick or commission, and not the lead's own notes
+  (office staff may have typed a price there). The homeowner's phone and
+  email are left out until the owner decides (open question D9). The note the
+  office writes for the crew is labelled "no prices: the crew sees this".
+- **Milestones for Roof Lee.** Booking an install, booking it again for
+  another crew, day or time, the crew starting and the crew finishing each add
+  a row to `job_milestones` (`install_scheduled`, `install_started`,
+  `install_done`), and the booking keeps `scheduled_at`, `started_at` and
+  `done_at`. Nothing reads them yet: Stage E will send `job.milestone` to Roof
+  Lee from them. No message goes to Roof Lee now.
+- **Every step is logged** in the company's log (system `archie`): crew made,
+  changed and its people, install booked, cleared and its status, and each
+  crew photo (`upload_photo`).
+- **Not yet:** a crew asking the office for extra work from the phone;
+  showing crews the homeowner's phone (D9); the checklist's "no later than
+  7:00 AM" as a company setting and the walkthrough's follow-up date in the
+  company's time zone (both still in the plan's Stage D list); and sending the
+  milestones to Roof Lee (Stage E).
 
 ## One sign-in
 
@@ -972,7 +1068,7 @@ board in Archie; and confirm no text or email reached the test customer.
 
     scripts/test-db.sh
     eval "$(scripts/test-db.sh --env)"
-    SESSION_SECRET=test npx vitest run server/sister server/tenant server/production server/photos
+    SESSION_SECRET=test npx vitest run server/sister server/tenant server/production server/photos server/crews
 
 The roles and the team list are tested in
 `server/sister/__tests__/roles.test.ts`: both sales roles kept on every list
@@ -980,6 +1076,17 @@ and in a sign-in, a salesperson held to their own leads and jobs through Roof
 Lee and in Archie, someone added in Archie surviving every list with their
 email sign-in, someone Roof Lee left out switched off, and the original
 company exactly as before.
+
+Crews and install dates are tested in `server/crews/__tests__`:
+`crews.db.test.ts` (the office books, the crew week in the company's own
+dates, a crew starts, ticks, adds a photo and finishes with each milestone
+recorded, another crew's or company's job is 404 on every crew route, and a
+company Roof Lee did not make gets 404 on all of it with its board as before)
+and `crew-money-walk.db.test.ts`, which is PERMANENT: it lists every read
+route the app registers and reads each as a crew member booked on a job with
+a price, and fails if any answer holds that price or a money field with
+anything in it. A new route is walked without any change there. A field that
+only looks like money is listed in it, by hand, with the reason.
 
 The photo tests are `server/photos/__tests__` (the photo routes, and the
 checklists using the job's own photos in `checklist-photos.db.test.ts`) and
