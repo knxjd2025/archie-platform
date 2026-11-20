@@ -6,10 +6,10 @@ interface Tally { doors: number; contacted: number; presented: number; referrals
 interface Goals { inputs: GoalInputs; plan: ReturnType<typeof incomePlan>; progress: { weekStart: string; week: Tally; today: Tally }; saved: boolean }
 
 /**
- * The Income Goal Plan from the sales training, live: the rep types the
+ * The Earnings Plan, live: the rep types the
  * income they want, their average commission and close rate, and the card
  * turns it into sales, appointments and doors per week — then shows this
- * week's real numbers against it, plus today's score in the points game.
+ * week's real numbers against it, plus today's Daily Scorecard.
  */
 export default function GoalsCard({ onOpenPlaybook }: { onOpenPlaybook?: (docId: string) => void }) {
   const [g, setG] = useState<Goals | null>(null);
@@ -55,7 +55,7 @@ export default function GoalsCard({ onOpenPlaybook }: { onOpenPlaybook?: (docId:
           <p className="text-xs text-gray-400">Your income goal, turned into the doors, appointments and sales it takes each week.</p>
         </div>
         <div className="flex gap-2">
-          {onOpenPlaybook && <button onClick={() => onOpenPlaybook('income-goal-plan')} className="text-xs text-blue-600 hover:underline">How the plan works</button>}
+          {onOpenPlaybook && <button onClick={() => onOpenPlaybook('earnings-plan')} className="text-xs text-blue-600 hover:underline">How the plan works</button>}
           <button onClick={() => setEdit((v) => !v)} className="text-xs px-2.5 py-1 rounded-lg border border-gray-200 bg-white font-medium text-gray-700">{edit ? 'Cancel' : g?.saved ? 'Edit goal' : 'Set my goal'}</button>
         </div>
       </div>
@@ -102,7 +102,7 @@ export default function GoalsCard({ onOpenPlaybook }: { onOpenPlaybook?: (docId:
                 </div>
                 <div className="rounded-lg border border-gray-200 p-3">
                   <div className="flex items-baseline justify-between">
-                    <p className="text-xs font-semibold text-gray-600">Today's points game</p>
+                    <p className="text-xs font-semibold text-gray-600">Today's scorecard</p>
                     <p className={`text-2xl font-bold tabular-nums ${p.today.points >= DAILY_POINT_GOAL ? 'text-emerald-600' : 'text-gray-900'}`}>{p.today.points}<span className="text-sm text-gray-400 font-normal"> / {DAILY_POINT_GOAL}</span></p>
                   </div>
                   {bar(p.today.points, DAILY_POINT_GOAL)}
@@ -110,7 +110,7 @@ export default function GoalsCard({ onOpenPlaybook }: { onOpenPlaybook?: (docId:
                     <li>Closed sale = {POINT_VALUES.closed} · today {p.today.closed}</li>
                     <li>Appointment run or report presented = {POINT_VALUES.presented} · today {p.today.contacted + p.today.presented}</li>
                     <li>Door knocked = {POINT_VALUES.door} · today {p.today.doors}</li>
-                    <li className="text-gray-400">Week so far: {p.week.points} points. {onOpenPlaybook && <button className="text-blue-600 hover:underline" onClick={() => onOpenPlaybook('daily-points-game')}>The rules</button>}</li>
+                    <li className="text-gray-400">Week so far: {p.week.points} points. {onOpenPlaybook && <button className="text-blue-600 hover:underline" onClick={() => onOpenPlaybook('daily-scorecard')}>The rules</button>}</li>
                   </ul>
                 </div>
               </div>

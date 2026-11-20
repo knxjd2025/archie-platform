@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { PLAYBOOK, companyFillFrom, fillTemplate, playbookDoc } from '../playbook';
+import { PLAYBOOK, companyFillFrom, fillTemplate, playbookDoc, subjectOf } from '../playbook';
 import { resolveCompanyProfile } from '../company';
 import { checklistTotal, inlineHtml, parsePlaybookText, renderPlaybookDocument, renderPlaybookPrintPage } from '../playbook-document';
 
@@ -38,10 +38,10 @@ describe('parsePlaybookText', () => {
   });
 
   it('joins PDF-wrapped checklist items and numbers the tick boxes', () => {
-    const blocks = parsePlaybookText('☐ Email or text Getting Reviews Templates for\nEmail/Text\n☐ Canvass using the SLAP\nCanvassing Formula letting people know.\n☐ Done.', { kind: 'checklist' });
+    const blocks = parsePlaybookText('☐ Email or text Getting Reviews Templates for\nEmail/Text\n☐ Canvass using the DOOR\nOpener Formula letting people know.\n☐ Done.', { kind: 'checklist' });
     const list = blocks.find((b) => b.t === 'list') as any;
     expect(list.items.map((it: any) => [it.text, it.n])).toEqual([
-      ['Email or text Getting Reviews Templates for Email/Text', 0], ['Canvass using the SLAP Canvassing Formula letting people know.', 1], ['Done.', 2],
+      ['Email or text Getting Reviews Templates for Email/Text', 0], ['Canvass using the DOOR Opener Formula letting people know.', 1], ['Done.', 2],
     ]);
   });
 
@@ -122,16 +122,29 @@ describe('every document in every mode', () => {
 
 describe('letters', () => {
   it('keeps rep instructions off the printed letter but shows them on screen', () => {
-    const d = PLAYBOOK.find((x) => x.title.startsWith('Wind Damage'))!;
+    const d = PLAYBOOK.find((x) => x.id === 'wind-damage-letter')!;
     const text = fillTemplate(d.body, ctx).text;
     const printed = renderPlaybookDocument(d, { mode: 'print', text, ctx });
-    expect(printed).not.toMatch(/Starts on Page 2|Watch these videos/);
-    expect(printed).toContain('Dear Homeowner');
-    expect(printed).toMatch(/pbd-title[^>]*>I drove by your house/);
-    expect(renderPlaybookDocument(d, { mode: 'screen', text, ctx })).toContain('Starts on Page 2');
+    expect(printed).not.toMatch(/Mail this only to homes/);
+    expect(printed).toContain('Hi neighbor,');
+    expect(renderPlaybookDocument(d, { mode: 'screen', text, ctx })).toContain('Mail this only to homes');
   });
-  it('leaves a letter without instructions whole', () => {
-    const d = PLAYBOOK.find((x) => x.title.startsWith('Door Hanger: Sorry'))!;
-    expect(renderPlaybookDocument(d, { mode: 'print' })).toContain('Sorry I Missed You!');
+  // PERMANENT: a note for the rep must never reach a customer.
+  it('never prints or emails a note for the rep, in any letter or email', () => {
+    for (const d of PLAYBOOK.filter((x) => x.kind === 'letter' || x.kind === 'email')) {
+      const notes = [...d.body.matchAll(/^(?:NOTE|TIP|IMPORTANT|REMINDER): (.{12,40})/gm)].map((m) => m[1]);
+      const text = fillTemplate(d.body, ctx).text;
+      const filledNotes = [...text.matchAll(/^(?:NOTE|TIP|IMPORTANT|REMINDER): (.{12,40})/gm)].map((m) => m[1]);
+      const out = d.kind === 'letter'
+        ? [renderPlaybookDocument(d, { mode: 'print', text, ctx })]
+        : [renderPlaybookDocument(d, { mode: 'email', text, ctx }), subjectOf(d, text).body];
+      for (const o of out) for (const n of filledNotes) expect(o, `${d.id}: ${n}`).not.toContain(n.replace(/&/g, '&amp;').replace(/'/g, '&#39;').replace(/"/g, '&quot;')), expect(o, d.id).not.toContain(n);
+      if (notes.length) expect(renderPlaybookDocument(d, { mode: 'screen', text, ctx }), d.id).toContain('Before you send');
+    }
+  });
+  it('ends every letter and single email with a sign-off the rep signature can replace', () => {
+    for (const d of PLAYBOOK.filter((x) => x.kind === 'letter')) {
+      expect(parsePlaybookText(d.body, { title: d.title, kind: d.kind }).some((b) => b.t === 'signoff'), d.id).toBe(true);
+    }
   });
 });

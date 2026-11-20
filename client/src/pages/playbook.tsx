@@ -73,7 +73,7 @@ export default function Playbook({ initialDocId, initialExternalId, onOpenClient
       {ctxError && <p className="text-sm text-red-600">{ctxError}</p>}
 
       <div className="flex gap-2 flex-wrap items-center">
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search: objection, 12 pack, referral, insurance agent…" className="flex-1 min-w-[200px] text-sm border border-gray-200 rounded-lg px-3 py-2 focus:ring-1 focus:ring-blue-400" />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search: objection, door opener, referral, insurance agent…" className="flex-1 min-w-[200px] text-sm border border-gray-200 rounded-lg px-3 py-2 focus:ring-1 focus:ring-blue-400" />
       </div>
       <div className="flex gap-1.5 flex-wrap">
         <Chip active={group === 'all'} onClick={() => setGroup('all')}>All ({PLAYBOOK.length})</Chip>

@@ -24,6 +24,23 @@ describe('playbook library', () => {
       for (const text of [d.body, d.summary, d.title, d.source]) expect(text, d.id).not.toMatch(FORMER_COMPANY);
     }
   });
+  // PERMANENT. The library was first loaded from a training system bought from
+  // an outside vendor. Every document was rewritten in Archie's own words and
+  // method names on 2026-11-20; none of the vendor's names, links or promises
+  // may come back.
+  it("is written in Archie's own terms, with no outside links and no promises", () => {
+    const VENDOR = /carpark|s\.l\.a\.p|\bSLAP\b|12[- ]pack|battle pack|points game|price lock|pitch book|cheat sheet|sell like a doctor|multi-touch|\bTRS\b|strategist|youtu\.?be|https?:\/\//i;
+    const PROMISE = /guarantee/i;
+    for (const d of PLAYBOOK) {
+      for (const text of [d.id, d.title, d.summary, d.body, d.source, d.tags.join(' ')]) expect(text, d.id).not.toMatch(VENDOR);
+      expect(d.body, d.id).not.toMatch(PROMISE);
+      expect(d.body, d.id).not.toMatch(/—/);
+      expect(d.videos, d.id).toEqual([]);
+      expect(d.source).toBe('Archie Sales Playbook');
+    }
+    for (const g of PLAYBOOK_GROUPS) expect(g.blurb).not.toMatch(VENDOR);
+    for (const s of STAGE_CHECKLISTS) for (const i of s.items) expect(i.label, i.key).not.toMatch(VENDOR);
+  });
   it('every checklist step points at a real document', () => {
     for (const s of STAGE_CHECKLISTS) for (const i of s.items) if (i.doc) expect(playbookDoc(i.doc), `${s.key}/${i.key} → ${i.doc}`).toBeDefined();
   });

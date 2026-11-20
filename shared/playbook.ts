@@ -1,6 +1,6 @@
 /**
  * The Sales Playbook: every checklist, script, letter, email and training
- * guide from the sales training library, with the placeholders each template
+ * guide in Archie's own sales library, with the placeholders each template
  * uses and the logic that fills them from the rep, the customer and the office.
  */
 import library from './playbook/library.json';
@@ -28,10 +28,10 @@ export interface PlaybookDoc {
 export const PLAYBOOK_GROUPS: { key: PlaybookGroup; label: string; blurb: string }[] = [
   { key: 'process', label: 'Process & checklists', blurb: 'The system, start to finish: open a neighborhood, run the appointment, and every checklist from signing to paid in full.' },
   { key: 'scripts', label: 'Scripts', blurb: 'What to say at the door, on the phone, and when a lead calls in.' },
-  { key: 'objections', label: 'Objections & closing', blurb: 'Handle any objection, get to the kitchen table, and close with CARPARK.' },
+  { key: 'objections', label: 'Objections & closing', blurb: 'Handle any objection, get invited in, and close with the ROOFTOP Visit.' },
   { key: 'letters', label: 'Letters & leave-behinds', blurb: 'Door hangers and direct mail, filled in and ready to print.' },
   { key: 'emails', label: 'Emails & texts', blurb: 'Customer updates, referral asks, review requests, and outreach emails, ready to send.' },
-  { key: 'productivity', label: 'Goals & productivity', blurb: 'Income plan, the daily points game, and time management.' },
+  { key: 'productivity', label: 'Goals & productivity', blurb: 'Your earnings plan, the Daily Scorecard, and time management.' },
 ];
 
 export const PLAYBOOK: PlaybookDoc[] = (library as { docs: PlaybookDoc[] }).docs;
@@ -174,8 +174,25 @@ export function todayLong(d = new Date()): string {
   return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
+/**
+ * Notes for the rep inside a template ("NOTE: send this a month after the
+ * job") are for the rep's eyes. They are taken out of anything that is sent
+ * or copied to a customer. A note runs from its label to the next blank line.
+ */
+export function stripRepNotes(text: string): string {
+  const out: string[] = [];
+  let skipping = false;
+  for (const line of text.replace(/\r/g, '').split('\n')) {
+    if (/^\s*(NOTE|TIP|PRO TIP|IMPORTANT|REMEMBER|REMINDER|OPTIONAL|WARNING|DISCLAIMER)\b[^:\n]{0,40}:/i.test(line)) { skipping = true; continue; }
+    if (skipping) { if (line.trim()) continue; skipping = false; }
+    out.push(line);
+  }
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').replace(/^\n+/, '');
+}
+
 /** Subject line for an email template: the "Subject:" line if the template has one, else the title. */
 export function subjectOf(doc: Pick<PlaybookDoc, 'title' | 'body'>, text = doc.body): { subject: string; body: string } {
+  text = stripRepNotes(text);
   const m = text.match(/^\s*(?:email\s*)?subject(?:\s*line)?\s*:\s*(.+)$/im);
   if (!m) return { subject: doc.title, body: text };
   const subject = m[1].replace(/^[“"]|[”"]$/g, '').trim();
@@ -209,10 +226,10 @@ export const STAGE_CHECKLISTS: StageChecklist[] = [
     key: 'new_customer', title: 'New Customer', when: 'As soon as the contract is signed',
     columns: ['Buyer Approved', 'Insurance Approved', 'Permitting'],
     items: [
-      { key: 'referral_gift', label: 'Make sure the customer knows about the referral gift', doc: 'referral-cheat-sheet' },
+      { key: 'referral_gift', label: 'Make sure the customer knows about the referral gift', doc: 'referral-quick-card' },
       { key: 'welcome_email', label: 'Send the New Customer Welcome email', doc: 'email-new-customer-welcome' },
       { key: 'insurance_agent', label: 'Send the insurance agent introduction email (insurance jobs)', doc: 'email-insurance-agent-1-4' },
-      { key: 'neighbor_list', label: 'Build the neighbor list: 12 pack around the property', doc: '12-pack-during-install' },
+      { key: 'neighbor_list', label: 'Build the Neighbor Ring: the homes around the property', doc: 'neighbor-ring-notice' },
       { key: 'before_build_letters', label: 'Drop the Neighbor Announcement before the build', doc: 'neighbor-announcement-before-build' },
       { key: 'welcome_call', label: 'Call the customer: confirm what happens next and who to call' },
       { key: 'social_post', label: 'Post the new project (with permission) on social media' },
@@ -233,7 +250,7 @@ export const STAGE_CHECKLISTS: StageChecklist[] = [
     columns: ['Pre-Construction', 'Roof Construction', 'Other Construction Work'],
     items: [
       { key: 'on_site', label: 'Be on site at the start to meet the customer and crew' },
-      { key: '12_pack', label: 'Knock the 12 pack with the During Install leave-behind', doc: '12-pack-during-install' },
+      { key: '12_pack', label: 'Knock the Neighbor Ring with the Neighbor Ring Notice', doc: 'neighbor-ring-notice' },
       { key: 'canvass_street', label: 'Canvass the street while the crew works', doc: 'canvassing-openers' },
       { key: 'photos', label: 'Take before, during and after photos for the customer and social media' },
       { key: 'end_of_day', label: 'End-of-day walkthrough with the customer' },
@@ -254,7 +271,7 @@ export const STAGE_CHECKLISTS: StageChecklist[] = [
     columns: ['PIF File Warranties', 'Closed'],
     items: [
       { key: 'job_complete_email', label: 'Send the Job Complete email', doc: 'email-job-complete' },
-      { key: 'review_request', label: 'Ask for the Google review', doc: 'getting-reviews' },
+      { key: 'review_request', label: 'Ask for the Google review', doc: 'review-request-messages' },
       { key: 'thank_you_letter', label: 'Mail the Thank You letter', doc: 'thank-you-letter' },
       { key: 'referral_emails', label: 'Schedule the 30/60/90-day referral emails', doc: 'email-referral-30', followUps: [
         { days: 30, note: 'Send the 30-day referral email (Playbook → Emails)' },
@@ -273,7 +290,7 @@ export function stageForColumn(column: string | null | undefined): StageChecklis
 }
 
 /* ------------------------------------------------------------------ */
-/* Goals: the income plan and the daily points game                     */
+/* Goals: the earnings plan and the Daily Scorecard                     */
 /* ------------------------------------------------------------------ */
 
 export interface GoalInputs {
@@ -287,7 +304,7 @@ export interface GoalInputs {
 
 export const GOAL_DEFAULTS: GoalInputs = { incomeGoal: 100000, avgCommission: 1500, closeRate: 40, sellingMonths: 9 };
 
-/** The Income Goal Plan math, exactly as the training worksheet lays it out. */
+/** The Earnings Plan math: an income goal worked back to sales, appointments and doors a week. */
 export function incomePlan(g: GoalInputs) {
   const salesPerYear = g.avgCommission > 0 ? g.incomeGoal / g.avgCommission : 0;
   const salesPerMonth = g.sellingMonths > 0 ? salesPerYear / g.sellingMonths : 0;
@@ -310,7 +327,7 @@ export function incomePlan(g: GoalInputs) {
   };
 }
 
-/** Daily points game scoring, from the worksheet: sale 10, appointment run 5, appointment set 5, new lead 1. */
+/** Daily Scorecard scoring: sale 10, appointment run 5, appointment set 5, new lead 1. */
 export const POINT_VALUES = { closed: 10, presented: 5, contacted: 5, door: 1 } as const;
 export const DAILY_POINT_GOAL = 10;
 

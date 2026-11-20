@@ -1,6 +1,6 @@
 /**
- * Turns a Sales Playbook document's plain text (exported from Word/PDF
- * training files) into a structured document branded as the company it is
+ * Turns a Sales Playbook document's plain text into a structured
+ * document branded as the company it is
  * for: its name, logo, colors and contact details come from the fill context
  * (companyFillFrom in playbook.ts), and a detail it has not entered is left
  * off rather than filled with another company's.
@@ -42,6 +42,16 @@ const CLOSING = /^\s*(Regards|Best regards|Kind regards|Warm regards|Warmly|Sinc
 const SALUTATION = /^\s*(Dear|Hi|Hello|Hey|Good (morning|afternoon|evening))\b.{0,60},\s*$/i;
 const LEAD = /^\s*((?:Stage|Step|Example|Option|Part|Phase|Round|Scenario|Level|Script|Day|Week|Email|Text|Letter|Version|Tip|Trick|Rule|Text Message|Text)\s*#?\s*\d{1,2}|FOR (?:RETAIL|STORM|INSURANCE|COMMERCIAL)|Subject(?: line)?)\s*(?:[:.)–]|\s-)\s*(.+)$/i;
 const SPOKEN = /^\s*(?:[“"‘']|(?:Hi|Hello|Hey|Good (?:morning|afternoon|evening)|Thanks|Thank you|Great|Perfect|Awesome|Excellent|Absolutely|Okay|OK|Sure|My name|This is|Is this|Would you|Could you|Can I|May I|Do you|Have you|Are you|I’m|I'm|I understand|I totally|I completely|That’s|That's|It sounds|Mr\.|Mrs\.|Ms\.)\b)/;
+
+/**
+ * A closing the list above does not name ("Take care,", "Thanks for your
+ * time,"): a short line that ends in a comma and is not a greeting. It only
+ * counts when signature lines follow it (checked where it is used).
+ */
+const softClosing = (s: string) => {
+  const t = s.trim();
+  return t.length <= 45 && /^[A-Z][A-Za-z' ]+,$/.test(t) && t.split(/\s+/).length <= 7 && !SALUTATION.test(t);
+};
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 const plainLen = (s: string) => s.replace(/\*\*/g, '').trim().length;
@@ -155,7 +165,7 @@ export function parsePlaybookText(text: string, opts: ParseOptions = {}): DocBlo
       continue;
     }
 
-    if (CLOSING.test(s)) {
+    if (CLOSING.test(s) || softClosing(s)) {
       let j = i + 1;
       if (j < lines.length && !lines[j].trim() && lines[j + 1]?.trim()) j++;
       const sig: string[] = [];
@@ -219,7 +229,7 @@ export function parsePlaybookText(text: string, opts: ParseOptions = {}): DocBlo
       continue;
     }
 
-    // A run of 3+ one- or two-word lines is a set of labels (e.g. the CARPARK letters).
+    // A run of 3+ one- or two-word lines is a set of labels (e.g. the letters of an acronym).
     {
       const run: string[] = [];
       let j = i;
@@ -488,7 +498,10 @@ function renderWithPalette(doc: PlaybookDoc, o: DocumentOptions): string {
   const email = doc.kind === 'email' ? subjectOf(doc, text) : null;
   const signature = o.ctx?.repName ? signatureBlock({ ...c }) : null;
   const parsed = parsePlaybookText(email ? email.body : text, { title: doc.title, kind: doc.kind, signature });
-  const { notes, letter: blocks } = doc.kind === 'letter' ? splitLetterNotes(parsed) : { notes: [] as DocBlock[], letter: parsed };
+  // Letters: the notes above the salutation. Emails: every note for the rep
+  // (subjectOf has already taken them out of what is sent), shown on screen only.
+  const { notes, letter: blocks } = doc.kind === 'letter' ? splitLetterNotes(parsed)
+    : { notes: email ? parsePlaybookText(text, { kind: doc.kind }).filter((x) => x.t === 'callout') : [] as DocBlock[], letter: parsed };
   const body = renderBlocks(blocks, o.mode, { checked: o.checked, kind: doc.kind });
   const notesHtml = notes.length && o.mode === 'screen'
     ? `<aside class="pbd-notes"><span class="pbd-notes-label">Before you send · not printed</span>${renderBlocks(notes, 'screen', { kind: doc.kind })}</aside>` : '';
