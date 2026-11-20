@@ -51,8 +51,10 @@ describe.skipIf(!isLocal(url) || !isLocal(ownerUrl))('system role and company is
                         'check', (select string_agg(pg_get_constraintdef(k.oid), ' ') from pg_constraint k
                                    where k.conrelid = c.oid and k.contype = 'c' and a.attnum = any(k.conkey)),
                         'fk', (select json_build_object('table', f.confrelid::regclass::text, 'col', fa.attname)
-                                 from pg_constraint f join pg_attribute fa on fa.attrelid = f.confrelid and fa.attnum = f.confkey[1]
-                                where f.conrelid = c.oid and f.contype = 'f' and array_length(f.conkey, 1) = 1 and f.conkey[1] = a.attnum
+                                 from pg_constraint f join pg_attribute fa on fa.attrelid = f.confrelid and fa.attnum = f.confkey[array_position(f.conkey, a.attnum)]
+                                -- A one-column key, or a key paired with company_id (0017's crews): either way the
+                                -- parent row is the same company's, which is what the insert below picks.
+                                where f.conrelid = c.oid and f.contype = 'f' and a.attnum = any(f.conkey)
                                 limit 1)))
                       filter (where a.attnotnull and not a.atthasdef and a.attname <> 'company_id' and a.attidentity = '' and a.attgenerated = ''), '[]') as cols
         from pg_class c
@@ -79,7 +81,8 @@ describe.skipIf(!isLocal(url) || !isLocal(ownerUrl))('system role and company is
           else if (col.fk) exprs.push(`(select "${col.fk.col}" from ${col.fk.table} where company_id = $1::uuid limit 1)`);
           else if (col.enum) exprs.push(`(enum_range(null::${col.udt}))[1]`);
           else if (literal) exprs.push(`'${literal}'`);
-          else if (/^(text|character varying)/.test(col.type)) exprs.push(`'${tag}-' || gen_random_uuid()`);
+          // Kept under 60 characters, so a capped name (0017's crews) still fits.
+          else if (/^(text|character varying)/.test(col.type)) exprs.push(`left('${tag}-' || replace(gen_random_uuid()::text, '-', ''), 56)`);
           else if (/^(integer|bigint|smallint)/.test(col.type)) exprs.push('(random() * 1e8)::int');
           else if (/^numeric/.test(col.type)) exprs.push('1');
           else if (col.type === 'boolean') exprs.push('false');
