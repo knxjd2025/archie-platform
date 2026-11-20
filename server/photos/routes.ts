@@ -12,6 +12,7 @@ import { getCurrentCompany } from '../tenant/companies';
 import { isNativeJobId, jobBackendFor } from '../production/native-jobs';
 import { addNativePhoto, deleteNativePhoto, editNativePhoto, keyFor, listNativePhotos, readyPhoto, MAX_PHOTO_BYTES, PHOTO_STORE_OFF } from './native';
 import { photoStore } from './store';
+import { crewJobFor } from '../crews/access';
 import { MAX_PHOTO_PAGE } from '../../shared/job-photos';
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
@@ -43,6 +44,17 @@ async function keptInArchie(lead: Pick<Lead, 'externalId'>): Promise<boolean> {
 async function mayOpenArchieJob(user: SessionUser, lead: Pick<Lead, 'externalId'>): Promise<boolean> {
   if (user.role === 'production') return false;
   return ownsLead(user, lead.externalId);
+}
+
+/**
+ * May this person see one photo of a job Archie keeps? As above, or a crew
+ * member whose crew the job is booked for, asked through the crew check
+ * (server/crews/access.ts crewJobFor), never through ownsLead. Used only for
+ * one photo at a time: a crew's photo list comes from the crew's own routes.
+ */
+async function maySeeArchiePhoto(user: SessionUser, lead: Pick<Lead, 'externalId'>): Promise<boolean> {
+  if (user.role === 'production') return !!lead.externalId && !!(await crewJobFor(user, lead.externalId));
+  return mayOpenArchieJob(user, lead);
 }
 
 /**
@@ -166,7 +178,7 @@ export function registerPhotoRoutes(app: Express) {
     const photo = await readyPhoto(req.params.id);
     if (!photo || !isNativeJobId(photo.jobKey)) return null;
     const [lead] = await db.select().from(leads).where(eq(leads.externalId, photo.jobKey));
-    if (!lead || !(await keptInArchie(lead)) || !(await mayOpenArchieJob(user, lead))) return null;
+    if (!lead || !(await keptInArchie(lead)) || !(await maySeeArchiePhoto(user, lead))) return null;
     return { user, photo };
   }
 

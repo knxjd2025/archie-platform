@@ -23,6 +23,7 @@ import { registerDashboardRoutes } from './dashboard/routes';
 import { registerFollowUpRoutes } from './followups/routes';
 import { registerRoofReportRoutes } from './reports/routes';
 import { registerPhotoRoutes } from './photos/routes';
+import { registerCrewRoutes } from './crews/routes';
 import { registerCanvassRoutes } from './canvass/routes';
 import { registerTracerfyRoutes } from './canvass/tracerfy-routes';
 import { registerRepReminderRoutes } from './canvass/reminder-routes';
@@ -156,6 +157,7 @@ export function registerRoutes(app: Express) {
   registerFollowUpRoutes(app);
   registerRoofReportRoutes(app);
   registerPhotoRoutes(app);
+  registerCrewRoutes(app);
   registerCanvassRoutes(app);
   registerTracerfyRoutes(app);
   registerRepReminderRoutes(app);
