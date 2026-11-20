@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../lib/api';
 import { isNativeApp } from '../lib/native';
 import {
@@ -53,13 +53,15 @@ export default function Playbook({ initialDocId, initialExternalId, onOpenClient
     return PLAYBOOK.filter((d) => (group === 'all' || d.group === group) && (!term || `${d.title} ${d.summary} ${d.audience ?? ''} ${d.tags.join(' ')} ${d.body}`.toLowerCase().includes(term)));
   }, [group, q]);
   const doc = docId ? PLAYBOOK.find((d) => d.id === docId) ?? null : null;
+  // Browsing everything with no search: show it section by section, in the order a job happens.
+  const sectioned = group === 'all' && !q.trim();
 
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">📚 Sales Playbook</h1>
-          <p className="text-sm text-gray-500 mt-1">Every checklist, script, letter and email in the system. Letters and emails fill themselves in for you and your customer.</p>
+          <p className="text-sm text-gray-500 mt-1">Everything you need from the first knock to the thank-you card. Letters and emails fill themselves in for you and your customer.</p>
         </div>
         {ctx?.customerLabel && (
           <div className="text-xs bg-blue-50 text-blue-800 border border-blue-100 rounded-lg px-3 py-2 flex items-center gap-2">
@@ -84,8 +86,15 @@ export default function Playbook({ initialDocId, initialExternalId, onOpenClient
         <div className={`space-y-1.5 ${doc ? 'hidden lg:block' : ''}`}>
           {group !== 'all' && <p className="text-xs text-gray-500 px-1 pb-1">{PLAYBOOK_GROUPS.find((g) => g.key === group)?.blurb}</p>}
           {docs.length === 0 && <p className="text-sm text-gray-400 px-1 py-6 text-center">Nothing matches. Try a different word.</p>}
-          {docs.map((d) => (
-            <button key={d.id} onClick={() => setDocId(d.id)} className={`w-full text-left rounded-xl border px-3 py-2.5 transition ${docId === d.id ? 'border-ink bg-blue-50/60' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
+          {docs.map((d, i) => (
+            <Fragment key={d.id}>
+            {sectioned && docs[i - 1]?.group !== d.group && (
+              <div className={`px-1 ${i ? 'pt-4' : ''}`}>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-700">{PLAYBOOK_GROUPS.find((g) => g.key === d.group)?.label}</p>
+                <p className="text-xs text-gray-500 pb-1">{PLAYBOOK_GROUPS.find((g) => g.key === d.group)?.blurb}</p>
+              </div>
+            )}
+            <button onClick={() => setDocId(d.id)} className={`w-full text-left rounded-xl border px-3 py-2.5 transition ${docId === d.id ? 'border-ink bg-blue-50/60' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
               <div className="flex items-center gap-2">
                 <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${KIND_COLOR[d.kind]}`}>{KIND_LABEL[d.kind]}</span>
                 {d.audience && <span className="text-[10px] text-gray-400 capitalize">{d.audience}</span>}
@@ -93,6 +102,7 @@ export default function Playbook({ initialDocId, initialExternalId, onOpenClient
               <p className="text-sm font-medium text-gray-900 mt-1">{d.title}</p>
               <p className="text-xs text-gray-500 line-clamp-2">{d.summary}</p>
             </button>
+            </Fragment>
           ))}
         </div>
         <div>

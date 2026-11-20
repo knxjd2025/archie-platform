@@ -16,7 +16,7 @@ import { getKnowledgeService } from '../server/rag/knowledge-service';
 import { PLAYBOOK, PLAYBOOK_GROUPS, type PlaybookGroup } from '../shared/playbook';
 import { forEachLiveCompany } from '../server/tenant/companies';
 
-const CATEGORY: Record<PlaybookGroup, 'company' | 'scripts'> = { process: 'company', productivity: 'company', scripts: 'scripts', objections: 'scripts', letters: 'scripts', emails: 'scripts' };
+const CATEGORY: Record<PlaybookGroup, 'company' | 'scripts'> = { start: 'company', job: 'company', scoreboard: 'company', doors: 'scripts', mailbox: 'scripts', table: 'scripts', fans: 'scripts', partners: 'scripts' };
 
 async function ingestForCompany() {
   let added = 0, updated = 0;

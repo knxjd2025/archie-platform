@@ -84,7 +84,7 @@ export default function GoalsCard({ onOpenPlaybook }: { onOpenPlaybook?: (docId:
               <Tile label="Letters a week" value={plan.lettersPerWeek} />
               <Tile label="Cold calls a week" value={plan.coldCallsPerWeek} />
             </div>
-            <p className="text-[11px] text-gray-400">Plus each week: {plan.referralAsksPerWeek} referral asks, {plan.agentIntrosPerWeek} insurance-agent intros, {plan.networkingPerWeek} networking touches. {plan.touchesPerWeek} touches a week in all.</p>
+            <p className="text-[11px] text-gray-400">Plus each week: {plan.referralAsksPerWeek} referral asks, {plan.agentIntrosPerWeek} insurance-agent intros, {plan.networkingPerWeek} networking chats. {plan.touchesPerWeek} hellos a week in all.</p>
             {p && (
               <div className="grid sm:grid-cols-2 gap-4">
                 <div className="space-y-2">

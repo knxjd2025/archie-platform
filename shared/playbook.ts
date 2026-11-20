@@ -6,7 +6,7 @@
 import library from './playbook/library.json';
 import type { CompanyProfile } from './company';
 
-export type PlaybookGroup = 'process' | 'scripts' | 'objections' | 'letters' | 'emails' | 'productivity';
+export type PlaybookGroup = 'start' | 'doors' | 'mailbox' | 'table' | 'job' | 'fans' | 'partners' | 'scoreboard';
 export type PlaybookKind = 'checklist' | 'guide' | 'script' | 'letter' | 'email' | 'reference';
 
 export interface PlaybookDoc {
@@ -25,13 +25,16 @@ export interface PlaybookDoc {
   source: string;
 }
 
+/** The sections, in the order a job happens: find it, win it, build it, grow from it. */
 export const PLAYBOOK_GROUPS: { key: PlaybookGroup; label: string; blurb: string }[] = [
-  { key: 'process', label: 'Process & checklists', blurb: 'The system, start to finish: open a neighborhood, run the appointment, and every checklist from signing to paid in full.' },
-  { key: 'scripts', label: 'Scripts', blurb: 'What to say at the door, on the phone, and when a lead calls in.' },
-  { key: 'objections', label: 'Objections & closing', blurb: 'Handle any objection, get invited in, and close with the ROOFTOP Visit.' },
-  { key: 'letters', label: 'Letters & leave-behinds', blurb: 'Door hangers and direct mail, filled in and ready to print.' },
-  { key: 'emails', label: 'Emails & texts', blurb: 'Customer updates, referral asks, review requests, and outreach emails, ready to send.' },
-  { key: 'productivity', label: 'Goals & productivity', blurb: 'Your earnings plan, the Daily Scorecard, and time management.' },
+  { key: 'start', label: 'Start here', blurb: 'New to the playbook? Two short reads show how the whole thing fits together.' },
+  { key: 'doors', label: 'Knock knock', blurb: 'Doors, phones and fresh leads: what to say first, and how to get invited in.' },
+  { key: 'mailbox', label: 'In the mailbox', blurb: 'Door hangers and letters for the homes you could not catch. Filled in and ready to print.' },
+  { key: 'table', label: 'At the kitchen table', blurb: 'The ROOFTOP Visit, answers for every worry, and friendly notes for people still deciding.' },
+  { key: 'job', label: 'From yes to paid', blurb: 'Every checklist, customer email and neighbor notice, in the order the job happens.' },
+  { key: 'fans', label: 'Fans for life', blurb: 'Reviews, referrals and check-ins that turn one happy customer into the next three.' },
+  { key: 'partners', label: 'Friends in the business', blurb: 'Insurance agents, real estate agents, churches, landlords and commercial owners.' },
+  { key: 'scoreboard', label: 'Keeping score', blurb: 'Your Earnings Plan, the Daily Scorecard, and how to spend your best hours.' },
 ];
 
 export const PLAYBOOK: PlaybookDoc[] = (library as { docs: PlaybookDoc[] }).docs;
@@ -227,10 +230,10 @@ export const STAGE_CHECKLISTS: StageChecklist[] = [
     columns: ['Buyer Approved', 'Insurance Approved', 'Permitting'],
     items: [
       { key: 'referral_gift', label: 'Make sure the customer knows about the referral gift', doc: 'referral-quick-card' },
-      { key: 'welcome_email', label: 'Send the New Customer Welcome email', doc: 'email-new-customer-welcome' },
+      { key: 'welcome_email', label: 'Send the New Customer Welcome Email', doc: 'email-new-customer-welcome' },
       { key: 'insurance_agent', label: 'Send the insurance agent introduction email (insurance jobs)', doc: 'email-insurance-agent-1-4' },
       { key: 'neighbor_list', label: 'Build the Neighbor Ring: the homes around the property', doc: 'neighbor-ring-notice' },
-      { key: 'before_build_letters', label: 'Drop the Neighbor Announcement before the build', doc: 'neighbor-announcement-before-build' },
+      { key: 'before_build_letters', label: 'Drop the Roof Work Coming Soon Notice at the homes nearby', doc: 'roof-work-coming-soon-notice' },
       { key: 'welcome_call', label: 'Call the customer: confirm what happens next and who to call' },
       { key: 'social_post', label: 'Post the new project (with permission) on social media' },
     ],
@@ -239,8 +242,8 @@ export const STAGE_CHECKLISTS: StageChecklist[] = [
     key: 'job_scheduled', title: 'Job Scheduled', when: 'Install date is set',
     columns: ['Schedule'],
     items: [
-      { key: 'scheduled_email', label: 'Send the Scheduled Notification email', doc: 'email-scheduled-notification' },
-      { key: 'install_notice_mail', label: 'Mail the Install Notice neighborhood announcement', doc: 'install-notice-mail' },
+      { key: 'scheduled_email', label: 'Send the Install Date Notice Email', doc: 'email-install-date-notice' },
+      { key: 'install_notice_mail', label: 'Mail the Install Notice Letter for Neighbors', doc: 'install-notice-neighbor-letter' },
       { key: 'confirm_details', label: 'Confirm color, materials, dumpster placement and vehicles moved' },
       { key: 'reminder_call', label: 'Reminder call the day before install' },
     ],
@@ -260,23 +263,23 @@ export const STAGE_CHECKLISTS: StageChecklist[] = [
     key: 'install_complete', title: 'Installation Complete', when: 'Roof is on, final payment pending',
     columns: ['Complete'],
     items: [
-      { key: 'complete_email', label: 'Send the Install Complete email (awaiting final payment)', doc: 'email-install-complete' },
+      { key: 'complete_email', label: 'Send the Install Complete Email', doc: 'email-install-complete' },
       { key: 'final_walk', label: 'Final walkthrough and cleanup check with the customer' },
       { key: 'collect_payment', label: 'Collect the final payment' },
-      { key: 'neighbor_mail', label: "Mail 'We Did Your Neighbor's Roof' to the surrounding streets", doc: 'we-did-your-neighbors-roof' },
+      { key: 'neighbor_mail', label: 'Mail the Job Complete Letter for Neighbors to the streets nearby', doc: 'job-complete-neighbor-letter' },
     ],
   },
   {
     key: 'paid_in_full', title: 'Paid in Full', when: 'Money is in',
     columns: ['PIF File Warranties', 'Closed'],
     items: [
-      { key: 'job_complete_email', label: 'Send the Job Complete email', doc: 'email-job-complete' },
+      { key: 'job_complete_email', label: 'Send the Job Complete Thank You Email', doc: 'email-job-complete' },
       { key: 'review_request', label: 'Ask for the Google review', doc: 'review-request-messages' },
-      { key: 'thank_you_letter', label: 'Mail the Thank You letter', doc: 'thank-you-letter' },
-      { key: 'referral_emails', label: 'Schedule the 30/60/90-day referral emails', doc: 'email-referral-30', followUps: [
-        { days: 30, note: 'Send the 30-day referral email (Playbook → Emails)' },
-        { days: 60, note: 'Send the 60-day referral email (Playbook → Emails)' },
-        { days: 90, note: 'Send the 90-day referral email (Playbook → Emails)' },
+      { key: 'thank_you_letter', label: 'Mail the Job Complete Thank You Letter', doc: 'thank-you-letter' },
+      { key: 'referral_emails', label: 'Line up the three check-in and referral emails', doc: 'email-referral-30', followUps: [
+        { days: 30, note: 'Send the 30 Day Check-In and Referral Email (Playbook, Fans for life)' },
+        { days: 60, note: 'Send the 60 Day Insurance Questions and Referral Email (Playbook, Fans for life)' },
+        { days: 90, note: 'Send the 90 Day Roof Care and Referral Email (Playbook, Fans for life)' },
       ] },
       { key: 'insurance_agent_thanks', label: 'Thank the insurance agent and ask for the next referral (insurance jobs)', doc: 'email-insurance-agent-1-4' },
       { key: 'warranty', label: 'Warranty registered and sent to the customer' },
