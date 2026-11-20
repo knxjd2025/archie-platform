@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { adminBanner, lockReason, trialDaysLeft } from '../status';
+import { MANAGED_IN_ROOF_LEE_MESSAGE, adminBanner, billedByRoofLee, lockReason, trialDaysLeft } from '../status';
 
 const now = new Date('2026-11-18T12:00:00Z');
 const days = (n: number) => new Date(now.getTime() + n * 24 * 60 * 60 * 1000);
@@ -46,5 +46,18 @@ describe('admin banner', () => {
     expect(trialDaysLeft(days(-1), now)).toBeNull();
     expect(trialDaysLeft(null, now)).toBeNull();
     expect(trialDaysLeft(days(13.2), now)).toBe(14);
+  });
+});
+
+describe('who bills a company', () => {
+  it('is Roof Lee for a company Roof Lee made, and Archie for every other', () => {
+    expect(billedByRoofLee({ roofliCompanyId: '0b8f6a52-5a0e-4b7e-9d0a-1c2d3e4f5a6b' })).toBe(true);
+    expect(billedByRoofLee({ roofliCompanyId: null })).toBe(false);
+    expect(billedByRoofLee({})).toBe(false);
+    expect(billedByRoofLee(null)).toBe(false);
+  });
+
+  it('says so in one plain sentence', () => {
+    expect(MANAGED_IN_ROOF_LEE_MESSAGE).toBe('Your plan is managed in Roof Lee.');
   });
 });

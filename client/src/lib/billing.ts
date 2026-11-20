@@ -12,6 +12,8 @@ export interface BillingStatus {
   message: string | null;
   /** Admins only: the trial or past-due reminder. */
   banner: Banner | null;
+  /** 'roofli': Roof Lee bills this company. Never locked, no banner, nothing to buy here. */
+  managedBy?: 'roofli' | null;
 }
 
 const OFF: BillingStatus = { enabled: false, locked: false, reason: null, message: null, banner: null };

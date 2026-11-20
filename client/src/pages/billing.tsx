@@ -4,7 +4,7 @@ import { BILLING_CHANGED_EVENT } from '../lib/billing';
 import {
   PLAN_LABEL, PRICES_CENTS, PRICING_EXAMPLES, TEAM_INCLUDED_SEATS, describeQuote, formatDollars, quoteForSeats, type Quote,
 } from '../../../shared/billing/pricing';
-import type { Banner, LockReason } from '../../../shared/billing/status';
+import { MANAGED_IN_ROOF_LEE_MESSAGE, type Banner, type LockReason } from '../../../shared/billing/status';
 
 /**
  * The Billing page (admins): what the team costs, the trial, the next bill,
@@ -15,6 +15,9 @@ import type { Banner, LockReason } from '../../../shared/billing/status';
 
 interface BillingPageData {
   enabled: boolean;
+  /** 'roofli': Roof Lee bills this company; the page is `message` and nothing else. */
+  managedBy?: 'roofli' | null;
+  message?: string;
   locked: boolean;
   reason: LockReason | null;
   banner: Banner | null;
@@ -151,6 +154,14 @@ export default function BillingPage({ returned }: { returned?: string | null }) 
       <div className="max-w-3xl mx-auto">
         <h1 className="text-2xl font-bold text-gray-900">Billing</h1>
         <p className="mt-3 text-sm text-gray-600">Billing is not set up yet.</p>
+      </div>
+    );
+  }
+  if (data.managedBy) {
+    return (
+      <div className="max-w-3xl mx-auto">
+        <h1 className="text-2xl font-bold text-gray-900">Billing</h1>
+        <p className={`${card} mt-4 p-4 sm:p-5 text-sm text-gray-800`}>{data.message || MANAGED_IN_ROOF_LEE_MESSAGE}</p>
       </div>
     );
   }

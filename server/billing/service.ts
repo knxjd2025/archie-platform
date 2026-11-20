@@ -21,7 +21,9 @@ import { db } from '../db';
 import { companies, companyBilling, stripeEvents, teamMembers, type Company, type CompanyBilling } from '../../shared/schema';
 import { isCompanyId, runAsCompany, runAsSystem } from '../tenant/context';
 import { quoteForSeats, seatsFromQuantities, type PriceKey, type Quote } from '../../shared/billing/pricing';
-import { adminBanner, isGoodSubscription, lockReason, type Banner, type LockReason } from '../../shared/billing/status';
+import {
+  MANAGED_IN_ROOF_LEE_MESSAGE, adminBanner, billedByRoofLee, isGoodSubscription, lockReason, type Banner, type LockReason,
+} from '../../shared/billing/status';
 import { appBaseUrl, billingEnabled, priceIds, priceKeyOf } from './config';
 import { customerIdOf, periodEndOf, stripe, type ItemChange, type StripeSubscription } from './stripe';
 
@@ -55,11 +57,19 @@ async function saveBilling(companyId: string, set: Partial<typeof companyBilling
     .onConflictDoUpdate({ target: companyBilling.companyId, set: { ...set, updatedAt: new Date() } }), { loadProfile: false });
 }
 
+/** Is the current company one Roof Lee made (and so bills)? As the company. */
+async function currentCompanyIsBilledByRoofLee(): Promise<boolean> {
+  const [company] = await db.select({ roofliCompanyId: companies.roofliCompanyId }).from(companies);
+  return billedByRoofLee(company);
+}
+
 export interface BillingState {
   enabled: boolean;
   locked: boolean;
   reason: LockReason | null;
   banner: Banner | null;
+  /** 'roofli' for a company Roof Lee made: Roof Lee bills it, so Archie never locks it or offers it a checkout. */
+  managedBy: 'roofli' | null;
 }
 
 /**
@@ -67,13 +77,16 @@ export interface BillingState {
  * Reads the company and its billing row as the current company.
  */
 export async function currentBillingState(now = new Date()): Promise<BillingState & { company: Company | null; billing: CompanyBilling | null }> {
-  if (!billingEnabled()) return { enabled: false, locked: false, reason: null, banner: null, company: null, billing: null };
+  if (!billingEnabled()) return { enabled: false, locked: false, reason: null, banner: null, managedBy: null, company: null, billing: null };
   const [company] = await db.select().from(companies);
   const billing = await getBillingRow();
-  if (!company) return { enabled: true, locked: false, reason: null, banner: null, company: null, billing };
+  if (!company) return { enabled: true, locked: false, reason: null, banner: null, managedBy: null, company: null, billing };
+  // Roof Lee bills the companies it made. Whatever trial date or Stripe status
+  // such a row holds, Archie's billing never locks it and never nags it.
+  if (billedByRoofLee(company)) return { enabled: true, locked: false, reason: null, banner: null, managedBy: 'roofli', company, billing };
   const facts = { trialEndsAt: company.trialEndsAt, subscriptionStatus: billing?.subscriptionStatus ?? null };
   const reason = lockReason(facts, now);
-  return { enabled: true, locked: reason !== null, reason, banner: reason ? null : adminBanner(facts, now), company, billing };
+  return { enabled: true, locked: reason !== null, reason, banner: reason ? null : adminBanner(facts, now), managedBy: null, company, billing };
 }
 
 // ============================================================
@@ -127,7 +140,7 @@ function seatIdempotencyKey(sub: StripeSubscription, changes: ItemChange[]): str
   return `archie-seats-${sub.id}-${createHash('sha256').update(state).digest('hex').slice(0, 32)}`;
 }
 
-export type SeatSyncStatus = 'off' | 'no_subscription' | 'finished' | 'in_sync' | 'updated' | 'failed';
+export type SeatSyncStatus = 'off' | 'managed' | 'no_subscription' | 'finished' | 'in_sync' | 'updated' | 'failed';
 export interface SeatSyncResult { status: SeatSyncStatus; seats?: number; error?: string }
 
 /**
@@ -138,6 +151,8 @@ export interface SeatSyncResult { status: SeatSyncStatus; seats?: number; error?
  */
 export async function syncSeats(companyId: string, why: string): Promise<SeatSyncResult> {
   if (!billingEnabled()) return { status: 'off' };
+  // A company Roof Lee made has no Archie subscription to keep in line.
+  if (await runAsCompany(companyId, currentCompanyIsBilledByRoofLee, { loadProfile: false })) return { status: 'managed' };
   const billing = await runAsCompany(companyId, getBillingRow, { loadProfile: false });
   if (!billing?.stripeSubscriptionId) return { status: 'no_subscription' };
   const subId = billing.stripeSubscriptionId;
@@ -235,6 +250,7 @@ export async function startCheckout(companyId: string, adminEmail: string, now =
   return runAsCompany(companyId, async () => {
     const [company] = await db.select().from(companies);
     if (!company) throw new BillingError('No such company.', 404);
+    if (billedByRoofLee(company)) throw new BillingError(MANAGED_IN_ROOF_LEE_MESSAGE, 409);
     const billing = await getBillingRow();
     if (billing?.stripeSubscriptionId && isGoodSubscription(billing.subscriptionStatus)) {
       throw new BillingError('You already have a subscription. Use Manage billing to change your card.', 409);
@@ -264,6 +280,7 @@ export async function startCheckout(companyId: string, adminEmail: string, now =
 /** A Stripe Billing Portal page: update the card, see invoices, cancel. */
 export async function startPortal(companyId: string): Promise<{ url: string }> {
   return runAsCompany(companyId, async () => {
+    if (await currentCompanyIsBilledByRoofLee()) throw new BillingError(MANAGED_IN_ROOF_LEE_MESSAGE, 409);
     const billing = await getBillingRow();
     if (!billing?.stripeCustomerId) throw new BillingError('Add a card first.', 400);
     const session = await stripe().createPortalSession({ customer: billing.stripeCustomerId, return_url: returnUrl('portal') });
@@ -343,6 +360,8 @@ export async function handleStripeEvent(event: StripeEvent): Promise<WebhookOutc
   return runAsCompany(companyId, async () => {
     const [company] = await db.select().from(companies);
     if (!company) return refuse(`no company ${companyId}`);
+    // Never record an Archie subscription against a company Roof Lee bills.
+    if (billedByRoofLee(company)) return refuse('the company is billed by Roof Lee, not by Archie');
     const billing = await getBillingRow();
     if (billing?.stripeCustomerId && billing.stripeCustomerId !== subCustomer) {
       return refuse('the company is billed to another Stripe customer');
@@ -376,6 +395,7 @@ export async function handleStripeEvent(event: StripeEvent): Promise<WebhookOutc
 
 export interface BillingPage {
   enabled: true;
+  managedBy: null;
   locked: boolean;
   reason: LockReason | null;
   banner: Banner | null;
@@ -394,14 +414,20 @@ export interface BillingPage {
   seatSyncError: boolean;
 }
 
+/** The whole Billing page of a company Roof Lee made: one sentence, nothing to buy. */
+export interface ManagedBillingPage { enabled: true; managedBy: 'roofli'; message: string }
+
 /** The admin's Billing page. As the current company. */
-export async function billingPage(now = new Date()): Promise<BillingPage | { enabled: false }> {
+export async function billingPage(now = new Date()): Promise<BillingPage | ManagedBillingPage | { enabled: false }> {
   const state = await currentBillingState(now);
   if (!state.enabled) return { enabled: false };
+  // No prices, no trial, no card: only where the plan lives.
+  if (state.managedBy) return { enabled: true, managedBy: state.managedBy, message: MANAGED_IN_ROOF_LEE_MESSAGE };
   const seats = await countSeats();
   const b = state.billing;
   return {
     enabled: true,
+    managedBy: null,
     locked: state.locked,
     reason: state.reason,
     banner: state.banner,

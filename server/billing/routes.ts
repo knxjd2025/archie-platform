@@ -67,6 +67,7 @@ export function registerBillingRoutes(app: Express): void {
       reason: state.reason,
       message: state.reason ? (admin ? LOCK_MESSAGE[state.reason] : LOCKED_MEMBER_MESSAGE) : null,
       banner: admin ? state.banner : null,
+      managedBy: state.managedBy,
     });
   }));
 

@@ -7,6 +7,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import express from 'express';
 import session from 'express-session';
+import { randomUUID } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { makeFakeStripe, signStripe } from './fake-stripe';
@@ -482,6 +483,85 @@ describe.skipIf(!local)('billing', async () => {
       } finally {
         await runAsSystem('test', () => db.update(schema.companies).set({ trialEndsAt: new Date(Date.now() + 10 * DAY) }).where(eq(schema.companies.id, ids.b)));
       }
+    });
+  });
+
+  // PERMANENT: Roof Lee bills the companies it made. Archie's own billing
+  // must never lock one, nag one, or offer one a checkout, whatever its trial
+  // date or billing row says.
+  describe('a company Roof Lee made', () => {
+    const roofliId = randomUUID();
+    let admin = '';
+
+    beforeAll(async () => {
+      // The worst case on purpose: a trial that ended and a billing row Stripe
+      // would lock anyone else for.
+      ids.roofli = await company('roofli', 'trial', new Date(Date.now() - 30 * DAY));
+      await runAsSystem('test: mark the company as one Roof Lee made', () =>
+        db.update(schema.companies).set({ roofliCompanyId: roofliId }).where(eq(schema.companies.id, ids.roofli)));
+      await addMember(ids.roofli, 'admin-r', 'admin', true);
+      await addMember(ids.roofli, 'rep-r', 'sales', true);
+      await runAsCompany(ids.roofli, () => db.insert(schema.companyBilling).values({
+        companyId: ids.roofli, stripeCustomerId: `cus_${tag}_roofli`, stripeSubscriptionId: `sub_${tag}_roofli`, subscriptionStatus: 'unpaid',
+      }));
+    });
+
+    beforeEach(async () => { fake.reset(); admin = await signIn('admin-r'); });
+
+    it('is never locked by the billing gate, admin or not, and is shown no banner', async () => {
+      const rep = await signIn('rep-r');
+      for (const cookie of [admin, rep]) {
+        expect((await req('GET', '/api/ordinary', undefined, cookie)).status).toBe(200);
+        const status = await (await req('GET', '/api/billing/status', undefined, cookie)).json();
+        expect(status).toMatchObject({ enabled: true, locked: false, reason: null, message: null, banner: null, managedBy: 'roofli' });
+      }
+      expect((await req('GET', '/api/team', undefined, admin)).status).toBe(200);
+      // The same facts lock a company Roof Lee did not make.
+      const other = await signIn('admin-l');
+      expect((await req('GET', '/api/ordinary', undefined, other)).status).toBe(402);
+    });
+
+    it('shows a Billing page that says where the plan lives, with no price and nothing to buy', async () => {
+      const res = await req('GET', '/api/billing', undefined, admin);
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ enabled: true, managedBy: 'roofli', message: 'Your plan is managed in Roof Lee.' });
+    });
+
+    it('offers no checkout and no billing portal, and calls Stripe for neither', async () => {
+      for (const what of ['checkout', 'portal']) {
+        const res = await req('POST', `/api/billing/${what}`, {}, admin);
+        expect(res.status, what).toBe(409);
+        expect(await res.json()).toEqual({ error: 'Your plan is managed in Roof Lee.' });
+      }
+      expect(fake.calls).toEqual([]);
+      expect(fake.sessions).toEqual([]);
+      expect(fake.portals).toEqual([]);
+    });
+
+    it('never bills its seats: a team change and the hourly check make no Stripe call', async () => {
+      const added = await req('POST', '/api/team', { name: 'Roofli Hire', email: email('roofli-hire'), role: 'sales', canLogin: true }, admin);
+      expect(added.status).toBe(201);
+      expect(await syncSeats(ids.roofli, 'test')).toEqual({ status: 'managed' });
+      expect(fake.calls).toEqual([]);
+    });
+
+    it('refuses a Stripe event that names it, and keeps its billing row as it was', async () => {
+      const before = await billingRow(ids.roofli);
+      const customer = await fake.createCustomer({ name: 'x', email: 'x@example.test', metadata: { archie_company_id: ids.roofli } }, `k-${tag}`);
+      const sub = fake.addSubscription({ customer: customer.id, companyId: ids.roofli, items: [['price_solo_base', 1]], status: 'active' });
+      const res = await sendEvent(event('customer.subscription.updated', { id: sub.id, customer: customer.id }));
+      expect(res.status).toBe(200);
+      expect(await res.json()).toMatchObject({ received: true, handled: false });
+      expect(await billingRow(ids.roofli)).toEqual(before);
+      expect((await companyRow(ids.roofli)).status).toBe('trial');
+    });
+
+    it('is shown on the operator page as billed by Roof Lee', async () => {
+      const op = await signIn('operator');
+      const res = await req('GET', `/api/operator/companies/${ids.roofli}`, undefined, op);
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect((body.company ?? body).billedByRoofLee).toBe(true);
     });
   });
 

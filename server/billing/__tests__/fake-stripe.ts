@@ -2,7 +2,7 @@
  * An in-memory Stripe for tests: the StripeApi interface (server/billing/stripe.ts)
  * over a few maps, recording every call. Nothing here talks to Stripe.
  */
-import { createHmac } from 'node:crypto';
+import { createHmac, randomBytes } from 'node:crypto';
 import type { ItemChange, StripeApi, StripeCustomer, StripeSubscription } from '../stripe';
 
 export interface FakeStripe extends StripeApi {
@@ -22,7 +22,10 @@ export interface FakeStripe extends StripeApi {
 
 export function makeFakeStripe(): FakeStripe {
   let n = 0;
-  const next = (p: string) => `${p}_${++n}`;
+  // Ids differ from run to run, so a second run against the same test
+  // database does not trip company_billing's unique customer and subscription ids.
+  const run = randomBytes(4).toString('hex');
+  const next = (p: string) => `${p}_${run}_${++n}`;
   const customerKeys = new Map<string, string>();
   const fake: FakeStripe = {
     customers: new Map(),

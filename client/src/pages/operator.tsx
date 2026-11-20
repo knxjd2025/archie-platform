@@ -32,6 +32,8 @@ interface CompanySummary {
   subscriptionStatus: string | null;
   noSubscription: boolean;
   seatSyncFailed: boolean;
+  /** Roof Lee made this company and bills it; Archie charges it nothing. */
+  billedByRoofLee?: boolean;
 }
 interface TeamRow { id: number; name: string; email: string; role: string; active: boolean; canSignIn: boolean; hasPassword: boolean; lastSignInAt: string | null }
 interface AuditRow { at: string; operatorEmail: string; action: string; details: Record<string, unknown> }
@@ -64,11 +66,14 @@ const SUBSCRIPTION_LABEL: Record<string, string> = {
 };
 
 /** "Team, 5 seats, $397/mo". */
-const planText = (c: Pick<CompanySummary, 'plan' | 'seats' | 'monthlyTotalCents'>): string =>
-  `${PLAN_LABEL[c.plan] ?? c.plan}, ${c.seats} ${c.seats === 1 ? 'seat' : 'seats'}, ${formatDollars(c.monthlyTotalCents)}/mo`;
+const planText = (c: Pick<CompanySummary, 'plan' | 'seats' | 'monthlyTotalCents' | 'billedByRoofLee'>): string =>
+  c.billedByRoofLee ? 'Billed by Roof Lee' : `${PLAN_LABEL[c.plan] ?? c.plan}, ${c.seats} ${c.seats === 1 ? 'seat' : 'seats'}, ${formatDollars(c.monthlyTotalCents)}/mo`;
 
 /** Stripe's status in plain words, or a "No subscription" flag. */
-function SubscriptionBadge({ c }: { c: Pick<CompanySummary, 'subscriptionStatus' | 'noSubscription' | 'seatSyncFailed'> }) {
+function SubscriptionBadge({ c }: { c: Pick<CompanySummary, 'subscriptionStatus' | 'noSubscription' | 'seatSyncFailed' | 'billedByRoofLee'> }) {
+  if (c.billedByRoofLee) {
+    return <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ring-inset whitespace-nowrap bg-gray-50 text-gray-700 ring-gray-200">Roof Lee</span>;
+  }
   const bad = c.subscriptionStatus === 'past_due' || c.subscriptionStatus === 'unpaid' || c.subscriptionStatus === 'canceled' || c.subscriptionStatus === 'incomplete_expired';
   return (
     <span className="inline-flex flex-wrap items-center gap-1">
@@ -650,7 +655,7 @@ export default function Operator() {
                   <td className="px-4 py-3"><StatusPill status={c.status} /></td>
                   <td className="px-4 py-3 text-gray-600 whitespace-nowrap" title={c.trialEndsAt ? formatDate(c.trialEndsAt) : undefined}>{trialText(c) || 'Not on trial'}</td>
                   <td className="px-4 py-3 text-right text-gray-700 whitespace-nowrap" title={`${c.canSignIn} of ${c.members} can sign in`}>{c.canSignIn} / {c.members}</td>
-                  <td className="px-4 py-3 text-gray-700 whitespace-nowrap" title={`${c.seats} billable ${c.seats === 1 ? 'seat' : 'seats'}`}>{PLAN_LABEL[c.plan] ?? c.plan} {formatDollars(c.monthlyTotalCents)}/mo</td>
+                  <td className="px-4 py-3 text-gray-700 whitespace-nowrap" title={`${c.seats} billable ${c.seats === 1 ? 'seat' : 'seats'}`}>{c.billedByRoofLee ? 'Billed by Roof Lee' : `${PLAN_LABEL[c.plan] ?? c.plan} ${formatDollars(c.monthlyTotalCents)}/mo`}</td>
                   <td className="px-4 py-3"><SubscriptionBadge c={c} /></td>
                   <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{ago(c.lastSignInAt)}</td>
                   <td className="px-4 py-3 whitespace-nowrap">{c.kynexProConnected ? <span className="text-green-700">Connected</span> : <span className="text-gray-500">Not yet</span>}</td>

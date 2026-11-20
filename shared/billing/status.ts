@@ -12,6 +12,18 @@
  * past_due keeps access; admins see a banner.
  */
 
+/**
+ * A company Roof Lee made (companies.roofli_company_id is set) is billed by
+ * Roof Lee, never by Archie's own Stripe billing: it is never billing-locked
+ * here, shown no trial or payment banner, offered no Archie checkout or
+ * billing portal, and has no Archie subscription. Roof Lee pauses or closes
+ * such a company itself through the signed link (server/sister/companies.ts).
+ * The one question, asked the same way everywhere billing decides anything.
+ */
+export const billedByRoofLee = (c: { roofliCompanyId?: string | null } | null | undefined): boolean => !!c?.roofliCompanyId;
+/** What such a company's admin reads on the Billing page and from the checkout and portal buttons. */
+export const MANAGED_IN_ROOF_LEE_MESSAGE = 'Your plan is managed in Roof Lee.';
+
 /** Stripe subscription statuses that keep a company running. */
 export const GOOD_SUBSCRIPTION_STATUSES = ['active', 'trialing', 'past_due'] as const;
 /** Stripe subscription statuses that lock a company until the card is fixed. */

@@ -283,6 +283,19 @@ unset: no gate, no Billing page, no Stripe calls.
   Billing page; everyone else a page asking them to tell their admin. Data is
   kept. `past_due` keeps access with a banner for admins; the trial banner
   starts 5 days before the end. A failed gate check lets the request through.
+- **Companies Roof Lee made.** A company with `companies.roofli_company_id`
+  set is billed by Roof Lee, not here (`billedByRoofLee` in
+  `shared/billing/status.ts`, the one question everything below asks). It is
+  never locked and never shown a banner, whatever its trial date or billing
+  row says; its Billing page is the one sentence "Your plan is managed in Roof
+  Lee."; checkout and the portal answer 409 with that sentence and call
+  Stripe for nothing; the seat sync skips it (`managed`); a Stripe event
+  naming it is refused. The Operator page shows "Billed by Roof Lee" in place
+  of a plan and price. Roof Lee pauses or closes such a company itself
+  (docs/archie/02-roof-lee-link.md).
+- **Migration order.** `0011` and `0012` come before the Roof Lee link's
+  (`0013` to `0019`). The full go-live list is at the top of
+  docs/archie/02-roof-lee-link.md.
 
 ## Running it
 

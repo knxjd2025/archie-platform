@@ -57,6 +57,8 @@ export interface CompanySummary {
   noSubscription: boolean;
   /** The last seat update to Stripe failed (retried hourly). */
   seatSyncFailed: boolean;
+  /** Roof Lee made this company and bills it: the plan and total above are not charged by Archie. */
+  billedByRoofLee: boolean;
 }
 
 export interface TeamRow {
@@ -110,7 +112,7 @@ export const integrationName = (provider: string): string | null =>
 
 /** The counts for one row, as SQL over the companies alias `c`. Each uses an index that starts with company_id. */
 const summaryColumns = (since: Date) => sql`
-  c.id, c.name, c.slug, c.status, c.created_at, c.trial_ends_at,
+  c.id, c.name, c.slug, c.status, c.created_at, c.trial_ends_at, (c.roofli_company_id is not null) as billed_by_roof_lee,
   (select count(*) from team_members m where m.company_id = c.id) as members,
   (select count(*) from team_members m where m.company_id = c.id and m.active and m.can_login) as can_sign_in,
   (select max(m.last_login_at) from team_members m where m.company_id = c.id) as last_sign_in_at,
@@ -143,6 +145,7 @@ function toSummary(r: Record<string, unknown>): CompanySummary {
     subscriptionStatus,
     noSubscription: !isGoodSubscription(subscriptionStatus),
     seatSyncFailed: r.seat_sync_failed === true,
+    billedByRoofLee: r.billed_by_roof_lee === true,
   };
 }
 
