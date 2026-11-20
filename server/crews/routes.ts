@@ -165,20 +165,21 @@ export function registerCrewRoutes(app: Express) {
     if (user?.role !== CREW_ROLE || !(await ownJobsCompany())) return notFound(res);
     const crew = await crewOfPerson(user.email);
     if (!crew) return res.json({ crewName: null, today: etToday(), jobs: [] });
-    const rows = await crewAssignmentsOf(crew.crewId, etToday());
+    const today = etToday();
+    const rows = await crewAssignmentsOf(crew.crewId, today);
     const jobs = [];
     for (const a of rows) {
       const lead = await leadOf(a.jobKey);
       if (!lead) continue;
-      jobs.push(crewJobView(lead, a, crew.crewName, await tradesOf(a.jobKey)));
+      jobs.push(crewJobView(lead, a, crew.crewName, await tradesOf(a.jobKey), today));
     }
-    res.json({ crewName: crew.crewName, today: etToday(), jobs });
+    res.json({ crewName: crew.crewName, today, jobs });
   }));
 
   app.get('/api/crew/jobs/:key', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     const seen = await crewJob(req);
     if (!seen) return notFound(res);
-    res.json({ job: crewJobView(seen.lead, seen.assignment, seen.crewName, await tradesOf(seen.assignment.jobKey)) });
+    res.json({ job: crewJobView(seen.lead, seen.assignment, seen.crewName, await tradesOf(seen.assignment.jobKey), etToday()) });
   }));
 
   // Started, or done. Forward only, one step at a time.
@@ -187,7 +188,7 @@ export function registerCrewRoutes(app: Express) {
     if (!seen) return notFound(res);
     const r = await setInstallStatus(seen.assignment.jobKey, req.body?.status, (req.session.user as SessionUser).email, 'crew');
     if (!r.ok) return res.status(r.status).json({ error: r.error });
-    res.json({ job: crewJobView(seen.lead, r.value, seen.crewName, await tradesOf(seen.assignment.jobKey)) });
+    res.json({ job: crewJobView(seen.lead, r.value, seen.crewName, await tradesOf(seen.assignment.jobKey), etToday()) });
   }));
 
   // A trade finished: the same tick the production board makes, through the crew check.
@@ -198,7 +199,7 @@ export function registerCrewRoutes(app: Express) {
     if (!(await tradesOf(seen.assignment.jobKey))) return res.status(409).json({ error: CREW_NOT_ON_BOARD });
     const r = await completeTrade(seen.assignment.jobKey, req.body?.trade, (req.session.user as SessionUser).email);
     if (!r.ok) return res.status(r.status).json({ error: r.error });
-    res.json({ completed: r.completed, job: crewJobView(seen.lead, seen.assignment, seen.crewName, r.row.trades) });
+    res.json({ completed: r.completed, job: crewJobView(seen.lead, seen.assignment, seen.crewName, r.row.trades, etToday()) });
   }));
 
   // The job's photos, as the job's other photos are shown.

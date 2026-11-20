@@ -856,9 +856,18 @@ appointments are not here: Roof Lee books them in Kynex Pro.
 - **Crews never see money.** What a crew is shown is built by `crewJobView`
   (`server/crews/view.ts`), an allow-list: no projected value, estimate,
   invoice, deposit, payment tick or commission, and not the lead's own notes
-  (office staff may have typed a price there). The homeowner's phone and
-  email are left out until the owner decides (open question D9). The note the
-  office writes for the crew is labelled "no prices: the crew sees this".
+  (office staff may have typed a price there), and never the homeowner's
+  email. The note the office writes for the crew is labelled "no prices: the
+  crew sees this".
+- **The homeowner's phone (D9, decided by the owner).** A crew member sees
+  the homeowner's phone only for a job booked for their own crew (the one
+  crew check above), and only around the install days: from two days before
+  the booking's first day until the end of its last day (the first day when
+  there is no last day), in the company's own dates. Outside that window the
+  field (`homeownerPhone`) is left out of the job altogether, not sent empty.
+  The crew's job page shows it as a tap-to-call link with the line "Call only
+  about this job." Everything else stays as it was: no money, no email, no
+  lead notes.
 - **Milestones for Roof Lee.** Booking an install, booking it again for
   another crew, day or time, the crew starting and the crew finishing each add
   a row to `job_milestones` (`install_scheduled`, `install_started`,
@@ -869,7 +878,7 @@ appointments are not here: Roof Lee books them in Kynex Pro.
   changed and its people, install booked, cleared and its status, and each
   crew photo (`upload_photo`).
 - **Not yet:** a crew asking the office for extra work from the phone;
-  showing crews the homeowner's phone (D9); the checklist's "no later than
+  the checklist's "no later than
   7:00 AM" as a company setting and the walkthrough's follow-up date in the
   company's time zone (both still in the plan's Stage D list); and sending the
   milestones to Roof Lee (Stage E).

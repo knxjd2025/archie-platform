@@ -3,7 +3,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { prepareArchiePhoto } from '../components/JobPhotos';
 import {
-  CREW_WORDS, STATUS_CHIP, addressLine, directionsUrl, groupCrewJobs, nextCrewStep, whenLine, type CrewJob,
+  CREW_WORDS, STATUS_CHIP, addressLine, directionsUrl, groupCrewJobs, nextCrewStep, telHref, whenLine, type CrewJob,
 } from '../lib/crews-view';
 
 interface CrewPhoto { id: string; thumbUrl: string; url: string; caption: string | null; phase: 'before' | 'during' | 'after' | null }
@@ -13,6 +13,8 @@ interface CrewPhoto { id: string; thumbUrl: string; url: string; caption: string
  * their crew, and for each one the address, the day, the work to do, a tick
  * for each trade, Start and Done, and photos. Nothing on it shows a price:
  * the server sends an allow-list with no money in it (server/crews/view.ts).
+ * The homeowner's phone appears only when the server sends it, which is only
+ * around the install days.
  */
 export default function CrewHome() {
   const { user } = useAuth();
@@ -137,6 +139,7 @@ function CrewJobPage({ job, onBack, onChanged }: { job: CrewJob; onBack: () => v
   };
 
   const map = directionsUrl(job);
+  const call = telHref(job.homeownerPhone);
 
   return (
     <div className="max-w-xl mx-auto space-y-4">
@@ -148,6 +151,12 @@ function CrewJobPage({ job, onBack, onChanged }: { job: CrewJob; onBack: () => v
         </div>
         <p className="text-sm text-gray-700 mt-1">{addressLine(job) || 'No address yet'}</p>
         {map && <a href={map} target="_blank" rel="noreferrer" className="inline-block mt-1 text-sm text-blue-600">{CREW_WORDS.directions} ↗</a>}
+        {call && (
+          <div className="mt-2">
+            <a href={call} className="inline-block text-sm text-blue-600">📞 {CREW_WORDS.callHomeowner}: {job.homeownerPhone}</a>
+            <p className="text-xs text-gray-500">{CREW_WORDS.callOnly}</p>
+          </div>
+        )}
         <p className="text-sm text-gray-600 mt-2">{whenLine(job)}</p>
         {job.jobType && <p className="text-xs text-gray-500 mt-0.5 capitalize">{job.jobType}</p>}
         {job.notes && (

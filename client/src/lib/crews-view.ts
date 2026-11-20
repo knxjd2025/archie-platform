@@ -27,6 +27,8 @@ export interface CrewJob {
   notes: string | null;
   trades: Array<{ key: string; label: string; done: boolean }>;
   currentTrade: string | null;
+  /** Sent only around the install days (owner's decision D9); absent otherwise. */
+  homeownerPhone?: string;
 }
 
 export interface WeekInstall {
@@ -59,6 +61,8 @@ export const CREW_WORDS = {
   saved: 'Photo saved',
   notes: 'From the office',
   directions: 'Directions',
+  callHomeowner: 'Call the homeowner',
+  callOnly: 'Call only about this job.',
   back: 'All my jobs',
   week: 'Crew week',
   board: 'Board',
@@ -88,6 +92,14 @@ export function addressLine(j: Pick<CrewJob, 'address' | 'city' | 'state' | 'zip
 export function directionsUrl(j: Pick<CrewJob, 'address' | 'city' | 'state' | 'zip'>): string | null {
   const line = addressLine(j);
   return line ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(line)}` : null;
+}
+
+/** A tap-to-call link for a phone number, or null when there is nothing to dial. */
+export function telHref(phone: string | null | undefined): string | null {
+  const raw = (phone ?? '').trim();
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length < 7) return null;
+  return `tel:${raw.startsWith('+') ? '+' : ''}${digits}`;
 }
 
 /** 'Mon, Nov 23 · 7:30 AM' or 'Mon, Nov 23 to Wed, Nov 25'. */

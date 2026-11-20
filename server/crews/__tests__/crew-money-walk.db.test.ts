@@ -122,15 +122,20 @@ describe.skipIf(!localDb)('a crew member, on every read route Archie has (PERMAN
     h.blockOutside();
     a = await h.company('Summit Ridge Roofing', true, [['owner', 'admin'], ['office', 'customer_service'], ['rep', 'sales'], ['crew', 'production']]);
     as(a, 'rep');
-    const lead = await post('/api/leads/create', { firstName: 'Pat', lastName: 'Hollis', address: '12 Main St', city: 'Cedar Falls', state: 'IA' });
+    const lead = await post('/api/leads/create', { firstName: 'Pat', lastName: 'Hollis', phone: '(319) 555-0142', address: '12 Main St', city: 'Cedar Falls', state: 'IA' });
     jobKey = lead.body.jobId;
     await runAsCompany(a.id, () => db.update(schema.leads).set({ projectedValue: PRICE }).where(eq(schema.leads.externalId, jobKey)));
     as(a, 'office');
     expect((await post(`/api/production/${jobKey}/pipeline/stage`, { stage: 'approved' })).status).toBe(200);
     const crew = await post('/api/crews', { name: `Walk ${tag}` });
     await put(`/api/crews/${crew.body.crew.id}/members`, { memberIds: [a.people.crew.id] });
-    expect((await put(`/api/jobs/${jobKey}/install`, { crewId: crew.body.crew.id, installDate: '2026-11-24' })).status).toBe(200);
+    // Booked for the company's today, so the walk runs with the homeowner's phone shown (D9).
     as(a, 'crew');
+    const today: string = (await get('/api/crew/jobs')).body.today;
+    as(a, 'office');
+    expect((await put(`/api/jobs/${jobKey}/install`, { crewId: crew.body.crew.id, installDate: today })).status).toBe(200);
+    as(a, 'crew');
+    expect((await get(`/api/crew/jobs/${jobKey}`)).body.job.homeownerPhone).toBe('(319) 555-0142');
     const photo = await post(`/api/crew/jobs/${jobKey}/photos`, { base64: makeJpeg().toString('base64'), phase: 'during' });
     photoId = photo.body.fileId;
     const [co] = await h.runAsSystem('test: read the company', () => db.select().from(schema.companies).where(eq(schema.companies.id, a.id)));

@@ -7,7 +7,9 @@
  * install from the job and sees it on the crew week in the company's own
  * dates; a crew member sees only their crew's jobs, starts one, ticks a
  * trade, adds a During photo and finishes it, and each step is recorded as a
- * milestone; another crew's job, another company's job and every route that
+ * milestone; the homeowner's phone reaches the crew only for its own job and
+ * only from two days before the first install day to the end of the last,
+ * in the company's dates (D9), and the homeowner's email never; another crew's job, another company's job and every route that
  * opens a job through ownsLead stay 404 for a crew; a salesperson cannot book
  * crews; and a company Roof Lee did not make gets 404 on every one of these,
  * with its production board unchanged.
@@ -69,9 +71,9 @@ describe.skipIf(!localDb)('crews and install dates', async () => {
   function company(...args: Parameters<typeof h.company>) { return h.company(...args); }
 
   /** A native lead made on the lead form by the company's rep, put on the production board. */
-  async function nativeJob(c: Co = a): Promise<string> {
+  async function nativeJob(c: Co = a, phone = '(319) 555-0142'): Promise<string> {
     as(c, 'rep');
-    const r = await post('/api/leads/create', { firstName: 'Pat', lastName: 'Hollis', phone: '(319) 555-0142', address: '12 Main St', city: 'Cedar Falls', state: 'IA' });
+    const r = await post('/api/leads/create', { firstName: 'Pat', lastName: 'Hollis', phone, email: 'pat.hollis@example.test', address: '12 Main St', city: 'Cedar Falls', state: 'IA' });
     expect(r.status).toBe(200);
     expect(isNativeJobId(r.body.jobId)).toBe(true);
     // A price on the job, so a crew could only fail to see it.
@@ -215,7 +217,7 @@ describe.skipIf(!localDb)('crews and install dates', async () => {
         status: 'scheduled', notes: 'Tear off and dry in.', currentTrade: 'roofing' });
       expect(job.trades.map((t: any) => t.key)).toEqual(['roofing', 'gutters']);
       expect(list.text).not.toContain('18450');
-      expect(list.text).not.toContain('555-0142');
+      expect(list.text).not.toContain('pat.hollis@example.test');
     });
 
     it('starts, ticks a trade, adds a During photo and finishes, recording each milestone', async () => {
@@ -320,6 +322,50 @@ describe.skipIf(!localDb)('crews and install dates', async () => {
       }
       as(a, 'idle');
       expect(await get('/api/crew/jobs')).toMatchObject({ status: 200, body: { crewName: null, jobs: [] } });
+    });
+
+    it('shows the homeowner\'s phone only around the install days, in the company\'s dates, and never the email', async () => {
+      const { addDays } = await import('../../../shared/crews');
+      as(a, 'crew');
+      // The company is in Kiritimati: "today" is that company's date, not the server's.
+      const today: string = (await get('/api/crew/jobs')).body.today;
+      expect(today).toBe(new Date().toLocaleDateString('en-CA', { timeZone: 'Pacific/Kiritimati' }));
+      const cases = [
+        { phone: '(319) 555-0201', booking: { installDate: addDays(today, 2) }, shown: true }, // opens two days before
+        { phone: '(319) 555-0202', booking: { installDate: addDays(today, 3) }, shown: false }, // not yet
+        { phone: '(319) 555-0203', booking: { installDate: addDays(today, -1), endDate: addDays(today, 1) }, shown: true }, // mid-job
+        { phone: '(319) 555-0204', booking: { installDate: addDays(today, -2), endDate: today }, shown: true }, // its last day
+        { phone: '(319) 555-0205', booking: { installDate: addDays(today, -3), endDate: addDays(today, -1) }, shown: false }, // finished
+        { phone: '(319) 555-0206', booking: { installDate: addDays(today, -1) }, shown: false }, // one day, yesterday
+      ];
+      const keys: string[] = [];
+      for (const c of cases) {
+        const key = await nativeJob(a, c.phone);
+        as(a, 'office');
+        expect((await put(`/api/jobs/${key}/install`, { crewId: red, ...c.booking })).status).toBe(200);
+        keys.push(key);
+      }
+      as(a, 'crew');
+      const list = await get('/api/crew/jobs');
+      expect(list.status).toBe(200);
+      cases.forEach((c, i) => {
+        const job = list.body.jobs.find((j: any) => j.jobKey === keys[i]);
+        expect(job, c.phone).toBeTruthy();
+        if (c.shown) expect(job.homeownerPhone, c.phone).toBe(c.phone);
+        else expect(job, c.phone).not.toHaveProperty('homeownerPhone');
+      });
+      expect(list.text).not.toContain('pat.hollis@example.test');
+      expect(list.text).not.toContain('18450');
+      // The single job and a crew's own write carry it the same way.
+      const one = await get(`/api/crew/jobs/${keys[0]}`);
+      expect(one.body.job.homeownerPhone).toBe('(319) 555-0201');
+      expect((await get(`/api/crew/jobs/${keys[1]}`)).body.job).not.toHaveProperty('homeownerPhone');
+      const started = await post(`/api/crew/jobs/${keys[2]}/status`, { status: 'in_progress' });
+      expect(started.body.job.homeownerPhone).toBe('(319) 555-0203');
+      // Another crew of the same company never reaches it.
+      as(a, 'crew2');
+      expect((await get(`/api/crew/jobs/${keys[0]}`)).status).toBe(404);
+      expect((await get('/api/crew/jobs')).text).not.toContain('555-0201');
     });
   });
 

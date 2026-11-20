@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addressLine, crewScreensFor, CREW_WORDS, directionsUrl, groupCrewJobs, installsOn, nextCrewStep, whenLine, type CrewJob } from '../crews-view';
+import { addressLine, crewScreensFor, CREW_WORDS, directionsUrl, groupCrewJobs, installsOn, nextCrewStep, telHref, whenLine, type CrewJob } from '../crews-view';
 
 const job = (over: Partial<CrewJob>): CrewJob => ({
   jobKey: 'archie-x', customer: 'Pat Hollis', jobName: null, jobType: null, address: '12 Main St', city: 'Cedar Falls', state: 'IA', zip: '50613',
@@ -59,5 +59,16 @@ describe('who sees the crew screens', () => {
     expect(crewScreensFor(true, 'production')).toEqual({ crewHome: true, booking: false });
     expect(crewScreensFor(true, 'sales')).toEqual({ crewHome: false, booking: false });
     for (const r of ['admin', 'sales_director', 'manager', 'customer_service'] as const) expect(crewScreensFor(true, r)).toEqual({ crewHome: false, booking: true });
+  });
+});
+
+describe('calling the homeowner from the crew\'s phone', () => {
+  it('dials the number the server sent, and nothing when there is none', () => {
+    expect(telHref('(319) 555-0142')).toBe('tel:3195550142');
+    expect(telHref('+1 319-555-0142')).toBe('tel:+13195550142');
+    expect(telHref(undefined)).toBeNull();
+    expect(telHref('')).toBeNull();
+    expect(telHref('n/a')).toBeNull();
+    expect(CREW_WORDS.callOnly).toBe('Call only about this job.');
   });
 });
