@@ -30,13 +30,14 @@ ticket, and read and add leads for them. Archie tells Roof Lee about new leads
 and finished jobs. All of it is off until `SISTERS_ARCHIE_SECRET` is set (and,
 for the news, `ROOFLI_EVENTS_URL`). See docs/archie/02-roof-lee-link.md.
 
-**Before this code is deployed, apply migrations `0011_roofli_sister.sql` to
-`0015_archie_native_jobs.sql` to the database, as the owner.** The code reads
-the columns `0011` adds on every sign-in and the ones `0015` adds on every
-read of a lead, link on or off, so deploying first breaks sign-in and every
-lead screen for every existing company. All five are safe to apply under the
-code that is live today. `0012` to `0014` only add tables the link uses once
-it is switched on. Nothing in the build or deploy runs migrations.
+**Before this code is deployed, apply migrations `0011_operator_console.sql`
+to `0019_crews.sql` to the database, as the owner** (the ordered list is at the
+top of docs/archie/02-roof-lee-link.md). The code reads the columns `0011` and
+`0013` add on every sign-in and the ones `0017` adds on every read of a lead,
+link on or off, so deploying first breaks sign-in and every lead screen for
+every existing company. All nine are safe to apply under the code that is live
+today. `0011` and `0012` are the operator console and billing; `0013` to `0019`
+are the Roof Lee link's. Nothing in the build or deploy runs migrations.
 
 They come after `0006` to `0010`, which are already in the live database, and
 they need `0008` (the system role) to be there: each new table is protected

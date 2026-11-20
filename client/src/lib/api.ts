@@ -1,4 +1,6 @@
 import { addTrail, endpointShape, reportCaughtError } from './bug-monitor';
+import { COMPANY_INACTIVE_CODE } from '../../../shared/company';
+import { BILLING_LOCKED_CODE } from '../../../shared/billing/status';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -13,14 +15,17 @@ interface RequestOptions extends RequestInit {
 }
 
 export const SESSION_EXPIRED_EVENT = 'archie:session-expired';
+/** The server said the company is billing-locked (402): the app shows the Billing page or the "ask your admin" page. */
+export const BILLING_LOCKED_EVENT = 'archie:billing-locked';
 
 // Fired once per expiry, not once per failed request: a dashboard makes a
 // dozen calls, and a dozen identical prompts is worse than none.
 let announced = false;
-function notifySessionExpired() {
+/** `reason` is the server's sentence when it said why (a paused company), shown on the sign-in page. */
+function notifySessionExpired(reason?: string) {
   if (announced) return;
   announced = true;
-  window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
+  window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT, { detail: reason ? { reason } : undefined }));
 }
 /** Called after a successful sign-in so a later expiry is announced again. */
 export function resetSessionExpiredNotice() { announced = false; }
@@ -69,12 +74,17 @@ class ApiClient {
       // on every screen — "Not authenticated" in one panel, an empty list in
       // another — with nothing telling the rep to sign in again. Announce it
       // once, centrally, and let the app show a single honest prompt.
-      if (response.status === 401) notifySessionExpired();
       // Routes answer with `{ error }` — around 330 of them — and a handful
       // with `{ message }`. Reading only `.message` threw the written-for-a-
       // human sentence away and showed the rep "HTTP 400" instead of "Dana
       // Whitfield's email doesn't look right." Take whichever the route sent.
       const body = await response.json().catch(() => null);
+      if (response.status === 401) {
+        notifySessionExpired(body?.code === COMPANY_INACTIVE_CODE && typeof body?.message === 'string' ? body.message : undefined);
+      }
+      if (response.status === 402 && body?.code === BILLING_LOCKED_CODE) {
+        window.dispatchEvent(new CustomEvent(BILLING_LOCKED_EVENT));
+      }
       const detail = typeof body?.error === 'string' ? body.error
         : typeof body?.message === 'string' ? body.message
           : '';

@@ -54,9 +54,9 @@ describe.skipIf(!isLocal)('migrations replace invalid leftover indexes', () => {
     });
   }
 
-  // The Roof Lee link's index on leads (0015) follows the same rule. It is
+  // The Roof Lee link's index on leads (0017) follows the same rule. It is
   // unique and partial, and must come back exactly so.
-  it('0015_archie_native_jobs.sql rebuilds leads_company_native_job_uq when a failed concurrent build left it invalid', async () => {
+  it('0017_archie_native_jobs.sql rebuilds leads_company_native_job_uq when a failed concurrent build left it invalid', async () => {
     if (!(owner as any)._connected) await owner.connect();
     const name = 'leads_company_native_job_uq';
     await owner.query('set session_replication_role = replica');
@@ -70,7 +70,7 @@ describe.skipIf(!isLocal)('migrations replace invalid leftover indexes', () => {
     // The whole file again, as an operator rerunning it would: the columns
     // are already there (IF NOT EXISTS), the broken index is replaced.
     await owner.query('begin');
-    await owner.query(sqlOf('0015_archie_native_jobs.sql'));
+    await owner.query(sqlOf('0017_archie_native_jobs.sql'));
     await owner.query('commit');
 
     const after = await state(name);

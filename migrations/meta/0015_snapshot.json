@@ -1,6 +1,6 @@
 {
-  "id": "c4203806-e28c-46be-8e3e-e446f34b9569",
-  "prevId": "db170ada-7481-4d8f-82a7-c493cab3de44",
+  "id": "b52b89a8-62de-439f-bf02-7768d94c4558",
+  "prevId": "609a613e-ff5a-4e80-856a-8ba7b6b61e7e",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2632,6 +2632,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "trial_ends_at": {
+          "name": "trial_ends_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {},
@@ -5908,43 +5914,6 @@
           "type": "boolean",
           "primaryKey": false,
           "notNull": false
-        },
-        "job_type": {
-          "name": "job_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "lat": {
-          "name": "lat",
-          "type": "double precision",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "lng": {
-          "name": "lng",
-          "type": "double precision",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "photo_consent": {
-          "name": "photo_consent",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "lead_source": {
-          "name": "lead_source",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "post_ref": {
-          "name": "post_ref",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
@@ -5986,28 +5955,6 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "leads_company_native_job_uq": {
-          "name": "leads_company_native_job_uq",
-          "columns": [
-            {
-              "expression": "company_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "external_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"leads\".\"external_id\" LIKE 'archie-%'",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -9540,147 +9487,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.outbound_events": {
-      "name": "outbound_events",
-      "schema": "",
-      "columns": {
-        "company_id": {
-          "name": "company_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "archie_current_company()"
-        },
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "dedupe_key": {
-          "name": "dedupe_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "type": {
-          "name": "type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "data": {
-          "name": "data",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "occurred_at": {
-          "name": "occurred_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "attempts": {
-          "name": "attempts",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "next_attempt_at": {
-          "name": "next_attempt_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "delivered_at": {
-          "name": "delivered_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "gave_up_at": {
-          "name": "gave_up_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "last_error": {
-          "name": "last_error",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "outbound_events_company_dedupe_uq": {
-          "name": "outbound_events_company_dedupe_uq",
-          "columns": [
-            {
-              "expression": "company_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "dedupe_key",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "outbound_events_due_idx": {
-          "name": "outbound_events_due_idx",
-          "columns": [
-            {
-              "expression": "next_attempt_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"outbound_events\".\"delivered_at\" IS NULL AND \"outbound_events\".\"gave_up_at\" IS NULL",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "outbound_events_company_id_companies_id_fk": {
-          "name": "outbound_events_company_id_companies_id_fk",
-          "tableFrom": "outbound_events",
-          "tableTo": "companies",
-          "columnsFrom": [
-            "company_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.sister_idempotency": {
       "name": "sister_idempotency",
       "schema": "",
@@ -9774,6 +9580,257 @@
           "tableTo": "companies",
           "columnsFrom": [
             "company_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.stripe_events": {
+      "name": "stripe_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "received_at": {
+          "name": "received_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.company_billing": {
+      "name": "company_billing",
+      "schema": "",
+      "columns": {
+        "company_id": {
+          "name": "company_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "archie_current_company()"
+        },
+        "stripe_customer_id": {
+          "name": "stripe_customer_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "stripe_subscription_id": {
+          "name": "stripe_subscription_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "plan": {
+          "name": "plan",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "seats": {
+          "name": "seats",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "subscription_status": {
+          "name": "subscription_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "current_period_end": {
+          "name": "current_period_end",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cancel_at_period_end": {
+          "name": "cancel_at_period_end",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "seat_sync_error": {
+          "name": "seat_sync_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "seat_sync_failed_at": {
+          "name": "seat_sync_failed_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "company_billing_customer_uq": {
+          "name": "company_billing_customer_uq",
+          "columns": [
+            {
+              "expression": "stripe_customer_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "company_billing_subscription_uq": {
+          "name": "company_billing_subscription_uq",
+          "columns": [
+            {
+              "expression": "stripe_subscription_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "company_billing_company_id_companies_id_fk": {
+          "name": "company_billing_company_id_companies_id_fk",
+          "tableFrom": "company_billing",
+          "tableTo": "companies",
+          "columnsFrom": [
+            "company_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "company_billing_plan_check": {
+          "name": "company_billing_plan_check",
+          "value": "\"company_billing\".\"plan\" IS NULL OR \"company_billing\".\"plan\" IN ('solo', 'team')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.operator_audit_log": {
+      "name": "operator_audit_log",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "operator_email": {
+          "name": "operator_email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_company_id": {
+          "name": "target_company_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "details": {
+          "name": "details",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        }
+      },
+      "indexes": {
+        "operator_audit_log_company_created_idx": {
+          "name": "operator_audit_log_company_created_idx",
+          "columns": [
+            {
+              "expression": "target_company_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "operator_audit_log_target_company_id_companies_id_fk": {
+          "name": "operator_audit_log_target_company_id_companies_id_fk",
+          "tableFrom": "operator_audit_log",
+          "tableTo": "companies",
+          "columnsFrom": [
+            "target_company_id"
           ],
           "columnsTo": [
             "id"

@@ -52,7 +52,7 @@ describe.skipIf(!isLocal(url) || !isLocal(ownerUrl))('system role and company is
                                    where k.conrelid = c.oid and k.contype = 'c' and a.attnum = any(k.conkey)),
                         'fk', (select json_build_object('table', f.confrelid::regclass::text, 'col', fa.attname)
                                  from pg_constraint f join pg_attribute fa on fa.attrelid = f.confrelid and fa.attnum = f.confkey[array_position(f.conkey, a.attnum)]
-                                -- A one-column key, or a key paired with company_id (0017's crews): either way the
+                                -- A one-column key, or a key paired with company_id (0019's crews): either way the
                                 -- parent row is the same company's, which is what the insert below picks.
                                 where f.conrelid = c.oid and f.contype = 'f' and a.attnum = any(f.conkey)
                                 limit 1)))
@@ -81,7 +81,7 @@ describe.skipIf(!isLocal(url) || !isLocal(ownerUrl))('system role and company is
           else if (col.fk) exprs.push(`(select "${col.fk.col}" from ${col.fk.table} where company_id = $1::uuid limit 1)`);
           else if (col.enum) exprs.push(`(enum_range(null::${col.udt}))[1]`);
           else if (literal) exprs.push(`'${literal}'`);
-          // Kept under 60 characters, so a capped name (0017's crews) still fits.
+          // Kept under 60 characters, so a capped name (0019's crews) still fits.
           else if (/^(text|character varying)/.test(col.type)) exprs.push(`left('${tag}-' || replace(gen_random_uuid()::text, '-', ''), 56)`);
           else if (/^(integer|bigint|smallint)/.test(col.type)) exprs.push('(random() * 1e8)::int');
           else if (/^numeric/.test(col.type)) exprs.push('1');

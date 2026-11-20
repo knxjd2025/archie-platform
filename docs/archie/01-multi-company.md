@@ -197,6 +197,93 @@ Seeding (advisors, knowledge base) is one of these jobs (`/api/cron/seed-compani
 once per deployment per company) plus at company creation. It is never on the
 request path.
 
+### 9. Operator console
+
+The people who run Archie (not anyone inside a roofing company) use the
+Operator page and `/api/operator/*` (`server/operator/`).
+
+- **Who:** emails in `ARCHIE_OPERATOR_EMAILS` (comma separated), signed in
+  normally. Read on every request, so removing an email revokes access at
+  once. Being a company admin never makes anyone an operator. Unset: nobody.
+- **What:** list every company with its numbers, view one (team, connected
+  apps by name, recent operator actions), create a company with its first
+  admin (returns a 72-hour welcome link to hand over), pause, resume or cancel
+  (pausing or cancelling ends every session of that company's people), and
+  make a 1-hour reset link for a member.
+- **Access:** reads of one company run as that company (`runAsCompany`, the
+  id only ever from the URL); the company list, status changes and the audit
+  log are `runAsSystem`, each with its own reason.
+- **Audit:** every change appends to `operator_audit_log` (migration 0011):
+  global, no `company_id`, RLS forced with one policy for `archie_system`;
+  `archie_app` has no privileges on it (42501), `archie_system` only
+  `SELECT, INSERT` (append-only). Links and tokens are never written to it.
+- **Trials:** `companies.trial_ends_at`, set to `ARCHIE_TRIAL_DAYS` (default
+  14) from creation for a trial. Enforced by billing once it is on (below).
+- **Billing columns:** plan, seats and monthly total (what the team costs now,
+  from `shared/billing/pricing.ts`), Stripe's subscription status, and a
+  "No subscription" flag for every company without an active, trialing or
+  past-due subscription (including grandfathered ones).
+
+### 10. Billing (Stripe)
+
+`server/billing/*`, prices in `shared/billing/pricing.ts` (the only place),
+lock rules in `shared/billing/status.ts`. **Off** while `STRIPE_SECRET_KEY` is
+unset: no gate, no Billing page, no Stripe calls.
+
+- **Prices.** Billable seats are team members who are `active` and `canLogin`.
+  1 seat: Solo $149. 2: Solo + 1 extra at $99 = $248. 3 or more: Team $299
+  includes 3, + $49 each beyond 3. 0 seats bills as 1. Plan changes on its own
+  at the 2/3 line. Four Stripe prices (`STRIPE_PRICE_SOLO_BASE`,
+  `_SOLO_EXTRA`, `_TEAM_BASE`, `_TEAM_EXTRA`); `scripts/stripe-setup.ts --yes`
+  finds or creates them by lookup key and prints the ids.
+- **Data.** `company_billing` (migration 0012): one row per company, a normal
+  company table (both policies). Stripe customer and subscription ids, plan,
+  seats Stripe bills for, status, period end, cancel-at-period-end, the last
+  seat-sync failure. Never card data. `stripe_events`: ids of webhook events
+  already handled; global, `archie_app` has no access, `archie_system` may
+  `SELECT, INSERT, DELETE`.
+- **Checkout / portal.** `POST /api/billing/checkout` and `/portal` (admins).
+  One Stripe customer per company, made with metadata `archie_company_id`
+  (idempotency key per company). Inside the trial, the subscription's
+  `trial_end` is the company's `trial_ends_at`, so nobody is charged early;
+  Stripe only accepts a trial end 48 hours or more away, so a company adding a
+  card in the last two days of its trial is charged at once.
+- **Seat sync.** After the team change is saved (`POST /api/team`,
+  `PATCH /api/team/:id` when sign-in turns on or off, the operator's first
+  admin), `afterSeatChange` updates the subscription items with proration. It
+  compares first (nothing to do: no call), uses an idempotency key derived
+  from the change, waits at most 8 seconds, and never fails the team change. A
+  failure is written to `company_billing.seat_sync_error`; the hourly cron
+  `/api/cron/billing-seats` (`runCompanyJob`, companies with a subscription)
+  fixes it.
+- **Webhook.** `POST /api/webhooks/stripe`: raw body (the `/api/webhooks` raw
+  parser runs before the JSON parser in `api/index.ts` and `server/index.ts`;
+  a body that was already parsed is refused), Stripe-Signature checked with
+  `STRIPE_WEBHOOK_SECRET` (5 minute tolerance), each event id handled once.
+  The subscription is re-read from Stripe, and the company comes **only** from
+  the `archie_company_id` metadata on the subscription and the customer, which
+  must agree with each other and with the customer Archie stored. Nothing else
+  in the payload (client_reference_id, emails, the event's own metadata) is
+  used. A refused event is answered 200 and logged, so Stripe does not retry
+  it; a failure releases the event id and answers 500, so Stripe does.
+- **Company status, and the operator override.** The webhook writes
+  `company_billing` and changes `companies.status` in exactly one case: a
+  subscription that is `active` moves a company from `trial` to `active`
+  (`UPDATE ... WHERE status = 'trial'`). It never touches a company the
+  operator paused or cancelled, and never pauses or cancels anyone itself:
+  being locked for billing is worked out from `company_billing`, not stored
+  as a status. To keep a company running whatever Stripe says, the operator
+  leaves it `active` with no trial end (grandfathered); to stop it, pause it.
+- **Gate.** `billingGate` (one middleware on `/api`): a company is locked when
+  its subscription is `unpaid`, `canceled` or `incomplete_expired`, or its
+  trial has ended with no `active`, `trialing` or `past_due` subscription.
+  `trial_ends_at` null with no subscription is not locked (grandfathered).
+  Locked: 402 with a plain sentence on every API route except `/api/auth`,
+  `/api/billing`, `/api/webhooks` and `/api/operator`. Admins see only the
+  Billing page; everyone else a page asking them to tell their admin. Data is
+  kept. `past_due` keeps access with a banner for admins; the trial banner
+  starts 5 days before the end. A failed gate check lets the request through.
+
 ## Running it
 
 - **Database URL.** Use the Supabase *session* pooler (port 5432) or a direct

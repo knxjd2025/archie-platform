@@ -9,6 +9,74 @@ The agreement between the two products is written in the Roof Lee repository:
 `docs/sisters/provisioning-contract.md` (version 1). That document is the
 authority. This page says how Archie's half is built.
 
+## Going live together with the operator console and billing (owner only)
+
+This branch now also holds the Archie team's work (the operator console and
+Stripe seat billing, docs/archie/01-multi-company.md sections 9 and 10). The two
+go live in one step. Nothing below has been done: no migration is applied to
+the hosted database, no setting is set, nothing is deployed.
+
+**1. Database first, as the owner.** The hosted database holds `0000` to
+`0010`. From a checkout of this branch run
+`DATABASE_URL=<owner url> npx tsx scripts/migrate.ts`. It skips the eleven
+already applied and runs these nine, in this order, one transaction each:
+
+1. `0011_operator_console.sql`
+2. `0012_billing.sql`
+3. `0013_roofli_sister.sql`
+4. `0014_roofli_sso.sql`
+5. `0015_roofli_lead_notes.sql`
+6. `0016_roofli_events.sql`
+7. `0017_archie_native_jobs.sql`
+8. `0018_job_photos.sql`
+9. `0019_crews.sql`
+
+Do the checks in "Before deploying this code" below before and after. All nine
+are safe under the code that is live today. The new code cannot sign anyone in
+without `0011` (it reads `companies.trial_ends_at`) and `0013` (it reads
+`team_members.auth_user_id`), so this step is never skipped or done second.
+
+**2. Settings on the hosting project, names only.** None is needed for the
+deploy itself. Check these two are already there: `CRON_SECRET`,
+`APP_BASE_URL`. Optional at deploy: `ARCHIE_OPERATOR_EMAILS` (who may open the
+Operator page; unset means nobody), `ARCHIE_TRIAL_DAYS` (unset means 14).
+
+**3. Deploy.** Merging this branch into main is the deploy.
+
+**4. Checks after the deploy.**
+
+- People still sign in, with a password and with Google. Leads and the
+  production board still show.
+- `GET /api/sister/v1/ready` answers a bare `401` (the Roof Lee link is off).
+- `GET /api/billing/status`, signed in, answers `enabled: false`; there is no
+  Billing page in the menu and nobody sees a trial or payment banner.
+- The Operator page opens for an email in `ARCHIE_OPERATOR_EMAILS` and for
+  nobody else.
+- Two new scheduled knocks answer at once with nothing to do:
+  `/api/cron/sister-events` (every ten minutes) and `/api/cron/billing-seats`
+  (hourly).
+
+**5. What stays off after this step.**
+
+- **The Roof Lee link**: `SISTERS_ARCHIE_SECRET`, `SISTERS_ARCHIE_READY` and
+  `ROOFLI_EVENTS_URL` stay unset. Switching it on is the checklist below,
+  parts C and D.
+- **Billing**: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` and the four
+  `STRIPE_PRICE_*` settings stay unset, and `scripts/stripe-setup.ts` is not
+  run. The prices in `shared/billing/pricing.ts` are not yet the decided ones,
+  and a Stripe price cannot be changed once made. Billing is switched on only
+  after the prices are brought in line.
+- **Photos**: the four `ARCHIE_PHOTOS_*` settings, unless already entered.
+
+**Who pays whom.** A company Roof Lee made is billed by Roof Lee, never by
+Archie's own Stripe billing. With billing on, such a company is never locked
+for a trial or a payment, sees no banner, and its Billing page says only "Your
+plan is managed in Roof Lee." It is offered no checkout and no card page, its
+seats are never sent to Stripe, and a Stripe event naming it is refused
+(`billedByRoofLee` in `shared/billing/status.ts`; the permanent tests are "a
+company Roof Lee made" in `server/billing/__tests__/billing.db.test.ts`). On
+the Operator page it shows as "Billed by Roof Lee".
+
 ## It is off until the owner turns it on
 
 Three settings, all unset by default:
@@ -22,7 +90,7 @@ Three settings, all unset by default:
 One optional setting, `ROOFLI_JOB_FINISHED_STAGE`, says which stage of the
 production board means "job finished" for Roof Lee. Unset, it is `closed_out`.
 
-Once migrations `0011_roofli_sister.sql` to `0016_job_photos.sql` are
+Once migrations `0011_operator_console.sql` to `0019_crews.sql` are
 in the database, deploying this code with none of these settings changes
 nothing for any existing company.
 The one visible difference is a new scheduled knock every ten minutes at
@@ -55,22 +123,15 @@ deployed. Stop at any step that does not check out.
    database owner. They must show: the applied list ends at
    `0010_company_job_leases.sql`; `0008` is in force (not reverted); no
    company already holds two leads with the same `archie-` id.
-2. From a checkout of this branch, apply the six migrations as the owner, in
-   this exact order (the command does the order for you, one transaction each):
-   1. `0011_roofli_sister.sql`
-   2. `0012_roofli_sso.sql`
-   3. `0013_roofli_lead_notes.sql`
-   4. `0014_roofli_events.sql`
-   5. `0015_archie_native_jobs.sql`
-   6. `0016_job_photos.sql`
-
-   (The numbers are provisional: they are renumbered after the Archie team's
-   own migrations when the two branches meet. Apply whatever numbers this
-   branch holds at the time, in order.)
+2. From a checkout of this branch, apply the nine migrations as the owner, in
+   the order listed at the top of this page (`0011_operator_console.sql` to
+   `0019_crews.sql`; the command does the order for you, one transaction each).
+   The first two are the Archie team's (the operator console and billing); the
+   other seven are the Roof Lee link's, renumbered to come after them.
 
    `DATABASE_URL=<owner url> npx tsx scripts/migrate.ts`
 3. Check it worked: step 4 of "Before deploying this code" (three small reads
-   that must not error, and five tables each showing
+   that must not error, and nine tables each showing
    `{company_isolation,company_system}`).
 
 **B. Deploy the code, with the link still off**
@@ -137,18 +198,20 @@ using Archie), or unset `SISTERS_ARCHIE_SECRET` (everything under
 
 ## Before deploying this code (owner only, must come first)
 
-**Apply migrations `0011` to `0017` to the database before this code is
+**Apply migrations `0011` to `0019` to the database before this code is
 deployed. Not after, and not as part of switching the link on.**
 
 | Migration | What it adds | When |
 |---|---|---|
-| `0011_roofli_sister.sql` | `companies.roofli_company_id`, `team_members.auth_user_id` and `source`, the table `sister_idempotency` | **Before deploy.** The code reads these columns on every sign-in and every company read. |
-| `0012_roofli_sso.sql` | the table `sister_sso_tickets` | Same step. Nothing touches it until the link is on. |
-| `0013_roofli_lead_notes.sql` | the table `lead_notes` | Same step. Nothing touches it until the link is on. |
-| `0014_roofli_events.sql` | the table `outbound_events` | Same step. Nothing touches it until the link is on. |
-| `0015_archie_native_jobs.sql` | six columns on `leads`, one partial unique index | **Before deploy.** The code reads these columns on every read of a lead. |
-| `0016_job_photos.sql` | the table `job_photos` | Same step. Only the photos of a job of Archie's own read or write it, and only a company Roof Lee made has one. The number is provisional (renumbered when the branches meet). |
-| `0017_crews.sql` | the tables `crews`, `crew_members`, `crew_assignments`, `job_milestones` | Same step. Only the crew and install routes read or write them, and they answer 404 to every company Roof Lee did not make. Provisional number, like `0016`. |
+| `0011_operator_console.sql` | `companies.trial_ends_at`, the table `operator_audit_log` | **Before deploy.** The code reads the column on every company read, sign-in included. The Archie team's (01-multi-company.md, section 9). |
+| `0012_billing.sql` | the tables `company_billing`, `stripe_events` | Same step. Nothing reads them until `STRIPE_SECRET_KEY` is set. The Archie team's (section 10). |
+| `0013_roofli_sister.sql` | `companies.roofli_company_id`, `team_members.auth_user_id` and `source`, the table `sister_idempotency` | **Before deploy.** The code reads these columns on every sign-in and every company read. |
+| `0014_roofli_sso.sql` | the table `sister_sso_tickets` | Same step. Nothing touches it until the link is on. |
+| `0015_roofli_lead_notes.sql` | the table `lead_notes` | Same step. Nothing touches it until the link is on. |
+| `0016_roofli_events.sql` | the table `outbound_events` | Same step. Nothing touches it until the link is on. |
+| `0017_archie_native_jobs.sql` | six columns on `leads`, one partial unique index | **Before deploy.** The code reads these columns on every read of a lead. |
+| `0018_job_photos.sql` | the table `job_photos` | Same step. Only the photos of a job of Archie's own read or write it, and only a company Roof Lee made has one. |
+| `0019_crews.sql` | the tables `crews`, `crew_members`, `crew_assignments`, `job_milestones` | Same step. Only the crew and install routes read or write them, and they answer 404 to every company Roof Lee did not make. |
 
 Why the order matters. This code reads the new columns every time it reads a
 person, a company or a lead, whether or not the link is switched on. Deployed
@@ -159,14 +222,14 @@ screen that shows a lead. Nothing in the build or the deploy runs migrations,
 so this is a step a person has to do.
 
 The other order is safe. The code that is live today names none of the new
-columns or tables, so it carries on exactly as before with all seven applied:
+columns or tables, so it carries on exactly as before with all nine applied:
 the new columns are null (and `photo_consent` false) for every existing row,
 the new index is empty, and the new tables are empty.
 
 **How this sits with `0006` to `0010`.** Those five are main's and are already
-in the live database; these seven come after them and change none of them.
-They need `0008` (the system role) to be there, because each new table gets
-its row level security from `archie_protect_company_table()`, which `0008`
+in the live database; these nine come after them and change none of them.
+They need `0008` (the system role) to be there, because each new company
+table gets its row level security from `archie_protect_company_table()`, which `0008`
 created: the company's own rows for everyone, every row for the
 `archie_system` role only, no `OR`. Note the order is the opposite of `0008`'s
 own ("deploy the code first, then run the migration",
@@ -184,19 +247,19 @@ hold at once because the code that is live already has `0008`.
    and this must return more than zero:
    `select count(*) from pg_policies where schemaname = 'public' and policyname = 'company_system';`
    If either is wrong, `0008` was reverted: go forward again first, as
-   01-multi-company.md says, and only then carry on here. Last, `0015` adds a
+   01-multi-company.md says, and only then carry on here. Last, `0017` adds a
    unique index, so no company may already hold two leads with the same
    `archie-` id. This must return no rows:
    `select company_id, external_id, count(*) from leads where external_id like 'archie-%' group by 1, 2 having count(*) > 1;`
-2. If `leads` is large, build `0015`'s index by hand first so writes to leads
+2. If `leads` is large, build `0017`'s index by hand first so writes to leads
    are not held up while it is built (the statements are at the top of
-   `migrations/0015_archie_native_jobs.sql`; one statement at a time, on a
+   `migrations/0017_archie_native_jobs.sql`; one statement at a time, on a
    direct connection). On a small table skip this.
 3. Apply the migrations as the database owner, at a quiet hour, **from a
    checkout of this branch** (the command applies the files in the folder it
    is run from; run from main it finds nothing new, says so and exits clean):
    `DATABASE_URL=<owner url> npx tsx scripts/migrate.ts`
-   It skips the eleven already applied and runs `0011` to `0017` in order,
+   It skips the eleven already applied and runs `0011` to `0019` in order,
    each in its own transaction. Each takes its locks for milliseconds and
    waits at most 5 seconds for one (`lock_timeout`); if one fails on the
    timeout, run the command again.
@@ -215,7 +278,7 @@ code does not notice them. (Main's rule still stands: never run code older
 than `0008` against this database without reverting `0008` first. The revert
 script and a later rerun of `0008` both cover the link's tables too.)
 
-A link switched on without `0012` to `0014` answers every sign-in and every
+A link switched on without `0014` to `0016` answers every sign-in and every
 request from Roof Lee with a refusal, which is why they go in the same step.
 
 ## Where the code is
@@ -369,7 +432,7 @@ and jobs, add a lead, change one and add a note.
   until then.
 - **Fields.** `message` is the lead's standing note (`leads.notes`), which
   `PATCH` replaces when it sends `notes`. `notes` in an answer is the list of
-  notes added one at a time (`lead_notes`, migration `0013`), newest first.
+  notes added one at a time (`lead_notes`, migration `0015`), newest first.
   No money is ever in an answer.
 - **Photos** (Stage A4, Archie's side). `photoConsent` is `true` only when a
   person recorded, in Archie, that the customer agreed (the switch on the
@@ -629,7 +692,7 @@ JobTread, so Archie gives its leads keys of its own.
 - **Photos.** The original company's photos live in its JobTread, exactly as
   before. A job Archie keeps has its photos kept by Archie itself, in Kynex's
   own private photo store (a Cloudflare R2 bucket with no public address;
-  `server/photos/store.ts`), with a row each in `job_photos` (migration `0016`):
+  `server/photos/store.ts`), with a row each in `job_photos` (migration `0018`):
   - **Keyed on the job key** (`job_photos.job_key`, the `archie-` key), never
     on the lead's row number, which the JobTread sync can change. A foreign
     key would skip row level security, so the job is looked up as the company
@@ -777,7 +840,7 @@ JobTread, so Archie gives its leads keys of its own.
   fails it until someone decides. `outside-systems.db.test.ts` walks a job
   Archie keeps through every one of these steps with clients that throw on any
   call, and checks the original JobTread company still reaches JobTread.
-- **New columns on `leads`** (migration `0015`): `job_type` (what Roof Lee
+- **New columns on `leads`** (migration `0017`): `job_type` (what Roof Lee
   called the job, also kept in `service_type`), `photo_consent`, and four that
   nothing fills yet because the agreement has no field for them: `lat`, `lng`,
   `lead_source`, `post_ref`.
@@ -793,7 +856,7 @@ answers `404` to any other company, for every role, and none of its screens
 change (`crewScreensFor` in `client/src/lib/crews-view.ts`). Homeowner
 appointments are not here: Roof Lee books them in Kynex Pro.
 
-- **The tables** (migration `0017`, provisional number): `crews` (a name, a
+- **The tables** (migration `0019`): `crews` (a name, a
   colour, switched on or off; no rates or prices), `crew_members` (who is on
   which crew, one crew per person), `crew_assignments` (a job's install: crew,
   first day, optional last day, optional start time, a note for the crew, and
@@ -934,7 +997,7 @@ How it works:
   nothing is sent, for anyone. A company without a Roof Lee id never gets a
   row. A paused or closed company's news is held back until it is live again.
 - **Written first, sent after.** The news goes into `outbound_events`
-  (migration `0014`) when the thing happens, and is sent right after the
+  (migration `0016`) when the thing happens, and is sent right after the
   person who caused it has their answer. Recording it never fails the work
   that caused it.
 - **Signed like every other version 2 request**: over the method, the address
@@ -1046,7 +1109,7 @@ needs the same change on its side.
 
 ## Turning it on (live step, owner only)
 
-The migrations (`0011` to `0016`) are not a step here. They were applied
+The migrations (`0011` to `0019`) are not a step here. They were applied
 before this code was deployed ("Before deploying this code" above).
 
 1. Generate one fresh secret and set it as `SISTERS_ARCHIE_SECRET` in both

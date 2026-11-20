@@ -8,7 +8,7 @@ import { sendPasswordLinkEmail } from './password-mail';
 import { endSessionsFor } from './sessions';
 import { PASSWORD_LINK_EXPIRED } from '../../shared/password-messages';
 import { clearFailedLogins, findSignInMember, recordFailedLogin, setPasswordHash, touchLogin, type SignInMember } from '../storage/team';
-import { isLiveCompany } from '../../shared/company';
+import { COMPANY_INACTIVE_CODE, inactiveCompanyMessage, isLiveCompany } from '../../shared/company';
 import { runAsCompany } from '../tenant/context';
 import { rateLimit } from '../lib/rate-limit';
 
@@ -69,6 +69,20 @@ async function passGate(email: string): Promise<SignInMember | null> {
   return found;
 }
 
+/**
+ * For sign-in only: the gate's answer, plus the member of a paused or
+ * cancelled company who would otherwise have passed. They are told their
+ * company is paused, but only after their password checks out, so the answer
+ * never tells a stranger that an email is on a roster.
+ */
+async function passGateOrInactive(email: string): Promise<{ found: SignInMember | null; inactive: SignInMember | null }> {
+  if (!email || isBlockedLoginEmail(email)) return { found: null, inactive: null };
+  if (process.env.LOGIN_ALLOWLIST && !isAllowedLoginEmail(email)) return { found: null, inactive: null };
+  const found = await findSignInMember(email);
+  if (!found || !memberCanLogin(found.member)) return { found: null, inactive: null };
+  return isLiveCompany(found.company) ? { found, inactive: null } : { found: null, inactive: found };
+}
+
 const startSession = (req: Request, { member, company }: SignInMember, email: string) =>
   startSignedInSession(req, { email, name: member.name, role: member.role, companyId: company.id });
 
@@ -77,7 +91,7 @@ export function registerPasswordRoutes(app: Express): void {
     try {
       const email = normalize(req.body?.email);
       const password = typeof req.body?.password === 'string' ? req.body.password : '';
-      const found = await passGate(email);
+      const { found, inactive } = await passGateOrInactive(email);
 
       // A locked account answers exactly like a wrong password (a distinct answer
       // would tell a stranger the email is on a roster), and still pays for a verify.
@@ -85,7 +99,11 @@ export function registerPasswordRoutes(app: Express): void {
 
       // Always hash-compare, even with nobody to compare against, so an unknown
       // email takes as long as a wrong password.
-      const ok = password.length <= MAX_PASSWORD_TRIED && await verifyPassword(password, found?.member.passwordHash ?? null);
+      const ok = password.length <= MAX_PASSWORD_TRIED && await verifyPassword(password, (found ?? inactive)?.member.passwordHash ?? null);
+      if (inactive && ok && !(inactive.member.lockedUntil && inactive.member.lockedUntil.getTime() > Date.now())) {
+        const message = inactiveCompanyMessage(inactive.company.status);
+        return res.status(403).json({ error: message, code: COMPANY_INACTIVE_CODE });
+      }
       if (!found || locked || !ok) {
         if (found && !locked) await runAsCompany(found.company.id, () => recordFailedLogin(email));
         return res.status(401).json(WRONG);

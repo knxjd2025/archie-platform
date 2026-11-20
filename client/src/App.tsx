@@ -38,9 +38,15 @@ import CallsPage from './pages/calls';
 import CallBar from './components/CallBar';
 import BugReportButton from './components/BugReportButton';
 import Bugs from './pages/bugs';
+import Operator from './pages/operator';
+import BillingPage from './pages/billing';
+import BillingBanner from './components/BillingBanner';
+import { useBillingStatus } from './lib/billing';
 import { setBugPage } from './lib/bug-monitor';
 
-type Page = MenuPage | 'client';
+// 'operator' is not on the company menu: it is for the people who run Archie,
+// shown from the account menu when /api/auth/me says isOperator.
+type Page = MenuPage | 'client' | 'operator';
 
 /**
  * One source of truth for navigation: shared/menu.ts. It drives the desktop
@@ -55,8 +61,19 @@ type Page = MenuPage | 'client';
 const GROUPS = MENU_GROUPS;
 const NAV = MENU_ITEMS;
 
+/** Stripe sends people back to /?billing=success (or cancelled, or portal): open the Billing page. */
+const BILLING_RETURNS = ['success', 'cancelled', 'portal'];
+function readBillingReturn(): string | null {
+  try {
+    const v = new URLSearchParams(window.location.search).get('billing');
+    return v && BILLING_RETURNS.includes(v) ? v : null;
+  } catch { return null; }
+}
+
 function App() {
+  const [billingReturn] = useState<string | null>(readBillingReturn);
   const [currentPage, setCurrentPage] = useState<Page>(() => {
+    if (readBillingReturn()) return 'billing';
     try {
       const raw = localStorage.getItem('archie.page');
       // The Meetings page used to be called Monday.
@@ -77,8 +94,15 @@ function App() {
   // remembers whichever page you actually came from.
   const [clientOrigin, setClientOrigin] = useState<Page>('leads');
 
-  const { user, profile, loading, offline, signOut } = useAuth();
+  const { user, profile, loading, offline, signOut, isOperator } = useAuth();
   const company = useCompany();
+  const billing = useBillingStatus(!!user);
+
+  // Take ?billing=... out of the address bar once read, so a reload does not repeat it.
+  useEffect(() => {
+    if (!billingReturn) return;
+    try { window.history.replaceState(null, '', window.location.pathname); } catch { /* ignore */ }
+  }, [billingReturn]);
 
   useEffect(() => {
     if (!user) return;
@@ -118,6 +142,7 @@ function App() {
       ...Object.fromEntries(NAV.map((n) => [n.page, n.label])),
       client: 'Client',
       inbox: 'Inbox Leads',
+      operator: 'Operator',
     };
     document.title = titles[currentPage] ? `${titles[currentPage]} · ${PRODUCT_NAME}` : PRODUCT_NAME;
   }, [currentPage]);
@@ -136,8 +161,16 @@ function App() {
   // "last page" either, because activePage falls back to Home.
   const isAdmin = user.role === 'admin';
   const hiddenPages = profile?.hiddenPages ?? [];
-  const canSeePage = (page: Page): boolean => pageVisible(user.role as TeamRole, page, hiddenPages);
-  const activePage: Page = canSeePage(currentPage) ? currentPage : 'dashboard';
+  // Billing-locked (server/billing/gate.ts answers 402 everywhere else): admins
+  // see only the Billing page, everyone else a page asking them to tell their admin.
+  const locked = billing.status.enabled && billing.status.locked;
+  const canSeePage = (page: Page): boolean => {
+    if (locked) return isAdmin && page === 'billing';
+    if (page === 'operator') return isOperator;
+    if (page === 'billing' && !billing.status.enabled) return false;
+    return pageVisible(user.role as TeamRole, page, hiddenPages);
+  };
+  const activePage: Page = canSeePage(currentPage) ? currentPage : locked ? 'billing' : 'dashboard';
   // So a bug report, or an error caught on its own, says which screen it came from.
   setBugPage(activePage);
 
@@ -233,7 +266,7 @@ function App() {
 
             <div className="flex items-center gap-1 sm:gap-2 min-w-0">
             {/* Desktop nav — primary items inline, the rest under "More ▾" */}
-            <nav className="hidden md:flex items-center gap-1 justify-end">
+            <nav className={`${locked ? 'hidden' : 'hidden md:flex'} items-center gap-1 justify-end`}>
               {navPrimary.map((n) => (
                 <button
                   key={n.page}
@@ -309,7 +342,7 @@ function App() {
 
             {/* Search + user menu */}
             {/* The ⌘K shortcut has always worked; nothing ever said so. */}
-            <button
+            {!locked && <button
               onClick={() => setSearchOpen(true)}
               className="flex-shrink-0 h-9 rounded-full hover:bg-white/10 flex items-center justify-center gap-1.5 px-2 lg:pr-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
               title="Search clients (⌘K)"
@@ -317,7 +350,7 @@ function App() {
             >
               <span aria-hidden className="text-lg leading-none">🔍</span>
               <kbd className="hidden lg:inline text-[10px] font-sans font-medium text-white/50 border border-white/25 rounded px-1 py-0.5">⌘K</kbd>
-            </button>
+            </button>}
             <div className="relative flex-shrink-0">
               <button
                 onClick={() => setUserMenuOpen((v) => !v)}
@@ -348,6 +381,14 @@ function App() {
                         <span aria-hidden className="w-5 text-center">🗂️</span>My Account
                       </button>
                     )}
+                    {isOperator && (
+                      <button
+                        onClick={() => go('operator')}
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                      >
+                        <span aria-hidden className="w-5 text-center">🛠️</span>Operator
+                      </button>
+                    )}
                     <div className="border-t border-gray-100" />
                     <button
                       onClick={() => { setUserMenuOpen(false); signOut(); }}
@@ -365,10 +406,26 @@ function App() {
       </header>
 
       {/* Admins only, until the company connects KynexPro. Blocks nothing. */}
-      <KynexProBanner isAdmin={isAdmin} onConnect={() => go('integrations')} />
+      <KynexProBanner isAdmin={isAdmin && !locked} onConnect={() => go('integrations')} />
+      {/* Admins only: the trial ends within 5 days, or a payment is past due. */}
+      {isAdmin && !locked && <BillingBanner banner={billing.status.banner} onOpen={() => go('billing')} />}
 
       {/* Main Content */}
       <main id="main" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 md:pb-8">
+        {locked && !isAdmin && (
+          <div className="max-w-md mx-auto mt-10 rounded-xl border border-gray-200 bg-white p-6 text-center">
+            <p className="text-lg font-semibold text-gray-900">{billing.status.message || "Your company's Archie account needs attention. Ask your admin."}</p>
+            <p className="mt-2 text-sm text-gray-600">Your work is saved. Once your admin sorts it out, Archie opens again.</p>
+            <button
+              type="button"
+              onClick={() => signOut()}
+              className="mt-5 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Sign out
+            </button>
+          </div>
+        )}
+        {activePage === 'billing' && isAdmin && <BillingPage returned={billingReturn} />}
         {activePage === 'meetings' && <Meetings onNavigate={handleNavigate} />}
         {/* A crew member of a company Roof Lee made lands on their crew's jobs. */}
         {activePage === 'dashboard' && crewScreensFor(company.madeByRoofli, user.role).crewHome && <CrewHome />}
@@ -422,13 +479,14 @@ function App() {
         )}
         {activePage === 'team' && <Team />}
         {activePage === 'company' && <CompanyPage />}
+        {activePage === 'operator' && <Operator />}
         {activePage === 'bugs' && <Bugs />}
       </main>
 
       <BugReportButton page={NAV.find((n) => n.page === activePage)?.label ?? activePage} />
 
       {/* Mobile bottom nav */}
-      <nav
+      {!locked && <nav
         className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-200 flex"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
@@ -471,7 +529,7 @@ function App() {
             <span>{activeGroup ? activeGroup.label : 'More'}</span>
           </button>
         )}
-      </nav>
+      </nav>}
 
       {/* "More" sheet (mobile) */}
       {moreOpen && (

@@ -179,10 +179,28 @@ describe('POST /api/auth/login/password', () => {
     ['not on the allowlist', () => { process.env.LOGIN_ALLOWLIST = 'someone@else.com'; }],
     ['canLogin false', () => { state.row!.canLogin = false; }],
     ['inactive', () => { state.row!.active = false; }],
-    ['paused company', () => { state.company.status = 'paused'; }],
   ])('%s members get 401', async (_name, setup) => {
     setup();
     const res = await login(EMAIL, PASSWORD);
+    expect(res.status).toBe(401);
+    expect(await res.json()).toEqual(WRONG);
+    expect(cookieOf(res)).toBeNull();
+  });
+
+  it.each([
+    ['paused', "Your company's Archie account is paused. Contact your administrator."],
+    ['cancelled', "Your company's Archie account is closed. Contact your administrator."],
+  ])('a %s company member with the right password is told why, and not signed in', async (status, message) => {
+    state.company.status = status;
+    const res = await login(EMAIL, PASSWORD);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: message, code: 'company_inactive' });
+    expect(cookieOf(res)).toBeNull();
+  });
+
+  it('a paused company member with a wrong password gets the same answer as anyone (no hint the email is on a roster)', async () => {
+    state.company.status = 'paused';
+    const res = await login(EMAIL, 'wrong password!');
     expect(res.status).toBe(401);
     expect(await res.json()).toEqual(WRONG);
     expect(cookieOf(res)).toBeNull();

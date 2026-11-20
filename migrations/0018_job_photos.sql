@@ -63,5 +63,5 @@ CREATE INDEX "job_photos_company_job_idx" ON "job_photos" USING btree ("company_
 -- Row level security the way every company table has it since 0008: on and
 -- forced, the company's own rows for everyone (company_isolation), every row
 -- for the archie_system role only (company_system), grants for both roles.
--- The id is a uuid, so there is no sequence to grant (compare 0013).
+-- The id is a uuid, so there is no sequence to grant (compare 0015).
 SELECT archie_protect_company_table('job_photos');

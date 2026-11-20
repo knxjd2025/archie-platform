@@ -50,6 +50,10 @@
     {
       "path": "/api/cron/sister-events",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/billing-seats",
+      "schedule": "47 * * * *"
     }
   ]
 }

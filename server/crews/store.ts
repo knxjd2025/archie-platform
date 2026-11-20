@@ -1,6 +1,6 @@
 /**
  * Crews, crew members, install bookings and install milestones, in the
- * database (migration 0017). docs/archie/02-roof-lee-link.md, "Crews and
+ * database (migration 0019). docs/archie/02-roof-lee-link.md, "Crews and
  * install dates".
  *
  * Everything here runs as the company (runAsCompany), so another company's

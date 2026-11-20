@@ -13,8 +13,8 @@
 -- it breaks sign-in for everyone. This file is safe under the older code.
 --
 -- NEEDS 0008 (the system role): the new table is protected with
--- archie_protect_company_table(), which 0008 creates. Numbered 0011 so it
--- runs after 0006 to 0010.
+-- archie_protect_company_table(), which 0008 creates. Numbered 0013 so it
+-- runs after 0006 to 0012 (0011 and 0012 are the operator console and billing).
 --
 -- Nothing here changes how an existing company behaves: every new column is
 -- null for it.

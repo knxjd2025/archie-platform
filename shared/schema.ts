@@ -51,9 +51,31 @@ export const companies = pgTable('companies', {
   settings: jsonb('settings').$type<import('./company').CompanySettings>().notNull().default({}),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  // When a trial's free period ends (migrations/0011). Shown on the operator
+  // page; not enforced yet (billing will). Null: no end date recorded.
+  trialEndsAt: timestamp('trial_ends_at'),
 });
 
 export type Company = typeof companies.$inferSelect;
+
+/**
+ * What the people who run Archie (operators, ARCHIE_OPERATOR_EMAILS) changed,
+ * from the operator console (server/operator/*). Global, not a company table:
+ * the app role has no access to it at all, the system role may only read and
+ * append (migrations/0011). Never holds a link, token or password.
+ */
+export const operatorAuditLog = pgTable('operator_audit_log', {
+  id: serial('id').primaryKey(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  operatorEmail: text('operator_email').notNull(),
+  action: text('action').notNull(),
+  targetCompanyId: uuid('target_company_id').references(() => companies.id),
+  details: jsonb('details').$type<Record<string, unknown>>().notNull().default({}),
+}, (t) => ({
+  companyCreatedIdx: index('operator_audit_log_company_created_idx').on(t.targetCompanyId, t.createdAt),
+}));
+
+export type OperatorAuditEntry = typeof operatorAuditLog.$inferSelect;
 
 /**
  * The company a row belongs to. The default stamps the company of the current
@@ -203,6 +225,45 @@ export const companyJobRuns = pgTable('company_job_runs', {
   pk: primaryKey({ columns: [t.companyId, t.job] }),
 }));
 
+/**
+ * Each company's Stripe billing (server/billing/*, migrations/0012): one row
+ * per company. The plan and seats are what Stripe bills for now; the seat
+ * count the team has comes from team_members and is pushed to Stripe by the
+ * seat sync. Never card data: cards live only at Stripe.
+ */
+export const companyBilling = pgTable('company_billing', {
+  companyId: companyId().primaryKey(),
+  stripeCustomerId: text('stripe_customer_id'),
+  stripeSubscriptionId: text('stripe_subscription_id'),
+  plan: text('plan', { enum: ['solo', 'team'] }),
+  seats: integer('seats'),
+  /** Stripe's subscription status: active, trialing, past_due, unpaid, canceled, incomplete, ... */
+  subscriptionStatus: text('subscription_status'),
+  currentPeriodEnd: timestamp('current_period_end'),
+  cancelAtPeriodEnd: boolean('cancel_at_period_end').notNull().default(false),
+  /** Why the last seat update to Stripe failed; cleared when one succeeds. Retried by the hourly job. */
+  seatSyncError: text('seat_sync_error'),
+  seatSyncFailedAt: timestamp('seat_sync_failed_at'),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (t) => ({
+  customerUq: uniqueIndex('company_billing_customer_uq').on(t.stripeCustomerId),
+  subscriptionUq: uniqueIndex('company_billing_subscription_uq').on(t.stripeSubscriptionId),
+  planCheck: check('company_billing_plan_check', sql`${t.plan} IS NULL OR ${t.plan} IN ('solo', 'team')`),
+}));
+
+export type CompanyBilling = typeof companyBilling.$inferSelect;
+
+/**
+ * Stripe webhook events already handled, by event id, so a repeated delivery
+ * does nothing. Global: the app role has no access, the system role may read,
+ * add and remove (migrations/0012).
+ */
+export const stripeEvents = pgTable('stripe_events', {
+  id: text('id').primaryKey(),
+  type: text('type').notNull(),
+  receivedAt: timestamp('received_at').defaultNow().notNull(),
+});
+
 export const companyIntegrations = pgTable('company_integrations', {
   id: serial('id').primaryKey(),
   companyId: companyId(),
@@ -306,7 +367,7 @@ export const teamMembers = pgTable('team_members', {
   source: text('source'),
   createdAt: timestamp('created_at').defaultNow(),
 }, (t) => ({
-  // Created by migrations/0011 as a partial index; declared here so
+  // Created by migrations/0013 as a partial index; declared here so
   // drizzle-kit does not see it as extra and drop it.
   authUserUq: uniqueIndex('team_members_company_auth_user_uq').on(t.companyId, t.authUserId).where(sql`${t.authUserId} IS NOT NULL`),
 }));
@@ -1053,7 +1114,7 @@ export const leads = pgTable('leads', {
   closedOn: timestamp('closed_on'),
   insuranceClaim: boolean('insurance_claim'),
 
-  // Archie's own jobs (server/production/native-jobs.ts, migration 0015): what a
+  // Archie's own jobs (server/production/native-jobs.ts, migration 0017): what a
   // job kept on Archie's own board, with no JobTread behind it, needs to carry.
   jobType: text('job_type'),                    // 'replacement', 'repair', ... as the customer or Roof Lee put it
   lat: doublePrecision('lat'),
@@ -1150,7 +1211,7 @@ export type JobPhoto = typeof jobPhotos.$inferSelect;
 
 // ============================================================
 // Crews and install dates for a job Archie keeps (Stage D,
-// shared/crews.ts, server/crews/, migration 0017)
+// shared/crews.ts, server/crews/, migration 0019)
 // ============================================================
 
 /**

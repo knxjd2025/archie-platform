@@ -78,6 +78,9 @@ import { registerGhlConnectionRoutes } from './integrations/ghl/routes';
 import { registerConnectionRoutes } from './integrations/connection-routes';
 import { registerCompanyRoutes } from './company/routes';
 import { registerSisterRoutes } from './sister/routes';
+import { registerOperatorRoutes } from './operator/routes';
+import { registerBillingRoutes } from './billing/routes';
+import { billingGate } from './billing/gate';
 import { currentGhlLocationId, ghlAppBase } from './integrations/ghl/connection';
 import { getCompanyByGhlLocation, getCurrentCompany } from './tenant/companies';
 import { jobBackendFor, keepsOwnJobs } from './production/native-jobs';
@@ -131,10 +134,17 @@ export function registerRoutes(app: Express) {
   // Jobs from the Best Roofing AI app that Archie does not run (server/tenant/cron.ts).
   blockDisabledJobs(app);
 
+  // A company whose trial ended without a card, or whose payment failed for
+  // good, gets 402 on every API route but sign-in, billing and webhooks
+  // (server/billing/gate.ts). Does nothing while STRIPE_SECRET_KEY is unset.
+  app.use('/api', billingGate);
+
   // First, so every route registered after it reports its failures to the bug log.
   registerBugRoutes(app);
   // Roof Lee's signed endpoints. Shut (401) until SISTERS_ARCHIE_SECRET is set.
   registerSisterRoutes(app);
+  // Billing, and Stripe's webhook (before the other /api/webhooks routers).
+  registerBillingRoutes(app);
   registerAuthRoutes(app);
   registerPasswordRoutes(app);
   registerGoogleRoutes(app);
@@ -180,6 +190,8 @@ export function registerRoutes(app: Express) {
   registerMeetingRoutes(app);
   registerPlaybookRoutes(app);
   registerBoardRoutes(app);
+  // The people who run Archie (ARCHIE_OPERATOR_EMAILS); guarded as a whole prefix.
+  registerOperatorRoutes(app);
 
   // ==================== CALLS & MESSAGES (our own, not a provider's) ====
   registerCommsRoutes(app);

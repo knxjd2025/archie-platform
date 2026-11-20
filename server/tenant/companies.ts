@@ -35,16 +35,33 @@ export interface NewCompany {
   ghlLocationId?: string | null;
   branding?: Company['branding'];
   settings?: Company['settings'];
+  /** For a trial: when it ends. Unset: ARCHIE_TRIAL_DAYS (default 14) from now. Null: no end date. */
+  trialEndsAt?: Date | null;
 }
+
+const DEFAULT_TRIAL_DAYS = 14;
+
+/** How long a new trial lasts, from ARCHIE_TRIAL_DAYS; anything that is not a whole number from 1 to 365 means the default. */
+export function trialDays(): number {
+  const raw = (process.env.ARCHIE_TRIAL_DAYS || '').trim();
+  const n = Number(raw);
+  return raw && Number.isInteger(n) && n >= 1 && n <= 365 ? n : DEFAULT_TRIAL_DAYS;
+}
+
+/** When a trial starting now ends. */
+export const defaultTrialEnd = (now = Date.now()): Date => new Date(now + trialDays() * 24 * 60 * 60 * 1000);
 
 /** Create a company. System work: only sign-up and admin tools call this. */
 export function createCompany(input: NewCompany): Promise<Company> {
+  const status = input.status ?? 'trial';
   return runAsSystem('create company', async () => {
     const rows = await db.insert(companies).values({
       slug: input.slug.trim().toLowerCase(),
       name: input.name.trim(),
       trade: input.trade ?? 'roofing',
-      status: input.status ?? 'trial',
+      status,
+      // Recorded, not enforced: billing will act on it.
+      trialEndsAt: input.trialEndsAt !== undefined ? input.trialEndsAt : status === 'trial' ? defaultTrialEnd() : null,
       ghlLocationId: input.ghlLocationId ?? null,
       branding: input.branding ?? {},
       settings: input.settings ?? {},
