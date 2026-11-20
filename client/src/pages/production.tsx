@@ -6,8 +6,7 @@ import InstallBooking from '../components/InstallBooking';
 import CrewWeek from './crew-week';
 import { useAuth } from '../lib/auth';
 import { useCompany } from '../lib/company';
-import { CREW_WORDS } from '../lib/crews-view';
-import { mayScheduleCrews } from '../../../shared/crews';
+import { CREW_WORDS, crewScreensFor } from '../lib/crews-view';
 
 /**
  * The production board: eleven columns, one per pipeline stage, from the
@@ -85,7 +84,7 @@ export default function Production({ onOpenClient }: { onOpenClient?: (externalI
   // Crews and install dates: a company Roof Lee made, office staff and up (shared/crews.ts).
   const { user } = useAuth();
   const company = useCompany();
-  const crewsOn = company.madeByRoofli && mayScheduleCrews(user?.role);
+  const crewsOn = crewScreensFor(company.madeByRoofli, user?.role).booking;
   const [view, setView] = useState<'board' | 'week'>('board');
   const [installFor, setInstallFor] = useState<string | null>(null);
 

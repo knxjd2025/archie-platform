@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addressLine, CREW_WORDS, directionsUrl, groupCrewJobs, installsOn, nextCrewStep, whenLine, type CrewJob } from '../crews-view';
+import { addressLine, crewScreensFor, CREW_WORDS, directionsUrl, groupCrewJobs, installsOn, nextCrewStep, whenLine, type CrewJob } from '../crews-view';
 
 const job = (over: Partial<CrewJob>): CrewJob => ({
   jobKey: 'archie-x', customer: 'Pat Hollis', jobName: null, jobType: null, address: '12 Main St', city: 'Cedar Falls', state: 'IA', zip: '50613',
@@ -45,7 +45,19 @@ describe('the crew screens', () => {
 
   it('has no em dash and no money word in anything a crew reads', () => {
     const text = Object.values(CREW_WORDS).map((w) => (typeof w === 'function' ? w('Roofing') : w)).join(' ');
-    expect(text).not.toMatch(/—/);
+    expect(text).not.toMatch(/\u2014/);
     expect(text).not.toMatch(/\$|price|invoice|payment|commission/i);
+  });
+});
+
+describe('who sees the crew screens', () => {
+  const roles = ['admin', 'sales_director', 'manager', 'customer_service', 'sales', 'production'] as const;
+  it('shows none of them in a company Roof Lee did not make, for any role', () => {
+    for (const r of roles) expect(crewScreensFor(false, r)).toEqual({ crewHome: false, booking: false });
+  });
+  it('lands a crew member on their jobs and gives office staff and up the bookings', () => {
+    expect(crewScreensFor(true, 'production')).toEqual({ crewHome: true, booking: false });
+    expect(crewScreensFor(true, 'sales')).toEqual({ crewHome: false, booking: false });
+    for (const r of ['admin', 'sales_director', 'manager', 'customer_service'] as const) expect(crewScreensFor(true, r)).toEqual({ crewHome: false, booking: true });
   });
 });

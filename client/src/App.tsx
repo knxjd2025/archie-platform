@@ -3,6 +3,7 @@ import { api } from './lib/api';
 import SearchOverlay from './components/SearchOverlay';
 import Dashboard from './pages/dashboard';
 import CrewHome from './pages/crew-home';
+import { crewScreensFor } from './lib/crews-view';
 import Leads from './pages/leads';
 import Integrations from './pages/integrations';
 import KynexProBanner from './components/KynexProBanner';
@@ -370,8 +371,8 @@ function App() {
       <main id="main" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 md:pb-8">
         {activePage === 'meetings' && <Meetings onNavigate={handleNavigate} />}
         {/* A crew member of a company Roof Lee made lands on their crew's jobs. */}
-        {activePage === 'dashboard' && user.role === 'production' && company.madeByRoofli && <CrewHome />}
-        {activePage === 'dashboard' && !(user.role === 'production' && company.madeByRoofli) && (
+        {activePage === 'dashboard' && crewScreensFor(company.madeByRoofli, user.role).crewHome && <CrewHome />}
+        {activePage === 'dashboard' && !crewScreensFor(company.madeByRoofli, user.role).crewHome && (
           <Dashboard
             onAgentChat={handleAgentChat}
             onNavigate={handleNavigate}

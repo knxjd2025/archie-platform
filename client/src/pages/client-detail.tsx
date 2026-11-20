@@ -21,7 +21,7 @@ import JobReps from '../components/JobReps';
 import AccountEditor from '../components/AccountEditor';
 import InstallBooking from '../components/InstallBooking';
 import { useAuth } from '../lib/auth';
-import { mayScheduleCrews } from '../../../shared/crews';
+import { crewScreensFor } from '../lib/crews-view';
 import type { AccountEdit } from '../../../shared/client-account';
 import { isPipelineStage, stageLabel } from '../../../shared/production-pipeline';
 import {
@@ -555,7 +555,7 @@ export default function ClientDetail({ externalId, onBack, onOpenPlaybook }: { e
           )}
 
           {/* The install: crew, day or days and start time (a job Archie keeps, office staff and up). */}
-          {company.madeByRoofli && isArchieJob(lead) && mayScheduleCrews(user?.role) && <InstallBooking jobKey={externalId} />}
+          {isArchieJob(lead) && crewScreensFor(company.madeByRoofli, user?.role).booking && <InstallBooking jobKey={externalId} />}
 
           {/* Job photos (JobTread) — shoot from the field, feeds the reports */}
           <JobPhotos externalId={externalId} keptInArchie={isArchieJob(lead)} />

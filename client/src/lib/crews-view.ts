@@ -6,7 +6,8 @@
  * Dates are the company's calendar dates ('YYYY-MM-DD'), as the server sends
  * them. "Today" is the company's today, which the server sends too.
  */
-import { installDays, installSpanLabel, startTimeLabel, CREW_STATUS_LABEL, type CrewStatus } from '../../../shared/crews';
+import { installDays, installSpanLabel, mayScheduleCrews, startTimeLabel, CREW_ROLE, CREW_STATUS_LABEL, type CrewStatus } from '../../../shared/crews';
+import type { TeamRole } from '../../../shared/rbac';
 
 export interface CrewJob {
   jobKey: string;
@@ -128,3 +129,14 @@ export const STATUS_CHIP: Record<CrewStatus, string> = {
   in_progress: 'bg-amber-100 text-amber-800',
   done: 'bg-emerald-100 text-emerald-800',
 };
+
+/**
+ * Which crew screens a person sees. Only in a company Roof Lee made: every
+ * other company sees none of them, whatever the role, so its screens are
+ * exactly as before. A crew member lands on their jobs (crewHome); office
+ * staff and up get the install box and the crew week.
+ */
+export function crewScreensFor(madeByRoofli: boolean, role: TeamRole | string | null | undefined): { crewHome: boolean; booking: boolean } {
+  if (!madeByRoofli) return { crewHome: false, booking: false };
+  return { crewHome: role === CREW_ROLE, booking: mayScheduleCrews(role as TeamRole) };
+}
