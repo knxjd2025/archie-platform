@@ -87,7 +87,6 @@ const NOT_MONEY: Record<string, string> = {
   '/api/leads/pipeline/summary $.total': 'how many leads there are, a count',
   '/api/kpis/summary $.totals': 'counts of calls, doors and the like, for the person\'s own row',
   '/api/knowledge/categories $[].value': 'a category\'s key, beside its label',
-  '/api/goals/me $.inputs.avgCommission': 'the person\'s own goal planner, filled with the planner\'s defaults until they change it; nothing a job or the company holds',
 };
 const decided = (route: string, field: string) => `${route} ${field.replace(/\[\d+\]/g, '[]')}` in NOT_MONEY;
 
@@ -198,9 +197,29 @@ describe.skipIf(!localDb)('a crew member, on every read route Archie has (PERMAN
 
   it('answers 404 to a crew member on the job routes that check only ownsLead', async () => {
     as(a, 'crew');
-    for (const path of [`/api/clients/${jobKey}`, `/api/clients/${jobKey}/estimates`, `/api/clients/${jobKey}/daily-logs`]) {
+    for (const path of [`/api/clients/${jobKey}`, `/api/clients/${jobKey}/estimates`, `/api/clients/${jobKey}/daily-logs`, `/api/clients/${jobKey}/commission`]) {
       expect((await get(path)).status, path).toBe(404);
     }
+  });
+
+  it('gives a crew member a goal planner with no money in it, and a rep the whole planner', async () => {
+    as(a, 'crew');
+    const crew = await get('/api/goals/me');
+    expect(crew.status).toBe(200);
+    expect(crew.body.inputs).not.toHaveProperty('avgCommission');
+    expect(crew.body.inputs).not.toHaveProperty('incomeGoal');
+    expect(moneyFound(crew.body)).toEqual([]);
+    const saved = await put('/api/goals/me', { incomeGoal: 250000, avgCommission: 4321, closeRate: 30, sellingMonths: 10 });
+    if (saved.status === 200) {
+      expect(saved.body.inputs).not.toHaveProperty('avgCommission');
+      expect(saved.body.inputs).not.toHaveProperty('incomeGoal');
+    }
+    expect((await get('/api/goals/me')).text).not.toContain('4321');
+    as(a, 'rep');
+    const rep = await get('/api/goals/me');
+    expect(rep.status).toBe(200);
+    expect(typeof rep.body.inputs.avgCommission).toBe('number');
+    expect(typeof rep.body.inputs.incomeGoal).toBe('number');
   });
 
   it('hands a crew member no money from the crew\'s own writes either', async () => {

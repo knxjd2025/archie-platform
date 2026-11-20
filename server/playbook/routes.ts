@@ -162,7 +162,7 @@ export function registerPlaybookRoutes(app: Express) {
         : GOAL_DEFAULTS;
       const plan = incomePlan(inputs);
       const progress = await progressFor(user, myId);
-      res.json({ inputs, plan, progress, saved: !!row });
+      res.json({ inputs: inputsShownTo(user, inputs), plan, progress, saved: !!row });
     } catch (error: any) {
       return sendFailure(res, error, 'GET /api/goals/me');
     }
@@ -182,7 +182,7 @@ export function registerPlaybookRoutes(app: Express) {
       };
       await db.insert(repGoals).values({ teamMemberId: myId, ...inputs, updatedAt: new Date() })
         .onConflictDoUpdate({ target: repGoals.teamMemberId, set: { ...inputs, updatedAt: new Date() } });
-      res.json({ inputs, plan: incomePlan(inputs), saved: true });
+      res.json({ inputs: inputsShownTo(user, inputs), plan: incomePlan(inputs), saved: true });
     } catch (error: any) {
       return sendFailure(res, error, 'PUT /api/goals/me');
     }
@@ -243,6 +243,18 @@ export async function tickChecklistItem(
 }
 
 /** This week's and today's activity for the points game and the weekly tracker, from the KPI events already recorded. */
+/**
+ * The planner's inputs as this person may see them. Crews never see money, so
+ * a crew member (role 'production', in every company) gets the planner without
+ * its dollar figures: no income goal, no average commission. The counts the
+ * plan works out from them (sales, appointments, doors) are not money.
+ */
+function inputsShownTo(user: SessionUser, inputs: GoalInputs): Partial<GoalInputs> {
+  if (user.role !== 'production') return inputs;
+  const { incomeGoal: _income, avgCommission: _commission, ...rest } = inputs;
+  return rest;
+}
+
 async function progressFor(user: SessionUser, myId: number | null) {
   // The Eastern day and Monday-to-Sunday week, not the server's: on Vercel
   // (UTC) the new day started at 8pm Eastern, so an evening's doors were

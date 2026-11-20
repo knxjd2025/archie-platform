@@ -145,6 +145,8 @@ export function registerJobCommissionRoutes(app: Express) {
   app.get('/api/clients/:externalId/commission', requireAuth, async (req: Request, res: Response) => {
     try {
       const user = req.session.user! as SessionUser;
+      // A crew is told the job is not there, like the other job money routes, not that it is hidden.
+      if (user.role === 'production') return res.status(404).json({ error: 'Client not found' });
       if (!canSeeMoney(user.role, 'commissions')) return res.status(403).json({ message: 'Forbidden' });
       const externalId = req.params.externalId;
       const [lead] = await db.select().from(leads).where(eq(leads.externalId, externalId));
