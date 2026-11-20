@@ -41,7 +41,7 @@ describe.skipIf(!localDb)('crews and install dates', async () => {
   const { setPhotoStoreForTests } = await import('../../photos/store');
   const { isNativeJobId } = await import('../../production/native-jobs');
   const { ONLY_CREW_PEOPLE, CREW_NAME_TAKEN, STARTED_CANNOT_CLEAR, CREW_STEP_NOT_ALLOWED, CREW_IN_USE } = await import('../store');
-  const { CREW_PHOTO_PHASE } = await import('../routes');
+  const { CREW_PHOTO_PHASE, CREW_NOT_ON_BOARD } = await import('../routes');
   const { PICK_CREW } = await import('../../../shared/crews');
 
   const stored = new Map<string, Buffer>();
@@ -259,6 +259,17 @@ describe.skipIf(!localDb)('crews and install dates', async () => {
       expect(logs.map((l) => l.actor)).toContain(a.people.crew.email);
       // Back on for the tests below.
       expect((await patch(`/api/crews/${red}`, { active: true })).status).toBe(200);
+    });
+
+    it('never puts a job on the board from a crew\'s tick', async () => {
+      as(a, 'rep');
+      const made = await post('/api/leads/create', { firstName: 'Lee', lastName: 'Ames', address: '4 Elm St', city: 'Cedar Falls', state: 'IA' });
+      as(a, 'office');
+      expect((await put(`/api/jobs/${made.body.jobId}/install`, { crewId: red, installDate: '2026-11-27' })).status).toBe(200);
+      as(a, 'crew');
+      expect(await post(`/api/crew/jobs/${made.body.jobId}/trade-done`, { trade: 'roofing' })).toMatchObject({ status: 409, body: { error: CREW_NOT_ON_BOARD } });
+      const rows = await runAsCompany(a.id, () => db.select().from(schema.productionPipeline).where(eq(schema.productionPipeline.jobExternalId, made.body.jobId)));
+      expect(rows).toEqual([]);
     });
 
     it('refuses to switch off a crew with work ahead of it', async () => {

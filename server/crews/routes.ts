@@ -36,6 +36,9 @@ import {
 import { crewJobView } from './view';
 import { crewJobFor, leadOf, ownJobsCompany, tradesOf } from './access';
 
+/** Said when a crew ticks a trade on a job the office has not put on the Production board. */
+export const CREW_NOT_ON_BOARD = 'This job isn\'t on the Production board yet. Ask the office to start production.';
+
 /** Said when a crew photo names a phase other than During or After. */
 export const CREW_PHOTO_PHASE = 'Pick During or After.';
 
@@ -191,6 +194,8 @@ export function registerCrewRoutes(app: Express) {
   app.post('/api/crew/jobs/:key/trade-done', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     const seen = await crewJob(req);
     if (!seen) return notFound(res);
+    // A tick never puts a job on the board: only the office does that (Start production).
+    if (!(await tradesOf(seen.assignment.jobKey))) return res.status(409).json({ error: CREW_NOT_ON_BOARD });
     const r = await completeTrade(seen.assignment.jobKey, req.body?.trade, (req.session.user as SessionUser).email);
     if (!r.ok) return res.status(r.status).json({ error: r.error });
     res.json({ completed: r.completed, job: crewJobView(seen.lead, seen.assignment, seen.crewName, r.row.trades) });
