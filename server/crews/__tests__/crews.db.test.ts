@@ -8,7 +8,7 @@
  * dates; a crew member sees only their crew's jobs, starts one, ticks a
  * trade, adds a During photo and finishes it, and each step is recorded as a
  * milestone; the homeowner's phone reaches the crew only for its own job and
- * only from two days before the first install day to the end of the last,
+ * only on install days, from the first to the end of the last,
  * in the company's dates (D9), and the homeowner's email never; another crew's job, another company's job and every route that
  * opens a job through ownsLead stay 404 for a crew; a salesperson cannot book
  * crews; and a company Roof Lee did not make gets 404 on every one of these,
@@ -331,8 +331,8 @@ describe.skipIf(!localDb)('crews and install dates', async () => {
       const today: string = (await get('/api/crew/jobs')).body.today;
       expect(today).toBe(new Date().toLocaleDateString('en-CA', { timeZone: 'Pacific/Kiritimati' }));
       const cases = [
-        { phone: '(319) 555-0201', booking: { installDate: addDays(today, 2) }, shown: true }, // opens two days before
-        { phone: '(319) 555-0202', booking: { installDate: addDays(today, 3) }, shown: false }, // not yet
+        { phone: '(319) 555-0201', booking: { installDate: today }, shown: true }, // install day
+        { phone: '(319) 555-0202', booking: { installDate: addDays(today, 1) }, shown: false }, // not yet: tomorrow
         { phone: '(319) 555-0203', booking: { installDate: addDays(today, -1), endDate: addDays(today, 1) }, shown: true }, // mid-job
         { phone: '(319) 555-0204', booking: { installDate: addDays(today, -2), endDate: today }, shown: true }, // its last day
         { phone: '(319) 555-0205', booking: { installDate: addDays(today, -3), endDate: addDays(today, -1) }, shown: false }, // finished

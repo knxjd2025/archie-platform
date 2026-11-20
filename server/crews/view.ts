@@ -10,7 +10,7 @@
  *
  * The homeowner's phone (owner's decision D9): shown only for a job booked for
  * the crew (the routes reach this through crewJobFor alone), and only around
- * the install days: from two days before the booking's first day to the end
+ * the install days: on the booking's install days only, through the end
  * of its last day (the first day when there is no last day), in the
  * company's own dates. Outside that window the field is left out entirely.
  *
@@ -45,7 +45,7 @@ export interface CrewJobView {
 }
 
 /** Days before the booking's first day that the homeowner's phone opens. */
-export const PHONE_DAYS_BEFORE = 2;
+export const PHONE_DAYS_BEFORE = 0;
 
 /** The exact keys a crew job carries. A test holds the view to this list. */
 export const CREW_JOB_KEYS: readonly (keyof CrewJobView)[] = [
@@ -55,7 +55,7 @@ export const CREW_JOB_KEYS: readonly (keyof CrewJobView)[] = [
 
 /**
  * Is today (the company's date, 'YYYY-MM-DD') inside the window a crew may see
- * the homeowner's phone: two days before the first day through the last day?
+ * the homeowner's phone: the first install day through the last day?
  */
 export function phoneWindowOpen(a: { installDate: string; endDate?: string | null }, today: string): boolean {
   if (!isIsoDate(today) || !isIsoDate(a.installDate)) return false;

@@ -28,21 +28,23 @@ describe('what a crew is shown about a job', () => {
     for (const leak of ['18450', '18,450', 'pat@example.test', 'Quoted']) expect(text).not.toContain(leak);
   });
 
-  it('opens the phone from two days before the first day to the end of the last day, in company dates', () => {
+  it('shows the phone only on install days, in company dates', () => {
     const shown = (today: string, a: { installDate: string; endDate?: string | null } = assignment) =>
       'homeownerPhone' in crewJobView(lead, { ...assignment, ...a, endDate: a.endDate ?? null } as any, null, null, today);
     expect(shown('2026-11-20')).toBe(false);
-    expect(shown('2026-11-21')).toBe(true);
-    expect(shown('2026-11-22')).toBe(true);
+    expect(shown('2026-11-21')).toBe(false);
+    expect(shown('2026-11-22')).toBe(false);
+    expect(shown('2026-11-23')).toBe(true);
     expect(shown('2026-11-24')).toBe(true);
     expect(shown('2026-11-25')).toBe(false);
     // No last day: the first day is the last.
     expect(shown('2026-11-23', { installDate: '2026-11-23', endDate: null })).toBe(true);
     expect(shown('2026-11-24', { installDate: '2026-11-23', endDate: null })).toBe(false);
     // Across a month's end.
-    expect(shown('2026-11-29', { installDate: '2026-12-01', endDate: null })).toBe(true);
+    expect(shown('2026-11-30', { installDate: '2026-12-01', endDate: null })).toBe(false);
+    expect(shown('2026-12-01', { installDate: '2026-12-01', endDate: null })).toBe(true);
     expect(shown('2026-11-28', { installDate: '2026-12-01', endDate: null })).toBe(false);
-    expect(phoneWindowOpen({ installDate: '2026-11-23', endDate: '2026-11-24' }, '2026-11-21')).toBe(true);
+    expect(phoneWindowOpen({ installDate: '2026-11-23', endDate: '2026-11-24' }, '2026-11-21')).toBe(false);
     expect(phoneWindowOpen({ installDate: '2026-11-23', endDate: '2026-11-24' }, 'not-a-date')).toBe(false);
   });
 

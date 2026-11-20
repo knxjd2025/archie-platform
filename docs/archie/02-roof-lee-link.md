@@ -861,8 +861,8 @@ appointments are not here: Roof Lee books them in Kynex Pro.
   crew sees this".
 - **The homeowner's phone (D9, decided by the owner).** A crew member sees
   the homeowner's phone only for a job booked for their own crew (the one
-  crew check above), and only around the install days: from two days before
-  the booking's first day until the end of its last day (the first day when
+  crew check above), and only on install days (owner, 2026-11-20): from the
+  booking's first day until the end of its last day (the first day when
   there is no last day), in the company's own dates. Outside that window the
   field (`homeownerPhone`) is left out of the job altogether, not sent empty.
   The crew's job page shows it as a tap-to-call link with the line "Call only
