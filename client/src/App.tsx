@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { api } from './lib/api';
 import SearchOverlay from './components/SearchOverlay';
 import Dashboard from './pages/dashboard';
+import CrewHome from './pages/crew-home';
 import Leads from './pages/leads';
 import Integrations from './pages/integrations';
 import KynexProBanner from './components/KynexProBanner';
@@ -368,7 +369,9 @@ function App() {
       {/* Main Content */}
       <main id="main" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 md:pb-8">
         {activePage === 'meetings' && <Meetings onNavigate={handleNavigate} />}
-        {activePage === 'dashboard' && (
+        {/* A crew member of a company Roof Lee made lands on their crew's jobs. */}
+        {activePage === 'dashboard' && user.role === 'production' && company.madeByRoofli && <CrewHome />}
+        {activePage === 'dashboard' && !(user.role === 'production' && company.madeByRoofli) && (
           <Dashboard
             onAgentChat={handleAgentChat}
             onNavigate={handleNavigate}

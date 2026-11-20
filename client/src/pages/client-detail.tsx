@@ -19,6 +19,9 @@ import StageChecklists from '../components/StageChecklists';
 import OpenTimes from '../components/OpenTimes';
 import JobReps from '../components/JobReps';
 import AccountEditor from '../components/AccountEditor';
+import InstallBooking from '../components/InstallBooking';
+import { useAuth } from '../lib/auth';
+import { mayScheduleCrews } from '../../../shared/crews';
 import type { AccountEdit } from '../../../shared/client-account';
 import { isPipelineStage, stageLabel } from '../../../shared/production-pipeline';
 import {
@@ -71,6 +74,7 @@ const STAGE_OPTIONS = [
 
 export default function ClientDetail({ externalId, onBack, onOpenPlaybook }: { externalId: string; onBack: () => void; onOpenPlaybook?: (docId: string) => void }) {
   const company = useCompany();
+  const { user } = useAuth();
   const [lead, setLead] = useState<Lead | null>(null);
   const [docs, setDocs] = useState<Doc[]>([]);
   const [insurance, setInsurance] = useState<Record<string, any>>({});
@@ -549,6 +553,9 @@ export default function ClientDetail({ externalId, onBack, onOpenPlaybook }: { e
               </label>
             </div>
           )}
+
+          {/* The install: crew, day or days and start time (a job Archie keeps, office staff and up). */}
+          {company.madeByRoofli && isArchieJob(lead) && mayScheduleCrews(user?.role) && <InstallBooking jobKey={externalId} />}
 
           {/* Job photos (JobTread) — shoot from the field, feeds the reports */}
           <JobPhotos externalId={externalId} keptInArchie={isArchieJob(lead)} />

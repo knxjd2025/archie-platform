@@ -42,7 +42,7 @@ export async function shrinkImage(file: File, maxEdge = MAX_EDGE): Promise<{ bas
  * block, location included), then a working copy and a small copy, both
  * redrawn as plain JPEGs.
  */
-async function prepareArchiePhoto(file: File): Promise<{ base64: string; thumbBase64: string; takenAt: string | null }> {
+export async function prepareArchiePhoto(file: File): Promise<{ base64: string; thumbBase64: string; takenAt: string | null }> {
   const takenAt = exifTakenAt(await file.slice(0, EXIF_READ_BYTES).arrayBuffer());
   const bitmap = await createImageBitmap(file);
   try {

@@ -1,7 +1,13 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { api } from '../lib/api';
-import { boardCardWords } from '../lib/own-jobs';
+import { boardCardWords, isArchieJobKey } from '../lib/own-jobs';
 import PipelineBoard, { MoveControls, StageChecks, money, daysSince, type BoardStage } from '../components/PipelineBoard';
+import InstallBooking from '../components/InstallBooking';
+import CrewWeek from './crew-week';
+import { useAuth } from '../lib/auth';
+import { useCompany } from '../lib/company';
+import { CREW_WORDS } from '../lib/crews-view';
+import { mayScheduleCrews } from '../../../shared/crews';
 
 /**
  * The production board: eleven columns, one per pipeline stage, from the
@@ -76,6 +82,12 @@ export default function Production({ onOpenClient }: { onOpenClient?: (externalI
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [includeClosed, setIncludeClosed] = useState(false);
+  // Crews and install dates: a company Roof Lee made, office staff and up (shared/crews.ts).
+  const { user } = useAuth();
+  const company = useCompany();
+  const crewsOn = company.madeByRoofli && mayScheduleCrews(user?.role);
+  const [view, setView] = useState<'board' | 'week'>('board');
+  const [installFor, setInstallFor] = useState<string | null>(null);
 
   const loadRequestId = useRef(0);
 
@@ -180,6 +192,16 @@ export default function Production({ onOpenClient }: { onOpenClient?: (externalI
           <p className="text-sm text-gray-500 mt-1">From signed to closed out{jobs.length ? ` · ${jobs.length} jobs` : ''}<span className="hidden sm:inline"> · drag a card to move it, or use the arrows on the card</span></p>
         </div>
         <div className="flex items-center gap-2">
+          {crewsOn && (
+            <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm" role="group" aria-label="Show">
+              {(['board', 'week'] as const).map((v) => (
+                <button key={v} onClick={() => setView(v)} aria-pressed={view === v}
+                  className={`px-3 py-1.5 ${view === v ? 'bg-ink text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>
+                  {v === 'board' ? CREW_WORDS.board : CREW_WORDS.week}
+                </button>
+              ))}
+            </div>
+          )}
           <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
             <input type="checkbox" checked={includeClosed} onChange={(e) => setIncludeClosed(e.target.checked)} />
             Show closed
@@ -199,7 +221,9 @@ export default function Production({ onOpenClient }: { onOpenClient?: (externalI
         <div className="rounded-lg bg-gray-900 text-white text-sm px-4 py-2 shadow">{toast}</div>
       )}
 
-      {loading ? (
+      {crewsOn && view === 'week' ? (
+        <CrewWeek onOpenClient={onOpenClient} />
+      ) : loading ? (
         <div className="flex gap-4 overflow-hidden">
           {[0, 1, 2, 3, 4].map((c) => (
             <div key={c} className="flex-shrink-0 w-72 space-y-2">
@@ -306,6 +330,20 @@ export default function Production({ onOpenClient }: { onOpenClient?: (externalI
                   >
                     {WALKTHROUGH_CHIP[j.walkthrough.state].label(j.walkthrough.issueCount)}
                   </button>
+                )}
+
+                {/* The install for a job Archie keeps: crew and day, from the card. */}
+                {crewsOn && j.externalId && isArchieJobKey(j.externalId) && (
+                  installFor === j.externalId ? (
+                    <div className="mt-2 p-2 rounded bg-gray-50 border border-gray-200">
+                      <InstallBooking jobKey={j.externalId} compact onSaved={() => setInstallFor(null)} />
+                      <button onClick={() => setInstallFor(null)} className="mt-1 text-[11px] text-gray-500 hover:text-gray-700">Close</button>
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => setInstallFor(j.externalId)} className="mt-1.5 text-[11px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100 hover:bg-indigo-100">
+                      🗓 {CREW_WORDS.install}
+                    </button>
+                  )
                 )}
 
                 <MoveControls colIdx={colIdx} stages={stages} blocker={j.nextBlocker} busy={busy}
