@@ -88,8 +88,9 @@ describe.skipIf(!local)('company isolation', async () => {
     // Every company table, including those added by 0004-0007.
     const covered = rows.filter((r: any) => !GLOBAL.has(r.relname)).map((r: any) => r.relname);
     expect(covered).toEqual(expect.arrayContaining(['password_links', 'company_assets', 'company_job_runs', 'leads']));
-    // And the Roof Lee link's (0011-0014, 0016), protected with archie_protect_company_table.
-    expect(covered).toEqual(expect.arrayContaining(['sister_idempotency', 'sister_sso_tickets', 'lead_notes', 'outbound_events', 'job_photos']));
+    // And the Roof Lee link's (0011-0014, 0016, 0017), protected with archie_protect_company_table.
+    expect(covered).toEqual(expect.arrayContaining(['sister_idempotency', 'sister_sso_tickets', 'lead_notes', 'outbound_events', 'job_photos',
+      'crews', 'crew_members', 'crew_assignments', 'job_milestones']));
   });
 
   it('gives the companies table only self-read for the app and everything for system work', async () => {

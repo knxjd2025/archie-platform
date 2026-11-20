@@ -16,6 +16,7 @@ import {
   index,
   primaryKey,
   check,
+  foreignKey,
   customType,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
@@ -1146,6 +1147,103 @@ export const jobPhotos = pgTable('job_photos', {
 }));
 
 export type JobPhoto = typeof jobPhotos.$inferSelect;
+
+// ============================================================
+// Crews and install dates for a job Archie keeps (Stage D,
+// shared/crews.ts, server/crews/, migration 0017)
+// ============================================================
+
+/**
+ * A company's crews. Only a company Roof Lee made has them for now. A crew is
+ * named by the company; it carries no rates or prices (crews never see money,
+ * and a crew row is shown to its own members).
+ */
+export const crews = pgTable('crews', {
+  companyId: companyId(),
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  color: text('color'),
+  active: boolean('active').notNull().default(true),
+  createdBy: text('created_by'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (t) => ({
+  // The composite target for crew_members and crew_assignments, so a row can
+  // only ever name a crew of its own company (a foreign key skips row level
+  // security, the company column in it does not).
+  companyIdUq: uniqueIndex('crews_company_id_uq').on(t.companyId, t.id),
+  nameUq: uniqueIndex('crews_company_name_uq').on(t.companyId, sql`lower(${t.name})`),
+  nameCheck: check('crews_name_check', sql`char_length(${t.name}) BETWEEN 1 AND 60`),
+}));
+
+/** Who is on which crew: one crew per person. The person is a team member on the Production role. */
+export const crewMembers = pgTable('crew_members', {
+  companyId: companyId(),
+  id: uuid('id').primaryKey().defaultRandom(),
+  crewId: uuid('crew_id').notNull(),
+  teamMemberId: integer('team_member_id').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (t) => ({
+  crewFk: foreignKey({ columns: [t.companyId, t.crewId], foreignColumns: [crews.companyId, crews.id], name: 'crew_members_crew_fk' }).onDelete('cascade'),
+  personUq: uniqueIndex('crew_members_company_person_uq').on(t.companyId, t.teamMemberId),
+  crewIdx: index('crew_members_company_crew_idx').on(t.companyId, t.crewId),
+}));
+
+/**
+ * A job's install: which crew, which day or days, and when they start, in
+ * the company's own calendar (plain dates, never instants). One per job.
+ * Keyed on the job key (leads.external_id, an 'archie-' key), like
+ * job_photos. The three milestone times are kept for Roof Lee (Stage E).
+ */
+export const crewAssignments = pgTable('crew_assignments', {
+  companyId: companyId(),
+  id: uuid('id').primaryKey().defaultRandom(),
+  crewId: uuid('crew_id').notNull(),
+  jobKey: text('job_key').notNull(),
+  installDate: date('install_date').notNull(),
+  endDate: date('end_date'),
+  startTime: text('start_time'),               // 'HH:MM', company time
+  status: text('status').notNull().default('scheduled'),
+  notes: text('notes'),                        // what the office tells the crew; never shown a price
+  scheduledAt: timestamp('scheduled_at').defaultNow().notNull(),
+  startedAt: timestamp('started_at'),
+  doneAt: timestamp('done_at'),
+  createdBy: text('created_by'),
+  updatedBy: text('updated_by'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (t) => ({
+  crewFk: foreignKey({ columns: [t.companyId, t.crewId], foreignColumns: [crews.companyId, crews.id], name: 'crew_assignments_crew_fk' }),
+  jobUq: uniqueIndex('crew_assignments_company_job_uq').on(t.companyId, t.jobKey),
+  dayIdx: index('crew_assignments_company_day_idx').on(t.companyId, t.installDate),
+  crewIdx: index('crew_assignments_company_crew_idx').on(t.companyId, t.crewId),
+  statusCheck: check('crew_assignments_status_check', sql`${t.status} IN ('scheduled','in_progress','done')`),
+  timeCheck: check('crew_assignments_start_time_check', sql`${t.startTime} IS NULL OR ${t.startTime} ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'`),
+  endCheck: check('crew_assignments_end_check', sql`${t.endDate} IS NULL OR (${t.endDate} >= ${t.installDate} AND ${t.endDate} < ${t.installDate} + 14)`),
+  notesCheck: check('crew_assignments_notes_check', sql`char_length(${t.notes}) <= 1000`),
+}));
+
+/**
+ * Each install milestone as it happens, for Roof Lee to be told later
+ * (Stage E, job.milestone). Append only. Nothing reads it yet.
+ */
+export const jobMilestones = pgTable('job_milestones', {
+  companyId: companyId(),
+  id: uuid('id').primaryKey().defaultRandom(),
+  jobKey: text('job_key').notNull(),
+  kind: text('kind').notNull(),
+  installDate: date('install_date'),           // for install_scheduled: the day it was booked for
+  occurredAt: timestamp('occurred_at').defaultNow().notNull(),
+  actor: text('actor'),
+}, (t) => ({
+  jobIdx: index('job_milestones_company_job_idx').on(t.companyId, t.jobKey, t.occurredAt),
+  kindCheck: check('job_milestones_kind_check', sql`${t.kind} IN ('install_scheduled','install_started','install_done')`),
+}));
+
+export type Crew = typeof crews.$inferSelect;
+export type CrewMember = typeof crewMembers.$inferSelect;
+export type CrewAssignment = typeof crewAssignments.$inferSelect;
+export type JobMilestoneRow = typeof jobMilestones.$inferSelect;
 
 // Agent Tasks - work items for agents
 export const agentTasks = pgTable('agent_tasks', {
