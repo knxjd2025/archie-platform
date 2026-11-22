@@ -15,6 +15,7 @@
  *     three prices and what the quoted one includes. Without them the
  *     diagram shows the three paths and the report has no price on it.
  */
+import { roofBuildOpener } from './sections/roof-build-opener.js';
 import { premiumShell, esc, usd } from './report-theme.js';
 import { arrangeSections, joinSections, type ReportSection } from './layout.js';
 import { reportFooter } from './render-proposal-html.js';
@@ -235,7 +236,7 @@ export function renderCommercialInspectionHtml(
   const body = joinSections(arrangeSections(commercialInspectionSections(report, opts), (report as any).layout));
   return premiumShell({
     title: `Commercial Roof Condition Report · ${report.property.address} · ${companyBrand().displayName}`,
-    hero: commercialInspectionHero(report, opts.jobType),
+    hero: roofBuildOpener(report, { docLabel: 'Commercial Roof Condition Report', mode: 'generic' }) + commercialInspectionHero(report, opts.jobType),
     body,
     extraHead: `${PROJECT_MAP_HEAD}<style>${PROJECT_MAP_CSS}${SECTION_CSS_DOCUMENT}${INSPECTION_FACTS_CSS}${COMMERCIAL_FACTS_CSS}${NARRATIVE_CSS}${ASSEMBLY_CSS_DOCUMENT}${EVIDENCE_CSS_DOCUMENT}${COMMERCIAL_BRAND_CSS}${ANATOMY_CSS}${GLANCE_CSS}</style>`,
     extraScripts: `<script>${PROJECT_MAP_JS}</script><script>${ASSEMBLY_JS}</script><script>${ANATOMY_JS}</script><script>${GLANCE_JS}</script>`,

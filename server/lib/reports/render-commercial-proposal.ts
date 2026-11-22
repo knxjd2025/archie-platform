@@ -10,6 +10,7 @@
  * (report.commercial, see commercial-context.ts) with the Good/Better/Best
  * tiers already priced (replacementOptions).
  */
+import { roofBuildOpener } from './sections/roof-build-opener.js';
 import { esc } from './report-theme.js';
 import { COVER_NAME_ATTRS } from './cover-name.js';
 import { arrangeSections, enforceMinimumSections, tagSection, type ReportSection } from './layout.js';
@@ -267,6 +268,7 @@ ${brandStyleTag()}
 <body>
 <span data-sc-progress></span>
 <div class="sc-grain" aria-hidden="true"></div>
+${roofBuildOpener(report, { docLabel: 'Commercial Roofing Proposal', customer: opts.customer, mode: 'options' })}
 ${folio}
 <main id="top">
 ${body}

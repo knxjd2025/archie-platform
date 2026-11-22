@@ -8,6 +8,7 @@
  * It never re-prices anything: every figure comes from the stored report, so an
  * estimate and the inspection it came from can't disagree.
  */
+import { roofBuildOpener } from './sections/roof-build-opener.js';
 import { premiumShell, esc, usd, usd2 } from './report-theme.js';
 import { commercialIncludes } from './commercial-products.js';
 import { arrangeSections, joinSections, type ReportSection } from './layout.js';
@@ -422,7 +423,7 @@ export function renderEstimateHtml(
 
   return premiumShell({
     title: `${estimateTitle(report)} · ${report.property?.address ?? ''} · ${companyBrand().displayName}`,
-    hero: estimateHero(report, opts.customer, opts.jobType),
+    hero: roofBuildOpener(report, { docLabel: 'Roof Replacement Estimate', customer: opts.customer, mode: 'selected' }) + estimateHero(report, opts.customer, opts.jobType),
     body,
     // SECTION_CSS_DOCUMENT, never SECTION_CSS_SCROLL: the scroll bundle is
     // written against --sc-* custom properties premiumShell does not define,

@@ -11,6 +11,7 @@
  * report type, which reuses them; renderInspectionHtml itself no longer
  * calls inspectionEstimateSection.
  */
+import { roofBuildOpener } from './sections/roof-build-opener.js';
 import { premiumShell, esc, usd, usd2 } from './report-theme.js';
 import { arrangeSections, joinSections, type ReportSection } from './layout.js';
 import { toEstimateLines, estimateTotal } from './estimate-lines.js';
@@ -413,7 +414,7 @@ export function renderInspectionHtml(
   const body = joinSections(arrangeSections(inspectionSections(report, opts), (report as any).layout));
   return premiumShell({
     title: `Roof Inspection Report · ${report.property.address} · ${companyBrand().displayName}`,
-    hero: inspectionHero(report, opts.jobType),
+    hero: roofBuildOpener(report, { docLabel: 'Roof Inspection Report', mode: 'generic' }) + inspectionHero(report, opts.jobType),
     body,
     extraHead: `${PROJECT_MAP_HEAD}<style>${PROJECT_MAP_CSS}${SECTION_CSS_DOCUMENT}${INSPECTION_FACTS_CSS}${NARRATIVE_CSS}${ANATOMY_CSS}${GLANCE_CSS}</style>`,
     extraScripts: `<script>${PROJECT_MAP_JS}</script><script>${ANATOMY_JS}</script><script>${GLANCE_JS}</script>`,

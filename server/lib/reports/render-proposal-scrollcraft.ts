@@ -14,6 +14,7 @@
  * a full-bleed scrub hero, centred hero copy. See references/uniqueness.md
  * §2.2 in the scroll-craft skill for the full spec this follows.
  */
+import { roofBuildOpener } from './sections/roof-build-opener.js';
 import { esc, usd } from './report-theme.js';
 import { COVER_NAME_ATTRS } from './cover-name.js';
 import { arrangeSections, tagSection, type ReportSection } from './layout.js';
@@ -845,6 +846,7 @@ ${brandStyleTag()}
 <body>
 <span data-sc-progress></span>
 <div class="sc-grain" aria-hidden="true"></div>
+${roofBuildOpener(report, { docLabel: 'Roof Replacement Proposal', customer: opts.customer, mode: 'options' })}
 ${folio}
 <main id="top">
 ${body}

@@ -33,6 +33,7 @@
  * CertainTeed's own product photography already used by Proposal, and the
  * owners' photo is the company's own (its profile), never generated.
  */
+import { roofBuildOpener } from './sections/roof-build-opener.js';
 import { COVER_NAME_ATTRS } from './cover-name.js';
 import { esc, usd } from './report-theme.js';
 import { arrangeSections, tagSection, type ReportSection } from './layout.js';
@@ -1019,6 +1020,7 @@ ${brandStyleTag()}
 <body>
 <span data-sc-progress></span>
 <div class="sc-grain" aria-hidden="true"></div>
+${roofBuildOpener(report, { docLabel: 'Roof Presentation', customer: opts.customer, mode: 'options' })}
 ${folio}
 <main id="top">
 ${body}
