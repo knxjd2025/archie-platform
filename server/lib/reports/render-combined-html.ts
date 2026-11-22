@@ -4,6 +4,7 @@
  * into the full replacement proposal (products, colors, system, warranty,
  * pricing). One document, the shared premium theme.
  */
+import { roofBuildOpener } from './sections/roof-build-opener.js';
 import { premiumShell, esc } from './report-theme.js';
 import { arrangeSections, joinSections, type ReportSection } from './layout.js';
 import type { ComprehensiveRoofReport } from './comprehensive-roof-report.js';
@@ -73,7 +74,7 @@ export function renderCombinedHtml(input: CombinedInput): string {
   const body = joinSections(arrangeSections(combinedSections(input), (input.report as any).layout));
   return premiumShell({
     title: `Roof Inspection & Proposal · ${input.proposal.customer} · ${companyBrand().displayName}`,
-    hero: combinedHero(input),
+    hero: roofBuildOpener(input.report, { docLabel: 'Roof Inspection and Proposal', customer: input.proposal.customer, mode: 'options' }) + combinedHero(input),
     body,
   });
 }
