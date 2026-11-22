@@ -424,7 +424,9 @@ function houseSvg(scene: BuildScene, id: string): string {
   // Chimney, skylight and pipe: the three things a roof has to be sealed around.
   const c = { x0: 6.5, x1: 7.5, y0: 1.5, y1: 2.3, top: H + R + 0.55 };
   const k = { x0: 2.0, x1: 3.3, y0: 1.5, y1: 2.5, h: 0.2 };
-  const pipeAt = { x: 4.7, y: 0.9 };
+  const pipeAt = { x: 8.7, y: 2.3 };
+  // A dormer, so the roof has valleys: where two slopes meet and the most water runs.
+  const d = { cx: 4.9, hw: 0.95, yf: 0.35, wall: 0.95, rise: 0.62 };
 
   /** A cricket: a small peaked ridge on the high side of something, so water goes around it. */
   const cricket = (x0: number, x1: number, y: number, len: number): { left: Pt[]; right: Pt[] } => {
@@ -460,6 +462,27 @@ function houseSvg(scene: BuildScene, id: string): string {
     poly([proj(v, k.x0 + 0.3, k.y0 + 0.1, zAt(k.y0 + 0.1) + k.h), proj(v, k.x0 + 0.62, k.y0 + 0.1, zAt(k.y0 + 0.1) + k.h), proj(v, k.x0 + 0.42, k.y1 - 0.1, zAt(k.y1 - 0.1) + k.h), proj(v, k.x0 + 0.12, k.y1 - 0.1, zAt(k.y1 - 0.1) + k.h)], '#a9cde6', 'opacity="0.55"'),
   ].join('');
 
+  const dz = { eave: zAt(d.yf) + d.wall, ridge: zAt(d.yf) + d.wall + d.rise };
+  const dy = { eave: d.yf + d.wall / slope, ridge: d.yf + (d.wall + d.rise) / slope };
+  const dL = d.cx - d.hw; const dR = d.cx + d.hw;
+  const dRoofL: Pt[] = [proj(v, dL - 0.1, d.yf - 0.12, dz.eave - 0.06), proj(v, d.cx, d.yf - 0.12, dz.ridge), proj(v, d.cx, dy.ridge, dz.ridge), proj(v, dL - 0.1, dy.eave - 0.1, dz.eave - 0.06)];
+  const dRoofR: Pt[] = [proj(v, dR + 0.1, d.yf - 0.12, dz.eave - 0.06), proj(v, d.cx, d.yf - 0.12, dz.ridge), proj(v, d.cx, dy.ridge, dz.ridge), proj(v, dR + 0.1, dy.eave - 0.1, dz.eave - 0.06)];
+  const dormerSkin = (light: string, dark: string, step: number | undefined, always = false): string => (step === undefined && !always ? '' : `<g${always ? '' : drive(step, 'fade')}>${poly(dRoofL, dark, EDGE)}${poly(dRoofR, light, EDGE)}</g>`);
+  const dWinA = proj(v, d.cx - 0.42, d.yf, zAt(d.yf) + 0.2); const dWinB = proj(v, d.cx + 0.42, d.yf, zAt(d.yf) + 0.2);
+  const dWinC = proj(v, d.cx + 0.42, d.yf, dz.eave - 0.05); const dWinD = proj(v, d.cx - 0.42, d.yf, dz.eave - 0.05);
+  const dormer = [
+    poly([proj(v, dR, d.yf, zAt(d.yf)), proj(v, dR, d.yf, dz.eave), proj(v, dR, dy.eave, dz.eave)], wall.side),
+    poly([proj(v, dL, d.yf, zAt(d.yf)), proj(v, dR, d.yf, zAt(d.yf)), proj(v, dR, d.yf, dz.eave), proj(v, d.cx, d.yf, dz.ridge), proj(v, dL, d.yf, dz.eave)], wall.front),
+    poly([dWinA, dWinB, dWinC, dWinD], `url(#${id}-glow)`, 'stroke="#f1ece3" stroke-width="3"'),
+    dormerSkin('#4a4d50', '#3a3d40', undefined, true),
+    dormerSkin('#e3c389', '#bf9a5c', at['tear-off']),
+    dormerSkin('#9db0bd', '#7e93a2', at.underlayment),
+    dormerSkin(fieldFill, fieldFill, at.field),
+    `<path d="M${dRoofR[1][0]} ${dRoofR[1][1]}L${dRoofR[2][0]} ${dRoofR[2][1]}" stroke="#15181b" stroke-opacity="0.45" stroke-width="2"/>`,
+    at['hip-ridge'] === undefined ? '' : `<path d="M${dRoofR[1][0]} ${dRoofR[1][1]}L${dRoofR[2][0]} ${dRoofR[2][1]}" stroke="${scene.surface === 'standing-seam' ? '#6a5c50' : scene.surface === 'shingle' ? '#54595e' : fieldFill}" stroke-width="6" stroke-linecap="round"${drive(at['hip-ridge'], 'fade')}/>`,
+  ].join('');
+  // The two valleys, on the main slope's own sheet.
+  const valleyD = `M${r1(uOf(dL - 0.1))} ${r1(vOf(dy.eave - 0.1))}L${r1(uOf(d.cx))} ${r1(vOf(dy.ridge))}L${r1(uOf(dR + 0.1))} ${r1(vOf(dy.eave - 0.1))}`;
   const fl = 0.24;
   const pipe = proj(v, pipeAt.x, pipeAt.y, zAt(pipeAt.y));
   const flashing = at.flashing === undefined ? '' : `<g${drive(at.flashing, 'fade')} class="rbo-l">
@@ -471,7 +494,7 @@ ${poly([proj(v, c.x1, c.y0, zAt(c.y0) - 0.05), proj(v, c.x1, c.y1, zAt(c.y1) - 0
   const spoutTop = proj(v, W + OV - 0.1, -OV - 0.12, H - drop - 0.2); const spoutBot = proj(v, W + OV - 0.1, -0.1, 0.1);
 
   // Where the leak barrier goes besides the eave: around everything that comes through the roof, and its flashings.
-  const sealAround = `<rect x="${r1(uOf(c.x0) - 4)}" y="${r1(vOf(c.y0) - 4)}" width="${r1(uOf(c.x1) - uOf(c.x0) + 8)}" height="${r1(vOf(c.y1 + 0.62) - vOf(c.y0) + 7)}" rx="1" fill="#22262b"/><rect x="${r1(uOf(k.x0) - 4)}" y="${r1(vOf(k.y0) - 4)}" width="${r1(uOf(k.x1) - uOf(k.x0) + 8)}" height="${r1(vOf(k.y1 + 0.5) - vOf(k.y0) + 7)}" rx="1" fill="#22262b"/><circle cx="${r1(uOf(pipeAt.x))}" cy="${r1(vOf(pipeAt.y))}" r="4.6" fill="#22262b"/>`;
+  const sealAround = `<rect x="${r1(uOf(c.x0) - 4)}" y="${r1(vOf(c.y0) - 4)}" width="${r1(uOf(c.x1) - uOf(c.x0) + 8)}" height="${r1(vOf(c.y1 + 0.62) - vOf(c.y0) + 7)}" rx="1" fill="#22262b"/><rect x="${r1(uOf(k.x0) - 4)}" y="${r1(vOf(k.y0) - 4)}" width="${r1(uOf(k.x1) - uOf(k.x0) + 8)}" height="${r1(vOf(k.y1 + 0.5) - vOf(k.y0) + 7)}" rx="1" fill="#22262b"/><circle cx="${r1(uOf(pipeAt.x))}" cy="${r1(vOf(pipeAt.y))}" r="4.6" fill="#22262b"/><path d="${valleyD}" fill="none" stroke="#22262b" stroke-width="7.5" stroke-linejoin="round" stroke-linecap="round"/><path d="${valleyD}" fill="none" stroke="#565d66" stroke-width="0.5" stroke-linejoin="round"/>`;
 
   return `<svg class="rbo__art" viewBox="0 0 1200 720" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Drawing of a house with its roof being replaced, one layer at a time">
 ${sharedDefs(id, scene.surface)}
@@ -501,8 +524,10 @@ ${at['drip-edge'] === undefined ? '' : `<path d="M0 0.5H${U}M0.5 0V${V}M${U - 0.
 ${at.trim === undefined ? '' : `<path d="M0.8 0V${V}M${U - 0.8} 0V${V}M0 0.8H${U}" stroke="#8a796a" stroke-width="1.7" fill="none"${drive(at.trim, 'fade')}/>`}
 ${at.exhaust === undefined ? '' : `<path d="M6 ${V - 2.2}H${U - 6}" stroke="#15181b" stroke-width="1.5" stroke-dasharray="1.4 0.9"${drive(at.exhaust, 'fade')}/>`}
 ${at.flashing === undefined ? '' : `<rect x="${r1(uOf(k.x0) - 1.6)}" y="${r1(vOf(k.y0) - 1.6)}" width="${r1(uOf(k.x1) - uOf(k.x0) + 3.2)}" height="${r1(vOf(k.y1) - vOf(k.y0) + 3.2)}" fill="none" stroke="#d5dce0" stroke-width="1.5"${drive(at.flashing, 'fade')}/>`}
+<path d="${valleyD}" fill="none" stroke="#101214" stroke-opacity="0.5" stroke-width="0.7" stroke-linejoin="round"/>
 <rect width="${U}" height="${V}" fill="url(#${id}-shade)" pointer-events="none"/>
 </g>
+${dormer}
 ${cricketHtml}
 ${skylight}
 ${chimney}

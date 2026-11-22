@@ -148,3 +148,11 @@ describe('the details a roofer would look for', () => {
     expect(text).not.toMatch(/warrant|guarantee|tenant/i);
   });
 });
+
+describe('valleys', () => {
+  it('gives the house a dormer so there are valleys, and runs the leak barrier down them', () => {
+    const html = roofBuildOpener(applyReplacementPricing(base(), { tierSelection: { good: 'landmark', better: 'landmark_pro', best: 'landmark_premium' }, squares: 30, selectedTier: 'better' }), { docLabel: 'Roof Replacement Estimate', mode: 'selected' });
+    const around = html.slice(html.indexOf('rbo-l--ice2'), html.indexOf('rbo-l--under'));
+    expect(around).toMatch(/<path d="M[\d. ]+L[\d. ]+L[\d. ]+" fill="none" stroke="#22262b"/);
+  });
+});
