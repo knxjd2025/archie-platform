@@ -107,3 +107,44 @@ describe('the opener on the page', () => {
     expect(html).not.toContain('<script>alert(1)</script>');
   });
 });
+
+describe('the details a roofer would look for', () => {
+  const pro = ROOFING_PRODUCTS.find((p) => p.key === 'landmark_pro')!;
+  const house = roofBuildOpener(applyReplacementPricing(base(), { tierSelection: { good: 'landmark', better: 'landmark_pro', best: 'landmark_premium' }, squares: 30, selectedTier: 'better' }), { docLabel: 'Roof Replacement Estimate', mode: 'selected' });
+
+  it('builds crickets behind the chimney and skylight, after the deck check and before anything covers them', () => {
+    const order = visuals(buildSceneFor(pro, { commercial: false }));
+    expect(order.indexOf('cricket')).toBe(order.indexOf('deck') + 1);
+    expect(order.indexOf('cricket')).toBeLessThan(order.indexOf('underlayment'));
+    expect(house).toContain('Crickets behind the chimney and skylight.');
+  });
+
+  it('runs the starter up the rakes as well as along the eave', () => {
+    expect(house).toContain('-clip-starter"');
+    expect(house).toContain('-clip-starter-rake"');
+  });
+
+  it('puts the leak barrier around the chimney, skylight and pipe as well as the eave', () => {
+    expect(house).toContain('-clip-ice"');
+    const around = house.slice(house.indexOf('rbo-l--ice2'), house.indexOf('rbo-l--under'));
+    expect(count(around, '<rect')).toBeGreaterThanOrEqual(2);
+    expect(around).toContain('<circle');
+  });
+
+  it('walks a commercial tear-off from set-up to the final check, in the order the work happens', () => {
+    const order = visuals(buildSceneFor(commercialAsProduct('gaf_commercial_tpo')!, { commercial: true }));
+    expect(order).toEqual(['setup', 'tear-off', 'deck', 'vapor', 'insulation', 'taper', 'cover-board', 'attachment', 'membrane', 'seams', 'accessories', 'edge-metal', 'walkway', 'final', 'clean-up']);
+  });
+
+  it('never slopes boards under a layover or a coating, where no insulation goes down', () => {
+    expect(visuals(buildSceneFor(commercialAsProduct('dura_last_layover')!, { commercial: true }))).not.toContain('taper');
+    const coating = visuals(buildSceneFor(commercialAsProduct('restoration_coating')!, { commercial: true }));
+    expect(coating).toEqual(['setup', 'prep', 'coating', 'final', 'clean-up']);
+  });
+
+  it('makes no promise on a roofing company\'s behalf in the new commercial steps', () => {
+    const said = buildSceneFor(commercialAsProduct('gaf_commercial_tpo')!, { commercial: true }).steps;
+    const text = said.filter((x) => ['setup', 'taper', 'seams', 'final'].includes(x.visual)).map((x) => x.title + ' ' + x.body).join(' ');
+    expect(text).not.toMatch(/warrant|guarantee|tenant/i);
+  });
+});
