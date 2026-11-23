@@ -18,6 +18,8 @@ export const ROOF_REPORT_MODELS = {
   narrative: { provider: 'anthropic', id: 'claude-sonnet-5' },
   labels: { provider: 'anthropic', id: 'claude-haiku-4-5' },
   measurement: { provider: 'groq', id: 'meta-llama/llama-4-scout-17b-16e-instruct' },
+  /** Text-only follow-up pass of the enhanced photo analysis (no image sent). */
+  enhancement: { provider: 'groq', id: 'llama-3.3-70b-versatile' },
 } as const satisfies Record<string, { provider: ModelProvider; id: string }>;
 
 export type ModelRole = keyof typeof ROOF_REPORT_MODELS;
@@ -36,6 +38,13 @@ export const MODEL_PRICES_CENTS_PER_MTOK: Record<string, { input: number; output
   'meta-llama/llama-4-scout-17b-16e-instruct': { input: 11, output: 34 },
   'meta-llama/llama-4-maverick-17b-128e-instruct': { input: 20, output: 60 },
   'gemini-2.5-flash': { input: 30, output: 250 },
+  'llama-3.3-70b-versatile': { input: 59, output: 79 },
   'claude-haiku-4-5': { input: 100, output: 500 },
   'claude-sonnet-5': { input: 300, output: 1500 },
 };
+
+/** How the photo analysis names its fallback providers in messages and logs. */
+export const VISION_PROVIDER_LABELS = {
+  google: 'Gemini',
+  anthropic: 'Haiku',
+} as const;

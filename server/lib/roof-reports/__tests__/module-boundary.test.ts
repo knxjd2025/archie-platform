@@ -89,7 +89,8 @@ describe('roof reports library boundary', () => {
     for (const file of SOURCE_FILES) {
       if (path.basename(file) === 'models.ts') continue;
       readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
-        const code = line.replace(/\/\/.*$/, '');
+        // Interpolated names such as ${geminiResult.model_used} are code, not text.
+        const code = line.replace(/\/\/.*$/, '').replace(/\$\{[^}]*\}/g, '');
         if (MODEL_IN_QUOTES.test(code)) bad.push(`${rel(file)}:${i + 1}`);
       });
     }
