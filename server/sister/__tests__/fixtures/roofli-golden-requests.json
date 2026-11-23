@@ -1,0 +1,471 @@
+{
+  "company": "0b9f6d0e-5c56-4a8e-9d55-2f1f5a3c7e11",
+  "requests": [
+    {
+      "name": "company_made",
+      "version": 1,
+      "method": "POST",
+      "path": "/api/sister/v1/companies",
+      "body": {
+        "roofliCompanyId": "0b9f6d0e-5c56-4a8e-9d55-2f1f5a3c7e11",
+        "name": "Summit Ridge Roofing",
+        "slug": "summit-ridge-roofing",
+        "city": "Cedar Falls",
+        "state": "IA",
+        "members": [
+          {
+            "authUserId": "7d1c1d0a-3f0e-4b53-8a44-0d6d7f1f2a10",
+            "email": "owner@golden.example.test",
+            "fullName": "Avery Lindqvist",
+            "role": "owner"
+          },
+          {
+            "authUserId": "3b9a6c42-0e51-4d0f-8f3a-5a1d2c7b9e01",
+            "email": "office@golden.example.test",
+            "fullName": "Riley Marsh",
+            "role": "office"
+          },
+          {
+            "authUserId": "5c2e8b13-7a64-4f9d-9b20-1e3f4a5b6c02",
+            "email": "crew@golden.example.test",
+            "fullName": "Sam Okafor",
+            "role": "crew"
+          },
+          {
+            "authUserId": "9e4f1a27-6b38-4c5d-a710-2f4e5d6c7b03",
+            "email": "sales@golden.example.test",
+            "fullName": "Jordan Reyes",
+            "role": "salesperson"
+          }
+        ],
+        "facts": {
+          "identity": {},
+          "contact": {},
+          "service_area": {},
+          "services": {},
+          "credentials": {},
+          "warranties": {},
+          "offers": {},
+          "voice": {},
+          "audiences": {},
+          "preferences": {}
+        },
+        "plan": {
+          "keys": [
+            "archie_solo",
+            "roof_lee"
+          ],
+          "active": true,
+          "trial": true
+        },
+        "timezone": "America/Chicago"
+      },
+      "expect": {
+        "status": [
+          200,
+          201
+        ],
+        "shape": {
+          "companyId": "nonEmptyString"
+        }
+      }
+    },
+    {
+      "name": "members_replaced",
+      "version": 1,
+      "method": "PUT",
+      "path": "/api/sister/v1/companies/0b9f6d0e-5c56-4a8e-9d55-2f1f5a3c7e11/members",
+      "body": {
+        "roofliCompanyId": "0b9f6d0e-5c56-4a8e-9d55-2f1f5a3c7e11",
+        "members": [
+          {
+            "authUserId": "7d1c1d0a-3f0e-4b53-8a44-0d6d7f1f2a10",
+            "email": "owner@golden.example.test",
+            "fullName": "Avery Lindqvist",
+            "role": "owner"
+          },
+          {
+            "authUserId": "3b9a6c42-0e51-4d0f-8f3a-5a1d2c7b9e01",
+            "email": "office@golden.example.test",
+            "fullName": "Riley Marsh",
+            "role": "office"
+          },
+          {
+            "authUserId": "5c2e8b13-7a64-4f9d-9b20-1e3f4a5b6c02",
+            "email": "crew@golden.example.test",
+            "fullName": "Sam Okafor",
+            "role": "crew"
+          },
+          {
+            "authUserId": "9e4f1a27-6b38-4c5d-a710-2f4e5d6c7b03",
+            "email": "sales@golden.example.test",
+            "fullName": "Jordan Reyes",
+            "role": "salesperson"
+          }
+        ]
+      },
+      "expect": {
+        "status": 200,
+        "shape": {
+          "ok": "boolean"
+        }
+      }
+    },
+    {
+      "name": "ready",
+      "version": 1,
+      "method": "GET",
+      "path": "/api/sister/v1/ready",
+      "body": null,
+      "expect": {
+        "status": 200,
+        "shape": {
+          "ready": "boolean"
+        }
+      }
+    },
+    {
+      "name": "company_status",
+      "version": 2,
+      "method": "GET",
+      "path": "/api/sister/v1/companies/0b9f6d0e-5c56-4a8e-9d55-2f1f5a3c7e11",
+      "body": null,
+      "expect": {
+        "status": 200,
+        "shape": {
+          "companyId": "nonEmptyString",
+          "status": "oneOf:active|paused|closed"
+        }
+      }
+    },
+    {
+      "name": "capabilities",
+      "version": 2,
+      "method": "GET",
+      "path": "/api/sister/v1/companies/0b9f6d0e-5c56-4a8e-9d55-2f1f5a3c7e11/capabilities",
+      "body": null,
+      "expect": {
+        "status": 200,
+        "shape": {
+          "capabilities": "list"
+        }
+      }
+    },
+    {
+      "name": "lead_before_quiet",
+      "version": 2,
+      "method": "POST",
+      "path": "/api/sister/v1/companies/0b9f6d0e-5c56-4a8e-9d55-2f1f5a3c7e11/leads",
+      "body": {
+        "name": "Dana Whitfield",
+        "phone": "+13195550100",
+        "email": "dana@example.com",
+        "address": "12 Elm Street",
+        "town": "Cedar Falls",
+        "jobType": "Roof replacement",
+        "message": "Hail damage on the north side.",
+        "acting": {
+          "authUserId": "3b9a6c42-0e51-4d0f-8f3a-5a1d2c7b9e01",
+          "role": "office"
+        }
+      },
+      "idempotencyKey": "golden-lead-refused",
+      "expect": {
+        "status": 409,
+        "when": "Archie does not say messages.quiet for the company"
+      }
+    },
+    {
+      "name": "lead_made",
+      "version": 2,
+      "method": "POST",
+      "path": "/api/sister/v1/companies/0b9f6d0e-5c56-4a8e-9d55-2f1f5a3c7e11/leads",
+      "body": {
+        "name": "Dana Whitfield",
+        "phone": "+13195550100",
+        "email": "dana@example.com",
+        "address": "12 Elm Street",
+        "town": "Cedar Falls",
+        "jobType": "Roof replacement",
+        "message": "Hail damage on the north side.",
+        "acting": {
+          "authUserId": "3b9a6c42-0e51-4d0f-8f3a-5a1d2c7b9e01",
+          "role": "office"
+        }
+      },
+      "idempotencyKey": "golden-lead-made",
+      "expect": {
+        "status": 201,
+        "shape": {
+          "leadId": "nonEmptyString"
+        }
+      }
+    },
+    {
+      "name": "jobs_as_owner",
+      "version": 2,
+      "method": "GET",
+      "path": "/api/sister/v1/companies/0b9f6d0e-5c56-4a8e-9d55-2f1f5a3c7e11/jobs?actingUserId=7d1c1d0a-3f0e-4b53-8a44-0d6d7f1f2a10&actingRole=owner",
+      "body": null,
+      "expect": {
+        "status": 200,
+        "shape": {
+          "jobs": "list",
+          "jobs[].id": "nonEmptyString",
+          "jobs[].kind": "oneOf:lead|job",
+          "jobs[].stage": "string"
+        }
+      }
+    },
+    {
+      "name": "jobs_as_office_search",
+      "version": 2,
+      "method": "GET",
+      "path": "/api/sister/v1/companies/0b9f6d0e-5c56-4a8e-9d55-2f1f5a3c7e11/jobs?actingUserId=3b9a6c42-0e51-4d0f-8f3a-5a1d2c7b9e01&actingRole=office&text=Cedar+Falls",
+      "body": null,
+      "expect": {
+        "status": 200,
+        "shape": {
+          "jobs": "list",
+          "jobs[].id": "nonEmptyString"
+        }
+      }
+    },
+    {
+      "name": "jobs_as_crew",
+      "version": 2,
+      "method": "GET",
+      "path": "/api/sister/v1/companies/0b9f6d0e-5c56-4a8e-9d55-2f1f5a3c7e11/jobs?actingUserId=5c2e8b13-7a64-4f9d-9b20-1e3f4a5b6c02&actingRole=crew",
+      "body": null,
+      "expect": {
+        "status": 200,
+        "shape": {
+          "jobs": "list"
+        }
+      }
+    },
+    {
+      "name": "jobs_as_salesperson",
+      "version": 2,
+      "method": "GET",
+      "path": "/api/sister/v1/companies/0b9f6d0e-5c56-4a8e-9d55-2f1f5a3c7e11/jobs?actingUserId=9e4f1a27-6b38-4c5d-a710-2f4e5d6c7b03&actingRole=salesperson",
+      "body": null,
+      "expect": {
+        "status": 200,
+        "shape": {
+          "jobs": "list"
+        }
+      }
+    },
+    {
+      "name": "job_as_office",
+      "version": 2,
+      "method": "GET",
+      "path": "/api/sister/v1/companies/0b9f6d0e-5c56-4a8e-9d55-2f1f5a3c7e11/jobs/JOB_ID?actingUserId=3b9a6c42-0e51-4d0f-8f3a-5a1d2c7b9e01&actingRole=office",
+      "body": null,
+      "expect": {
+        "status": 200,
+        "shape": {
+          "job.id": "nonEmptyString",
+          "job.kind": "oneOf:lead|job",
+          "job.stage": "string",
+          "job.notes": "list"
+        }
+      }
+    },
+    {
+      "name": "job_for_the_run",
+      "version": 2,
+      "method": "GET",
+      "path": "/api/sister/v1/companies/0b9f6d0e-5c56-4a8e-9d55-2f1f5a3c7e11/jobs/JOB_ID",
+      "body": null,
+      "expect": {
+        "status": 200,
+        "shape": {
+          "job.id": "nonEmptyString",
+          "job.photoConsent": "boolean"
+        }
+      }
+    },
+    {
+      "name": "lead_changed",
+      "version": 2,
+      "method": "PATCH",
+      "path": "/api/sister/v1/companies/0b9f6d0e-5c56-4a8e-9d55-2f1f5a3c7e11/leads/LEAD_ID",
+      "body": {
+        "status": "contacted",
+        "phone": "+13195550101",
+        "acting": {
+          "authUserId": "3b9a6c42-0e51-4d0f-8f3a-5a1d2c7b9e01",
+          "role": "office"
+        }
+      },
+      "idempotencyKey": "golden-lead-changed",
+      "expect": {
+        "status": 200,
+        "shape": {
+          "ok": "boolean"
+        }
+      }
+    },
+    {
+      "name": "note_added",
+      "version": 2,
+      "method": "POST",
+      "path": "/api/sister/v1/companies/0b9f6d0e-5c56-4a8e-9d55-2f1f5a3c7e11/leads/LEAD_ID/notes",
+      "body": {
+        "text": "Called back. Wants a visit on Friday.",
+        "acting": {
+          "authUserId": "3b9a6c42-0e51-4d0f-8f3a-5a1d2c7b9e01",
+          "role": "office"
+        }
+      },
+      "idempotencyKey": "golden-note-added",
+      "expect": {
+        "status": [
+          200,
+          201
+        ]
+      }
+    },
+    {
+      "name": "job_moved",
+      "version": 2,
+      "method": "POST",
+      "path": "/api/sister/v1/companies/0b9f6d0e-5c56-4a8e-9d55-2f1f5a3c7e11/jobs/JOB_ID/stage",
+      "body": {
+        "stage": "approved",
+        "acting": {
+          "authUserId": "3b9a6c42-0e51-4d0f-8f3a-5a1d2c7b9e01",
+          "role": "office"
+        }
+      },
+      "idempotencyKey": "golden-job-moved",
+      "expect": {
+        "status": 200,
+        "shape": {
+          "ok": "boolean",
+          "stage": "string"
+        }
+      }
+    },
+    {
+      "name": "photo_without_consent",
+      "version": 2,
+      "method": "GET",
+      "path": "/api/sister/v1/companies/0b9f6d0e-5c56-4a8e-9d55-2f1f5a3c7e11/jobs/JOB_ID/photos/PHOTO_ID",
+      "body": null,
+      "expect": {
+        "status": 404,
+        "when": "the customer has not agreed to photos being used"
+      }
+    },
+    {
+      "name": "company_paused",
+      "version": 2,
+      "method": "DELETE",
+      "path": "/api/sister/v1/companies/0b9f6d0e-5c56-4a8e-9d55-2f1f5a3c7e11",
+      "body": {
+        "roofliCompanyId": "0b9f6d0e-5c56-4a8e-9d55-2f1f5a3c7e11",
+        "mode": "pause"
+      },
+      "idempotencyKey": "golden-pause",
+      "expect": {
+        "status": 200,
+        "shape": {
+          "status": "oneOf:active|paused|closed"
+        }
+      }
+    },
+    {
+      "name": "company_back",
+      "version": 1,
+      "method": "POST",
+      "path": "/api/sister/v1/companies",
+      "body": {
+        "roofliCompanyId": "0b9f6d0e-5c56-4a8e-9d55-2f1f5a3c7e11",
+        "name": "Summit Ridge Roofing",
+        "slug": "summit-ridge-roofing",
+        "city": "Cedar Falls",
+        "state": "IA",
+        "members": [
+          {
+            "authUserId": "7d1c1d0a-3f0e-4b53-8a44-0d6d7f1f2a10",
+            "email": "owner@golden.example.test",
+            "fullName": "Avery Lindqvist",
+            "role": "owner"
+          },
+          {
+            "authUserId": "3b9a6c42-0e51-4d0f-8f3a-5a1d2c7b9e01",
+            "email": "office@golden.example.test",
+            "fullName": "Riley Marsh",
+            "role": "office"
+          },
+          {
+            "authUserId": "5c2e8b13-7a64-4f9d-9b20-1e3f4a5b6c02",
+            "email": "crew@golden.example.test",
+            "fullName": "Sam Okafor",
+            "role": "crew"
+          },
+          {
+            "authUserId": "9e4f1a27-6b38-4c5d-a710-2f4e5d6c7b03",
+            "email": "sales@golden.example.test",
+            "fullName": "Jordan Reyes",
+            "role": "salesperson"
+          }
+        ],
+        "facts": {
+          "identity": {},
+          "contact": {},
+          "service_area": {},
+          "services": {},
+          "credentials": {},
+          "warranties": {},
+          "offers": {},
+          "voice": {},
+          "audiences": {},
+          "preferences": {}
+        },
+        "plan": {
+          "keys": [
+            "archie_solo",
+            "roof_lee"
+          ],
+          "active": true,
+          "trial": false
+        },
+        "timezone": "America/Chicago"
+      },
+      "expect": {
+        "status": [
+          200,
+          201
+        ],
+        "shape": {
+          "companyId": "nonEmptyString"
+        }
+      }
+    },
+    {
+      "name": "company_closed",
+      "version": 2,
+      "method": "DELETE",
+      "path": "/api/sister/v1/companies/0b9f6d0e-5c56-4a8e-9d55-2f1f5a3c7e11",
+      "body": {
+        "roofliCompanyId": "0b9f6d0e-5c56-4a8e-9d55-2f1f5a3c7e11",
+        "mode": "close",
+        "acting": {
+          "authUserId": "7d1c1d0a-3f0e-4b53-8a44-0d6d7f1f2a10",
+          "role": "owner"
+        }
+      },
+      "idempotencyKey": "golden-close",
+      "expect": {
+        "status": 200,
+        "shape": {
+          "status": "oneOf:active|paused|closed"
+        }
+      }
+    }
+  ]
+}
