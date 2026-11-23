@@ -11,6 +11,7 @@ import {
   type RoofAnalysisResult,
   type DamageDetection,
   type AnalysisOptions,
+  type VisionRunOptions,
 } from './groq-vision.js';
 import { DAMAGE_TYPES, ROOFING_MATERIALS } from './damage-knowledge-base.js';
 import { groqChat } from './groq-chat.js';
@@ -330,13 +331,16 @@ export async function deepImageAnalysis(
     known_material?: string;
     recent_weather_events?: string[];
     previous_repairs?: string[];
-  }
+  },
+  run: VisionRunOptions = {},
 ): Promise<DetailedImageAnalysis> {
   // First, get the base vision analysis
   const visionAnalysis = await analyzeRoofImage(imageUrl, apiKey, {
     model: GROQ_VISION_MODELS.LLAMA4_MAVERICK, // Use the best model
     include_haag_assessment: true,
     max_tokens: 4096,
+    call: run.call,
+    signal: run.signal,
   });
 
   // Then, enhance with detailed analysis
@@ -344,7 +348,8 @@ export async function deepImageAnalysis(
     visionAnalysis,
     imageUrl,
     apiKey,
-    context
+    context,
+    run,
   );
 
   return enhancedAnalysis;
@@ -362,7 +367,8 @@ async function enhanceAnalysisWithDetails(
     known_material?: string;
     recent_weather_events?: string[];
     previous_repairs?: string[];
-  }
+  },
+  run: VisionRunOptions = {},
 ): Promise<DetailedImageAnalysis> {
   const systemPrompt = `You are an expert roofing analyst providing detailed assessment.
 Based on the initial analysis provided, generate comprehensive enhancement data.
@@ -439,7 +445,7 @@ Please provide detailed enhancement analysis.`;
       { role: 'user', content: userPrompt },
     ],
     apiKey,
-    { model: ROOF_REPORT_MODELS.enhancement.id, json_mode: true, temperature: ENHANCEMENT_TEMPERATURE }
+    { model: ROOF_REPORT_MODELS.enhancement.id, json_mode: true, temperature: ENHANCEMENT_TEMPERATURE, call: run.call, signal: run.signal }
   );
 
   // Loose Partial type — Claude/Llama returns one of the field shapes
@@ -500,8 +506,11 @@ export async function comprehensiveMultiImageAnalysis(
     known_roof_age?: number;
     known_material?: string;
     known_size_squares?: number;
-  }
+  },
+  run: VisionRunOptions = {},
 ): Promise<{
+  /** True when the request deadline stopped the run early: the analyses listed are the photos done by then. */
+  partial?: boolean;
   individual_analyses: DetailedImageAnalysis[];
   combined_report: {
     overall_condition: string;
@@ -531,11 +540,15 @@ export async function comprehensiveMultiImageAnalysis(
   const individualAnalyses: DetailedImageAnalysis[] = [];
 
   for (const url of imageUrls.slice(0, MAX_ANALYZED_IMAGES)) {
-    const analysis = await deepImageAnalysis(url, apiKey, context);
+    // After the deadline no photo is begun.
+    if (run.signal?.aborted) break;
+    const analysis = await deepImageAnalysis(url, apiKey, context, run);
     individualAnalyses.push(analysis);
   }
+  const partial = run.signal?.aborted === true;
 
   return {
+    ...(partial && { partial: true }),
     individual_analyses: individualAnalyses,
     combined_report: buildCombinedReport(individualAnalyses, {
       known_size_squares: context?.known_size_squares,

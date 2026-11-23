@@ -10,17 +10,13 @@ import {
   type DamageCategory,
 } from './damage-knowledge-base.js';
 import { downloadReportImage } from './safe-download.js';
-import { ROOF_REPORT_MODELS, VISION_PROVIDER_LABELS } from './models.js';
-
-// Groq API configuration
-const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
+import { ROOF_REPORT_MODELS, VISION_PROVIDER_LABELS, roleForModelId, type ModelRole } from './models.js';
+import { providerCaller, describeModelError, type ModelCaller } from './model-call.js';
 
 // ─── Vision-call defaults shared by all three providers ────────────────
 const DEFAULT_MAX_TOKENS = 4096;
 /** Low temperature → consistent JSON output across runs. */
 const DEFAULT_VISION_TEMPERATURE = 0.1;
-/** Header Google's REST API reads the key from. */
-const GOOGLE_KEY_HEADER = 'x-goog-api-key';
 
 // ─── Provider model defaults (single source of truth for fallback chain) ─
 const GEMINI_VISION_MODEL: string = ROOF_REPORT_MODELS.visionFallback.id;
@@ -32,14 +28,12 @@ const DATA_URL_PARSE_RE = /^data:([^;]+);base64,(.+)$/;
 /** Standard error thrown when a `data:` URL fails to parse. */
 const INVALID_DATA_URL_ERR = 'Invalid base64 data URL format';
 
-/** Common JSON-output response-format object passed to Groq vision. */
-const JSON_OBJECT_RESPONSE_FORMAT = { type: 'json_object' as const };
+/** The longest any one vision call may take, whichever provider it goes to. */
+const VISION_CALL_TIMEOUT_MS = 45_000;
 
-/** `Bearer <token>` prefix for the `Authorization` header. */
-const BEARER_PREFIX = 'Bearer ';
-
-/** Content-Type header for JSON request bodies. */
-const CONTENT_TYPE_JSON = 'application/json';
+/** What a person sees when a photo could not be analysed. Never the provider's words. */
+const PHOTO_FAILED_SUMMARY = 'This photo could not be analyzed.';
+const PHOTO_FAILED_RECOMMENDATION = 'Please try this photo again.';
 
 /** Default user-message prompt used by `reanalyzeWithHints` calls. */
 const REANALYZE_USER_PROMPT = 'Re-analyze this roof image with the inspector hints provided. Look extra carefully for the reported damage types.';
@@ -72,22 +66,20 @@ function parseDataUrl(dataUrl: string): { mimeType: string; data: string } | nul
   return { mimeType: matches[1], data: matches[2] };
 }
 
-/** Read `error.message` safely from an unknown reject value. */
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 /**
  * Build a uniform `RoofAnalysisResult` for any provider failure path.
- * Centralizes the shape so adding a new field doesn't require updating
- * three near-identical catch blocks (Groq / Gemini / Haiku).
+ *
+ * The summary is one plain sentence. Nothing a provider said (an error body, a
+ * message, a key it quoted back) is kept anywhere in the result: all that is
+ * logged is a status or the word "timed out", by `describeModelError`.
  */
 function failedAnalysisResult(
   provider: string,
   model: string,
   processingTime: number,
-  errorMessage: string,
+  error: unknown,
 ): RoofAnalysisResult {
+  console.error(`[${provider.toLowerCase()}-vision] Analysis failed:`, describeModelError(error));
   return {
     success: false,
     image_quality: 'poor',
@@ -96,13 +88,36 @@ function failedAnalysisResult(
     overall_condition: 'poor',
     overall_severity_score: 0,
     insurance_claim_recommended: false,
-    summary: `${provider} analysis failed: ${errorMessage}`,
+    summary: PHOTO_FAILED_SUMMARY,
     detailed_findings: '',
-    recommendations: [`Unable to analyze with ${provider}. Please try again.`],
-    raw_analysis: errorMessage,
+    recommendations: [PHOTO_FAILED_RECOMMENDATION],
     model_used: model,
     processing_time_ms: processingTime,
   };
+}
+
+/** How a vision call is made and stopped. Both are optional. */
+export interface VisionRunOptions {
+  /** The seam. Archie passes one that also records each call's cost; without one, the key given is used. */
+  call?: ModelCaller;
+  /** The request-wide deadline. Aborting it stops this call at once. */
+  signal?: AbortSignal;
+}
+
+/** The roles a Groq vision call may use. `options.model` can only name one of them. */
+const GROQ_VISION_ROLES: readonly ModelRole[] = ['vision', 'visionAlternative'];
+
+/** The seam to use: the one handed in, or the default for one provider's key, or null when there is neither. */
+function seamFor(provider: 'groq' | 'google' | 'anthropic', key: string | undefined, run: VisionRunOptions | undefined): ModelCaller | null {
+  if (run?.call) return run.call;
+  return key ? providerCaller({ [provider]: key }) : null;
+}
+
+/** An inline photo split for the seam. */
+function splitInline(dataUrl: string): { base64: string; mediaType: string } {
+  const parsed = parseDataUrl(dataUrl);
+  if (!parsed) throw new Error(INVALID_DATA_URL_ERR);
+  return { base64: parsed.data, mediaType: parsed.mimeType };
 }
 
 // Available vision models on Groq (updated 2025)
@@ -151,7 +166,8 @@ export interface RoofAnalysisResult {
   processing_time_ms: number;
 }
 
-export interface AnalysisOptions {
+export interface AnalysisOptions extends VisionRunOptions {
+  /** One of the two Groq vision ids in models.ts. Any other value is refused. */
   model?: GroqVisionModel;
   include_haag_assessment?: boolean;
   focus_areas?: DamageCategory[];
@@ -431,64 +447,37 @@ export async function analyzeRoofImage(
   options: AnalysisOptions = {}
 ): Promise<RoofAnalysisResult> {
   const startTime = Date.now();
-  const model = options.model || GROQ_VISION_MODELS.LLAMA4_MAVERICK;
+  const role = options.model === undefined ? 'visionAlternative' : roleForModelId(options.model, GROQ_VISION_ROLES);
+  const model = role ? ROOF_REPORT_MODELS[role].id : ROOF_REPORT_MODELS.visionAlternative.id;
 
-  if (!apiKey) {
+  const call = seamFor('groq', apiKey, options);
+  if (!call) {
     throw new Error('Groq API key is required');
   }
+  // A model id that is not written in models.ts is never sent anywhere.
+  if (!role) return failedAnalysisResult('Groq', model, Date.now() - startTime, new Error('model refused'));
 
   const systemPrompt = buildSystemPrompt(options);
 
   try {
-    // Convert image URL to base64 for Groq Vision API
+    // Convert image URL to base64 for the vision call
     const base64ImageUrl = await imageUrlToBase64(imageUrl);
 
-    const response = await fetch(GROQ_API_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `${BEARER_PREFIX}${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          {
-            role: 'system',
-            content: systemPrompt,
-          },
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: `${DEFAULT_USER_PROMPT}${buildPhotoNoteSuffix(options.inspectorPhotoNote)}`,
-              },
-              {
-                type: 'image_url',
-                image_url: {
-                  url: base64ImageUrl,
-                },
-              },
-            ],
-          },
-        ],
-        max_tokens: options.max_tokens || DEFAULT_MAX_TOKENS,
-        temperature: options.temperature ?? DEFAULT_VISION_TEMPERATURE,
-        response_format: JSON_OBJECT_RESPONSE_FORMAT,
-      }),
-      // Cap each vision call so one hung photo/inference can't stall its batch
-      // and freeze the whole (now background) report pipeline. On timeout the
-      // catch below degrades this photo to a failed-analysis stub.
-      signal: AbortSignal.timeout(45000),
+    // The vision call is capped so one hung photo/inference can't stall its
+    // batch and freeze the whole (now background) report pipeline. On timeout
+    // the catch below degrades this photo to a failed-analysis stub.
+    const reply = await call({
+      role,
+      system: systemPrompt,
+      prompt: `${DEFAULT_USER_PROMPT}${buildPhotoNoteSuffix(options.inspectorPhotoNote)}`,
+      image: splitInline(base64ImageUrl),
+      maxTokens: options.max_tokens || DEFAULT_MAX_TOKENS,
+      temperature: options.temperature ?? DEFAULT_VISION_TEMPERATURE,
+      json: true,
+      timeoutMs: VISION_CALL_TIMEOUT_MS,
+      signal: options.signal,
     });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(`Groq API error: ${response.status} - ${JSON.stringify(errorData)}`);
-    }
-
-    const data = await response.json();
-    const rawAnalysis = data.choices?.[0]?.message?.content || '';
+    const rawAnalysis = reply.text;
     const processingTime = Date.now() - startTime;
 
     // Parse the JSON response
@@ -497,7 +486,7 @@ export async function analyzeRoofImage(
 
     return result;
   } catch (error: unknown) {
-    return failedAnalysisResult('Groq', model, Date.now() - startTime, getErrorMessage(error));
+    return failedAnalysisResult('Groq', model, Date.now() - startTime, error);
   }
 }
 
@@ -514,6 +503,11 @@ export async function analyzeRoofImageBase64(
   return analyzeRoofImage(dataUrl, apiKey, options);
 }
 
+/** The prompt the fallback providers (Gemini, Haiku) are given, which puts the system prompt and the extra instructions in one message. */
+function fallbackPrompt(inspectorPhotoNote?: string): string {
+  return `${buildSystemPrompt({})}\n\n${ADDITIONAL_VISION_INSTRUCTIONS}${buildPhotoNoteSuffix(inspectorPhotoNote)}`;
+}
+
 /**
  * Analyze roof image using Gemini Vision API as fallback
  * Uses Google's Gemini 2.0 Flash model for image analysis
@@ -521,71 +515,34 @@ export async function analyzeRoofImageBase64(
 export async function analyzeRoofImageWithGemini(
   imageUrl: string,
   geminiApiKey: string,
-  inspectorPhotoNote?: string
+  inspectorPhotoNote?: string,
+  run?: VisionRunOptions,
 ): Promise<RoofAnalysisResult> {
   const startTime = Date.now();
   const model = GEMINI_VISION_MODEL;
+  const call = seamFor('google', geminiApiKey, run);
 
   try {
-    // Convert image URL to base64
-    // Debug:('[gemini-vision] Converting image to base64 for Gemini...');
+    if (!call) throw new Error('no key');
     const base64ImageUrl = await imageUrlToBase64(imageUrl);
-
-    // Extract base64 data and mime type from data URL
-    const parsed = parseDataUrl(base64ImageUrl);
-    if (!parsed) {
-      throw new Error(INVALID_DATA_URL_ERR);
-    }
-    const { mimeType, data: base64Data } = parsed;
-
-    const systemPromptBase = buildSystemPrompt({});
-    const prompt = `${systemPromptBase}\n\n${ADDITIONAL_VISION_INSTRUCTIONS}${buildPhotoNoteSuffix(inspectorPhotoNote)}`;
-
-    // Google's REST endpoint, called with fetch: no extra package to bundle.
-    const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
-      {
-        method: 'POST',
-        headers: {
-          [GOOGLE_KEY_HEADER]: geminiApiKey,
-          'Content-Type': CONTENT_TYPE_JSON,
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              role: 'user',
-              parts: [{ text: prompt }, { inlineData: { data: base64Data, mimeType } }],
-            },
-          ],
-          generationConfig: { responseMimeType: CONTENT_TYPE_JSON },
-        }),
-      }
-    );
-    if (!geminiResponse.ok) {
-      const errorData = await geminiResponse.json().catch(() => ({}));
-      throw new Error(`Google API error: ${geminiResponse.status} - ${JSON.stringify(errorData)}`);
-    }
-    const geminiData = await geminiResponse.json();
-    const result = {
-      text: (geminiData?.candidates?.[0]?.content?.parts ?? [])
-        .map((part: { text?: string }) => part?.text ?? '')
-        .join(''),
-    };
-
-    const responseText = result.text || '';
+    const reply = await call({
+      role: 'visionFallback',
+      prompt: fallbackPrompt(inspectorPhotoNote),
+      image: splitInline(base64ImageUrl),
+      maxTokens: DEFAULT_MAX_TOKENS,
+      json: true,
+      timeoutMs: VISION_CALL_TIMEOUT_MS,
+      signal: run?.signal,
+    });
+    const responseText = reply.text || '';
     const processingTime = Date.now() - startTime;
 
-    // Debug:('[gemini-vision] Response received, processing time:', processingTime, 'ms');
-
-    // Parse the response
     const parsedResult = parseAnalysisResponse(responseText, model, processingTime);
     parsedResult.raw_analysis = responseText;
 
     return parsedResult;
   } catch (error: unknown) {
-    const message = getErrorMessage(error);
-    console.error(`[${VISION_PROVIDER_LABELS.google.toLowerCase()}-vision] Analysis failed:`, message);
-    return failedAnalysisResult(VISION_PROVIDER_LABELS.google, model, Date.now() - startTime, message);
+    return failedAnalysisResult(VISION_PROVIDER_LABELS.google, model, Date.now() - startTime, error);
   }
 }
 
@@ -596,59 +553,25 @@ export async function analyzeRoofImageWithGemini(
 export async function analyzeRoofImageWithHaiku(
   imageUrl: string,
   anthropicApiKey: string,
-  inspectorPhotoNote?: string
+  inspectorPhotoNote?: string,
+  run?: VisionRunOptions,
 ): Promise<RoofAnalysisResult> {
   const startTime = Date.now();
   const model = HAIKU_VISION_MODEL;
+  const call = seamFor('anthropic', anthropicApiKey, run);
 
   try {
-    // Convert image URL to base64
+    if (!call) throw new Error('no key');
     const base64ImageUrl = await imageUrlToBase64(imageUrl);
-
-    // Extract base64 data and mime type from data URL
-    const parsed = parseDataUrl(base64ImageUrl);
-    if (!parsed) {
-      throw new Error(INVALID_DATA_URL_ERR);
-    }
-    const { mimeType, data: base64Data } = parsed;
-
-    const systemPromptBase = buildSystemPrompt({});
-    const prompt = `${systemPromptBase}\n\n${ADDITIONAL_VISION_INSTRUCTIONS}${buildPhotoNoteSuffix(inspectorPhotoNote)}`;
-
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': anthropicApiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: 4096,
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'text', text: prompt },
-            {
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: mimeType,
-                data: base64Data,
-              },
-            },
-          ],
-        }],
-      }),
+    const reply = await call({
+      role: 'visionLastResort',
+      prompt: fallbackPrompt(inspectorPhotoNote),
+      image: splitInline(base64ImageUrl),
+      maxTokens: DEFAULT_MAX_TOKENS,
+      timeoutMs: VISION_CALL_TIMEOUT_MS,
+      signal: run?.signal,
     });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(`Anthropic API error: ${response.status} - ${JSON.stringify(errorData)}`);
-    }
-
-    const data = await response.json();
-    const responseText = data.content?.[0]?.text || '';
+    const responseText = reply.text || '';
     const processingTime = Date.now() - startTime;
 
     const parsedResult = parseAnalysisResponse(responseText, model, processingTime);
@@ -656,9 +579,7 @@ export async function analyzeRoofImageWithHaiku(
 
     return parsedResult;
   } catch (error: unknown) {
-    const message = getErrorMessage(error);
-    console.error(`[${VISION_PROVIDER_LABELS.anthropic.toLowerCase()}-vision] Analysis failed:`, message);
-    return failedAnalysisResult(VISION_PROVIDER_LABELS.anthropic, model, Date.now() - startTime, message);
+    return failedAnalysisResult(VISION_PROVIDER_LABELS.anthropic, model, Date.now() - startTime, error);
   }
 }
 
@@ -675,8 +596,17 @@ export async function analyzeRoofImageWithFallback(
   options: AnalysisOptions = {},
   anthropicApiKey?: string
 ): Promise<RoofAnalysisResult> {
+  // The photo is fetched once, however many providers look at it.
+  let inline: string;
+  try {
+    inline = await imageUrlToBase64(imageUrl);
+  } catch (error: unknown) {
+    return failedAnalysisResult('Groq', ROOF_REPORT_MODELS.visionAlternative.id, 0, error);
+  }
+  const run: VisionRunOptions = { call: options.call, signal: options.signal };
+
   // First try Groq Vision
-  const groqResult = await analyzeRoofImage(imageUrl, groqApiKey, options);
+  const groqResult = await analyzeRoofImage(inline, groqApiKey, options);
   // Post-parse hallucination + plausibility guard
   const { result: _sanitized, anomalies: _groqAnomalies } = sanitizeVisionResult(groqResult, options);
   if (_groqAnomalies.length > 0) {
@@ -690,12 +620,12 @@ export async function analyzeRoofImageWithFallback(
 
     if (geminiApiKey) {
       crossValidationPromises.push(
-        analyzeRoofImageWithGemini(imageUrl, geminiApiKey, options.inspectorPhotoNote).catch(() => null)
+        analyzeRoofImageWithGemini(inline, geminiApiKey, options.inspectorPhotoNote, run).catch(() => null)
       );
     }
     if (anthropicApiKey) {
       crossValidationPromises.push(
-        analyzeRoofImageWithHaiku(imageUrl, anthropicApiKey, options.inspectorPhotoNote).catch(() => null)
+        analyzeRoofImageWithHaiku(inline, anthropicApiKey, options.inspectorPhotoNote, run).catch(() => null)
       );
     }
 
@@ -740,7 +670,7 @@ export async function analyzeRoofImageWithFallback(
 
   // If Groq failed or found no damage, try Haiku first (faster, cheaper), then Gemini
   if (anthropicApiKey) {
-    const haikuResult = await analyzeRoofImageWithHaiku(imageUrl, anthropicApiKey, options.inspectorPhotoNote).catch(() => null);
+    const haikuResult = await analyzeRoofImageWithHaiku(inline, anthropicApiKey, options.inspectorPhotoNote, run).catch(() => null);
     if (haikuResult && haikuResult.success && haikuResult.damages_detected.length > 0) {
       haikuResult.model_used = `${groqResult.model_used} + ${haikuResult.model_used} (fallback)`;
       haikuResult.processing_time_ms = groqResult.processing_time_ms + haikuResult.processing_time_ms;
@@ -749,7 +679,7 @@ export async function analyzeRoofImageWithFallback(
   }
 
   if (geminiApiKey) {
-    const geminiResult = await analyzeRoofImageWithGemini(imageUrl, geminiApiKey, options.inspectorPhotoNote);
+    const geminiResult = await analyzeRoofImageWithGemini(inline, geminiApiKey, options.inspectorPhotoNote, run);
     if (geminiResult.damages_detected.length > 0) {
       geminiResult.model_used = `${groqResult.model_used} + ${geminiResult.model_used} (fallback)`;
       geminiResult.processing_time_ms = groqResult.processing_time_ms + geminiResult.processing_time_ms;
@@ -819,7 +749,8 @@ export async function reanalyzeWithHints(
   options?: AnalysisOptions
 ): Promise<RoofAnalysisResult> {
   const startTime = Date.now();
-  const model = options?.model || GROQ_VISION_MODELS.LLAMA4_MAVERICK;
+  const role = options?.model === undefined ? 'visionAlternative' : roleForModelId(options.model, GROQ_VISION_ROLES);
+  const model = role ? ROOF_REPORT_MODELS[role].id : ROOF_REPORT_MODELS.visionAlternative.id;
   const basePrompt = buildSystemPrompt(options || {});
 
   // Insert hint text before the response format section
@@ -834,43 +765,23 @@ Re-examine the image carefully for subtle impact marks, granule displacement, li
     ? `${promptParts[0]}${hintSection}\n\n## Response Format${promptParts[1]}`
     : `${basePrompt}\n${hintSection}`;
 
+  const call = seamFor('groq', groqApiKey, options);
   try {
+    if (!call || !role) throw new Error('not run');
     const base64ImageUrl = await imageUrlToBase64(imageUrl);
 
-    const fetchResponse = await fetch(GROQ_API_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `${BEARER_PREFIX}${groqApiKey}`,
-        'Content-Type': CONTENT_TYPE_JSON,
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: enhancedPrompt },
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: REANALYZE_USER_PROMPT,
-              },
-              { type: 'image_url', image_url: { url: base64ImageUrl } },
-            ],
-          },
-        ],
-        max_tokens: options?.max_tokens || DEFAULT_MAX_TOKENS,
-        temperature: options?.temperature || DEFAULT_VISION_TEMPERATURE,
-        response_format: JSON_OBJECT_RESPONSE_FORMAT,
-      }),
+    const reply = await call({
+      role,
+      system: enhancedPrompt,
+      prompt: REANALYZE_USER_PROMPT,
+      image: splitInline(base64ImageUrl),
+      maxTokens: options?.max_tokens || DEFAULT_MAX_TOKENS,
+      temperature: options?.temperature || DEFAULT_VISION_TEMPERATURE,
+      json: true,
+      timeoutMs: VISION_CALL_TIMEOUT_MS,
+      signal: options?.signal,
     });
-
-    if (!fetchResponse.ok) {
-      const errorData = await (fetchResponse as any).json().catch(() => ({}));
-      throw new Error(`Groq API error: ${fetchResponse.status} - ${JSON.stringify(errorData)}`);
-    }
-
-    const data = await (fetchResponse as any).json();
-    const rawAnalysis = data.choices?.[0]?.message?.content || '';
+    const rawAnalysis = reply.text;
     const processingTime = Date.now() - startTime;
 
     const result = parseAnalysisResponse(rawAnalysis, `${model} (re-analysis with hints)`, processingTime);
@@ -883,7 +794,7 @@ Re-examine the image carefully for subtle impact marks, granule displacement, li
 
     // Groq found nothing — try Gemini fallback if available
     if (geminiApiKey) {
-      const geminiResult = await analyzeRoofImageWithGemini(imageUrl, geminiApiKey);
+      const geminiResult = await analyzeRoofImageWithGemini(base64ImageUrl, geminiApiKey ?? '', undefined, { call: options?.call, signal: options?.signal });
       if (geminiResult.damages_detected.length > 0) {
         geminiResult.model_used = `${model} + ${geminiResult.model_used} (hint re-analysis fallback)`;
         geminiResult.processing_time_ms = (Date.now() - startTime);
@@ -893,22 +804,7 @@ Re-examine the image carefully for subtle impact marks, granule displacement, li
 
     return result;
   } catch (error: unknown) {
-    const processingTime = Date.now() - startTime;
-    return {
-      success: false,
-      image_quality: 'poor',
-      roof_material: null,
-      damages_detected: [],
-      overall_condition: 'poor',
-      overall_severity_score: 0,
-      insurance_claim_recommended: false,
-      summary: `Re-analysis with hints failed: ${(error as Error).message}`,
-      detailed_findings: '',
-      recommendations: ['Unable to re-analyze image. Please try again.'],
-      raw_analysis: (error as Error).message,
-      model_used: model,
-      processing_time_ms: processingTime,
-    };
+    return failedAnalysisResult('Groq', model, Date.now() - startTime, error);
   }
 }
 
@@ -923,23 +819,17 @@ export type PhotoCategory = 'roof_surface' | 'gutter' | 'flashing' | 'vent' | 'c
  */
 export async function classifyPhoto(
   imageUrl: string,
-  groqApiKey: string
+  groqApiKey: string,
+  run?: VisionRunOptions,
 ): Promise<{ category: PhotoCategory; confidence: number }> {
   try {
+    const call = seamFor('groq', groqApiKey, run);
+    if (!call) throw new Error('no key');
     const base64ImageUrl = await imageUrlToBase64(imageUrl);
 
-    const fetchResponse = await fetch(GROQ_API_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${groqApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: GROQ_VISION_MODELS.LLAMA4_SCOUT,
-        messages: [
-          {
-            role: 'system',
-            content: `Classify this roofing photo into exactly one category. Return JSON only.
+    const reply = await call({
+      role: 'vision',
+      system: `Classify this roofing photo into exactly one category. Return JSON only.
 
 Categories:
 - roof_surface: General view of shingles, tiles, or roofing material
@@ -953,28 +843,15 @@ Categories:
 - other: Does not fit any category above
 
 Return: { "category": "one_of_above", "confidence": 0-100 }`,
-          },
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: 'Classify this photo.' },
-              { type: 'image_url', image_url: { url: base64ImageUrl } },
-            ],
-          },
-        ],
-        max_tokens: 256,
-        temperature: 0.1,
-        response_format: { type: 'json_object' },
-      }),
+      prompt: 'Classify this photo.',
+      image: splitInline(base64ImageUrl),
+      maxTokens: 256,
+      temperature: 0.1,
+      json: true,
+      timeoutMs: VISION_CALL_TIMEOUT_MS,
+      signal: run?.signal,
     });
-
-    if (!fetchResponse.ok) {
-      return { category: 'other', confidence: 0 };
-    }
-
-    const data = await (fetchResponse as any).json();
-    const content = data.choices?.[0]?.message?.content || '{}';
-    const parsed = JSON.parse(content);
+    const parsed = JSON.parse(reply.text || '{}');
 
     const validCategories: PhotoCategory[] = [
       'roof_surface', 'gutter', 'flashing', 'vent', 'chimney',
@@ -1365,6 +1242,8 @@ export async function analyzeMultipleImages(
   const results: RoofAnalysisResult[] = [];
 
   for (let i = 0; i < imageUrls.length; i += MULTI_IMAGE_BATCH_SIZE) {
+    // After the request deadline no batch is begun; the photos done so far are returned.
+    if (options.signal?.aborted) break;
     const batch = imageUrls.slice(i, i + MULTI_IMAGE_BATCH_SIZE);
     const batchResults = await Promise.all(
       batch.map(url => analyzeRoofImage(url, apiKey, options))
@@ -1531,7 +1410,8 @@ export function combineAnalysisResults(results: RoofAnalysisResult[]): RoofAnaly
  */
 export async function correlateMultiImageFindings(
   results: RoofAnalysisResult[],
-  apiKey: string
+  apiKey: string,
+  run?: VisionRunOptions,
 ): Promise<{ correlations: string; crossPhotoPatterns: string[] }> {
   const successfulResults = results.filter(r => r.success && r.damages_detected.length > 0);
   if (successfulResults.length < CORRELATE_MIN_PHOTOS) {
@@ -1546,37 +1426,19 @@ export async function correlateMultiImageFindings(
   }).join(CORRELATE_BLOCK_SEPARATOR);
 
   try {
-    const response = await fetch(GROQ_API_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `${BEARER_PREFIX}${apiKey}`,
-        'Content-Type': CONTENT_TYPE_JSON,
-      },
-      body: JSON.stringify({
-        model: GROQ_VISION_MODELS.LLAMA4_SCOUT,
-        messages: [
-          {
-            role: 'system',
-            content: CORRELATE_SYSTEM_PROMPT,
-          },
-          {
-            role: 'user',
-            content: `${CORRELATE_USER_PROMPT_PREFIX}${successfulResults.length}${CORRELATE_USER_PROMPT_INFIX}${damageSummaries}`,
-          }
-        ],
-        max_tokens: QUICK_MAX_TOKENS,
-        temperature: CORRELATE_TEMPERATURE,
-        response_format: JSON_OBJECT_RESPONSE_FORMAT,
-      }),
+    const call = seamFor('groq', apiKey, run);
+    if (!call) throw new Error('no key');
+    const reply = await call({
+      role: 'vision',
+      system: CORRELATE_SYSTEM_PROMPT,
+      prompt: `${CORRELATE_USER_PROMPT_PREFIX}${successfulResults.length}${CORRELATE_USER_PROMPT_INFIX}${damageSummaries}`,
+      maxTokens: QUICK_MAX_TOKENS,
+      temperature: CORRELATE_TEMPERATURE,
+      json: true,
+      timeoutMs: VISION_CALL_TIMEOUT_MS,
+      signal: run?.signal,
     });
-
-    if (!response.ok) {
-      return { ...CORRELATE_EMPTY_RESULT };
-    }
-
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content || '';
-    const parsed = JSON.parse(content);
+    const parsed = JSON.parse(reply.text || '');
     return {
       correlations: parsed.correlations || '',
       crossPhotoPatterns: parsed.crossPhotoPatterns || parsed.cross_photo_patterns || [],
@@ -1591,7 +1453,8 @@ export async function correlateMultiImageFindings(
  */
 export async function quickDamageCheck(
   imageUrl: string,
-  apiKey: string
+  apiKey: string,
+  run?: VisionRunOptions,
 ): Promise<{
   has_damage: boolean;
   damage_count: number;
@@ -1601,6 +1464,8 @@ export async function quickDamageCheck(
   const result = await analyzeRoofImage(imageUrl, apiKey, {
     model: GROQ_VISION_MODELS.LLAMA4_SCOUT, // Fast model for quick check
     max_tokens: QUICK_MAX_TOKENS,
+    call: run?.call,
+    signal: run?.signal,
   });
 
   const damageCount = result.damages_detected.length;
@@ -1620,43 +1485,26 @@ export async function quickDamageCheck(
  */
 export async function analyzeAccessories(
   imageUrl: string,
-  apiKey: string
+  apiKey: string,
+  run?: VisionRunOptions,
 ): Promise<DamageDetection[]> {
   try {
+    const call = seamFor('groq', apiKey, run);
+    if (!call) throw new Error('no key');
     const base64ImageUrl = await imageUrlToBase64(imageUrl);
 
-    const response = await fetch(GROQ_API_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `${BEARER_PREFIX}${apiKey}`,
-        'Content-Type': CONTENT_TYPE_JSON,
-      },
-      body: JSON.stringify({
-        model: GROQ_VISION_MODELS.LLAMA4_SCOUT,
-        messages: [
-          {
-            role: 'system',
-            content: ACCESSORIES_SYSTEM_PROMPT,
-          },
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: ACCESSORIES_USER_PROMPT },
-              { type: 'image_url', image_url: { url: base64ImageUrl } },
-            ],
-          },
-        ],
-        max_tokens: ACCESSORIES_MAX_TOKENS,
-        temperature: ACCESSORIES_TEMPERATURE,
-        response_format: JSON_OBJECT_RESPONSE_FORMAT,
-      }),
+    const reply = await call({
+      role: 'vision',
+      system: ACCESSORIES_SYSTEM_PROMPT,
+      prompt: ACCESSORIES_USER_PROMPT,
+      image: splitInline(base64ImageUrl),
+      maxTokens: ACCESSORIES_MAX_TOKENS,
+      temperature: ACCESSORIES_TEMPERATURE,
+      json: true,
+      timeoutMs: VISION_CALL_TIMEOUT_MS,
+      signal: run?.signal,
     });
-
-    if (!response.ok) return [...ACCESSORIES_EMPTY_RESULT];
-
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content || '{}';
-    const parsed = JSON.parse(content);
+    const parsed = JSON.parse(reply.text || '{}');
     const accessories = parsed.accessories_found || [];
 
     return accessories.map((d: any) => ({

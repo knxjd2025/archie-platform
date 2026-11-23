@@ -27,6 +27,16 @@ export const ROOF_REPORT_MODELS = {
 export type ModelRole = keyof typeof ROOF_REPORT_MODELS;
 
 /**
+ * The role, among `roles`, whose model has exactly this id; null for anything
+ * else. A caller that lets a person or a stored option name a model must go
+ * through this, so only an id written above can ever be sent to a provider.
+ */
+export function roleForModelId(id: unknown, roles: readonly ModelRole[]): ModelRole | null {
+  if (typeof id !== 'string') return null;
+  return roles.find((role) => ROOF_REPORT_MODELS[role].id === id) ?? null;
+}
+
+/**
  * Cents per million tokens, input and output. The only prices in the folder.
  *
  * CONFIRMED (2026-11-24, against Anthropic's published model list as served by

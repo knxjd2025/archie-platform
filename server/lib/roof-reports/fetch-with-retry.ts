@@ -9,6 +9,8 @@ export interface RetryOptions {
   maxDelayMs: number;
   timeoutMs: number;
   retryOnStatus: number[];
+  /** The request-wide deadline. When it fires: no fetch starts, none is waited for, nothing is retried. */
+  signal?: AbortSignal;
   onRetry?: (attempt: number, error: Error, delayMs: number) => void;
 }
 
@@ -97,11 +99,18 @@ function formatRetryWarning(attempt: number, total: number, reason: string, dela
  * Run a single `fetch` with an `AbortController` timeout.
  * Always clears the timeout — even if `fetch` throws synchronously.
  */
-async function fetchWithAbort(url: string, fetchOptions: RequestInit | undefined, timeoutMs: number): Promise<Response> {
+async function fetchWithAbort(
+  url: string,
+  fetchOptions: RequestInit | undefined,
+  timeoutMs: number,
+  deadline?: AbortSignal,
+): Promise<Response> {
+  if (deadline?.aborted) throw abortError();
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch(url, { ...fetchOptions, signal: controller.signal });
+    const signal = deadline ? AbortSignal.any([controller.signal, deadline]) : controller.signal;
+    return await fetch(url, { ...fetchOptions, signal });
   } finally {
     clearTimeout(timeoutId);
   }
@@ -122,9 +131,25 @@ const RETRYABLE_ERROR_PATTERNS: readonly string[] = [
   'timeout',
 ];
 
-/** Sleep for a given number of milliseconds */
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+/** The error a deadline produces. It is never retried. */
+function abortError(): Error {
+  return Object.assign(new Error('The request ran out of time.'), { name: 'AbortError' });
+}
+
+/** Sleep for a given number of milliseconds, or less if the deadline fires (then it rejects). */
+function sleep(ms: number, deadline?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (deadline?.aborted) return reject(abortError());
+    const onAbort = (): void => {
+      clearTimeout(timer);
+      reject(abortError());
+    };
+    const timer = setTimeout(() => {
+      deadline?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    deadline?.addEventListener('abort', onAbort, { once: true });
+  });
 }
 
 /** Calculate delay with exponential backoff and jitter */
@@ -159,7 +184,7 @@ export async function fetchWithRetry(
 
   for (let attempt = 0; attempt <= opts.maxRetries; attempt++) {
     try {
-      const response = await fetchWithAbort(url, fetchOptions, opts.timeoutMs);
+      const response = await fetchWithAbort(url, fetchOptions, opts.timeoutMs, opts.signal);
 
       // Check if we should retry based on status code
       if (!response.ok && opts.retryOnStatus.includes(response.status) && attempt < opts.maxRetries) {
@@ -167,7 +192,7 @@ export async function fetchWithRetry(
         const retryError = new Error(`${MSG_HTTP_PREFIX}${response.status}${MSG_HTTP_FROM_INFIX}${url}`);
         opts.onRetry?.(attempt + 1, retryError, delay);
         console.warn(`${LOG_PREFIX_RETRY} ${formatRetryWarning(attempt + 1, totalAttempts, `${MSG_HTTP_PREFIX}${response.status}`, delay, url)}`);
-        await sleep(delay);
+        await sleep(delay, opts.signal);
         continue;
       }
 
@@ -179,11 +204,14 @@ export async function fetchWithRetry(
     } catch (error) {
       lastError = toError(error);
 
+      // The deadline is final: never retry past it.
+      if (opts.signal?.aborted) throw lastError;
+
       if (isRetryableNetworkError(error) && attempt < opts.maxRetries) {
         const delay = calculateDelay(attempt, opts.baseDelayMs, opts.maxDelayMs);
         opts.onRetry?.(attempt + 1, lastError, delay);
         console.warn(`${LOG_PREFIX_RETRY} ${formatRetryWarning(attempt + 1, totalAttempts, lastError.message, delay, url)}`);
-        await sleep(delay);
+        await sleep(delay, opts.signal);
         continue;
       }
 
@@ -213,6 +241,8 @@ export async function fetchWithDomainFallback(
       return { ...result, usedUrl: url };
     } catch (error) {
       lastError = toError(error);
+      // Past the deadline there is no next host to try.
+      if (retryOptions?.signal?.aborted) throw lastError;
       console.warn(`${LOG_PREFIX_FALLBACK} ${MSG_FALLBACK_FAILED_PREFIX}${url}${MSG_FALLBACK_TRYING_SUFFIX}`);
     }
   }

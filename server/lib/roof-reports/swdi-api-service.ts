@@ -25,6 +25,8 @@ export interface DataSourceDetail {
   status: 'success' | 'failed' | 'empty' | 'timeout';
   event_count: number;
   response_time_ms: number;
+  /** True when the request deadline ended this source before it finished: the events listed are what it had by then. */
+  partial?: boolean;
 }
 
 // NCEI (new) primary, NCDC (legacy) fallback
@@ -254,12 +256,13 @@ function parseHailMagnitude(mag: number): number {
  * Simple concurrency limiter to prevent overloading NOAA APIs during 10-year fetches.
  * Runs up to `limit` promises concurrently.
  */
-async function pLimitAll<T>(tasks: (() => Promise<T>)[], limit: number): Promise<PromiseSettledResult<T>[]> {
-  const results: PromiseSettledResult<T>[] = new Array(tasks.length);
+async function pLimitAll<T>(tasks: (() => Promise<T>)[], limit: number, signal?: AbortSignal): Promise<(PromiseSettledResult<T> | undefined)[]> {
+  const results: (PromiseSettledResult<T> | undefined)[] = new Array(tasks.length);
   let nextIndex = 0;
 
   async function runNext(): Promise<void> {
-    while (nextIndex < tasks.length) {
+    // After the deadline no task is started; a task never started has no result.
+    while (nextIndex < tasks.length && !signal?.aborted) {
       const index = nextIndex++;
       try {
         const value = await tasks[index]();
@@ -542,7 +545,8 @@ export async function fetchNX3HailEvents(
   lng: number,
   startDate: Date,
   endDate: Date,
-  radiusMiles: number
+  radiusMiles: number,
+  signal?: AbortSignal,
 ): Promise<StormEvent[]> {
   const start = formatSWDIDate(startDate);
   const end = formatSWDIDate(endDate);
@@ -553,7 +557,7 @@ export async function fetchNX3HailEvents(
     const { response } = await fetchWithDomainFallback(
       urls,
       { headers: FETCH_HEADERS },
-      RETRY_OPTIONS
+      { ...RETRY_OPTIONS, signal }
     );
 
     if (!response.ok) {
@@ -619,7 +623,8 @@ export async function fetchSWDIStormEvents(
   lng: number,
   startDate: Date,
   endDate: Date,
-  radiusMiles: number = 25
+  radiusMiles: number = 25,
+  signal?: AbortSignal,
 ): Promise<{ events: StormEvent[]; sourceDetail: DataSourceDetail }> {
   const overallStart = Date.now();
   const chunks = splitIntoChunks(startDate, endDate);
@@ -633,21 +638,27 @@ export async function fetchSWDIStormEvents(
   // Storm Reports (hail/wind/tornado) now come from the IEM source in
   // storm-history-service.ts, which is why IEM is the coordinated secondary.
   const tasks = chunks.map(chunk =>
-    () => fetchNX3HailEvents(lat, lng, chunk.start, chunk.end, radiusMiles),
+    () => fetchNX3HailEvents(lat, lng, chunk.start, chunk.end, radiusMiles, signal),
   );
 
-  const results = await pLimitAll(tasks, MAX_CONCURRENT_SWDI_REQUESTS);
+  const results = await pLimitAll(tasks, MAX_CONCURRENT_SWDI_REQUESTS, signal);
 
   const events: StormEvent[] = [];
   let successCount = 0;
   let failCount = 0;
 
+  // A chunk the deadline cut off answers with nothing (its fetch is aborted), which looks like an empty
+  // success, so a deadline anywhere makes the whole source partial and its quiet chunks unproven.
+  const partial = signal?.aborted === true;
+  let finished = 0;
   for (const result of results) {
+    if (!result) continue; // never started: the deadline came first
     if (result.status === PROMISE_STATUS_FULFILLED) {
       if (result.value.length > 0) {
         events.push(...result.value);
       }
       successCount++;
+      finished++;
     } else {
       failCount++;
     }
@@ -663,7 +674,9 @@ export async function fetchSWDIStormEvents(
 
   // Determine source status
   let status: DataSourceDetail['status'];
-  if (failCount === results.length) {
+  if (partial && sortedEvents.length === 0) {
+    status = 'timeout';
+  } else if (failCount === results.length) {
     status = STATUS_FAILED;
   } else if (sortedEvents.length === 0) {
     status = STATUS_EMPTY;
@@ -678,6 +691,7 @@ export async function fetchSWDIStormEvents(
       status,
       event_count: sortedEvents.length,
       response_time_ms: responseTimeMs,
+      ...(partial && { partial: true }),
     },
   };
 }

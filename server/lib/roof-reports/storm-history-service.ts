@@ -12,6 +12,7 @@
  */
 
 import { fetchSWDIStormEvents, deduplicateEvents, type DataSourceDetail } from './swdi-api-service.js';
+import { createDeadline } from './deadline.js';
 import { fetchIEMLSREvents } from './iem-api-service.js';
 import { sanitizeUrl } from './safe-url.js';
 
@@ -494,6 +495,8 @@ export interface StormReport {
   // Data quality indicator
   data_quality: 'verified' | 'no_data' | 'partial' | 'degraded';
   data_source_details: DataSourceDetail[];
+  /** True when the request deadline ended the fetch early: the events listed are what had arrived by then. */
+  partial?: boolean;
 
   // Metadata
   generated_at: string;
@@ -519,8 +522,11 @@ export async function geocodeAddress(
   city: string,
   state: string,
   zip?: string,
-  googleApiKey?: string
+  googleApiKey?: string,
+  signal?: AbortSignal,
 ): Promise<GeocodingResult | null> {
+  // Each lookup has its own limit, and also stops at the request-wide deadline.
+  const limit = (): AbortSignal => (signal ? AbortSignal.any([AbortSignal.timeout(GEOCODE_FETCH_TIMEOUT_MS), signal]) : AbortSignal.timeout(GEOCODE_FETCH_TIMEOUT_MS));
   const fullAddress = `${address}, ${city}, ${state} ${zip || ''}`.trim();
 
   // Try Google Geocoding if API key provided
@@ -528,7 +534,7 @@ export async function geocodeAddress(
     try {
       const response = await fetch(
         `${GOOGLE_GEOCODE_BASE_URL}?address=${encodeURIComponent(fullAddress)}&key=${googleApiKey}`,
-        { signal: AbortSignal.timeout(GEOCODE_FETCH_TIMEOUT_MS) }
+        { signal: limit() }
       );
 
       if (response.ok) {
@@ -568,7 +574,7 @@ export async function geocodeAddress(
         headers: {
           'User-Agent': NOMINATIM_USER_AGENT,
         },
-        signal: AbortSignal.timeout(GEOCODE_FETCH_TIMEOUT_MS),
+        signal: limit(),
       }
     );
 
@@ -603,12 +609,13 @@ async function fetchStormEventsMultiSource(
   longitude: number,
   startDate: Date,
   endDate: Date,
-  radiusMiles: number
-): Promise<{ events: StormEvent[]; sourceDetails: DataSourceDetail[]; dataQuality: StormReport['data_quality'] }> {
+  radiusMiles: number,
+  signal?: AbortSignal,
+): Promise<{ events: StormEvent[]; sourceDetails: DataSourceDetail[]; dataQuality: StormReport['data_quality']; partial: boolean }> {
   // Fetch from SWDI and IEM in parallel
   const [swdiResult, iemResult] = await Promise.allSettled([
-    fetchSWDIStormEvents(latitude, longitude, startDate, endDate, radiusMiles),
-    fetchIEMLSREvents(latitude, longitude, startDate, endDate, radiusMiles),
+    fetchSWDIStormEvents(latitude, longitude, startDate, endDate, radiusMiles, signal),
+    fetchIEMLSREvents(latitude, longitude, startDate, endDate, radiusMiles, signal),
   ]);
 
   const allEvents: StormEvent[] = [];
@@ -653,7 +660,12 @@ async function fetchStormEventsMultiSource(
   // Determine data quality
   let dataQuality: StormReport['data_quality'];
 
-  if (failedSources === TOTAL_SOURCES) {
+  // The deadline may have cut a source off, or both. What arrived is kept and flagged.
+  const partial = signal?.aborted === true || sourceDetails.some((d) => d.partial === true);
+
+  if (partial) {
+    dataQuality = dedupedEvents.length > 0 ? DATA_QUALITY_PARTIAL : DATA_QUALITY_DEGRADED;
+  } else if (failedSources === TOTAL_SOURCES) {
     dataQuality = DATA_QUALITY_DEGRADED;
   } else if (dedupedEvents.length === 0) {
     dataQuality = DATA_QUALITY_NO_DATA;
@@ -665,7 +677,7 @@ async function fetchStormEventsMultiSource(
 
   console.log(`${MULTI_SOURCE_LOG_PREFIX} ${dedupedEvents.length} events after dedup (${allEvents.length} raw), quality=${dataQuality}, ${successSources}/${TOTAL_SOURCES} sources OK`);
 
-  return { events: dedupedEvents, sourceDetails, dataQuality };
+  return { events: dedupedEvents, sourceDetails, dataQuality, partial };
 }
 
 /**
@@ -1011,6 +1023,50 @@ function computeHailSizeDistribution(events: StormEvent[]): Record<number, numbe
  * Generate a comprehensive storm report for a property.
  * Uses real NOAA data from multiple sources. No synthetic/estimated data.
  */
+/** The report returned when the deadline passed before the address could even be placed. */
+function emptyPartialReport(
+  address: string,
+  city: string,
+  state: string,
+  zip: string | undefined,
+  yearsBack: number,
+  searchRadius: number,
+): StormReport {
+  const end = new Date();
+  const start = new Date();
+  start.setFullYear(start.getFullYear() - yearsBack);
+  return {
+    property_address: address,
+    city,
+    state,
+    zip,
+    latitude: 0,
+    longitude: 0,
+    start_date: start.toISOString().split('T')[0],
+    end_date: end.toISOString().split('T')[0],
+    years_covered: yearsBack,
+    summary: {
+      total_events: 0,
+      hail_events: 0,
+      wind_events: 0,
+      tornado_events: 0,
+      insurance_claim_potential: 'none',
+      hail_size_distribution: computeHailSizeDistribution([]),
+    },
+    events_by_year: {},
+    events: [],
+    significant_events: [],
+    risk_assessment: assessRisk([]),
+    risk_score: computeRiskScores([], yearsBack),
+    data_quality: DATA_QUALITY_DEGRADED,
+    data_source_details: [],
+    partial: true,
+    generated_at: new Date().toISOString(),
+    data_sources: [MSG_NO_DATA_SOURCES],
+    search_radius_miles: searchRadius,
+  };
+}
+
 export async function generateStormReport(
   address: string,
   city: string,
@@ -1020,15 +1076,20 @@ export async function generateStormReport(
     yearsBack?: number;
     searchRadiusMiles?: number;
     googleApiKey?: string;
+    /** The request-wide deadline. Without one, a 240 second budget applies. When it fires the report is returned with what had arrived, flagged `partial`. */
+    signal?: AbortSignal;
   } = {}
 ): Promise<StormReport> {
   const yearsBack = options.yearsBack || DEFAULT_GENERATE_YEARS_BACK;
   const searchRadius = options.searchRadiusMiles || DEFAULT_GENERATE_SEARCH_RADIUS;
+  const signal = options.signal ?? createDeadline();
 
   // Geocode the address
-  const geoResult = await geocodeAddress(address, city, state, zip, options.googleApiKey);
+  const geoResult = await geocodeAddress(address, city, state, zip, options.googleApiKey, signal);
 
   if (!geoResult) {
+    // Out of time before the address could be placed: nothing can be searched, and that is not an error.
+    if (signal.aborted) return emptyPartialReport(address, city, state, zip, yearsBack, searchRadius);
     throw new Error('Unable to geocode address');
   }
 
@@ -1040,8 +1101,8 @@ export async function generateStormReport(
   startDate.setFullYear(startDate.getFullYear() - yearsBack);
 
   // Fetch storm events from multiple real NOAA sources
-  const { events, sourceDetails, dataQuality } = await fetchStormEventsMultiSource(
-    latitude, longitude, startDate, endDate, searchRadius
+  const { events, sourceDetails, dataQuality, partial } = await fetchStormEventsMultiSource(
+    latitude, longitude, startDate, endDate, searchRadius, signal
   );
 
   // Build data sources list for display
@@ -1146,6 +1207,7 @@ export async function generateStormReport(
 
     data_quality: dataQuality,
     data_source_details: sourceDetails,
+    ...(partial && { partial: true }),
 
     generated_at: new Date().toISOString(),
     data_sources: dataSources,

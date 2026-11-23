@@ -374,7 +374,8 @@ export async function fetchIEMLSREvents(
   lng: number,
   startDate: Date,
   endDate: Date,
-  radiusMiles: number
+  radiusMiles: number,
+  signal?: AbortSignal,
 ): Promise<{ events: StormEvent[]; sourceDetail: DataSourceDetail }> {
   const overallStart = Date.now();
   const bbox = toBoundingBox(lat, lng, radiusMiles);
@@ -401,7 +402,7 @@ export async function fetchIEMLSREvents(
     const { response } = await fetchWithRetry(
       url,
       { headers: { 'User-Agent': IEM_USER_AGENT } },
-      RETRY_OPTIONS
+      { ...RETRY_OPTIONS, signal }
     );
 
     const responseTimeMs = Date.now() - overallStart;
@@ -447,9 +448,10 @@ export async function fetchIEMLSREvents(
       events: [],
       sourceDetail: {
         name: SOURCE_NAME,
-        status: message.includes(TIMEOUT_ERROR_MARKER) ? STATUS_TIMEOUT : STATUS_FAILED,
+        status: signal?.aborted || message.includes(TIMEOUT_ERROR_MARKER) ? STATUS_TIMEOUT : STATUS_FAILED,
         event_count: 0,
         response_time_ms: responseTimeMs,
+        ...(signal?.aborted && { partial: true }),
       },
     };
   }

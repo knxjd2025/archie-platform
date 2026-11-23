@@ -384,6 +384,11 @@ export async function labelPhotosWithClaude(
   try {
     let modelLabelled = 0;
     for (let i = 0; i < inputs.length; i += batchSize) {
+      // After the request deadline no photo is sent: the rest keep labels built from their existing detections.
+      if (opts.signal?.aborted) {
+        for (const input of inputs.slice(i)) results[input.photoId] = generateFallbackLabels(input.existingDamages);
+        break;
+      }
       const batch = inputs.slice(i, i + batchSize);
       const batchResults = await Promise.all(batch.map((input) => labelOne(input, call, opts)));
       for (const r of batchResults) {

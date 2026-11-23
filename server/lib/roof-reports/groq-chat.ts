@@ -1,12 +1,16 @@
 /**
  * Groq chat call used by the enhanced photo analysis. Copied from the old
  * program's assistant helper: only `groqChat` and its two shapes, nothing
- * else from that file. Model ids come from models.ts.
+ * else from that file. The call itself goes through the ModelCaller seam
+ * (model-call.ts), and the model id comes from models.ts.
  */
 import { ROOF_REPORT_MODELS } from './models.js';
+import { providerCaller, type ModelCaller } from './model-call.js';
 
-const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const GROQ_REQUEST_TIMEOUT_MS = 30_000;
+
+/** What a failed chat says. The provider's own words are never kept. */
+const CHAT_FAILED_MESSAGE = 'The model could not be reached.';
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -32,59 +36,51 @@ export async function groqChat(
   messages: ChatMessage[],
   apiKey: string,
   options: {
+    /** Only the id written in models.ts for this job. Any other value is refused. */
     model?: string;
     temperature?: number;
     max_tokens?: number;
     json_mode?: boolean;
+    /** The seam. Archie passes one that also records the call's cost. */
+    call?: ModelCaller;
+    /** The request-wide deadline. */
+    signal?: AbortSignal;
   } = {}
 ): Promise<AIResponse> {
-  const model = options.model || ROOF_REPORT_MODELS.enhancement.id;
+  const model = ROOF_REPORT_MODELS.enhancement.id;
+  const failed = (): AIResponse => ({ success: false, content: '', model, error: CHAT_FAILED_MESSAGE });
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), GROQ_REQUEST_TIMEOUT_MS);
+  if (options.model !== undefined && options.model !== model) return failed();
+  const call = options.call ?? (apiKey ? providerCaller({ groq: apiKey }) : null);
+  if (!call) return failed();
+
+  const system = messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n\n');
+  const prompt = messages.filter((m) => m.role !== 'system').map((m) => m.content).join('\n\n');
 
   try {
-    const fetchResponse = await fetch(GROQ_API_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        temperature: options.temperature ?? 0.7,
-        max_tokens: options.max_tokens ?? 4096,
-        ...(options.json_mode && { response_format: { type: 'json_object' } }),
-      }),
-      signal: controller.signal,
+    const reply = await call({
+      role: 'enhancement',
+      ...(system && { system }),
+      prompt,
+      maxTokens: options.max_tokens ?? 4096,
+      temperature: options.temperature ?? 0.7,
+      json: options.json_mode === true,
+      timeoutMs: GROQ_REQUEST_TIMEOUT_MS,
+      signal: options.signal,
     });
-    const response = fetchResponse as any;
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(`Groq API error: ${response.status} - ${JSON.stringify(errorData)}`);
-    }
-
-    const data = await response.json();
     return {
       success: true,
-      content: data.choices?.[0]?.message?.content || '',
+      content: reply.text,
       model,
-      usage: data.usage,
+      usage: reply.usage
+        ? {
+            prompt_tokens: reply.usage.inputTokens,
+            completion_tokens: reply.usage.outputTokens,
+            total_tokens: reply.usage.inputTokens + reply.usage.outputTokens,
+          }
+        : undefined,
     };
-  } catch (error: unknown) {
-    const err = error as Error;
-    const isAbort = err?.name === 'AbortError';
-    return {
-      success: false,
-      content: '',
-      model,
-      error: isAbort
-        ? `Groq request timed out after ${GROQ_REQUEST_TIMEOUT_MS}ms`
-        : err.message,
-    };
-  } finally {
-    clearTimeout(timeoutId);
+  } catch {
+    return failed();
   }
 }
