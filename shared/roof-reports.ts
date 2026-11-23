@@ -39,6 +39,36 @@ export const NEEDS_ADDRESS = 'Please enter the street address.';
 export const PICK_A_KIND = 'Pick at least one: inspection, measurements or storm history.';
 export const TOO_MANY_PHOTOS = 'Please pick 40 photos or fewer.';
 export const GENERATE_FAILED = 'The report could not be finished. Please try again.';
+export const GEOCODE_FAILED = 'We couldn\'t find that address on the map. Check the street, city and ZIP.';
+export const NEEDS_CITY_STATE = 'Please enter the city and state as well.';
+export const STILL_BEING_MADE = 'This report is still being made. Archive it once it finishes.';
+export const ONLY_FAILED_RETRY = 'Only a report that could not be finished can be tried again.';
+export const TOO_MANY_TODAY = 'Your company has made a lot of reports today. Please try again tomorrow.';
+export const TOO_MANY_WAITING = 'You have a lot of photos waiting. Please put them in a report first.';
+export const NOT_A_KIND = 'Pick from inspection, measurements or storm history.';
+export const NOT_A_TEMPLATE = 'Pick one of the report styles from the list.';
+export const NOT_A_STYLE = 'Pick one of the looks from the list.';
+export const BAD_EMAIL = 'That email address doesn\'t look right.';
+export const BAD_DATE = 'That date doesn\'t look right.';
+export const TEXT_TOO_LONG = 'That is too long. Please shorten it.';
+export const NOT_TEXT = 'That needs to be text.';
+export const NOTHING_TO_CHANGE = 'There was nothing to change.';
+export const CANT_CHANGE = 'That part of a report can\'t be changed here.';
+export const REPORT_DATA_BAD = 'The report\'s contents couldn\'t be saved. Please reload it and try again.';
+export const PAGE_NOT_SAFE = 'That page contains something that can\'t be saved.';
+export const PAGE_NOT_READY = 'This report isn\'t ready to show yet.';
+export const PICK_PHOTO_KIND = 'Pick what the photo shows from the list.';
+
+/** The most photos one report may hold. The same cap as Archie's own documents. */
+export const MAX_REPORT_PHOTOS = 40;
+/** The most uploaded photos one person may leave waiting, unused, in a day. */
+export const MAX_WAITING_PHOTOS = 100;
+/** The most reports one company may start in a day. */
+export const MAX_REPORTS_PER_DAY = 200;
+/** What a photo may be said to show. They sit in a report in this order, the way a roof is walked. */
+export const REPORT_PHOTO_CATEGORIES = ['overview', 'roof_surface', 'flashing', 'vent', 'chimney', 'gutter', 'interior', 'closeup', 'other'] as const;
+export type ReportPhotoCategory = (typeof REPORT_PHOTO_CATEGORIES)[number];
+
 /** Never shown: while the feature is off every route answers a bare 404. */
 export const SWITCHED_OFF = 'Roof reports are not switched on.';
 

@@ -1,6 +1,6 @@
 import { afterEach, describe, it, expect } from 'vitest';
 import { Readable } from 'node:stream';
-import { isPhotoObjectKey, photoObjectKey, photoStore, photoStoreConfigured, setPhotoStoreForTests, describeStoreError, type PhotoStore } from '../store';
+import { isPhotoObjectKey, photoObjectKey, roofReportPhotoKey, photoStore, photoStoreConfigured, setPhotoStoreForTests, describeStoreError, type PhotoStore } from '../store';
 
 const all = {
   ARCHIE_PHOTOS_ACCOUNT_ID: 'acct',
@@ -59,5 +59,31 @@ describe('where a photo is kept', () => {
     const e = Object.assign(new Error('signature for secret xyz at https://acct.r2.cloudflarestorage.com/bucket/c/...'), { name: 'AccessDenied', $metadata: { httpStatusCode: 403 } });
     expect(describeStoreError(e)).toBe('AccessDenied 403');
     expect(describeStoreError(null)).toBe('Error');
+  });
+});
+
+describe('where a roof report photo is kept', () => {
+  const scope = 'a1b2c3d4-0000-4000-8000-000000000001';
+
+  it('is under its company\'s own rr/ prefix, in a scope, named by the photo', () => {
+    expect(roofReportPhotoKey(company, 'pending', photo, 'working')).toBe(`c/${company}/rr/pending/${photo}/working.jpg`);
+    expect(roofReportPhotoKey(company, scope, photo, 'thumb')).toBe(`c/${company}/rr/${scope}/${photo}/thumb.jpg`);
+  });
+
+  it('refuses anything that is not a company id, a scope and a photo id', () => {
+    expect(() => roofReportPhotoKey('../other', 'pending', photo, 'working')).toThrow();
+    expect(() => roofReportPhotoKey(company, '../x', photo, 'working')).toThrow();
+    expect(() => roofReportPhotoKey(company, 'pending', '../../x', 'thumb')).toThrow();
+    expect(() => roofReportPhotoKey(company, 'pending', photo, 'original' as any)).toThrow();
+  });
+
+  it('is a key the store accepts, and ordinary job photo keys still are too', () => {
+    expect(isPhotoObjectKey(`c/${company}/rr/pending/${photo}/working.jpg`)).toBe(true);
+    expect(isPhotoObjectKey(`c/${company}/rr/${scope}/${photo}/thumb.jpg`)).toBe(true);
+    expect(isPhotoObjectKey(`c/${company}/p/${photo}/working.jpg`)).toBe(true);
+    expect(isPhotoObjectKey(`c/${company}/rr/${scope}/${photo}/../working.jpg`)).toBe(false);
+    expect(isPhotoObjectKey(`c/${company}/rr/other-word/${photo}/working.jpg`)).toBe(false);
+    expect(isPhotoObjectKey(`c/${company}/rr/${photo}/working.jpg`)).toBe(false);
+    expect(isPhotoObjectKey(`c/${company}/rr/pending/${photo}/original.jpg`)).toBe(false);
   });
 });

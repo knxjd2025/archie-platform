@@ -43,6 +43,22 @@ export type PhotoVariant = 'working' | 'thumb';
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const KEY_RE = new RegExp(`^c/${UUID}/p/${UUID}/(working|thumb)\\.jpg$`);
+/** A roof report photo: under the company's own rr/ prefix, in the word `pending` (uploaded, not yet in a report) or a report id. */
+const REPORT_KEY_RE = new RegExp(`^c/${UUID}/rr/(pending|${UUID})/${UUID}/(working|thumb)\\.jpg$`);
+
+/**
+ * Where a roof report photo's copy is kept: 'c/<company id>/rr/<scope>/<photo
+ * id>/<variant>.jpg'. The scope is `pending` for a photo uploaded before its
+ * report exists. Which report a photo belongs to is the database row's, never
+ * its key. Built only here, from the database row, never from anything a
+ * request sent. The database holds the same prefix rule
+ * (roof_report_photos_keys_in_company).
+ */
+export function roofReportPhotoKey(companyId: string, scope: string, photoId: string, variant: PhotoVariant): string {
+  const key = `c/${companyId}/rr/${scope}/${photoId}/${variant}.jpg`;
+  if (!REPORT_KEY_RE.test(key)) throw new Error('photo key refused');
+  return key;
+}
 
 /**
  * Where a photo's copy is kept: always under its company's own prefix
@@ -57,7 +73,7 @@ export function photoObjectKey(companyId: string, photoId: string, variant: Phot
 }
 
 /** True for a key photoObjectKey could have built. The store refuses any other. */
-export const isPhotoObjectKey = (key: string): boolean => KEY_RE.test(key);
+export const isPhotoObjectKey = (key: string): boolean => KEY_RE.test(key) || REPORT_KEY_RE.test(key);
 
 let forTests: PhotoStore | null = null;
 let real: { signature: string; store: PhotoStore } | null = null;
