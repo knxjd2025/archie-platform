@@ -9,6 +9,9 @@ import path from 'node:path';
 import { generateComprehensiveReportHTML } from '../roof-analysis-report-html';
 import { generateReportHtml, type ReportData } from '../measurement-report-html';
 import type { ReportTemplate } from '../comprehensive-roof-report';
+import { generateScrollPresentationHTML } from '../scroll-presentation-report';
+import { generateScrollFlightReportHTML } from '../scroll-flight-report';
+import type { AnalyzedPhoto } from '../comprehensive-roof-report';
 import { makeReport } from './fixtures/report';
 
 const EM = '—';
@@ -51,6 +54,10 @@ const SCREEN_FILES = [
   'company-header-html.ts',
   'roof-analysis-report-html.ts',
   'measurement-report-html.ts',
+  'scroll-presentation-report.ts',
+  'scroll-flight-report.ts',
+  'render-report-html.ts',
+  'presentation-chapters.ts',
 ];
 
 describe('no em dashes in what a person reads', () => {
@@ -78,6 +85,32 @@ describe('no em dashes in what a person reads', () => {
     const html = generateReportHtml(data);
     expect(html.length).toBeGreaterThan(500);
     expect(html.includes(EM)).toBe(false);
+  });
+
+  it('rendered presentation and flight: none', () => {
+    const photos = Array.from({ length: 6 }, (_, i) => ({
+      id: `p${i}`,
+      url: `https://cdn.example.com/roof-${i}.jpg`,
+      damages: [],
+      overallSeverity: 'none',
+      aiSummary: 'Looks sound.',
+      analyzedAt: '2026-09-05T00:00:00.000Z',
+    })) as unknown as AnalyzedPhoto[];
+    const report = makeReport();
+    const rich = { ...report, damageAnalysis: { ...report.damageAnalysis, photos } };
+    const brand = { companyName: 'Summit Ridge Roofing', companyPhone: '(319) 555-0142' };
+    const presentation = generateScrollPresentationHTML(rich, brand, null);
+    const flight = generateScrollFlightReportHTML(rich, brand);
+    for (const [name, html] of [['presentation', presentation], ['flight', flight]]) {
+      expect(html.length, name).toBeGreaterThan(500);
+      // The vendored engine is not ours to edit; check the page we author around it.
+      // Comments inside the page's stylesheet are not read by anyone.
+      const authored = (html.slice(0, html.indexOf('<script>')) + html.slice(html.lastIndexOf('</script>')))
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/<!--[\s\S]*?-->/g, '');
+      expect(authored.includes(EM), name).toBe(false);
+      expect(/&mdash;/i.test(authored), name).toBe(false);
+    }
   });
 
   it('source: no em dash in any string of the files that put words on a screen', () => {
