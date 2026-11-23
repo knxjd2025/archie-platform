@@ -4,8 +4,6 @@
  * code path. Pulls storm history, runs photo damage analysis, builds the
  * estimate, assembles the comprehensive report, persists it, and renders HTML.
  */
-import { sql } from 'drizzle-orm';
-import { db } from '../../db';
 import { generateStormReport } from './storm-history-service.js';
 import {
   analyzeRoofImageWithFallback,
@@ -229,52 +227,11 @@ export async function generateInspectionReport(params: GenerateInspectionParams)
     Object.assign(report.damageAnalysis as any, { analysisSkipped: true, aiSummary: '', totalPhotosAnalyzed: 0, photosWithDamage: 0, overallSeverity: 'none', damageTypes: [] });
   }
 
-  await persistReport(report, params, stormReport);
-
   return {
     report,
     html: renderInspectionHtml(report, { jobType: params.jobType }),
     processingTimeMs: Date.now() - startedAt,
   };
-}
-
-async function persistReport(report: ComprehensiveRoofReport, params: GenerateInspectionParams, stormReport: any): Promise<void> {
-  try {
-    await db.execute(sql`
-      INSERT INTO roof_reports (
-        id, lead_id, job_id, project_id,
-        address, city, state, zip, latitude, longitude,
-        storm_data, damage_data, estimate_data,
-        total_estimate, data_quality,
-        roof_details, damage_counts, replacement_data,
-        inspector_notes, measurements, report_version
-      ) VALUES (
-        ${report.id},
-        ${params.leadId || null},
-        ${params.jobId || null},
-        ${params.projectId || null},
-        ${params.address},
-        ${params.city},
-        ${params.state},
-        ${params.zip || null},
-        ${stormReport.latitude},
-        ${stormReport.longitude},
-        ${JSON.stringify(report.stormHistory)}::jsonb,
-        ${JSON.stringify(report.damageAnalysis)}::jsonb,
-        ${JSON.stringify(report.repairEstimate)}::jsonb,
-        ${(report.repairEstimate as any).total || 0},
-        ${report.dataQuality},
-        ${JSON.stringify(report.roofDetails || {})}::jsonb,
-        ${JSON.stringify(report.damageCounts || {})}::jsonb,
-        ${JSON.stringify(report.replacementOptions || [])}::jsonb,
-        ${report.inspectorNotes || ''},
-        ${JSON.stringify(report.measurements || {})}::jsonb,
-        ${'2.0'}
-      )
-    `);
-  } catch (dbErr: any) {
-    console.error('[generate-inspection] DB save error:', dbErr.message);
-  }
 }
 
 // ── severity / roof-age helpers (shared with the route) ──
