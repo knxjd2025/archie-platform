@@ -80,6 +80,10 @@ describe.skipIf(!isLocal(url) || !isLocal(ownerUrl))('system role and company is
           if (col.fk?.table === 'companies') exprs.push('$1::uuid');
           else if (col.fk) exprs.push(`(select "${col.fk.col}" from ${col.fk.table} where company_id = $1::uuid limit 1)`);
           else if (col.enum) exprs.push(`(enum_range(null::${col.udt}))[1]`);
+          // A key the table holds under the company's own storage prefix (0020's report photos).
+          else if (col.check?.includes('/rr/')) exprs.push(`'c/' || $1::text || '/rr/' || replace(gen_random_uuid()::text, '-', '')`);
+          // A list whose entries the table limits to a few words (0020's report kinds).
+          else if (literal && /\[\]$/.test(col.type)) exprs.push(`ARRAY['${literal}']::${col.type}`);
           else if (literal) exprs.push(`'${literal}'`);
           // Kept under 60 characters, so a capped name (0019's crews) still fits.
           else if (/^(text|character varying)/.test(col.type)) exprs.push(`left('${tag}-' || replace(gen_random_uuid()::text, '-', ''), 56)`);

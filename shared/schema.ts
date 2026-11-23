@@ -2257,3 +2257,89 @@ export const jobtreadArchiveSteps = pgTable('jobtread_archive_steps', {
 }));
 
 export type JobtreadArchiveStepRow = typeof jobtreadArchiveSteps.$inferSelect;
+
+// ============================================================
+// Roof reports, merged from the roof reports program (migration 0020,
+// server/roof-reports/, docs/superpowers/plans/2026-11-24-roof-reports-into-archie.md).
+// Off until ARCHIE_ROOF_REPORTS=on.
+// ============================================================
+
+/**
+ * A roof report: an inspection, a measurement or a storm history, alone or
+ * together, for a job or for an address with no job. The whole report is kept
+ * in report_json. Archived, never deleted. The share token is unique across
+ * every company so a link names one report.
+ */
+export const roofReports = pgTable('roof_reports', {
+  companyId: companyId(),
+  id: uuid('id').primaryKey().defaultRandom(),
+  jobExternalId: text('job_external_id'),            // null for an address-first report
+  createdByMemberId: integer('created_by_member_id'), // team_members.id of the maker
+  status: text('status').notNull().default('generating'), // generating | ready | failed | archived
+  reportTypes: text('report_types').array().notNull(),    // inspection | measurement | storm
+  template: text('template').notNull().default('full'),   // insurance | homeowner | full | quick
+  visualStyle: text('visual_style'),                      // formal | presentation | flight
+  title: text('title'),
+  address: text('address').notNull(),
+  city: text('city'),
+  state: text('state'),
+  zip: text('zip'),
+  latitude: decimal('latitude', { precision: 10, scale: 7 }),
+  longitude: decimal('longitude', { precision: 10, scale: 7 }),
+  customerName: text('customer_name'),
+  customerEmail: text('customer_email'),
+  customerPhone: text('customer_phone'),
+  inspectionDate: timestamp('inspection_date', { withTimezone: true }),
+  inspectorNotes: text('inspector_notes'),
+  reportJson: jsonb('report_json'),
+  editedHtml: text('edited_html'),
+  totalEstimate: decimal('total_estimate', { precision: 12, scale: 2 }),
+  damageSeverity: text('damage_severity'),
+  stormEventsCount: integer('storm_events_count'),
+  dataQuality: text('data_quality'),
+  shareToken: text('share_token'),
+  emailSentAt: timestamp('email_sent_at', { withTimezone: true }),
+  emailSentCount: integer('email_sent_count').notNull().default(0),
+  /** A plain sentence for the person, never a provider's error. */
+  problem: text('problem'),
+  legacyId: text('legacy_id'),
+  legacyExtra: jsonb('legacy_extra'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  shareTokenUq: uniqueIndex('roof_reports_share_token_uq').on(t.shareToken),
+  legacyUq: uniqueIndex('roof_reports_legacy_uq').on(t.companyId, t.legacyId),
+  createdIdx: index('roof_reports_company_created').on(t.companyId, t.createdAt),
+  jobIdx: index('roof_reports_company_job').on(t.companyId, t.jobExternalId),
+  statusCheck: check('roof_reports_status_check', sql`${t.status} IN ('generating','ready','failed','archived')`),
+  kindsCheck: check('roof_reports_kinds_check', sql`${t.reportTypes} <@ ARRAY['inspection','measurement','storm']::text[] AND cardinality(${t.reportTypes}) > 0`),
+  templateCheck: check('roof_reports_template_check', sql`${t.template} IN ('insurance','homeowner','full','quick')`),
+  visualStyleCheck: check('roof_reports_visual_style_check', sql`${t.visualStyle} IN ('formal','presentation','flight')`),
+}));
+
+export type RoofReport = typeof roofReports.$inferSelect;
+
+/**
+ * A photo of a roof report, kept in the private photo store under the
+ * company's own prefix `c/<company_id>/rr/`, which the database checks. No
+ * foreign key to roof_reports (it would skip row level security): the code
+ * looks the report up as the company first.
+ */
+export const roofReportPhotos = pgTable('roof_report_photos', {
+  companyId: companyId(),
+  id: uuid('id').primaryKey().defaultRandom(),
+  reportId: uuid('report_id'),                       // null while uploaded but not yet used
+  uploadedByMemberId: integer('uploaded_by_member_id'),
+  position: integer('position').notNull().default(0),
+  category: text('category'),
+  workingKey: text('working_key').notNull(),
+  thumbKey: text('thumb_key').notNull(),
+  analysis: jsonb('analysis'),
+  labels: jsonb('labels'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  reportIdx: index('roof_report_photos_company_report').on(t.companyId, t.reportId, t.position),
+  keysInCompany: check('roof_report_photos_keys_in_company', sql`${t.workingKey} LIKE 'c/' || ${t.companyId}::text || '/rr/%' AND ${t.thumbKey} LIKE 'c/' || ${t.companyId}::text || '/rr/%'`),
+}));
+
+export type RoofReportPhoto = typeof roofReportPhotos.$inferSelect;

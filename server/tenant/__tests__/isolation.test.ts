@@ -93,6 +93,8 @@ describe.skipIf(!local)('company isolation', async () => {
     // And the Roof Lee link's (0013-0016, 0018, 0019), protected with archie_protect_company_table.
     expect(covered).toEqual(expect.arrayContaining(['sister_idempotency', 'sister_sso_tickets', 'lead_notes', 'outbound_events', 'job_photos',
       'crews', 'crew_members', 'crew_assignments', 'job_milestones']));
+    // And the roof reports' (0020, 0021).
+    expect(covered).toEqual(expect.arrayContaining(['roof_reports', 'roof_report_photos']));
   });
 
   it('gives the companies table only self-read for the app and everything for system work', async () => {
