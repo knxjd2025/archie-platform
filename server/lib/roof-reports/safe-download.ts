@@ -3,12 +3,9 @@ import { isIP } from 'node:net';
 import { request as httpRequest, type IncomingMessage, type RequestOptions } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { assertSafeFetchUrl } from './url-safety.js';
-import { isPrivateIp } from './safe-fetch.js';
+import { isPublicAddress } from './ip-range.js';
 
-export function isPublicAddress(address: string): boolean {
-  // isPrivateIp fails closed: anything that is not a public IP literal is refused.
-  return !isPrivateIp(address);
-}
+export { isPublicAddress };
 /** Resolve once and pin that vetted address to the connection (including TLS).
  * No redirects, proxies, connection reuse, or unbounded response buffering.
  */

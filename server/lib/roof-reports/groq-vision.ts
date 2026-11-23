@@ -9,8 +9,7 @@ import {
   type DamageType,
   type DamageCategory,
 } from './damage-knowledge-base.js';
-import { isSafeFetchUrl } from './url-safety.js';
-import { safeFetch } from './safe-fetch.js';
+import { downloadReportImage } from './safe-download.js';
 import { ROOF_REPORT_MODELS, VISION_PROVIDER_LABELS } from './models.js';
 
 // Groq API configuration
@@ -20,8 +19,6 @@ const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const DEFAULT_MAX_TOKENS = 4096;
 /** Low temperature → consistent JSON output across runs. */
 const DEFAULT_VISION_TEMPERATURE = 0.1;
-/** Fallback when the upstream image host doesn't send a Content-Type header. */
-const DEFAULT_IMAGE_MIME = 'image/jpeg';
 /** Header Google's REST API reads the key from. */
 const GOOGLE_KEY_HEADER = 'x-goog-api-key';
 
@@ -400,37 +397,27 @@ CRITICAL: If you see ANY potential damage, include it in the damages array even 
   return prompt;
 }
 
+/** An inline photo the models are allowed to be sent: a plain raster image, base64. */
+const INLINE_IMAGE_RE = /^data:image\/(?:png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+$/i;
+
 /**
- * Fetch image and convert to base64 data URL
+ * Turn a photo address into an inline image for the model.
+ *
+ * An address is downloaded with the same pinned, size-capped, timed download the
+ * report images use (safe-download.ts): the name is looked up once, the answer
+ * is vetted, and the connection goes to exactly that answer. A general-purpose
+ * fetch would look the name up a second time, which is the gap a rebinding
+ * attack uses, and would read a response of any size for as long as it took.
  */
 async function imageUrlToBase64(imageUrl: string): Promise<string> {
-  // If already a data URL, return as-is
   if (imageUrl.startsWith('data:')) {
+    if (!INLINE_IMAGE_RE.test(imageUrl)) throw new Error('Unsupported inline image');
     return imageUrl;
   }
-
-  // SSRF guard: reject internal/loopback/private/metadata hosts before fetch.
-  if (!isSafeFetchUrl(imageUrl)) {
-    throw new Error('Unsafe image URL');
-  }
-
   try {
-    // SECURITY (H4): safeFetch resolves the host IPs and re-validates every
-    // redirect hop, so a public URL can't rebind/redirect to a private target.
-    const response = await safeFetch(imageUrl);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch image: ${response.status}`);
-    }
-
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const base64 = buffer.toString('base64');
-
-    // Detect content type from response or URL
-    const contentType = response.headers.get('content-type') || DEFAULT_IMAGE_MIME;
-    return `data:${contentType};base64,${base64}`;
+    return await downloadReportImage(imageUrl);
   } catch (error: unknown) {
-    console.error('[groq-vision] Failed to convert image to base64:', (error as Error).message);
+    console.error('[groq-vision] Failed to fetch the photo:', (error as Error).message);
     throw error;
   }
 }

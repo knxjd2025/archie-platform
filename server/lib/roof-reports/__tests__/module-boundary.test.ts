@@ -52,13 +52,14 @@ describe('roof reports library boundary', () => {
     expect(SOURCE_FILES.length).toBeGreaterThan(3);
   });
 
-  it('(a) imports only from inside the folder, Node built-ins, @turf/* and the shared scroll engine', () => {
+  it('(a) imports only from inside the folder, Node built-ins, @turf/*, ipaddr.js and the shared scroll engine', () => {
     const bad: string[] = [];
     for (const file of FILES) {
       const text = readFileSync(file, 'utf8');
       for (const spec of importsOf(text)) {
         if (spec.startsWith('node:')) continue;
         if (spec.startsWith('@turf/')) continue;
+        if (spec === 'ipaddr.js') continue;
         if (isTest(file) && spec === 'vitest') continue;
         if (spec.startsWith('.')) {
           const resolved = path.resolve(path.dirname(file), spec).replace(/\.(js|ts)$/, '');
