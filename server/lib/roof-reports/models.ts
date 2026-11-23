@@ -16,6 +16,8 @@ export const ROOF_REPORT_MODELS = {
   visionFallback: { provider: 'google', id: 'gemini-2.5-flash' },
   visionLastResort: { provider: 'anthropic', id: 'claude-haiku-4-5' },
   narrative: { provider: 'anthropic', id: 'claude-sonnet-5' },
+  /** Rewriting one finding and regenerating the executive summary: short, cheap passes. */
+  rewrite: { provider: 'anthropic', id: 'claude-haiku-4-5' },
   labels: { provider: 'anthropic', id: 'claude-haiku-4-5' },
   measurement: { provider: 'groq', id: 'meta-llama/llama-4-scout-17b-16e-instruct' },
   /** Text-only follow-up pass of the enhanced photo analysis (no image sent). */
@@ -27,20 +29,22 @@ export type ModelRole = keyof typeof ROOF_REPORT_MODELS;
 /**
  * Cents per million tokens, input and output. The only prices in the folder.
  *
- * Entered 2026-11-24 from the providers' published list prices as last known
- * to the person who wrote this; no price page was fetched while writing it.
- * The Sonnet figure in particular is NOT confirmed against the current list
- * and must be checked before the cost record is relied on. A model id that is
- * missing here is recorded as 0 cents with priced: false (see the metered
- * call), never guessed.
+ * CONFIRMED (2026-11-24, against Anthropic's published model list as served by
+ * the claude-api reference, itself cached 2026-11-03): claude-sonnet-5 is $2 in
+ * and $10 out per million tokens; claude-haiku-4-5 is $1 in and $5 out.
+ * Both ids are current Anthropic ids.
+ *
+ * UNCONFIRMED, deliberately left without a price: the Groq ids
+ * (llama-4-scout, llama-4-maverick, llama-3.3-70b-versatile) and the Google id
+ * (gemini-2.5-flash). Neither provider's model page could be fetched while
+ * writing this, so whether those ids are still listed, and at what price, is
+ * not known. A model id missing here is recorded as 0 cents with
+ * priced: false (see the metered call), never guessed. Add each entry only
+ * after reading the provider's own page.
  */
 export const MODEL_PRICES_CENTS_PER_MTOK: Record<string, { input: number; output: number }> = {
-  'meta-llama/llama-4-scout-17b-16e-instruct': { input: 11, output: 34 },
-  'meta-llama/llama-4-maverick-17b-128e-instruct': { input: 20, output: 60 },
-  'gemini-2.5-flash': { input: 30, output: 250 },
-  'llama-3.3-70b-versatile': { input: 59, output: 79 },
   'claude-haiku-4-5': { input: 100, output: 500 },
-  'claude-sonnet-5': { input: 300, output: 1500 },
+  'claude-sonnet-5': { input: 200, output: 1000 },
 };
 
 /** How the photo analysis names its fallback providers in messages and logs. */

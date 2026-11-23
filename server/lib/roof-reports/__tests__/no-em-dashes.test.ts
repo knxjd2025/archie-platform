@@ -58,6 +58,8 @@ const SCREEN_FILES = [
   'scroll-flight-report.ts',
   'render-report-html.ts',
   'presentation-chapters.ts',
+  'claude-report-narrator.ts',
+  'claude-image-labeler.ts',
 ];
 
 describe('no em dashes in what a person reads', () => {
