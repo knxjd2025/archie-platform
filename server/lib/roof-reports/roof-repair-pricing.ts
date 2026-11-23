@@ -692,21 +692,21 @@ export const DAMAGE_TO_REPAIR_MAPPINGS: DamageToRepairMapping[] = [
     damageType: 'algae_growth',
     severity: 'low',
     recommendedRepairs: [
-      { repairTypeId: 'shingle_replacement_per_sq', estimatedQuantity: 0.25, notes: 'Algae-affected area — cleaning may suffice' },
+      { repairTypeId: 'shingle_replacement_per_sq', estimatedQuantity: 0.25, notes: 'Algae-affected area - cleaning may suffice' },
     ],
   },
   {
     damageType: 'algae',
     severity: 'low',
     recommendedRepairs: [
-      { repairTypeId: 'shingle_replacement_per_sq', estimatedQuantity: 0.25, notes: 'Algae-affected area — cleaning may suffice' },
+      { repairTypeId: 'shingle_replacement_per_sq', estimatedQuantity: 0.25, notes: 'Algae-affected area - cleaning may suffice' },
     ],
   },
   {
     damageType: 'moss_growth',
     severity: 'low',
     recommendedRepairs: [
-      { repairTypeId: 'shingle_replacement_per_sq', estimatedQuantity: 0.25, notes: 'Moss-affected area — cleaning may suffice' },
+      { repairTypeId: 'shingle_replacement_per_sq', estimatedQuantity: 0.25, notes: 'Moss-affected area - cleaning may suffice' },
     ],
   },
   {
@@ -734,14 +734,14 @@ export const DAMAGE_TO_REPAIR_MAPPINGS: DamageToRepairMapping[] = [
     damageType: 'exposed_nail',
     severity: 'medium',
     recommendedRepairs: [
-      { repairTypeId: 'shingle_replacement_per_sq', estimatedQuantity: 0.25, notes: 'Nail pop area — reseal or replace' },
+      { repairTypeId: 'shingle_replacement_per_sq', estimatedQuantity: 0.25, notes: 'Nail pop area - reseal or replace' },
     ],
   },
   {
     damageType: 'nail_pop',
     severity: 'medium',
     recommendedRepairs: [
-      { repairTypeId: 'shingle_replacement_per_sq', estimatedQuantity: 0.25, notes: 'Nail pop — reseal or replace surrounding shingles' },
+      { repairTypeId: 'shingle_replacement_per_sq', estimatedQuantity: 0.25, notes: 'Nail pop - reseal or replace surrounding shingles' },
     ],
   },
   {
@@ -755,14 +755,14 @@ export const DAMAGE_TO_REPAIR_MAPPINGS: DamageToRepairMapping[] = [
     damageType: 'debris_accumulation',
     severity: 'low',
     recommendedRepairs: [
-      { repairTypeId: 'shingle_replacement_per_sq', estimatedQuantity: 0.1, notes: 'Debris area — cleaning recommended' },
+      { repairTypeId: 'shingle_replacement_per_sq', estimatedQuantity: 0.1, notes: 'Debris area - cleaning recommended' },
     ],
   },
   {
     damageType: 'debris',
     severity: 'low',
     recommendedRepairs: [
-      { repairTypeId: 'shingle_replacement_per_sq', estimatedQuantity: 0.1, notes: 'Debris area — cleaning recommended' },
+      { repairTypeId: 'shingle_replacement_per_sq', estimatedQuantity: 0.1, notes: 'Debris area - cleaning recommended' },
     ],
   },
   {
@@ -825,7 +825,7 @@ export const DAMAGE_TO_REPAIR_MAPPINGS: DamageToRepairMapping[] = [
     damageType: 'impact_damage',
     severity: 'high',
     recommendedRepairs: [
-      { repairTypeId: 'full_roof_replacement_per_sq', estimatedQuantity: 1, notes: 'Impact damage — consider full replacement if widespread' },
+      { repairTypeId: 'full_roof_replacement_per_sq', estimatedQuantity: 1, notes: 'Impact damage - consider full replacement if widespread' },
     ],
   },
   {
@@ -839,14 +839,14 @@ export const DAMAGE_TO_REPAIR_MAPPINGS: DamageToRepairMapping[] = [
     damageType: 'sealant_failure',
     severity: 'medium',
     recommendedRepairs: [
-      { repairTypeId: 'flashing_repair', estimatedQuantity: 1, notes: 'Failed sealant — reseal' },
+      { repairTypeId: 'flashing_repair', estimatedQuantity: 1, notes: 'Failed sealant - reseal' },
     ],
   },
   {
     damageType: 'caulk_failure',
     severity: 'medium',
     recommendedRepairs: [
-      { repairTypeId: 'flashing_repair', estimatedQuantity: 1, notes: 'Failed caulking — reseal' },
+      { repairTypeId: 'flashing_repair', estimatedQuantity: 1, notes: 'Failed caulking - reseal' },
     ],
   },
   {

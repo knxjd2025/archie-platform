@@ -38,6 +38,24 @@ describe('motionRuntime', () => {
     expect(out).toContain('cdn.jsdelivr.net/npm/gsap@3.14.2/dist/ScrollTrigger.min.js');
   });
 
+  it('the CDN scripts carry a subresource integrity hash for the exact pinned version, and crossorigin', () => {
+    // sha384 of dist/gsap.min.js and dist/ScrollTrigger.min.js from the npm package gsap@3.14.2
+    // (the registry's own sha512 for that package was checked when these were computed).
+    // Changing GSAP_VERSION without recomputing both hashes must fail here.
+    const PINNED: Record<string, string> = {
+      'gsap.min.js': 'sha384-sG0Hv1tP1lZCk9KQmrIbY/XNwi+OY84GQqhMscbnsoBFqAz8KNCil1kvfL3Hbbk2',
+      'ScrollTrigger.min.js': 'sha384-xNHNOfrykny9oFwnmpfNbkSc6isny38d1GZvTRVuFV0l9fTMIZKhULvomyQJSMRl',
+    };
+    const tags = [...motionRuntime().matchAll(/<script\s[^>]*src="([^"]+)"[^>]*>/g)];
+    expect(tags).toHaveLength(2);
+    for (const [tag, src] of tags) {
+      expect(src).toMatch(/^https:\/\/cdn\.jsdelivr\.net\/npm\/gsap@3\.14\.2\/dist\/(gsap|ScrollTrigger)\.min\.js$/);
+      const file = src.split('/').pop()!;
+      expect(tag).toContain(`integrity="${PINNED[file]}"`);
+      expect(tag).toContain('crossorigin="anonymous"');
+    }
+  });
+
   it('registers ScrollTrigger and guards reduced-motion; never ships markers', () => {
     const out = motionRuntime({ gsapSource: 'x' });
     expect(out).toContain('registerPlugin(ScrollTrigger)');

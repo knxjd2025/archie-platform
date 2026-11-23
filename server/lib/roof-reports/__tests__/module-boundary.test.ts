@@ -201,6 +201,15 @@ describe('roof reports library boundary', () => {
     expect(bad).toEqual([]);
   });
 
+  it('(c) names no real town as an example or a default: fixtures use the fictional Cedar Falls', () => {
+    const bad: string[] = [];
+    for (const file of FILES) {
+      if (path.basename(file) === 'module-boundary.test.ts') continue;
+      if (/\bCharlotte\b/.test(readFileSync(file, 'utf8'))) bad.push(rel(file));
+    }
+    expect(bad).toEqual([]);
+  });
+
   it('(d) names only US model providers', () => {
     expect([...US_MODEL_PROVIDERS].sort()).toEqual(['anthropic', 'google', 'groq']);
     for (const [role, m] of Object.entries(ROOF_REPORT_MODELS)) {

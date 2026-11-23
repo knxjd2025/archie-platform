@@ -60,6 +60,14 @@ const SCREEN_FILES = [
   'presentation-chapters.ts',
   'claude-report-narrator.ts',
   'claude-image-labeler.ts',
+  // The words that reach a customer through the estimate, the findings, the summary and the photo tips.
+  'roof-report-pricing.ts',
+  'roof-repair-pricing.ts',
+  'default-pricing.ts',
+  'damage-knowledge-base.ts',
+  'comprehensive-roof-report.ts',
+  'storm-history-service.ts',
+  'groq-vision.ts',
 ];
 
 describe('no em dashes in what a person reads', () => {

@@ -55,7 +55,7 @@ const DEFAULT_USER_PROMPT = 'Please analyze this roof image for damage. Provide 
 const ADDITIONAL_VISION_INSTRUCTIONS = `## Additional Instructions for This Analysis:
 - Include HAAG condition ratings (Good/Fair/Poor) for each damage item as "haag_condition"
 - Provide an "estimated_age" field with years, confidence, and indicators
-- Be thorough — report ALL potential damage, even with lower confidence
+- Be thorough: report ALL potential damage, even with lower confidence
 
 Return ONLY valid JSON matching the format above.`;
 
@@ -192,7 +192,7 @@ export interface AnalysisOptions extends VisionRunOptions {
 function buildPhotoNoteSuffix(note?: string): string {
   const trimmed = note?.trim();
   if (!trimmed) return '';
-  return `\n\nThe field inspector verbally described THIS specific photo as: "${trimmed}"\nUse this as a strong hint about what to look for and where in the image, but only report damage you can actually see — do not invent damage that isn't visible just because it was mentioned.`;
+  return `\n\nThe field inspector verbally described THIS specific photo as: "${trimmed}"\nUse this as a strong hint about what to look for and where in the image, but only report damage you can actually see - do not invent damage that isn't visible just because it was mentioned.`;
 }
 
 /**
@@ -755,7 +755,7 @@ export async function reanalyzeWithHints(
 
   // Insert hint text before the response format section
   const hintSection = `
-## Inspector Hints — Focused Re-analysis:
+## Inspector Hints: Focused Re-analysis:
 The inspector reported the following damage types: ${hints.focusDamageTypes.join(', ')}.
 ${hints.inspectorNote ? `Inspector note: "${hints.inspectorNote}"` : ''}
 Re-examine the image carefully for subtle impact marks, granule displacement, lifted edges, and any damage that may have been initially missed. Pay special attention to the reported damage types above, but also report any other damage you find.`;
@@ -1139,16 +1139,16 @@ const ACCESSORIES_EMPTY_RESULT: DamageDetection[] = [];
 /** System-prompt for the accessories pass. */
 const ACCESSORIES_SYSTEM_PROMPT = `You are a roofing inspector focused ONLY on accessories and penetrations.
 Ignore shingles and general roof surface. Focus EXCLUSIVELY on:
-1. Pipe boots / vent collars — cracked, split, or deteriorated neoprene
-2. Ridge caps — lifted, missing, cracked, improperly nailed
-3. Skylight seals — cracked caulk, flashing gaps, condensation
-4. Chimney flashing — step/counter flashing separation, cracked mortar
-5. Nail pops — raised nails pushing through shingles
-6. Soffit/fascia — rot, peeling, separation, blocked vents
-7. Satellite dish mounts — unsealed bolt holes
-8. Roof vents — damaged hoods, missing screens
-9. Valley metal — exposed, rusted, or improperly overlapped
-10. Gutter conditions — granule buildup, sagging, separation
+1. Pipe boots / vent collars: cracked, split, or deteriorated neoprene
+2. Ridge caps: lifted, missing, cracked, improperly nailed
+3. Skylight seals: cracked caulk, flashing gaps, condensation
+4. Chimney flashing: step/counter flashing separation, cracked mortar
+5. Nail pops: raised nails pushing through shingles
+6. Soffit/fascia: rot, peeling, separation, blocked vents
+7. Satellite dish mounts: unsealed bolt holes
+8. Roof vents: damaged hoods, missing screens
+9. Valley metal: exposed, rusted, or improperly overlapped
+10. Gutter conditions: granule buildup, sagging, separation
 
 Return JSON:
 {
@@ -1211,9 +1211,9 @@ const PARSE_DAMAGE_DEFAULT_URGENCY = 'monitor';
 /** Image-quality buckets + tips. */
 const IMG_QUALITY_FAIR = 'fair';
 const IMG_QUALITY_POOR = 'poor';
-const IMG_QUALITY_TIP_DARK_OR_BLURRY = 'Image is too dark or blurry — retake in better lighting';
+const IMG_QUALITY_TIP_DARK_OR_BLURRY = 'Image is too dark or blurry, retake in better lighting';
 const IMG_QUALITY_TIP_CLOSER = 'Move closer to the roof for more detail';
-const IMG_QUALITY_TIP_LIGHTING_ANGLE = 'Image could be clearer — try better lighting or a closer angle';
+const IMG_QUALITY_TIP_LIGHTING_ANGLE = 'Image could be clearer, try better lighting or a closer angle';
 
 /** Default summary + recommendations when the response is well-formed. */
 const PARSE_DEFAULT_SUMMARY = 'Analysis complete.';

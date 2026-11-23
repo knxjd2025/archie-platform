@@ -49,6 +49,23 @@ const GSAP_VERSION = '3.14.2';
 const GSAP_CDN = `https://cdn.jsdelivr.net/npm/gsap@${GSAP_VERSION}/dist/gsap.min.js`;
 const ST_CDN = `https://cdn.jsdelivr.net/npm/gsap@${GSAP_VERSION}/dist/ScrollTrigger.min.js`;
 
+/**
+ * Subresource integrity for the two CDN files above, tied to GSAP_VERSION: bump
+ * the version and these must be recomputed (report-motion.test.ts fails until
+ * they are). sha384 of dist/gsap.min.js and dist/ScrollTrigger.min.js taken from
+ * the npm package gsap@3.14.2, whose own sha512 was checked against the registry.
+ *
+ * NOTE, UNVERIFIED AGAINST THE CDN: jsDelivr serves a published .min.js file
+ * unchanged, so these should match what it sends, but cdn.jsdelivr.net could not
+ * be reached from the environment that computed them (the build sandbox blocks
+ * it). If a browser ever refuses these scripts with an integrity error, fetch the
+ * two files from the CDN and recompute. A refused script only costs the motion:
+ * every hidden state is gated on .gsap-anim, which is added only once GSAP runs,
+ * so the report still reads in full without it.
+ */
+const GSAP_INTEGRITY = 'sha384-sG0Hv1tP1lZCk9KQmrIbY/XNwi+OY84GQqhMscbnsoBFqAz8KNCil1kvfL3Hbbk2';
+const ST_INTEGRITY = 'sha384-xNHNOfrykny9oFwnmpfNbkSc6isny38d1GZvTRVuFV0l9fTMIZKhULvomyQJSMRl';
+
 export function motionRuntime(opts: MotionRuntimeOptions = {}): string {
   const { enabled = true, intensity = 'standard', gsapSource } = opts;
   if (!enabled) return '';
@@ -58,7 +75,7 @@ export function motionRuntime(opts: MotionRuntimeOptions = {}): string {
 
   const libTags = gsapSource
     ? `<script>${gsapSource}</script>`
-    : `<script src="${GSAP_CDN}" crossorigin="anonymous"></script>\n<script src="${ST_CDN}" crossorigin="anonymous"></script>`;
+    : `<script src="${GSAP_CDN}" integrity="${GSAP_INTEGRITY}" crossorigin="anonymous"></script>\n<script src="${ST_CDN}" integrity="${ST_INTEGRITY}" crossorigin="anonymous"></script>`;
 
   return `
 <!-- archie-motion-runtime -->

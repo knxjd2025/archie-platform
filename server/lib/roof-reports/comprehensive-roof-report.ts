@@ -818,7 +818,7 @@ export function generateExecutiveSummary(report: ComprehensiveRoofReport): strin
     const claimPotential = report.stormHistory?.claimPotential;
     if (claimPotential === 'high' || claimPotential === 'medium') {
       const dol = report.stormHistory.recommendedDateOfLoss;
-      parts.push(`NOAA storm data analysis covering ${report.stormHistory.yearsAnalyzed} years within a ${report.stormHistory.searchRadiusMiles}-mile radius identified ${report.stormHistory.totalEvents} qualifying weather events. Insurance claim filing is recommended${dol ? ` with proposed date of loss: ${dol.date} (${dol.eventType} — ${dol.magnitude})` : ''}.`);
+      parts.push(`NOAA storm data analysis covering ${report.stormHistory.yearsAnalyzed} years within a ${report.stormHistory.searchRadiusMiles}-mile radius identified ${report.stormHistory.totalEvents} qualifying weather events. Insurance claim filing is recommended${dol ? ` with proposed date of loss: ${dol.date} (${dol.eventType} - ${dol.magnitude})` : ''}.`);
     }
     if (report.repairEstimate?.total > 0) {
       parts.push(`Estimated repair scope totals $${report.repairEstimate.total.toLocaleString()}, subject to adjuster review and supplemental documentation.`);
@@ -826,8 +826,8 @@ export function generateExecutiveSummary(report: ComprehensiveRoofReport): strin
   } else if (template === 'homeowner') {
     // Friendly homeowner language
     if (rci) {
-      parts.push(`Your ${materialName} at ${report.property.address} scored ${rci.overallScore} out of 100 on our Roof Condition Index — that's a Grade ${rci.grade}.`);
-      if (rci.overallScore >= RCI_GOOD_THRESHOLD) parts.push(`Great news — your roof is in solid shape!`);
+      parts.push(`Your ${materialName} at ${report.property.address} scored ${rci.overallScore} out of 100 on our Roof Condition Index, which is a Grade ${rci.grade}.`);
+      if (rci.overallScore >= RCI_GOOD_THRESHOLD) parts.push(`Great news: your roof is in solid shape!`);
       else if (rci.overallScore >= RCI_FAIR_THRESHOLD) parts.push(`Your roof has some areas that need attention, but nothing urgent.`);
       else parts.push(`We found some concerns that should be addressed soon to protect your home.`);
     }

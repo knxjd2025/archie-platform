@@ -20,7 +20,7 @@ import { sanitizeUrl } from './safe-url.js';
 export const HAIL_SIZE_SCALE = [
   { level: 1,  min: 0.50, max: 0.74, label: 'Pea',         color: '#93c5fd', damageRating: 'Minimal',       haagRef: 'Below functional damage threshold' },
   { level: 2,  min: 0.75, max: 0.99, label: 'Penny/Dime',  color: '#60a5fa', damageRating: 'Minor',         haagRef: 'Possible granule loss on aged shingles' },
-  { level: 3,  min: 1.00, max: 1.24, label: 'Quarter',     color: '#3b82f6', damageRating: 'Moderate',      haagRef: 'Functional damage likely — bruising, granule displacement' },
+  { level: 3,  min: 1.00, max: 1.24, label: 'Quarter',     color: '#3b82f6', damageRating: 'Moderate',      haagRef: 'Functional damage likely - bruising, granule displacement' },
   { level: 4,  min: 1.25, max: 1.49, label: 'Half Dollar', color: '#2563eb', damageRating: 'Significant',   haagRef: 'Fractures and cracks in shingle mat' },
   { level: 5,  min: 1.50, max: 1.74, label: 'Golf Ball',   color: '#f59e0b', damageRating: 'Severe',        haagRef: 'Open fractures, exposed fiberglass mat' },
   { level: 6,  min: 1.75, max: 1.99, label: 'Lime',        color: '#f97316', damageRating: 'Very Severe',   haagRef: 'Mat tears, sealant failure, potential leaks' },
@@ -797,7 +797,7 @@ export function assessRisk(events: StormEvent[]): StormReport['risk_assessment']
  *
  * Calibration benchmarks (3-year window, 25mi radius):
  *   Low risk area (e.g., Portland, OR):       5-15
- *   Moderate area (e.g., Charlotte, NC):      20-40
+ *   Moderate area (e.g., Cedar Falls, IA):    20-40
  *   High risk area (e.g., Dallas, TX):        45-65
  *   Extreme hail corridor (e.g., OKC, OK):    65-85
  *   Theoretical max:                          95
@@ -1348,7 +1348,7 @@ const IEM_NEXRAD_PATH_INFIX = '/GIS/ridge/USCOMP/n0q_';
 const IEM_NEXRAD_PNG_SUFFIX = '.png';
 
 /** NEXRAD radar caption template fragments. */
-const NEXRAD_CAPTION_PREFIX = 'NEXRAD Composite — ';
+const NEXRAD_CAPTION_PREFIX = 'NEXRAD Composite - ';
 const NEXRAD_DATE_LOCALE = 'en-US';
 const NEXRAD_DATE_OPTIONS: Intl.DateTimeFormatOptions = { month: 'long', day: 'numeric', year: 'numeric' };
 const NEXRAD_HAIL_INCHES_SUFFIX = '"';

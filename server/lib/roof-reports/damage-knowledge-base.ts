@@ -895,7 +895,7 @@ export const DAMAGE_TYPES: DamageType[] = [
       {
         level: 'critical',
         description: 'Widespread shrinkage, membrane tearing from stress',
-        action_required: 'Emergency — full replacement likely',
+        action_required: 'Emergency - full replacement likely',
         typical_repair: 'Complete membrane replacement',
       },
     ],

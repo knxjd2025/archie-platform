@@ -94,7 +94,7 @@ const NOTE_DEFAULT_RATES = 'Prices based on industry standard rates.';
 const NOTE_COMPANY_RATES = 'Prices based on company-configured rates.';
 /** Repair line-item template fragments — assembled into:
  *  `'LABEL — Shingle Repair (N shingle[s])'`. */
-const REPAIR_LINE_DASH_INFIX = ' — Shingle Repair (';
+const REPAIR_LINE_DASH_INFIX = ' - Shingle Repair (';
 const REPAIR_LINE_SHINGLE_SUFFIX = ' shingle';
 const REPAIR_LINE_CLOSE_PAREN = ')';
 /** Unit string used by the shingle-repair line items (default pricing path). */
@@ -104,7 +104,7 @@ const MSG_MINIMUM_PREFIX = 'Minimum repair charge of $';
 const MSG_MINIMUM_SUFFIX = ' applied.';
 
 /** Repair label suffix for the company-pricing path (per-square units, not per-shingle). */
-const REPAIR_LABEL_SHINGLE_REPAIR_SUFFIX = ' — Shingle Repair';
+const REPAIR_LABEL_SHINGLE_REPAIR_SUFFIX = ' - Shingle Repair';
 /** Per-square unit string used by the company-pricing line items. */
 const REPAIR_PER_SQUARE_UNIT = 'sq';
 /** Shingle-substring matcher used by `getRepairCost` to fuzzy-match a custom shingle line. */
@@ -669,7 +669,7 @@ function calculateTiersFromCompanyPackages(params: {
         {
           description: shingleProduct?.productLine || getMaterialName(pkg.tier),
           details: shingleProduct
-            ? `${shingleProduct.manufacturer} — ${shingleProduct.description}`
+            ? `${shingleProduct.manufacturer} - ${shingleProduct.description}`
             : undefined,
           brand: shingleProduct?.manufacturer,
           quantity: roofSquares,
@@ -766,7 +766,7 @@ function getDefaultTierNameCompany(tier: string): string {
 function getDefaultTaglineCompany(tier: string): string {
   return {
     good: 'Reliable protection with solid budget value',
-    better: 'Enhanced wind and impact ratings — most popular choice',
+    better: 'Enhanced wind and impact ratings - most popular choice',
     best: 'Maximum protection with premium materials and warranty',
   }[tier] || '';
 }

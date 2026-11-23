@@ -47,7 +47,7 @@ describe('escapeHtml', () => {
   });
 
   it('leaves ordinary text unchanged', () => {
-    expect(escapeHtml('123 Main Street, Charlotte NC')).toBe('123 Main Street, Charlotte NC');
+    expect(escapeHtml('12 Elm Street, Cedar Falls IA')).toBe('12 Elm Street, Cedar Falls IA');
     expect(escapeHtml('Acme Roofing Co')).toBe('Acme Roofing Co');
     expect(escapeHtml('')).toBe('');
   });

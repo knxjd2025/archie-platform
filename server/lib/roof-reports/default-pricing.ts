@@ -283,7 +283,7 @@ const TIER_DISPLAY: Record<string, TierDisplayInfo> = {
     best:   { name: 'Heavy Cedar',           tagline: 'Hand-split heavy cedar shakes with premium grade' },
   },
   slate: {
-    good:   { name: 'Standard Slate',        tagline: 'Natural slate roofing — standard thickness' },
+    good:   { name: 'Standard Slate',        tagline: 'Natural slate roofing - standard thickness' },
     better: { name: 'Premium Slate',         tagline: 'Premium grade natural slate' },
     best:   { name: 'Architectural Slate',   tagline: 'Thick-cut architectural grade natural slate' },
   },
