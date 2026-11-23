@@ -2343,3 +2343,27 @@ export const roofReportPhotos = pgTable('roof_report_photos', {
 }));
 
 export type RoofReportPhoto = typeof roofReportPhotos.$inferSelect;
+
+/**
+ * One row for every paid model call the roof reports make (migration 0021,
+ * server/roof-reports/metered.ts). `priced` is false when the model's price is
+ * not confirmed: the row then holds the tokens and 0 cents, never a guess.
+ */
+export const modelCosts = pgTable('model_costs', {
+  companyId: companyId(),
+  id: uuid('id').primaryKey().defaultRandom(),
+  operation: text('operation').notNull(),   // photo_analysis | narrative | photo_labels | rewrite | measurement_detect | satellite_image
+  provider: text('provider').notNull(),     // groq | google | anthropic
+  model: text('model'),
+  inputTokens: integer('input_tokens'),
+  outputTokens: integer('output_tokens'),
+  cents: decimal('cents', { precision: 10, scale: 4 }).notNull().default('0'),
+  priced: boolean('priced').notNull(),
+  ref: text('ref'),                         // the report the call was for
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  createdIdx: index('model_costs_company_created').on(t.companyId, t.createdAt),
+  providerCheck: check('model_costs_provider_check', sql`${t.provider} IN ('groq','google','anthropic')`),
+}));
+
+export type ModelCost = typeof modelCosts.$inferSelect;
