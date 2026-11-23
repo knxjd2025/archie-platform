@@ -22,11 +22,11 @@ const DEFAULT_FONT_KEY = 'inter';
 /** Returns the Google Fonts CSS import URL for HTML reports */
 export function getGoogleFontUrl(brandFontFamily?: string): string | null {
   const key = brandFontFamily || DEFAULT_FONT_KEY;
-  return GOOGLE_FONT_URLS[key] || GOOGLE_FONT_URLS[DEFAULT_FONT_KEY];
+  return Object.hasOwn(GOOGLE_FONT_URLS, key) ? GOOGLE_FONT_URLS[key] : GOOGLE_FONT_URLS[DEFAULT_FONT_KEY];
 }
 
 /** Returns CSS font-family value for HTML reports */
 export function getCssFontFamily(brandFontFamily?: string): string {
   const key = brandFontFamily || DEFAULT_FONT_KEY;
-  return CSS_FONT_FAMILIES[key] || CSS_FONT_FAMILIES[DEFAULT_FONT_KEY];
+  return Object.hasOwn(CSS_FONT_FAMILIES, key) ? CSS_FONT_FAMILIES[key] : CSS_FONT_FAMILIES[DEFAULT_FONT_KEY];
 }

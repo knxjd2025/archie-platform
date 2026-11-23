@@ -9,6 +9,8 @@ import type { MaterialTakeoff } from './material-takeoff.js';
 import { formatArea, sqFeetToSquares, pitchFactor } from './geometry-utils.js';
 import { escapeHtml } from './escape-html.js';
 import { motionStyles, motionRuntime } from './report-motion.js';
+import { safeColor, safeHttpUrl } from './html-safety.js';
+import { toNumber } from './report-normalize.js';
 
 // ─── Brand color defaults ──────────────────────────────────────────────
 const DEFAULT_BRAND_PRIMARY = '#ea580c';   // Archie orange
@@ -184,12 +186,11 @@ const USD_FORMATTER = new Intl.NumberFormat('en-US', {
 });
 
 // Validate http(s) URLs before injecting into `<img src="…">`. Returns
-// empty string for anything that isn't a literal http(s) URL — defends
-// against `javascript:` payloads from a tenant brand logo URL field.
+// empty string for anything that isn't a literal http(s) URL (the shared check
+// also refuses control characters), which defends against `javascript:`
+// payloads from a tenant brand logo URL field.
 function safeImageUrl(raw: unknown): string {
-  if (typeof raw !== 'string') return '';
-  const trimmed = raw.trim();
-  return /^https?:\/\//i.test(trimmed) ? trimmed : '';
+  return safeHttpUrl(raw);
 }
 
 export interface MaterialCostLine {
@@ -227,11 +228,19 @@ export interface ReportData {
  * The document uses only inline CSS (no external dependencies) so it
  * renders correctly when opened in a new window or saved as a file.
  */
-export function generateReportHtml(data: ReportData): string {
+export function generateReportHtml(rawData: ReportData): string {
+  // A saved report can hold text where a figure belongs; every figure below is a number.
+  const data: ReportData = {
+    ...rawData,
+    totalFootprintSqFt: toNumber(rawData.totalFootprintSqFt),
+    totalAdjustedSqFt: toNumber(rawData.totalAdjustedSqFt),
+    wastePercentage: toNumber(rawData.wastePercentage),
+    costs: rawData.costs?.map((c) => ({ ...c, qty: toNumber(c.qty), unitPrice: toNumber(c.unitPrice) })),
+  };
   const title = data.companyName || DEFAULT_REPORT_TITLE;
   const totalSquares = sqFeetToSquares(data.totalAdjustedSqFt);
-  const brandSecondary = data.brandSecondaryColor || DEFAULT_BRAND_SECONDARY;
-  const brandPrimary = data.brandPrimaryColor || DEFAULT_BRAND_PRIMARY;
+  const brandSecondary = safeColor(data.brandSecondaryColor, DEFAULT_BRAND_SECONDARY);
+  const brandPrimary = safeColor(data.brandPrimaryColor, DEFAULT_BRAND_PRIMARY);
 
   // Waste percentage conditional formatting
   const wasteColor = data.wastePercentage > WASTE_HIGH_THRESHOLD

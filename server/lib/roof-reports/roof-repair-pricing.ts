@@ -981,7 +981,8 @@ export function formatCurrency(amount: number): string {
  * defensive handling against `NaN` / `Infinity` slipping in).
  */
 export function formatUnit(unit: RepairUnit, quantity: number): string {
-  const label = UNIT_LABELS[unit];
+  // A unit read back from a saved report can be anything; never throw for one.
+  const label = UNIT_LABELS[unit] ?? UNIT_LABELS.each;
   return Number.isFinite(quantity) && quantity === 1 ? label.singular : label.plural;
 }
 

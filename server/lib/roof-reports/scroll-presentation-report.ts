@@ -41,6 +41,8 @@
 
 import { SCROLLCRAFT_CSS, SCROLLCRAFT_JS } from '../reports/scrollcraft-engine.js';
 import { escapeHtml } from './escape-html';
+import { safeColor, safeHttpUrl, isSafeId, boundedNumber, jsonForScript } from './html-safety';
+import { normalizeReportNumbers } from './report-normalize';
 import {
   BASE_CHAPTER_IDS,
   chaptersToRender,
@@ -80,11 +82,6 @@ const MAX_DETAILED_FINDINGS = 6;
 
 const DEFAULT_PRIMARY = '#EA580C';
 const DEFAULT_SECONDARY = '#1F2937';
-
-/** Only hex. These land in a style attribute and are tenant-provided. */
-const HEX_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
-const safeColor = (v: string | undefined, fallback: string): string =>
-  v && HEX_RE.test(v.trim()) ? v.trim() : fallback;
 
 /** Telephone hrefs keep digits and a leading +, and nothing else. */
 const telHref = (phone: string): string => phone.replace(/[^\d+]/g, '');
@@ -150,9 +147,9 @@ const TENANT_DRIFTS = ['#151209', '#171209', '#141109', '#12100C'];
 // ── photo selection ─────────────────────────────────────────────────────────
 
 const usablePhotos = (report: ComprehensiveRoofReport): AnalyzedPhoto[] =>
-  (report.damageAnalysis?.photos || []).filter(
-    (p) => typeof p.url === 'string' && p.url.length > 0,
-  );
+  (report.damageAnalysis?.photos || [])
+    .filter((p) => safeHttpUrl(p?.url) !== '')
+    .map((p) => ({ ...p, url: safeHttpUrl(p.url) }));
 
 /**
  * The widest shot available, for the opening frame. An `overview` is what an
@@ -252,7 +249,7 @@ const pinAct = (
   copyId: string,
   copy: string,
 ): string => `
-<section id="${id}" data-sc-act="pin" data-sc-span="${span}" data-sc-drift="${drift}">
+<section id="${escapeHtml(id)}" data-sc-act="pin" data-sc-span="${span}" data-sc-drift="${drift}">
   <div data-sc-stage>
     ${
       photo
@@ -268,7 +265,7 @@ const pinAct = (
 
 /** `flow`: ordinary document flow, which anything tabular needs. */
 const flowAct = (id: string, drift: string, inner: string): string => `
-<section id="${id}" class="sc-section" data-sc-act="flow" data-sc-drift="${drift}">
+<section id="${escapeHtml(id)}" class="sc-section" data-sc-act="flow" data-sc-drift="${drift}">
   <div class="wrap">
     ${inner}
   </div>
@@ -702,10 +699,11 @@ function chapterNext(c: Ctx): PresentationChapter {
  * what a given report would actually produce without rendering it.
  */
 export function presentationChapters(
-  report: ComprehensiveRoofReport,
+  rawReport: ComprehensiveRoofReport,
   brand: PresentationBrandColors = {},
   pack: ChapterPack | null = null,
 ): PresentationChapter[] {
+  const report = normalizeReportNumbers(rawReport);
   const photos = usablePhotos(report);
   const prop = report.property || ({} as ComprehensiveRoofReport['property']);
   const dateStr = (() => {
@@ -777,14 +775,20 @@ export function presentationChapters(
       }
       return -1;
     };
+    // A pack is data somebody typed. Whatever it says, the id becomes an HTML id
+    // and a link target, so it has to be a plain id, and it must not take the
+    // place of a chapter that already exists.
+    const taken = new Set<string>(BASE_CHAPTER_IDS);
     for (const t of chaptersToRender(pack, tctx)) {
+      if (!isSafeId(t.id) || taken.has(t.id)) continue;
+      taken.add(t.id);
       const at = resolveAnchor(t.after);
       // Nothing in the chain rendered, so there is no sensible place for it.
       if (at < 0) continue;
       out.splice(at + 1, 0, {
         id: t.id,
         label: t.label,
-        minutes: t.minutes,
+        minutes: Math.round(boundedNumber(t.minutes, 0, 120, 1)),
         html: flowAct(t.id, TENANT_DRIFTS[out.length % TENANT_DRIFTS.length], packChapterHtml(tctx, t)),
       });
     }
@@ -1040,8 +1044,8 @@ tbody tr:nth-child(even){background:rgba(247,242,233,.025)}
 <nav class="rail" id="rail" aria-label="Chapters">
   <div class="rail__head">
     <div class="rail__mark">${
-      brand.companyLogo
-        ? `<img src="${escapeHtml(brand.companyLogo)}" alt="${escapeHtml(company)}">`
+      safeHttpUrl(brand.companyLogo)
+        ? `<img src="${escapeHtml(safeHttpUrl(brand.companyLogo))}" alt="${escapeHtml(company)}">`
         : escapeHtml(company)
     }</div>
     ${report.customerName ? `<div class="rail__who">${escapeHtml(report.customerName)}</div>` : ''}
@@ -1055,7 +1059,7 @@ tbody tr:nth-child(even){background:rgba(247,242,233,.025)}
     ${chapters
       .map(
         (ch, i) =>
-          `<a href="#${ch.id}" data-ch="${ch.id}"><span class="n">${String(i + 1).padStart(2, '0')}</span><span>${escapeHtml(ch.label)}</span><span class="m">${ch.minutes}m</span></a>`,
+          `<a href="#${escapeHtml(ch.id)}" data-ch="${escapeHtml(ch.id)}"><span class="n">${String(i + 1).padStart(2, '0')}</span><span>${escapeHtml(ch.label)}</span><span class="m">${escapeHtml(ch.minutes)}m</span></a>`,
       )
       .join('\n    ')}
   </div>
@@ -1087,7 +1091,7 @@ ${chapters.map((ch) => ch.html).join('\n')}
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(relayout);
 
   // ── the presentation rail ────────────────────────────────────────────────
-  var CH = ${JSON.stringify(chapters.map((ch) => ({ id: ch.id })))};
+  var CH = ${jsonForScript(chapters.map((ch) => ({ id: ch.id })))};
   var rail = document.getElementById('rail');
   var toggle = document.getElementById('railToggle');
   var now = document.getElementById('railNow');

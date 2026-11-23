@@ -16,6 +16,8 @@ import { formatCurrency, formatUnit } from './roof-repair-pricing.js';
 import { escapeHtml } from './escape-html.js';
 import { PLATFORM_NAME } from './platform.js';
 import { motionStyles, motionRuntime } from './report-motion.js';
+import { safeColor as safeHexColor, safeUrl as safeLinkUrl, safeHttpUrl, safeImageSrc } from './html-safety.js';
+import { normalizeReportNumbers } from './report-normalize.js';
 
 const FEATURE_COLORS: Record<string, string> = {
   solar_panel: '#F59E0B',
@@ -46,8 +48,6 @@ const SQFT_UNIT_SUFFIX = ' sqft';
 const PERCENT_SUFFIX = '%';
 /** Separator between contact-line items in the footer (HTML-encoded middle-dot). */
 const FOOTER_CONTACT_SEPARATOR = '  &middot;  ';
-/** http(s) URL prefix regex used by `safeUrl` to allowlist external hrefs. */
-const HTTP_URL_PROTOCOL_RE = /^https?:\/\//i;
 
 // ─── Summary-row labels ──────────────────────────────────────────────
 const LABEL_SOLAR_PANELS = 'Solar Panels';
@@ -797,17 +797,13 @@ function formatLongDate(d: Date | string | number): string {
 // attribute. Falls back to the default dot color otherwise — defends
 // against `style="background:url(javascript:...)"`-style payloads even
 // though browsers reject those.
-const SAFE_HEX_COLOR_RE = /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 function safeColor(raw: unknown, fallback: string): string {
-  return typeof raw === 'string' && SAFE_HEX_COLOR_RE.test(raw) ? raw : fallback;
+  return safeHexColor(raw, fallback);
 }
 
-/** Allow only http(s) URLs into `src`/`href` attributes. */
+/** Allow only http, https, mailto and tel links into `src`/`href` attributes. */
 function safeUrl(raw: unknown): string {
-  if (typeof raw !== 'string') return '';
-  const trimmed = raw.trim();
-  if (!HTTP_URL_PROTOCOL_RE.test(trimmed)) return '';
-  return trimmed;
+  return safeLinkUrl(raw);
 }
 
 /** Format a square-footage number with locale grouping + " sqft" suffix. */
@@ -850,8 +846,8 @@ export function generateRoofAnalysisReportHTML(
     summaryRows.push(row(LABEL_TOTAL_ANALYZED_AREA, formatSqft(summary.total_analyzed_area_sqft), ''));
   }
 
-  const brandPrimary = brandColors?.brandPrimaryColor || DEFAULT_BRAND_PRIMARY;
-  const brandSecondary = brandColors?.brandSecondaryColor || DEFAULT_BRAND_SECONDARY;
+  const brandPrimary = safeColor(brandColors?.brandPrimaryColor, DEFAULT_BRAND_PRIMARY);
+  const brandSecondary = safeColor(brandColors?.brandSecondaryColor, DEFAULT_BRAND_SECONDARY);
 
   // Footer contact info
   const footerParts: string[] = [];
@@ -914,7 +910,7 @@ export function generateRoofAnalysisReportHTML(
         const safeImage = safeUrl(analysis.satellite_image_url);
         return safeImage ? `
         <div style="margin-bottom:24px;text-align:center;">
-          <img src="${safeImage}" alt="${MSG_SATELLITE_IMAGE_ALT}" loading="lazy" style="max-width:100%;border-radius:8px;border:1px solid #e5e7eb;" />
+          <img src="${escapeHtml(safeImage)}" alt="${MSG_SATELLITE_IMAGE_ALT}" loading="lazy" style="max-width:100%;border-radius:8px;border:1px solid #e5e7eb;" />
           <p style="font-size:11px;color:#9ca3af;margin-top:4px;">${MSG_SATELLITE_IMAGERY_SOURCE}</p>
         </div>
       ` : '';
@@ -1003,11 +999,13 @@ interface BrandColors {
  * replacement options (Good/Better/Best), and company credentials.
  */
 export function generateComprehensiveReportHTML(
-  report: ComprehensiveRoofReport,
+  rawReport: ComprehensiveRoofReport,
   brandColors: BrandColors = {}
 ): string {
-  const brandPrimary = brandColors.brandPrimaryColor || DEFAULT_BRAND_PRIMARY;
-  const brandSecondary = brandColors.brandSecondaryColor || DEFAULT_BRAND_SECONDARY;
+  // Every figure below is formatted from a number, whatever the saved JSON held.
+  const report = normalizeReportNumbers(rawReport);
+  const brandPrimary = safeColor(brandColors.brandPrimaryColor, DEFAULT_BRAND_PRIMARY);
+  const brandSecondary = safeColor(brandColors.brandSecondaryColor, DEFAULT_BRAND_SECONDARY);
   // Confidence is an internal signal, never a customer-facing one. Default off,
   // so any caller that forgets the flag produces the safe report.
   const internalView = brandColors.internalView === true;
@@ -1058,7 +1056,12 @@ export function generateComprehensiveReportHTML(
   if (brandColors.companyName) footerParts.push(`<strong>${escapeHtml(brandColors.companyName)}</strong>`);
   if (brandColors.companyPhone) footerParts.push(`<a href="${TEL_PROTOCOL}${escapeHtml(brandColors.companyPhone)}" style="${FOOTER_LINK_STYLE}">${escapeHtml(brandColors.companyPhone)}</a>`);
   if (brandColors.companyEmail) footerParts.push(`<a href="${MAILTO_PROTOCOL}${escapeHtml(brandColors.companyEmail)}" style="${FOOTER_LINK_STYLE}">${escapeHtml(brandColors.companyEmail)}</a>`);
-  if (brandColors.companyWebsite) footerParts.push(`<a href="${escapeHtml(brandColors.companyWebsite)}" style="${FOOTER_LINK_STYLE}">${escapeHtml(brandColors.companyWebsite)}</a>`);
+  if (brandColors.companyWebsite) {
+    const site = safeUrl(brandColors.companyWebsite);
+    footerParts.push(site
+      ? `<a href="${escapeHtml(site)}" style="${FOOTER_LINK_STYLE}">${escapeHtml(brandColors.companyWebsite)}</a>`
+      : escapeHtml(brandColors.companyWebsite));
+  }
   const footerContact = footerParts.length > 0
     ? `<div style="margin-bottom:8px;">${footerParts.join(FOOTER_CONTACT_SEPARATOR)}</div>`
     : '';
@@ -1285,7 +1288,7 @@ export function generateComprehensiveReportHTML(
         <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 20% 50%, rgba(255,255,255,0.08) 0%, transparent 70%);pointer-events:none;"></div>
         <h1 style="font-size:clamp(24px, 4vw, 34px);font-weight:800;margin:0 0 8px;color:#fff;letter-spacing:-0.5px;position:relative;">${escapeHtml(reportTitle)}</h1>
         <p style="color:rgba(255,255,255,0.8);font-size:clamp(12px, 2vw, 14px);margin:0 0 4px;position:relative;">
-          Prepared ${dateStr} &bull; Report ID: ${report.id}
+          Prepared ${dateStr} &bull; Report ID: ${escapeHtml(report.id)}
         </p>
         ${brandColors.tagline ? `<p style="color:rgba(255,255,255,0.65);font-size:13px;margin:8px 0 0;font-style:italic;position:relative;">${escapeHtml(brandColors.tagline)}</p>` : ''}
       </div>
@@ -1293,7 +1296,7 @@ export function generateComprehensiveReportHTML(
       <div class="report-section" style="margin-bottom:32px;">
         <h1 style="font-size:clamp(22px, 4vw, 30px);font-weight:800;margin:0 0 6px;color:var(--brand-secondary);letter-spacing:-0.5px;">${escapeHtml(reportTitle)}</h1>
         <p style="color:var(--text-secondary);font-size:14px;margin:0;">
-          Prepared ${dateStr} &bull; Report ID: ${report.id}
+          Prepared ${dateStr} &bull; Report ID: ${escapeHtml(report.id)}
         </p>
         <div style="width:60px;height:3px;background:var(--brand-primary);margin-top:12px;border-radius:2px;"></div>
       </div>
@@ -1339,7 +1342,7 @@ export function generateComprehensiveReportHTML(
       ${brandColors.companyAddress ? `<div style="margin-bottom:4px;font-size:11px;">${escapeHtml(brandColors.companyAddress)}</div>` : ''}
       ${brandColors.companyLicenseNumber ? `<div style="margin-bottom:8px;font-size:11px;">License #${escapeHtml(brandColors.companyLicenseNumber)}</div>` : ''}
       <div style="margin-top:8px;font-size:10px;color:#d1d5db;">Generated by ${PLATFORM_NAME} Roof Report AI - ${dateStr}</div>
-      <div style="margin-top:2px;font-size:9px;color:#e5e7eb;">Data sources: ${report.dataSources.join(', ') || 'N/A'}</div>
+      <div style="margin-top:2px;font-size:9px;color:#e5e7eb;">Data sources: ${escapeHtml((report.dataSources || []).join(', ') || 'N/A')}</div>
     </div>
     </div><!-- /padding wrapper -->
   </div>
@@ -1358,7 +1361,8 @@ export function generateComprehensiveReportHTML(
 }
 
 function buildCompanyHeader(brandColors: BrandColors, brandPrimary: string): string {
-  if (!brandColors.companyName && !brandColors.companyLogo) {
+  const logoSrc = safeHttpUrl(brandColors.companyLogo);
+  if (!brandColors.companyName && !logoSrc) {
     return `<div style="width:100%;height:6px;background:linear-gradient(90deg, ${brandPrimary}, ${brandPrimary}88);margin-bottom:24px;border-radius:4px;"></div>`;
   }
 
@@ -1378,11 +1382,11 @@ function buildCompanyHeader(brandColors: BrandColors, brandPrimary: string): str
     ? `<div style="font-size:10px;opacity:0.7;margin-top:2px;">${LABEL_LICENSE_PREFIX}${escapeHtml(brandColors.companyLicenseNumber)}</div>`
     : '';
 
-  if (brandColors.companyLogo) {
+  if (logoSrc) {
     return `
       <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 24px;margin-bottom:28px;background:linear-gradient(135deg, ${brandPrimary}, ${brandPrimary}dd);border-radius:12px;color:#fff;">
         <div style="display:flex;align-items:center;gap:16px;">
-          <img src="${escapeHtml(brandColors.companyLogo)}" alt="${escapeHtml(brandColors.companyName || '')}" style="max-height:${COMPANY_LOGO_MAX_HEIGHT_PX}px;max-width:${COMPANY_LOGO_MAX_WIDTH_PX}px;border-radius:6px;" />
+          <img src="${escapeHtml(logoSrc)}" alt="${escapeHtml(brandColors.companyName || '')}" style="max-height:${COMPANY_LOGO_MAX_HEIGHT_PX}px;max-width:${COMPANY_LOGO_MAX_WIDTH_PX}px;border-radius:6px;" />
           <div>
             ${brandColors.companyName ? `<div style="font-size:22px;font-weight:800;letter-spacing:-0.3px;">${escapeHtml(brandColors.companyName)}</div>` : ''}
             ${brandColors.tagline ? `<div style="font-size:12px;opacity:0.85;font-style:italic;margin-top:2px;">${escapeHtml(brandColors.tagline)}</div>` : ''}
@@ -1432,12 +1436,12 @@ function buildPropertySection(report: ComprehensiveRoofReport, brandPrimary: str
   // Roof detail lines
   const roofDetailLines: string[] = [];
   const mat = damageAnalysis?.roofAge?.roofMaterial || roofDetails?.material;
-  if (mat) roofDetailLines.push(`<strong>${LABEL_DETAIL_MATERIAL}</strong> ${mat.replace(UNDERSCORE_TO_SPACE_RE, ' ')}`);
-  if (roofDetails?.squares) roofDetailLines.push(`<strong>${LABEL_DETAIL_SIZE}</strong> ${roofDetails.squares}${SQUARES_SUFFIX}`);
-  if (roofDetails?.pitch) roofDetailLines.push(`<strong>${LABEL_DETAIL_PITCH}</strong> ${roofDetails.pitch}`);
-  if (roofDetails?.stories) roofDetailLines.push(`<strong>${LABEL_DETAIL_STORIES}</strong> ${roofDetails.stories}`);
+  if (mat) roofDetailLines.push(`<strong>${LABEL_DETAIL_MATERIAL}</strong> ${escapeHtml(String(mat).replace(UNDERSCORE_TO_SPACE_RE, ' '))}`);
+  if (roofDetails?.squares) roofDetailLines.push(`<strong>${LABEL_DETAIL_SIZE}</strong> ${escapeHtml(roofDetails.squares)}${SQUARES_SUFFIX}`);
+  if (roofDetails?.pitch) roofDetailLines.push(`<strong>${LABEL_DETAIL_PITCH}</strong> ${escapeHtml(roofDetails.pitch)}`);
+  if (roofDetails?.stories) roofDetailLines.push(`<strong>${LABEL_DETAIL_STORIES}</strong> ${escapeHtml(roofDetails.stories)}`);
   const ageYrs = damageAnalysis?.roofAge?.estimatedAgeYears || roofDetails?.age_years;
-  if (ageYrs) roofDetailLines.push(`<strong>${LABEL_DETAIL_EST_AGE}</strong> ${ESTIMATE_PREFIX}${ageYrs}${YEARS_SUFFIX}`);
+  if (ageYrs) roofDetailLines.push(`<strong>${LABEL_DETAIL_EST_AGE}</strong> ${ESTIMATE_PREFIX}${escapeHtml(ageYrs)}${YEARS_SUFFIX}`);
 
   return `
     <div class="report-section" data-reveal style="display:flex;gap:20px;margin-bottom:24px;flex-wrap:wrap;">
@@ -1511,14 +1515,14 @@ function buildRoofAgeSection(roofAge: RoofAgeEstimation | null | undefined, inte
       <div style="display:flex;gap:24px;flex-wrap:wrap;">
         <div style="flex:1;min-width:150px;">
           <div style="font-size:11px;text-transform:uppercase;color:#6b7280;margin-bottom:4px;">${LABEL_ESTIMATED_AGE}</div>
-          <div style="font-size:24px;font-weight:700;color:#581c87;">${hasAge ? `${ESTIMATE_PREFIX}${roofAge.estimatedAgeYears}${YEARS_SUFFIX}` : NOT_ASSESSED}</div>
-          ${internalView ? `<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;background:${conf.bg};color:${conf.text};text-transform:uppercase;margin-top:4px;">${roofAge.confidence}${CONFIDENCE_SUFFIX}</span>` : ''}
+          <div style="font-size:24px;font-weight:700;color:#581c87;">${hasAge ? `${ESTIMATE_PREFIX}${escapeHtml(roofAge.estimatedAgeYears)}${YEARS_SUFFIX}` : NOT_ASSESSED}</div>
+          ${internalView ? `<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;background:${conf.bg};color:${conf.text};text-transform:uppercase;margin-top:4px;">${escapeHtml(roofAge.confidence)}${CONFIDENCE_SUFFIX}</span>` : ''}
         </div>
 
         ${roofAge.roofMaterial ? `
           <div style="flex:1;min-width:150px;">
             <div style="font-size:11px;text-transform:uppercase;color:#6b7280;margin-bottom:4px;">${LABEL_MATERIAL}</div>
-            <div style="font-size:18px;font-weight:600;color:#581c87;text-transform:capitalize;">${roofAge.roofMaterial.replace(UNDERSCORE_TO_SPACE_RE, ' ')}</div>
+            <div style="font-size:18px;font-weight:600;color:#581c87;text-transform:capitalize;">${escapeHtml(String(roofAge.roofMaterial).replace(UNDERSCORE_TO_SPACE_RE, ' '))}</div>
           </div>
         ` : ''}
 
@@ -1580,16 +1584,16 @@ function buildStormHistorySection(storm: ComprehensiveRoofReport['stormHistory']
         ${storm.mostRecentHailStorm ? `
           <div style="flex:1;min-width:200px;background:${STORM_HAIL_CARD_COLORS.bg};border-radius:8px;padding:16px;border-left:4px solid ${STORM_HAIL_CARD_COLORS.border};">
             <div style="font-size:11px;text-transform:uppercase;color:${STORM_HAIL_CARD_COLORS.labelColor};font-weight:600;margin-bottom:4px;">${MSG_RECENT_HAIL_LABEL}</div>
-            <div style="font-size:16px;font-weight:700;color:${STORM_HAIL_CARD_COLORS.valueColor};">${storm.mostRecentHailStorm.magnitude}</div>
-            <div style="font-size:13px;color:${STORM_HAIL_CARD_COLORS.labelColor};">${storm.mostRecentHailStorm.date}</div>
+            <div style="font-size:16px;font-weight:700;color:${STORM_HAIL_CARD_COLORS.valueColor};">${escapeHtml(storm.mostRecentHailStorm.magnitude)}</div>
+            <div style="font-size:13px;color:${STORM_HAIL_CARD_COLORS.labelColor};">${escapeHtml(storm.mostRecentHailStorm.date)}</div>
             <div style="font-size:11px;color:${STORM_HAIL_CARD_COLORS.distanceColor};margin-top:4px;">${storm.mostRecentHailStorm.distanceMiles.toFixed(DISTANCE_DECIMALS)}${MILES_AWAY_SUFFIX}</div>
           </div>
         ` : ''}
         ${storm.mostRecentWindStorm ? `
           <div style="flex:1;min-width:200px;background:${STORM_WIND_CARD_COLORS.bg};border-radius:8px;padding:16px;border-left:4px solid ${STORM_WIND_CARD_COLORS.border};">
             <div style="font-size:11px;text-transform:uppercase;color:${STORM_WIND_CARD_COLORS.labelColor};font-weight:600;margin-bottom:4px;">${MSG_RECENT_WIND_LABEL}</div>
-            <div style="font-size:16px;font-weight:700;color:${STORM_WIND_CARD_COLORS.valueColor};">${storm.mostRecentWindStorm.magnitude}</div>
-            <div style="font-size:13px;color:${STORM_WIND_CARD_COLORS.labelColor};">${storm.mostRecentWindStorm.date}</div>
+            <div style="font-size:16px;font-weight:700;color:${STORM_WIND_CARD_COLORS.valueColor};">${escapeHtml(storm.mostRecentWindStorm.magnitude)}</div>
+            <div style="font-size:13px;color:${STORM_WIND_CARD_COLORS.labelColor};">${escapeHtml(storm.mostRecentWindStorm.date)}</div>
             <div style="font-size:11px;color:${STORM_WIND_CARD_COLORS.distanceColor};margin-top:4px;">${storm.mostRecentWindStorm.distanceMiles.toFixed(DISTANCE_DECIMALS)}${MILES_AWAY_SUFFIX}</div>
           </div>
         ` : ''}
@@ -1631,7 +1635,7 @@ function buildStormHistorySection(storm: ComprehensiveRoofReport['stormHistory']
     const barPct = maxYearTotal > 0 ? Math.round(((Number(data.total) || 0) / maxYearTotal) * 100) : 0;
     return `
       <tr>
-        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-weight:600;">${year}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-weight:600;">${escapeHtml(year)}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:center;">${data.hail}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:center;">${data.wind}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;"><div class="rbar-cell"><span class="rbar-track"><span class="rbar-fill" data-bar-fill style="width:${barPct}%"></span></span><span class="rbar-num">${data.total}</span></div></td>
@@ -1645,9 +1649,9 @@ function buildStormHistorySection(storm: ComprehensiveRoofReport['stormHistory']
     dolHtml = `
       <div style="background:${STORM_DOL_COLORS.bg};border:1px solid ${STORM_DOL_COLORS.border};border-radius:8px;padding:16px;margin-top:20px;">
         <div style="font-size:12px;text-transform:uppercase;color:${STORM_DOL_COLORS.labelColor};font-weight:600;margin-bottom:8px;">${MSG_RECOMMENDED_DOL_LABEL}</div>
-        <div style="font-size:18px;font-weight:700;color:${STORM_DOL_COLORS.dateColor};">${storm.recommendedDateOfLoss.date}</div>
-        <div style="font-size:13px;color:${STORM_DOL_COLORS.eventColor};margin-top:4px;">${storm.recommendedDateOfLoss.eventType} - ${storm.recommendedDateOfLoss.magnitude}</div>
-        <div style="font-size:12px;color:${STORM_DOL_COLORS.reasonColor};margin-top:8px;font-style:italic;">${storm.recommendedDateOfLoss.reason}</div>
+        <div style="font-size:18px;font-weight:700;color:${STORM_DOL_COLORS.dateColor};">${escapeHtml(storm.recommendedDateOfLoss.date)}</div>
+        <div style="font-size:13px;color:${STORM_DOL_COLORS.eventColor};margin-top:4px;">${escapeHtml(storm.recommendedDateOfLoss.eventType)} - ${escapeHtml(storm.recommendedDateOfLoss.magnitude)}</div>
+        <div style="font-size:12px;color:${STORM_DOL_COLORS.reasonColor};margin-top:8px;font-style:italic;">${escapeHtml(storm.recommendedDateOfLoss.reason)}</div>
       </div>
     `;
   }
@@ -1662,12 +1666,12 @@ function buildStormHistorySection(storm: ComprehensiveRoofReport['stormHistory']
       <div style="display:flex;gap:16px;margin-bottom:20px;flex-wrap:wrap;">
         <div style="flex:1;min-width:150px;background:#f9fafb;border-radius:8px;padding:16px;text-align:center;">
           <div style="font-size:11px;text-transform:uppercase;color:#6b7280;margin-bottom:4px;">${RISK_LABEL_RISK_LEVEL}</div>
-          <div style="font-size:20px;font-weight:700;text-transform:uppercase;color:${riskColor};">${storm.riskLevel}</div>
+          <div style="font-size:20px;font-weight:700;text-transform:uppercase;color:${riskColor};">${escapeHtml(storm.riskLevel)}</div>
           <div style="font-size:12px;color:#6b7280;margin-top:2px;">${RISK_SCORE_PREFIX}${storm.riskScore}${RISK_SCORE_DENOMINATOR}</div>
         </div>
         <div style="flex:1;min-width:150px;background:#f9fafb;border-radius:8px;padding:16px;text-align:center;">
           <div style="font-size:11px;text-transform:uppercase;color:#6b7280;margin-bottom:4px;">${RISK_LABEL_CLAIM_POTENTIAL}</div>
-          <div style="font-size:20px;font-weight:700;text-transform:uppercase;color:${claimColor};">${storm.claimPotential}</div>
+          <div style="font-size:20px;font-weight:700;text-transform:uppercase;color:${claimColor};">${escapeHtml(storm.claimPotential)}</div>
         </div>
         ${storm.largestHailInches ? `
           <div style="flex:1;min-width:150px;background:#fef3c7;border-radius:8px;padding:16px;text-align:center;">
@@ -1716,8 +1720,8 @@ function buildEnhancedStormSection(
     ? enhanced.narratives.slice(0, MAX_NARRATIVES_DISPLAYED).map(n => `
         <div style="margin-bottom:12px;padding:12px;background:#eff6ff;border-radius:6px;border-left:3px solid #3b82f6;">
           <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-            <span style="font-size:12px;font-weight:600;color:#2563eb;">${n.type}</span>
-            <span style="font-size:12px;color:#6b7280;">${n.date}</span>
+            <span style="font-size:12px;font-weight:600;color:#2563eb;">${escapeHtml(n.type)}</span>
+            <span style="font-size:12px;color:#6b7280;">${escapeHtml(n.date)}</span>
           </div>
           <div style="font-size:12px;color:#374151;line-height:1.5;">${escapeHtml(n.narrative.slice(0, NARRATIVE_PREVIEW_MAX_CHARS))}${n.narrative.length > NARRATIVE_PREVIEW_MAX_CHARS ? '...' : ''}</div>
         </div>
@@ -1732,8 +1736,8 @@ function buildEnhancedStormSection(
       <h3 style="font-size:15px;font-weight:700;margin:24px 0 12px;color:${brandSecondary};">${LABEL_PROPERTY_STORM_PROFILE}</h3>
       <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:12px;margin-bottom:20px;">
         <div style="text-align:center;padding:12px;background:#f3f4f6;border-radius:6px;">
-          <div style="font-size:20px;font-weight:700;color:#1f2937;">${pp.worst_year?.year || WORST_YEAR_FALLBACK}</div>
-          <div style="font-size:11px;color:#6b7280;">${LABEL_WORST_STORM_YEAR}${pp.worst_year ? ` (${pp.worst_year.event_count} events)` : ''}</div>
+          <div style="font-size:20px;font-weight:700;color:#1f2937;">${escapeHtml(pp.worst_year?.year || WORST_YEAR_FALLBACK)}</div>
+          <div style="font-size:11px;color:#6b7280;">${LABEL_WORST_STORM_YEAR}${pp.worst_year ? ` (${escapeHtml(pp.worst_year.event_count)} events)` : ''}</div>
         </div>
         <div style="text-align:center;padding:12px;background:#f3f4f6;border-radius:6px;">
           <div style="font-size:20px;font-weight:700;color:#1f2937;">${(pp.avg_events_per_year ?? 0).toFixed(PROFILE_DECIMALS)}</div>
@@ -1744,7 +1748,7 @@ function buildEnhancedStormSection(
           <div style="font-size:11px;color:#6b7280;">${LABEL_STORM_FREE_YEARS}</div>
         </div>
         <div style="text-align:center;padding:12px;background:#f3f4f6;border-radius:6px;">
-          <div style="font-size:20px;font-weight:700;text-transform:uppercase;color:${EXPOSURE_TIER_COLORS[pp.estimated_cumulative_exposure || ''] || EXPOSURE_TIER_COLOR_DEFAULT};">${pp.estimated_cumulative_exposure || EXPOSURE_FALLBACK_LABEL}</div>
+          <div style="font-size:20px;font-weight:700;text-transform:uppercase;color:${EXPOSURE_TIER_COLORS[pp.estimated_cumulative_exposure || ''] || EXPOSURE_TIER_COLOR_DEFAULT};">${escapeHtml(pp.estimated_cumulative_exposure || EXPOSURE_FALLBACK_LABEL)}</div>
           <div style="font-size:11px;color:#6b7280;">${LABEL_CUMULATIVE_EXPOSURE}</div>
         </div>
       </div>
@@ -1758,9 +1762,9 @@ function buildEnhancedStormSection(
       <p style="font-size:12px;color:#6b7280;margin-bottom:12px;">${MSG_NOAA_REF_HELPER}</p>
       ${enhanced.noaaEventPageUrls.slice(0, MAX_NOAA_REFS_DISPLAYED).map(ref => `
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;padding:4px 0;">
-          <span style="font-size:12px;font-weight:600;color:#2563eb;">${ref.date}</span>
-          <span style="font-size:12px;color:#374151;">${ref.type}</span>
-          <span style="font-size:11px;color:#9ca3af;flex:1;text-align:right;word-break:break-all;">${ref.url}</span>
+          <span style="font-size:12px;font-weight:600;color:#2563eb;">${escapeHtml(ref.date)}</span>
+          <span style="font-size:12px;color:#374151;">${escapeHtml(ref.type)}</span>
+          <span style="font-size:11px;color:#9ca3af;flex:1;text-align:right;word-break:break-all;">${escapeHtml(ref.url)}</span>
         </div>
       `).join('')}
     `
@@ -1771,7 +1775,7 @@ function buildEnhancedStormSection(
     ? `
       <div style="margin-top:16px;padding:12px;background:#f9fafb;border-radius:6px;border:1px solid #e5e7eb;">
         <div style="font-size:13px;font-weight:600;color:#374151;">${LABEL_FULL_COUNTY_DB}</div>
-        <div style="font-size:11px;color:#6b7280;margin-top:4px;word-break:break-all;">${enhanced.countyStormDatabaseUrl}</div>
+        <div style="font-size:11px;color:#6b7280;margin-top:4px;word-break:break-all;">${escapeHtml(enhanced.countyStormDatabaseUrl)}</div>
       </div>
     `
     : '';
@@ -1822,7 +1826,7 @@ function buildDamageAnalysisSection(damage: ComprehensiveRoofReport['damageAnaly
         <div style="font-size:11px;color:#6b7280;">${LABEL_WITH_DAMAGE}</div>
       </div>
       <div style="flex:1;min-width:140px;background:${severityColor.bg};border-radius:8px;padding:16px;text-align:center;">
-        <div style="font-size:15px;font-weight:700;text-transform:uppercase;color:${severityColor.text};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${damage.overallSeverity || 'none'}</div>
+        <div style="font-size:15px;font-weight:700;text-transform:uppercase;color:${severityColor.text};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(damage.overallSeverity || 'none')}</div>
         <div style="font-size:11px;color:${severityColor.text};">${LABEL_OVERALL_SEVERITY}</div>
       </div>
     </div>
@@ -1851,10 +1855,10 @@ function buildDamageAnalysisSection(damage: ComprehensiveRoofReport['damageAnaly
       const countPct = maxTypeCount > 0 ? Math.round(((Number(dt.count) || 0) / maxTypeCount) * 100) : 0;
       return `
         <tr>
-          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-transform:capitalize;">${dt.type.replace(UNDERSCORE_TO_SPACE_RE, ' ')}</td>
-          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;"><div class="rbar-cell"><span class="rbar-track"><span class="rbar-fill" data-bar-fill style="width:${countPct}%;background:${sColor.text}"></span></span><span class="rbar-num">${dt.count}</span></div></td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-transform:capitalize;">${escapeHtml(String(dt.type).replace(UNDERSCORE_TO_SPACE_RE, ' '))}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;"><div class="rbar-cell"><span class="rbar-track"><span class="rbar-fill" data-bar-fill style="width:${countPct}%;background:${sColor.text}"></span></span><span class="rbar-num">${escapeHtml(dt.count)}</span></div></td>
           <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">
-            <span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;background:${sColor.bg};color:${sColor.text};text-transform:uppercase;">${dt.severity}</span>
+            <span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;background:${sColor.bg};color:${sColor.text};text-transform:uppercase;">${escapeHtml(dt.severity)}</span>
           </td>
           <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:11px;color:#6b7280;">${recommendation}</td>
         </tr>
@@ -1867,17 +1871,17 @@ function buildDamageAnalysisSection(damage: ComprehensiveRoofReport['damageAnaly
       const photoById = new Map((damage.photos || []).map(ph => [ph.id, ph]));
       findingCards = structuredFindings.map(finding => {
         const colors = FINDING_SEVERITY_COLOR_MAP[finding.severity] || FINDING_SEVERITY_COLOR_MAP.moderate;
-        const badgeLabel = finding.severity.toUpperCase();
+        const badgeLabel = escapeHtml(String(finding.severity).toUpperCase());
 
         // The evidence for this finding, beside the finding.
         const evidence = (finding.relatedPhotoIds || [])
           .map(id => photoById.get(id))
-          .filter((ph): ph is NonNullable<typeof ph> => Boolean(ph && ph.url))
+          .filter((ph): ph is NonNullable<typeof ph> => Boolean(ph && safeHttpUrl(ph.url)))
           .slice(0, MAX_FINDING_PHOTOS);
         const evidenceHtml = evidence.length > 0
           ? `<div style="display:grid;grid-template-columns:repeat(${Math.min(evidence.length, MAX_FINDING_PHOTOS)}, 1fr);gap:8px;margin-top:12px;">
               ${evidence.map(ph => `<figure style="margin:0;border-radius:6px;overflow:hidden;border:1px solid ${colors.border}33;">
-                <img src="${escapeHtml(ph.url)}" alt="${escapeHtml(ph.caption || finding.title)}" style="width:100%;height:150px;object-fit:cover;display:block;" loading="lazy" />
+                <img src="${escapeHtml(safeHttpUrl(ph.url))}" alt="${escapeHtml(ph.caption || finding.title)}" style="width:100%;height:150px;object-fit:cover;display:block;" loading="lazy" />
               </figure>`).join('')}
             </div>`
           : '';
@@ -1904,12 +1908,12 @@ function buildDamageAnalysisSection(damage: ComprehensiveRoofReport['damageAnaly
         // No Claude findings on this report, so match photos by damage type.
         const evidence = (damage.photos || [])
           .filter(ph => (ph.damages || []).some(d => d.type === dt.type))
-          .filter(ph => Boolean(ph.url))
+          .filter(ph => Boolean(safeHttpUrl(ph.url)))
           .slice(0, MAX_FINDING_PHOTOS);
         const evidenceHtml = evidence.length > 0
           ? `<div style="display:grid;grid-template-columns:repeat(${Math.min(evidence.length, MAX_FINDING_PHOTOS)}, 1fr);gap:8px;margin-top:12px;">
               ${evidence.map(ph => `<figure style="margin:0;border-radius:6px;overflow:hidden;border:1px solid ${sColor.text}22;">
-                <img src="${escapeHtml(ph.url)}" alt="${escapeHtml(ph.caption || dt.type)}" style="width:100%;height:150px;object-fit:cover;display:block;" loading="lazy" />
+                <img src="${escapeHtml(safeHttpUrl(ph.url))}" alt="${escapeHtml(ph.caption || dt.type)}" style="width:100%;height:150px;object-fit:cover;display:block;" loading="lazy" />
               </figure>`).join('')}
             </div>`
           : '';
@@ -1919,11 +1923,11 @@ function buildDamageAnalysisSection(damage: ComprehensiveRoofReport['damageAnaly
         return `
           <div style="background:${sColor.bg};border-left:4px solid ${borderColor};border-radius:0 8px 8px 0;padding:16px;margin-bottom:10px;">
             <div style="display:flex;justify-content:space-between;align-items:center;">
-              <div style="font-size:15px;font-weight:600;color:${sColor.text};text-transform:capitalize;">${dt.type.replace(UNDERSCORE_TO_SPACE_RE, ' ')}</div>
+              <div style="font-size:15px;font-weight:600;color:${sColor.text};text-transform:capitalize;">${escapeHtml(String(dt.type).replace(UNDERSCORE_TO_SPACE_RE, ' '))}</div>
               <span style="background:${borderColor}22;color:${sColor.text};padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;">${badgeLabel}</span>
             </div>
             <p style="margin:8px 0 0;font-size:13px;color:${sColor.text};line-height:1.5;">
-              ${dt.count} instance(s) detected across inspection photos. ${recommendation}
+              ${escapeHtml(dt.count)} instance(s) detected across inspection photos. ${recommendation}
             </p>
             ${evidenceHtml}
           </div>
@@ -1964,7 +1968,7 @@ function buildDamageAnalysisSection(damage: ComprehensiveRoofReport['damageAnaly
       const damageDescriptions = (photo.damages || []).slice(0, MAX_PHOTO_DAMAGES_DISPLAYED).map(d => {
         const location = escapeHtml(d.location || LOCATION_FALLBACK);
         const type = escapeHtml(d.label || d.type);
-        const severity = escapeHtml(d.severity.toUpperCase());
+        const severity = escapeHtml(String(d.severity).toUpperCase());
         return `${location} - ${type} - ${severity}`;
       });
       const damageLabels = damageDescriptions.join('<br>') || MSG_NO_DAMAGE_DETECTED_PHOTO;
@@ -1989,7 +1993,7 @@ function buildDamageAnalysisSection(damage: ComprehensiveRoofReport['damageAnaly
             const bb = d.boundingBox!;
             const damageColor = SEVERITY_BORDER_COLORS_FALLBACK[d.severity] ?? SEVERITY_BORDER_COLOR_FALLBACK_DEFAULT;
             const bbLabel = escapeHtml(d.label || d.type);
-            return `<div style="position:absolute;left:${bb.x}%;top:${bb.y}%;width:${bb.width}%;height:${bb.height}%;border:2px solid ${damageColor};border-radius:3px;pointer-events:none;" title="${bbLabel}">
+            return `<div style="position:absolute;left:${escapeHtml(bb.x)}%;top:${escapeHtml(bb.y)}%;width:${escapeHtml(bb.width)}%;height:${escapeHtml(bb.height)}%;border:2px solid ${damageColor};border-radius:3px;pointer-events:none;" title="${bbLabel}">
               <span style="position:absolute;top:-16px;left:0;font-size:9px;font-weight:700;color:#fff;background:${damageColor};padding:1px 4px;border-radius:2px;white-space:nowrap;">${bbLabel}</span>
             </div>`;
           }).join('');
@@ -2006,18 +2010,18 @@ function buildDamageAnalysisSection(damage: ComprehensiveRoofReport['damageAnaly
       return `
         <div class="photo-card" style="border:1px solid var(--border-light);border-radius:var(--radius-md);overflow:hidden;position:relative;box-shadow:var(--shadow-card);animation:fadeSlideUp 0.4s ease both;animation-delay:${0.1 + idx * 0.05}s;">
           <div style="position:relative;overflow:hidden;">
-            <img src="${photo.url}" alt="Photo ${idx + 1}" style="width:100%;height:220px;object-fit:cover;display:block;" loading="lazy" />
+            ${safeHttpUrl(photo.url) ? `<img src="${escapeHtml(safeHttpUrl(photo.url))}" alt="Photo ${idx + 1}" style="width:100%;height:220px;object-fit:cover;display:block;" loading="lazy" />` : ''}
             <div style="position:absolute;top:8px;left:8px;">
-              <span style="display:inline-block;padding:4px 12px;border-radius:var(--radius-sm);font-size:11px;font-weight:700;background:${pSeverity.bg};color:${pSeverity.text};text-transform:uppercase;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);">${photo.overallSeverity}</span>
+              <span style="display:inline-block;padding:4px 12px;border-radius:var(--radius-sm);font-size:11px;font-weight:700;background:${pSeverity.bg};color:${pSeverity.text};text-transform:uppercase;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);">${escapeHtml(photo.overallSeverity)}</span>
             </div>
             ${internalView && topDamage ? `
               <div style="position:absolute;top:8px;right:8px;">
-                <span style="display:inline-block;padding:3px 10px;border-radius:var(--radius-sm);font-size:10px;font-weight:600;background:rgba(0,0,0,0.65);color:#fff;backdrop-filter:blur(4px);">${topDamage.confidence}${CONFIDENCE_BADGE_SUFFIX}</span>
+                <span style="display:inline-block;padding:3px 10px;border-radius:var(--radius-sm);font-size:10px;font-weight:600;background:rgba(0,0,0,0.65);color:#fff;backdrop-filter:blur(4px);">${escapeHtml(topDamage.confidence)}${CONFIDENCE_BADGE_SUFFIX}</span>
               </div>
             ` : ''}
             ${photo.photoCategory ? `
               <div style="position:absolute;bottom:8px;left:8px;">
-                <span style="display:inline-block;padding:3px 8px;border-radius:4px;font-size:9px;font-weight:600;background:rgba(0,0,0,0.55);color:#fff;text-transform:uppercase;backdrop-filter:blur(4px);">${photo.photoCategory.replace(UNDERSCORE_TO_SPACE_RE, ' ')}</span>
+                <span style="display:inline-block;padding:3px 8px;border-radius:4px;font-size:9px;font-weight:600;background:rgba(0,0,0,0.55);color:#fff;text-transform:uppercase;backdrop-filter:blur(4px);">${escapeHtml(String(photo.photoCategory).replace(UNDERSCORE_TO_SPACE_RE, ' '))}</span>
               </div>
             ` : ''}
           </div>
@@ -2083,7 +2087,7 @@ function buildRepairEstimateSection(
   const lineItemRows = estimate.lineItems.map(item => `
     <tr>
       <td style="padding:10px 12px;border-bottom:1px solid ${BORDER_COLOR_NEUTRAL};">${escapeHtml(item.repairName)}</td>
-      <td style="padding:10px 12px;border-bottom:1px solid ${BORDER_COLOR_NEUTRAL};text-align:center;">${item.quantity} ${formatUnit(item.unit, item.quantity)}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid ${BORDER_COLOR_NEUTRAL};text-align:center;">${escapeHtml(item.quantity)} ${escapeHtml(formatUnit(item.unit, item.quantity))}</td>
       <td style="padding:10px 12px;border-bottom:1px solid ${BORDER_COLOR_NEUTRAL};text-align:right;">${formatCurrency(item.finalCostPerUnit)}</td>
       <td style="padding:10px 12px;border-bottom:1px solid ${BORDER_COLOR_NEUTRAL};text-align:right;font-weight:600;">${formatCurrency(item.totalFinalCost)}</td>
     </tr>
@@ -2135,22 +2139,22 @@ function buildRoofDetailsSection(report: ComprehensiveRoofReport, brandSecondary
   if (!rd && !m) return '';
 
   const details: Array<{ label: string; value: string }> = [];
-  if (rd?.material) details.push({ label: LABEL_SPECS_MATERIAL, value: rd.material.replace(UNDERSCORE_TO_SPACE_RE, ' ') });
-  if (rd?.type) details.push({ label: LABEL_SPECS_ROOF_TYPE, value: rd.type.replace(UNDERSCORE_TO_SPACE_RE, ' ') });
-  if (rd?.squares) details.push({ label: LABEL_SPECS_ROOF_SIZE, value: `${rd.squares}${SQUARES_LOWER_SUFFIX} (${(rd.squares * 100).toLocaleString()}${SQ_FT_SUFFIX})` });
-  if (rd?.pitch) details.push({ label: LABEL_SPECS_PITCH, value: rd.pitch });
-  if (rd?.stories) details.push({ label: LABEL_SPECS_STORIES, value: String(rd.stories) });
-  if (rd?.age_years) details.push({ label: LABEL_SPECS_ESTIMATED_AGE, value: `${rd.age_years}${YEARS_SUFFIX}` });
+  if (rd?.material) details.push({ label: LABEL_SPECS_MATERIAL, value: escapeHtml(String(rd.material).replace(UNDERSCORE_TO_SPACE_RE, ' ')) });
+  if (rd?.type) details.push({ label: LABEL_SPECS_ROOF_TYPE, value: escapeHtml(String(rd.type).replace(UNDERSCORE_TO_SPACE_RE, ' ')) });
+  if (rd?.squares) details.push({ label: LABEL_SPECS_ROOF_SIZE, value: `${escapeHtml(rd.squares)}${SQUARES_LOWER_SUFFIX} (${(rd.squares * 100).toLocaleString()}${SQ_FT_SUFFIX})` });
+  if (rd?.pitch) details.push({ label: LABEL_SPECS_PITCH, value: escapeHtml(rd.pitch) });
+  if (rd?.stories) details.push({ label: LABEL_SPECS_STORIES, value: escapeHtml(String(rd.stories)) });
+  if (rd?.age_years) details.push({ label: LABEL_SPECS_ESTIMATED_AGE, value: `${escapeHtml(rd.age_years)}${YEARS_SUFFIX}` });
 
   // Add measurement data if available
   if (m) {
-    if (m.ridgeLength) details.push({ label: MEASUREMENT_DETAIL_LABELS.ridgeLength, value: `${m.ridgeLength}${LF_SUFFIX}` });
-    if (m.hipLength) details.push({ label: MEASUREMENT_DETAIL_LABELS.hipLength, value: `${m.hipLength}${LF_SUFFIX}` });
-    if (m.valleyLength) details.push({ label: MEASUREMENT_DETAIL_LABELS.valleyLength, value: `${m.valleyLength}${LF_SUFFIX}` });
-    if (m.eaveLength) details.push({ label: MEASUREMENT_DETAIL_LABELS.eaveLength, value: `${m.eaveLength}${LF_SUFFIX}` });
-    if (m.rakeLength) details.push({ label: MEASUREMENT_DETAIL_LABELS.rakeLength, value: `${m.rakeLength}${LF_SUFFIX}` });
-    if (m.perimeterLength) details.push({ label: MEASUREMENT_DETAIL_LABELS.perimeter, value: `${m.perimeterLength}${LF_SUFFIX}` });
-    if (m.facetCount) details.push({ label: MEASUREMENT_DETAIL_LABELS.facets, value: String(m.facetCount) });
+    if (m.ridgeLength) details.push({ label: MEASUREMENT_DETAIL_LABELS.ridgeLength, value: `${escapeHtml(m.ridgeLength)}${LF_SUFFIX}` });
+    if (m.hipLength) details.push({ label: MEASUREMENT_DETAIL_LABELS.hipLength, value: `${escapeHtml(m.hipLength)}${LF_SUFFIX}` });
+    if (m.valleyLength) details.push({ label: MEASUREMENT_DETAIL_LABELS.valleyLength, value: `${escapeHtml(m.valleyLength)}${LF_SUFFIX}` });
+    if (m.eaveLength) details.push({ label: MEASUREMENT_DETAIL_LABELS.eaveLength, value: `${escapeHtml(m.eaveLength)}${LF_SUFFIX}` });
+    if (m.rakeLength) details.push({ label: MEASUREMENT_DETAIL_LABELS.rakeLength, value: `${escapeHtml(m.rakeLength)}${LF_SUFFIX}` });
+    if (m.perimeterLength) details.push({ label: MEASUREMENT_DETAIL_LABELS.perimeter, value: `${escapeHtml(m.perimeterLength)}${LF_SUFFIX}` });
+    if (m.facetCount) details.push({ label: MEASUREMENT_DETAIL_LABELS.facets, value: escapeHtml(String(m.facetCount)) });
   }
 
   if (details.length === 0) return '';
@@ -2191,11 +2195,11 @@ function buildMeasurementSection(report: ComprehensiveRoofReport, brandSecondary
         <div style="font-size:11px;color:${MUTED_TEXT_PRIMARY};text-transform:uppercase;font-weight:600;">${STAT_LABEL_TOTAL_SQ_FT}</div>
       </div>
       <div style="flex:1;min-width:140px;background:${STAT_CARD_BG};border-radius:8px;padding:16px;text-align:center;border:1px solid ${STAT_CARD_BORDER};">
-        <div style="font-size:20px;font-weight:800;color:${STAT_CARD_TEXT_COLOR};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${mr.averagePitch || 'N/A'}</div>
+        <div style="font-size:20px;font-weight:800;color:${STAT_CARD_TEXT_COLOR};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(mr.averagePitch || 'N/A')}</div>
         <div style="font-size:11px;color:${MUTED_TEXT_PRIMARY};text-transform:uppercase;font-weight:600;">${STAT_LABEL_AVG_PITCH}</div>
       </div>
       <div style="flex:1;min-width:140px;background:${STAT_CARD_BG};border-radius:8px;padding:16px;text-align:center;border:1px solid ${STAT_CARD_BORDER};">
-        <div style="font-size:20px;font-weight:800;color:${STAT_CARD_TEXT_COLOR};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${mr.wastePercentage}%</div>
+        <div style="font-size:20px;font-weight:800;color:${STAT_CARD_TEXT_COLOR};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(mr.wastePercentage)}%</div>
         <div style="font-size:11px;color:${MUTED_TEXT_PRIMARY};text-transform:uppercase;font-weight:600;">${STAT_LABEL_WASTE_FACTOR}</div>
       </div>
     </div>
@@ -2210,13 +2214,13 @@ function buildMeasurementSection(report: ComprehensiveRoofReport, brandSecondary
 
   // 3D Roof visualization
   let roof3DBlock = '';
-  const roof3DImage = report.measurements?.roof3DImage;
-  if (roof3DImage && typeof roof3DImage === 'string') {
+  const roof3DImage = safeImageSrc(report.measurements?.roof3DImage);
+  if (roof3DImage) {
     roof3DBlock = `
       <div style="margin-bottom:20px;text-align:center;">
         <h3 style="font-size:15px;font-weight:700;margin:0 0 12px;color:${H3_DARK_HEADING_COLOR};">${LABEL_3D_ROOF_GEOMETRY}</h3>
         <div style="display:inline-block;border:1px solid ${BORDER_COLOR_NEUTRAL};border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
-          <img src="${roof3DImage}" alt="3D Roof Model" style="max-width:100%;height:auto;" />
+          <img src="${escapeHtml(roof3DImage)}" alt="3D Roof Model" style="max-width:100%;height:auto;" />
         </div>
       </div>
     `;
@@ -2237,7 +2241,7 @@ function buildMeasurementSection(report: ComprehensiveRoofReport, brandSecondary
       <tr style="background:${i % 2 === 1 ? ZEBRA_BG_ODD : ZEBRA_BG_EVEN};">
         <td style="padding:8px 12px;font-size:13px;">${escapeHtml(seg.name || `${SEGMENT_NAME_PREFIX}${i + 1}`)}</td>
         <td style="padding:8px 12px;font-size:13px;text-align:right;">${(seg.footprintSqFt ?? 0).toLocaleString()}${SQFT_SUFFIX}</td>
-        <td style="padding:8px 12px;font-size:13px;text-align:center;">${seg.pitch || '-'}</td>
+        <td style="padding:8px 12px;font-size:13px;text-align:center;">${escapeHtml(seg.pitch || '-')}</td>
         <td style="padding:8px 12px;font-size:13px;text-align:right;">${(seg.adjustedSqFt ?? 0).toLocaleString()}${SQFT_SUFFIX}</td>
       </tr>
     `).join('');
@@ -2281,8 +2285,8 @@ function buildMeasurementSection(report: ComprehensiveRoofReport, brandSecondary
       return `
       <div style="background:${colors.bg};border-radius:8px;padding:14px 12px;min-width:110px;border:1px solid ${colors.border};text-align:center;">
         <div style="font-size:22px;font-weight:800;color:${colors.text};">${Math.round(val)}'</div>
-        <div style="font-size:11px;font-weight:700;color:${colors.text};text-transform:uppercase;margin-top:2px;">${label}</div>
-        <div style="font-size:9px;color:${MUTED_TEXT_SECONDARY};margin-top:4px;">${desc}</div>
+        <div style="font-size:11px;font-weight:700;color:${colors.text};text-transform:uppercase;margin-top:2px;">${escapeHtml(label)}</div>
+        <div style="font-size:9px;color:${MUTED_TEXT_SECONDARY};margin-top:4px;">${escapeHtml(desc)}</div>
       </div>
     `;
     }).join('');
@@ -2310,9 +2314,9 @@ function buildMeasurementSection(report: ComprehensiveRoofReport, brandSecondary
       }
       return `
         <tr style="background:${i % 2 === 1 ? ZEBRA_BG_ODD : ZEBRA_BG_EVEN};">
-          <td style="padding:8px 12px;font-size:13px;">${item.replace(UNDERSCORE_TO_SPACE_RE, ' ').replace(WORD_BOUNDARY_RE, c => c.toUpperCase())}</td>
-          <td style="padding:8px 12px;font-size:13px;text-align:right;">${quantity}</td>
-          <td style="padding:8px 12px;font-size:13px;text-align:right;color:${MUTED_TEXT_PRIMARY};">${unit}</td>
+          <td style="padding:8px 12px;font-size:13px;">${escapeHtml(item.replace(UNDERSCORE_TO_SPACE_RE, ' ').replace(WORD_BOUNDARY_RE, c => c.toUpperCase()))}</td>
+          <td style="padding:8px 12px;font-size:13px;text-align:right;">${escapeHtml(quantity)}</td>
+          <td style="padding:8px 12px;font-size:13px;text-align:right;color:${MUTED_TEXT_PRIMARY};">${escapeHtml(unit)}</td>
         </tr>
       `;
     }).join('');
@@ -2377,7 +2381,7 @@ function buildReplacementOptionsSection(
           <div style="font-size:11px;text-transform:uppercase;color:#6b7280;font-weight:600;margin-bottom:4px;">${LABEL_TIER_MATERIALS}</div>
           <div style="font-size:13px;font-weight:600;color:#1f2937;">${escapeHtml(mat.description)}</div>
           ${mat.brand ? `<div style="font-size:11px;color:#6b7280;">${escapeHtml(mat.brand)}${mat.details ? ` - ${escapeHtml(mat.details)}` : ''}</div>` : ''}
-          <div style="font-size:12px;color:#6b7280;margin-top:4px;">${mat.quantity} ${mat.unit} × $${(mat.unit_price || 0).toLocaleString()}/SQ</div>
+          <div style="font-size:12px;color:#6b7280;margin-top:4px;">${escapeHtml(mat.quantity)} ${escapeHtml(mat.unit)} × $${(mat.unit_price || 0).toLocaleString()}/SQ</div>
         </div>
       `;
     }
@@ -2387,7 +2391,7 @@ function buildReplacementOptionsSection(
         ${isRecommended ? `<div style="background:${brandPrimary};color:#fff;text-align:center;padding:6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">${BADGE_MOST_POPULAR}</div>` : ''}
         <div style="background:${colors.bg};padding:20px;">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-            <span style="display:inline-block;padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700;text-transform:uppercase;background:${colors.badge};color:#fff;">${tier.tier}</span>
+            <span style="display:inline-block;padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700;text-transform:uppercase;background:${colors.badge};color:#fff;">${escapeHtml(tier.tier)}</span>
           </div>
           <div style="font-size:18px;font-weight:700;color:#1f2937;margin-bottom:2px;">${escapeHtml(tier.name || tier.tier)}</div>
           ${tier.tagline ? `<div style="font-size:12px;color:#6b7280;margin-bottom:12px;">${escapeHtml(tier.tagline)}</div>` : ''}
@@ -2395,7 +2399,7 @@ function buildReplacementOptionsSection(
           <div style="font-size:32px;font-weight:800;color:${isRecommended ? brandPrimary : '#1f2937'};margin-bottom:4px;">
             $${(tier.total || 0).toLocaleString()}
           </div>
-          ${tier.warranty_years ? `<div style="font-size:12px;color:#6b7280;">${tier.warranty_years}${WARRANTY_YEAR_SUFFIX}</div>` : ''}
+          ${tier.warranty_years ? `<div style="font-size:12px;color:#6b7280;">${escapeHtml(tier.warranty_years)}${WARRANTY_YEAR_SUFFIX}</div>` : ''}
 
           <div style="margin-top:16px;">
             ${featuresHtml}
@@ -2451,7 +2455,7 @@ function buildCredentialsSection(brandColors: BrandColors, brandSecondary: strin
       <div style="display:flex;flex-wrap:wrap;gap:8px;">
         ${brandColors.warranties!.map(w => `
           <div style="padding:8px 14px;background:#f0fdf4;border:1px solid #86efac;border-radius:6px;">
-            <div style="font-size:12px;font-weight:600;color:#166534;">${escapeHtml(w.type)} - ${w.years} Year${w.years > 1 ? 's' : ''}</div>
+            <div style="font-size:12px;font-weight:600;color:#166534;">${escapeHtml(w.type)} - ${escapeHtml(w.years)} Year${Number(w.years) > 1 ? 's' : ''}</div>
             ${w.description ? `<div style="font-size:10px;color:#6b7280;margin-top:2px;">${escapeHtml(w.description)}</div>` : ''}
           </div>
         `).join('')}
@@ -2520,7 +2524,7 @@ function buildRCISection(rci: RoofConditionIndex, brandSecondary: string): strin
     const barColorRaw = c.score >= 80 ? '#22c55e' : c.score >= 60 ? '#eab308' : c.score >= 40 ? '#f97316' : '#ef4444';
     return `
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
-        <div style="width:140px;font-size:12px;color:#374151;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${c.name}</div>
+        <div style="width:140px;font-size:12px;color:#374151;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(c.name)}</div>
         <div style="flex:1;background:var(--border-subtle);border-radius:6px;height:22px;overflow:hidden;">
           <div class="progress-bar-fill" style="width:${c.score}%;background:${barColor};height:100%;border-radius:6px;animation-delay:${0.2 + i * 0.1}s;"></div>
         </div>
@@ -2550,7 +2554,7 @@ function buildRCISection(rci: RoofConditionIndex, brandSecondary: string): strin
             </div>
           </div>
           <div style="margin-top:10px;">
-            <span class="badge-pulse" style="display:inline-block;padding:6px 20px;border-radius:var(--radius-sm);font-size:18px;font-weight:800;background:${gc.bg};color:${gc.text};">${LABEL_GRADE_PREFIX}${rci.grade}</span>
+            <span class="badge-pulse" style="display:inline-block;padding:6px 20px;border-radius:var(--radius-sm);font-size:18px;font-weight:800;background:${gc.bg};color:${gc.text};">${LABEL_GRADE_PREFIX}${escapeHtml(rci.grade)}</span>
           </div>
         </div>
         <div style="flex:1;min-width:280px;">
@@ -2577,12 +2581,12 @@ function buildStormTimeline(storm: StormSummarySection, brandSecondary: string):
     return `
       <div style="flex:1;text-align:center;min-width:60px;">
         <div style="height:100px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;">
-          ${data.hail > 0 ? `<div class="timeline-bar" style="width:28px;background:linear-gradient(180deg, #fbbf24, #f59e0b);border-radius:4px 4px 0 0;height:${Math.max(4, (data.hail / maxEvents) * 80)}px;animation-delay:${0.1 + i * 0.08}s;" title="${data.hail} hail events"></div>` : ''}
-          ${data.wind > 0 ? `<div class="timeline-bar" style="width:28px;background:linear-gradient(180deg, #60a5fa, #3b82f6);border-radius:${data.hail > 0 ? '0' : '4px 4px'} 0 0;height:${Math.max(4, (data.wind / maxEvents) * 80)}px;animation-delay:${0.15 + i * 0.08}s;" title="${data.wind} wind events"></div>` : ''}
+          ${data.hail > 0 ? `<div class="timeline-bar" style="width:28px;background:linear-gradient(180deg, #fbbf24, #f59e0b);border-radius:4px 4px 0 0;height:${Math.max(4, (data.hail / maxEvents) * 80)}px;animation-delay:${0.1 + i * 0.08}s;" title="${escapeHtml(data.hail)} hail events"></div>` : ''}
+          ${data.wind > 0 ? `<div class="timeline-bar" style="width:28px;background:linear-gradient(180deg, #60a5fa, #3b82f6);border-radius:${data.hail > 0 ? '0' : '4px 4px'} 0 0;height:${Math.max(4, (data.wind / maxEvents) * 80)}px;animation-delay:${0.15 + i * 0.08}s;" title="${escapeHtml(data.wind)} wind events"></div>` : ''}
           ${data.total === 0 ? `<div style="width:28px;background:var(--border-light);border-radius:4px;height:4px;"></div>` : ''}
         </div>
-        <div style="font-size:11px;font-weight:${isDOLYear ? '800' : '500'};color:${isDOLYear ? 'var(--severity-critical)' : 'var(--text-secondary)'};margin-top:6px;">${year}</div>
-        <div style="font-size:10px;color:var(--text-muted);">${data.total}${EVENTS_COUNT_SUFFIX}</div>
+        <div style="font-size:11px;font-weight:${isDOLYear ? '800' : '500'};color:${isDOLYear ? 'var(--severity-critical)' : 'var(--text-secondary)'};margin-top:6px;">${escapeHtml(year)}</div>
+        <div style="font-size:10px;color:var(--text-muted);">${escapeHtml(data.total)}${EVENTS_COUNT_SUFFIX}</div>
         ${isDOLYear ? `<div style="font-size:9px;color:var(--severity-critical);font-weight:700;letter-spacing:0.5px;">${LABEL_DATE_OF_LOSS_FLAG}</div>` : ''}
       </div>
     `;
@@ -2624,9 +2628,9 @@ function buildInsuranceClaimSection(report: ComprehensiveRoofReport, brandSecond
   const dolSection = storm.recommendedDateOfLoss ? `
     <div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:16px;margin-bottom:16px;">
       <div style="font-size:12px;text-transform:uppercase;color:#92400e;font-weight:700;margin-bottom:6px;">${LABEL_RECOMMENDED_DATE_OF_LOSS_BLOCK}</div>
-      <div style="font-size:20px;font-weight:800;color:#78350f;">${storm.recommendedDateOfLoss.date}</div>
-      <div style="font-size:13px;color:#92400e;margin-top:4px;">${storm.recommendedDateOfLoss.eventType} - ${storm.recommendedDateOfLoss.magnitude}</div>
-      <div style="font-size:12px;color:#a16207;margin-top:8px;font-style:italic;">${storm.recommendedDateOfLoss.reason}</div>
+      <div style="font-size:20px;font-weight:800;color:#78350f;">${escapeHtml(storm.recommendedDateOfLoss.date)}</div>
+      <div style="font-size:13px;color:#92400e;margin-top:4px;">${escapeHtml(storm.recommendedDateOfLoss.eventType)} - ${escapeHtml(storm.recommendedDateOfLoss.magnitude)}</div>
+      <div style="font-size:12px;color:#a16207;margin-top:8px;font-style:italic;">${escapeHtml(storm.recommendedDateOfLoss.reason)}</div>
     </div>
   ` : '';
 
@@ -2658,7 +2662,7 @@ function buildInsuranceClaimSection(report: ComprehensiveRoofReport, brandSecond
         </div>
         <div style="flex:1;min-width:150px;background:#f9fafb;border-radius:8px;padding:16px;text-align:center;">
           <div style="font-size:20px;font-weight:700;color:#1f2937;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${storm.totalEvents}</div>
-          <div style="font-size:11px;color:#6b7280;">Storm Events (${storm.yearsAnalyzed}yr)</div>
+          <div style="font-size:11px;color:#6b7280;">Storm Events (${escapeHtml(storm.yearsAnalyzed)}yr)</div>
         </div>
         ${totalEstimate > 0 ? `
           <div style="flex:1;min-width:150px;background:#f9fafb;border-radius:8px;padding:16px;text-align:center;">

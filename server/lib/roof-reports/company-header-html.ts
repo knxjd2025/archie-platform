@@ -4,6 +4,14 @@
  * All CSS is inline for print/PDF compatibility.
  */
 
+import { escapeHtml } from './escape-html.js';
+import { safeColor } from './html-safety.js';
+
+/** Picture types a logo may be stored as. Anything else is not drawn. */
+const LOGO_MIME = /^image\/(?:png|jpeg|jpg|webp|gif)$/i;
+/** Base64 only: no quote, no angle bracket, nothing that could end the attribute. */
+const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
+
 export interface CompanyHeaderOptions {
   name: string;
   logoData?: string | null;
@@ -26,33 +34,34 @@ export interface CompanyHeaderOptions {
 export function companyHeaderHTML(opts: CompanyHeaderOptions): string {
   if (!opts.name) return '';
 
-  const brandColor = opts.brandPrimaryColor || '#ea580c';
+  const brandColor = safeColor(opts.brandPrimaryColor, '#ea580c');
 
-  const logoHTML = opts.logoData && opts.logoMimeType
-    ? `<img src="data:${opts.logoMimeType};base64,${opts.logoData}" alt="${opts.name}" style="max-height:${opts.compact ? '40px' : '60px'};max-width:${opts.compact ? '120px' : '180px'};object-fit:contain;" />`
+  const logoOk = Boolean(opts.logoData && opts.logoMimeType && LOGO_MIME.test(opts.logoMimeType) && BASE64.test(opts.logoData));
+  const logoHTML = logoOk
+    ? `<img src="data:${opts.logoMimeType};base64,${opts.logoData}" alt="${escapeHtml(opts.name)}" style="max-height:${opts.compact ? '40px' : '60px'};max-width:${opts.compact ? '120px' : '180px'};object-fit:contain;" />`
     : '';
 
   // Structured contact layout: each on its own line with label
   const contactLines: string[] = [];
   const fontSize = opts.compact ? '11px' : '13px';
-  if (opts.phone) contactLines.push(`<div style="font-size:${fontSize};color:#6b7280;margin-top:2px;"><span style="font-weight:600;color:#9ca3af;margin-right:4px;">P</span>${opts.phone}</div>`);
-  if (opts.email) contactLines.push(`<div style="font-size:${fontSize};color:#6b7280;margin-top:1px;"><span style="font-weight:600;color:#9ca3af;margin-right:4px;">E</span>${opts.email}</div>`);
-  if (opts.website) contactLines.push(`<div style="font-size:${fontSize};color:#6b7280;margin-top:1px;"><span style="font-weight:600;color:#9ca3af;margin-right:4px;">W</span>${opts.website}</div>`);
+  if (opts.phone) contactLines.push(`<div style="font-size:${fontSize};color:#6b7280;margin-top:2px;"><span style="font-weight:600;color:#9ca3af;margin-right:4px;">P</span>${escapeHtml(opts.phone)}</div>`);
+  if (opts.email) contactLines.push(`<div style="font-size:${fontSize};color:#6b7280;margin-top:1px;"><span style="font-weight:600;color:#9ca3af;margin-right:4px;">E</span>${escapeHtml(opts.email)}</div>`);
+  if (opts.website) contactLines.push(`<div style="font-size:${fontSize};color:#6b7280;margin-top:1px;"><span style="font-weight:600;color:#9ca3af;margin-right:4px;">W</span>${escapeHtml(opts.website)}</div>`);
   const contactBlock = contactLines.join('');
 
   const addressLine = opts.address
-    ? `<div style="font-size:${opts.compact ? '11px' : '13px'};color:#6b7280;margin-top:3px;">${opts.address}</div>`
+    ? `<div style="font-size:${opts.compact ? '11px' : '13px'};color:#6b7280;margin-top:3px;">${escapeHtml(opts.address)}</div>`
     : '';
 
   // License as pill badge
   const licenseLine = opts.licenseNumber
-    ? `<div style="display:inline-block;font-size:11px;font-weight:600;color:#6b7280;background:#f3f4f6;padding:2px 10px;border-radius:10px;margin-top:6px;">License #${opts.licenseNumber}</div>`
+    ? `<div style="display:inline-block;font-size:11px;font-weight:600;color:#6b7280;background:#f3f4f6;padding:2px 10px;border-radius:10px;margin-top:6px;">License #${escapeHtml(opts.licenseNumber)}</div>`
     : '';
 
   // Certifications as brand-tinted pills
   const certBadges = !opts.compact && opts.certifications && opts.certifications.length > 0
     ? `<div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;">${opts.certifications.map(c =>
-        `<span style="font-size:10px;background:${brandColor}12;color:${brandColor};padding:3px 10px;border-radius:10px;border:1px solid ${brandColor}30;font-weight:500;">${c.name}</span>`
+        `<span style="font-size:10px;background:${brandColor}12;color:${brandColor};padding:3px 10px;border-radius:10px;border:1px solid ${brandColor}30;font-weight:500;">${escapeHtml(c.name)}</span>`
       ).join('')}</div>`
     : '';
 
@@ -65,8 +74,8 @@ export function companyHeaderHTML(opts: CompanyHeaderOptions): string {
       <div style="display:flex;align-items:center;gap:${opts.compact ? '10px' : '16px'};">
         ${logoHTML}
         <div>
-          <div style="font-size:${opts.compact ? '16px' : '22px'};font-weight:700;color:#111827;letter-spacing:0.3px;">${opts.name}</div>
-          ${opts.tagline ? `<div style="font-size:${opts.compact ? '10px' : '12px'};color:#6b7280;font-style:italic;margin-top:1px;">${opts.tagline}</div>` : ''}
+          <div style="font-size:${opts.compact ? '16px' : '22px'};font-weight:700;color:#111827;letter-spacing:0.3px;">${escapeHtml(opts.name)}</div>
+          ${opts.tagline ? `<div style="font-size:${opts.compact ? '10px' : '12px'};color:#6b7280;font-style:italic;margin-top:1px;">${escapeHtml(opts.tagline)}</div>` : ''}
           ${contactBlock}
           ${addressLine}
         </div>

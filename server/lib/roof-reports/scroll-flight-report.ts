@@ -29,6 +29,8 @@
 
 import { SCROLLCRAFT_CSS, SCROLLCRAFT_JS } from '../reports/scrollcraft-engine.js';
 import { escapeHtml } from './escape-html';
+import { safeColor, safeHttpUrl } from './html-safety';
+import { normalizeReportNumbers } from './report-normalize';
 import type {
   AnalyzedPhoto,
   ComprehensiveRoofReport,
@@ -56,11 +58,6 @@ const SEAM = 0.18;
 
 const DEFAULT_PRIMARY = '#EA580C';
 const DEFAULT_SECONDARY = '#1F2937';
-
-/** Only hex. These land in a style attribute and are tenant-provided. */
-const HEX_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
-const safeColor = (v: string | undefined, fallback: string): string =>
-  v && HEX_RE.test(v.trim()) ? v.trim() : fallback;
 
 type Tone = 'good' | 'watch' | 'urgent';
 
@@ -104,8 +101,8 @@ const CATEGORY_WAYPOINT: Record<string, string> = {
 
 export function orderPhotosForFlight(photos: AnalyzedPhoto[]): AnalyzedPhoto[] {
   return photos
-    .filter((p) => typeof p.url === 'string' && p.url.length > 0)
-    .map((p, i) => ({ p, i }))
+    .filter((p) => safeHttpUrl(p?.url) !== '')
+    .map((p, i) => ({ p: { ...p, url: safeHttpUrl(p.url) }, i }))
     .sort((a, b) => {
       const av = CATEGORY_ALTITUDE[a.p.photoCategory || 'other'] ?? 2;
       const bv = CATEGORY_ALTITUDE[b.p.photoCategory || 'other'] ?? 2;
@@ -190,9 +187,10 @@ const money = (n: number): string =>
  * URLs and the webfont, so a saved copy still works.
  */
 export function generateScrollFlightReportHTML(
-  report: ComprehensiveRoofReport,
+  rawReport: ComprehensiveRoofReport,
   brand: FlightBrandColors = {},
 ): string {
+  const report = normalizeReportNumbers(rawReport);
   const primary = safeColor(brand.brandPrimaryColor, DEFAULT_PRIMARY);
   const secondary = safeColor(brand.brandSecondaryColor, DEFAULT_SECONDARY);
   const company = brand.companyName || 'Your roofer';
@@ -419,7 +417,7 @@ h1,h2{text-wrap:balance;text-shadow:0 2px 30px rgba(0,0,0,.6)}
 <div class="sc-grain" aria-hidden="true"></div>
 
 <header class="bar">
-  ${brand.companyLogo ? `<img src="${escapeHtml(brand.companyLogo)}" alt="${escapeHtml(company)}">` : `<span>${escapeHtml(company)}</span>`}
+  ${safeHttpUrl(brand.companyLogo) ? `<img src="${escapeHtml(safeHttpUrl(brand.companyLogo))}" alt="${escapeHtml(company)}">` : `<span>${escapeHtml(company)}</span>`}
   <span class="bar__meta">${escapeHtml(dateStr)}</span>
 </header>
 
