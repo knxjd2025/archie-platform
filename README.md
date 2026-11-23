@@ -47,6 +47,14 @@ itself, which was "deploy the code first, then migrate"
 deploy. The steps and checks are in docs/archie/02-roof-lee-link.md, "Before
 deploying this code".
 
+## Roof reports
+
+The old roof reports program is being merged into Archie: reports from an address, with or without
+photos, kept private and cleaned of location data. Stage B (the tables, the photos, the generation and
+the routes) is in. All of it is off until `ARCHIE_ROOF_REPORTS=on`. **Apply migrations `0020` and `0021`
+as the owner before deploying code that reads them**; both are safe under the code live today. See
+docs/archie/03-roof-reports.md.
+
 ## Not in this repo on purpose
 
 - `ios/` and `android/` app shells (will be regenerated with Archie's own bundle IDs)
