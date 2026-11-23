@@ -137,12 +137,9 @@ export async function photosNamedOfReport(reportId: string, ids: readonly string
     .orderBy(asc(roofReportPhotos.position));
 }
 
-/** One copy of a photo, as bytes. Null when the photo is not this report's own, has no copy in the store, or is too large to hand on. */
-export async function reportPhotoBytes(reportId: string, photoId: string, variant: PhotoVariant, store: PhotoStore | null = photoStore()): Promise<Buffer | null> {
-  if (!store || !isId(reportId) || !isId(photoId) || (variant !== 'working' && variant !== 'thumb')) return null;
-  const [photo] = await db.select().from(roofReportPhotos).where(and(eq(roofReportPhotos.id, photoId), eq(roofReportPhotos.reportId, reportId))).limit(1);
-  if (!photo) return null;
-  const object = await store.get(variant === 'thumb' ? photo.thumbKey : photo.workingKey);
+/** One stored copy as bytes, or null when the store has lost it or it is larger than allowed. */
+async function readCopy(store: PhotoStore, key: string): Promise<Buffer | null> {
+  const object = await store.get(key);
   if (!object) return null;
   const chunks: Buffer[] = [];
   let total = 0;
@@ -153,6 +150,23 @@ export async function reportPhotoBytes(reportId: string, photoId: string, varian
     chunks.push(b);
   }
   return Buffer.concat(chunks);
+}
+
+/** One copy of a photo, as bytes. Null when the photo is not this report's own, has no copy in the store, or is too large to hand on. */
+export async function reportPhotoBytes(reportId: string, photoId: string, variant: PhotoVariant, store: PhotoStore | null = photoStore()): Promise<Buffer | null> {
+  if (!store || !isId(reportId) || !isId(photoId) || (variant !== 'working' && variant !== 'thumb')) return null;
+  const [photo] = await db.select().from(roofReportPhotos).where(and(eq(roofReportPhotos.id, photoId), eq(roofReportPhotos.reportId, reportId))).limit(1);
+  if (!photo) return null;
+  return readCopy(store, variant === 'thumb' ? photo.thumbKey : photo.workingKey);
+}
+
+/** The working copy of one of this report's photos with what it was said to show, for the generation. Null for any other photo. */
+export async function loadReportPhoto(reportId: string, photoId: string, store: PhotoStore | null = photoStore()): Promise<{ bytes: Buffer; category: string | null } | null> {
+  if (!store || !isId(reportId) || !isId(photoId)) return null;
+  const [photo] = await db.select().from(roofReportPhotos).where(and(eq(roofReportPhotos.id, photoId), eq(roofReportPhotos.reportId, reportId))).limit(1);
+  if (!photo) return null;
+  const bytes = await readCopy(store, photo.workingKey);
+  return bytes ? { bytes, category: photo.category } : null;
 }
 
 function sendPhoto(res: Response, bytes: Buffer): void {
