@@ -191,15 +191,15 @@ function readUpload(req: Request, res: Response, next: NextFunction): void {
 }
 
 /**
- * The photo routes, to be mounted under /api/roof-reports after the switch:
+ * The photo routes, in two parts so the caller controls the order around the
+ * sign-in check:
  *
- *   GET  /linked-photo/:token            a short signed link; no session; the signature IS the check
- *   POST /photos                         a raw JPEG body, ?category=
- *   GET  /:id/photos/:photoId/:variant   through the report's own access rule
+ *   linkedPhotoRoute  GET /linked-photo/:token  a short signed link; no session; the signature IS the check
+ *   authedPhotoRoutes (after the sign-in and role check)
+ *                     POST /photos                         a raw JPEG body, ?category=
+ *                     GET  /:id/photos/:photoId/:variant   through the report's own access rule
  */
-export function photoRouter(): Router {
-  const router = Router();
-
+export function linkedPhotoRoute(router: Router): void {
   router.get('/linked-photo/:token', async (req, res) => {
     try {
       const link = verifyPhotoLink(req.params.token);
@@ -216,9 +216,9 @@ export function photoRouter(): Router {
       sendFailure(res, error, 'roof reports: GET linked-photo');
     }
   });
+}
 
-  router.use(requireAuth, requireRoofReportUser);
-
+export function authedPhotoRoutes(router: Router): void {
   router.post('/photos', readUpload, async (req, res) => {
     try {
       const user = roofReportUser(req)!;
@@ -246,6 +246,13 @@ export function photoRouter(): Router {
       sendFailure(res, error, 'roof reports: GET photo');
     }
   });
+}
 
+/** The whole photo surface as one router (the switch is the caller's). Used by the photo tests; the app mounts the two parts itself. */
+export function photoRouter(): Router {
+  const router = Router();
+  linkedPhotoRoute(router);
+  router.use(requireAuth, requireRoofReportUser);
+  authedPhotoRoutes(router);
   return router;
 }

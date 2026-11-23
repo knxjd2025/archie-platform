@@ -34,7 +34,7 @@ import { providerCaller, type ModelCaller, type ProviderKeys } from '../lib/roof
 import type { ImageLabel } from '../lib/roof-reports/comprehensive-roof-report.js';
 import {
   GEOCODE_FAILED, GENERATE_FAILED, MAX_REPORT_PHOTOS, NEEDS_ADDRESS, NEEDS_CITY_STATE, PICK_A_KIND, TOO_MANY_PHOTOS,
-  REPORT_KINDS, TEMPLATES,
+  REPORT_KINDS, TEMPLATES, roofReportPhotoPath,
 } from '../../shared/roof-reports';
 import { googleMapsKey } from '../lib/reports/google-key.js';
 import { meteredModelCaller, type CostOperation } from './metered';
@@ -148,8 +148,7 @@ function mapDamages(result: RoofAnalysisResult, photoIndex: number): DamageDetec
   return out;
 }
 
-/** The address of a photo inside the app. A route that checks who is asking, never a place in the store. */
-const photoPath = (reportId: string, photoId: string, variant: 'working' | 'thumb') => `/api/roof-reports/${reportId}/photos/${photoId}/${variant}`;
+const photoPath = roofReportPhotoPath;
 
 function stub(reportId: string, photoId: string, category: PhotoCategory | undefined, summary: string): AnalyzedPhoto {
   return {

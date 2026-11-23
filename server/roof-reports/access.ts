@@ -96,6 +96,13 @@ export async function roofReportFor(user: SessionUser, id: string): Promise<Roof
   return row ?? null;
 }
 
+/** Is there a job with this key in the company in context? Another company's job is not there. */
+export async function jobExistsInCompany(jobExternalId: string): Promise<boolean> {
+  if (typeof jobExternalId !== 'string' || !jobExternalId) return false;
+  const [job] = await db.select({ id: leads.id }).from(leads).where(eq(leads.externalId, jobExternalId)).limit(1);
+  return Boolean(job);
+}
+
 /** May this person attach a report to this job: it exists in their company and their scope covers it. */
 export async function mayAttachJob(user: SessionUser, jobExternalId: string): Promise<boolean> {
   if (typeof jobExternalId !== 'string' || !jobExternalId) return false;

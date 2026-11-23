@@ -51,6 +51,8 @@ export async function insertGenerating(args: { req: GenerateRequest; memberId: n
     customerEmail: cleanText(req.customer?.email, 254) || null,
     customerPhone: cleanText(req.customer?.phone, 40) || null,
     inspectorNotes: cleanText(req.inspectorNotes, 20_000) || null,
+    // What a retry needs and the row has no column for. Gone as soon as the report is saved.
+    reportJson: { retryInput: { roofDetails: req.roofDetails ?? null, damageCounts: req.damageCounts ?? null, measurements: req.measurements ?? null } },
     shareToken: newShareToken(),
   }).returning();
   return row;

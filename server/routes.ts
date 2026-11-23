@@ -22,6 +22,7 @@ import { registerAssistRoutes } from './ai/routes';
 import { registerDashboardRoutes } from './dashboard/routes';
 import { registerFollowUpRoutes } from './followups/routes';
 import { registerRoofReportRoutes } from './reports/routes';
+import { registerRoofReportsRoutes } from './roof-reports/routes';
 import { registerPhotoRoutes } from './photos/routes';
 import { registerCrewRoutes } from './crews/routes';
 import { registerCanvassRoutes } from './canvass/routes';
@@ -166,6 +167,8 @@ export function registerRoutes(app: Express) {
   registerDashboardRoutes(app);
   registerFollowUpRoutes(app);
   registerRoofReportRoutes(app);
+  // Roof reports merged from the old program: every route is a bare 404 unless ARCHIE_ROOF_REPORTS is "on".
+  registerRoofReportsRoutes(app);
   registerPhotoRoutes(app);
   registerCrewRoutes(app);
   registerCanvassRoutes(app);

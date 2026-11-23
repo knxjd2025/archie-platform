@@ -59,6 +59,13 @@ export const PAGE_NOT_SAFE = 'That page contains something that can\'t be saved.
 export const PAGE_NOT_READY = 'This report isn\'t ready to show yet.';
 export const PICK_PHOTO_KIND = 'Pick what the photo shows from the list.';
 
+export const STILL_BEING_MADE_EDIT = 'This report is still being made. Please try again once it finishes.';
+export const TOO_MANY_RECENT = 'You have made a lot of reports in the last few minutes. Please wait a little and try again.';
+
+/** Where a report photo is shown from inside the app: a route that checks who is asking. Never a place in the photo store. */
+export const roofReportPhotoPath = (reportId: string, photoId: string, variant: 'working' | 'thumb'): string =>
+  `/api/roof-reports/${reportId}/photos/${photoId}/${variant}`;
+
 /** The most photos one report may hold. The same cap as Archie's own documents. */
 export const MAX_REPORT_PHOTOS = 40;
 /** The most uploaded photos one person may leave waiting, unused, in a day. */

@@ -9,7 +9,7 @@
 import type { CompanyProfile } from '../../shared/company';
 import type { CompanyHeaderOptions } from '../lib/roof-reports/company-header-html.js';
 
-export interface ReportBrandColors {
+export type ReportBrandColors = {
   brandPrimaryColor: string;
   brandSecondaryColor: string;
   companyName: string;
@@ -18,7 +18,7 @@ export interface ReportBrandColors {
   companyWebsite: string;
   companyLogo: string;
   companyAddress: string;
-}
+};
 
 export interface ReportBrand {
   brandColors: ReportBrandColors;
