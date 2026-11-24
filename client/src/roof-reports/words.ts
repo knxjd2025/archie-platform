@@ -197,6 +197,16 @@ export const RR = {
     emailedTimes: (n: number) => `Emailed ${n} times.`,
     lastSent: (date: string) => `Last sent ${date}.`,
   },
+  rewrite: {
+    button: 'Rewrite',
+    rewriting: 'Rewriting...',
+    done: 'Rewritten. You can undo it.',
+    undo: 'Undo rewrite',
+    failed: 'The rewrite did not work, so nothing was changed. Please try again.',
+    unsavedFirst: 'Save your changes to this box first.',
+    rewriteFor: (label: string) => `Rewrite ${label}`,
+    undoFor: (label: string) => `Undo rewrite of ${label}`,
+  },
   pdf: {
     title: 'Printable copy',
     button: 'Download PDF',

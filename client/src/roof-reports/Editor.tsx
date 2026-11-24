@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { TeamRole } from '../../../shared/rbac';
 import { TEMPLATES, VISUAL_STYLES } from '../../../shared/roof-reports';
-import { archiveReport, createShareLink, fetchReport, revokeShareLink, sendReportEmail, updateReport } from './api';
+import { archiveReport, createShareLink, fetchReport, revokeShareLink, rewriteFinding, rewriteSummary, sendReportEmail, updateReport } from './api';
 import {
-  FRAME_SANDBOX, SaveChain, editsAllowed, emptyValues, fieldReducer, initialFields, previewSrc, readDetail, requestFor, sharesAllowed, valueOf, valuesOf,
+  FRAME_SANDBOX, SaveChain, editsAllowed, emptyValues, fieldReducer, initialFields, previewSrc, readDetail, requestFor, sharesAllowed, valueOf, valuesOf, withValue,
   type FieldKey, type FieldsState, type ReportDetail,
 } from './editor-model';
 import { partialNotes, type PartialNote } from './generate-flow';
 import { useCompany } from '../lib/company';
+import { initialRewrites, rewriteBusy, rewriteReducer, rewriteStateOf, submitRewrite, type RewriteMap } from './rewrite-model';
 import { loadPdfBuilder } from './pdf-loader';
 import { initialPdf, pdfFileName, pdfReducer, runPdf, saveFile, type PdfState } from './pdf-model';
 import { SendDialog } from './SendDialog';
@@ -34,6 +35,9 @@ export interface EditorViewProps {
   share: ShareState;
   onCopyLink: () => void;
   onTurnLinkOff: () => void;
+  rewrites: RewriteMap;
+  onRewrite: (key: FieldKey) => void;
+  onUndoRewrite: (key: FieldKey) => void;
   pdf: PdfState;
   onPdf: () => void;
   send: SendState;
@@ -67,14 +71,20 @@ function State({ fields, k, label }: { fields: FieldsState; k: FieldKey; label: 
   );
 }
 
-interface FieldProps { fields: FieldsState; k: FieldKey; label: string; multiline?: boolean; rows?: number; type?: string; max: number; onEdit: EditorViewProps['onEdit']; onSave: EditorViewProps['onSave']; editable: boolean }
+interface FieldProps {
+  fields: FieldsState; k: FieldKey; label: string; multiline?: boolean; rows?: number; type?: string; max: number; onEdit: EditorViewProps['onEdit']; onSave: EditorViewProps['onSave']; editable: boolean;
+  /** A field a model may rewrite (the summary, a finding): its state, and what its buttons do. */
+  rewrite?: { rewrites: RewriteMap; onRewrite: (key: FieldKey) => void; onUndo: (key: FieldKey) => void };
+}
 
 function Field(p: FieldProps) {
   const id = idFor(p.k);
   const s = p.fields.status[p.k] ?? { status: 'idle' as const };
   const value = valueOf(p.fields.values, p.k);
+  const rw = p.rewrite ? rewriteStateOf(p.rewrite.rewrites, p.k) : null;
+  const rewriting = rw?.phase === 'rewriting';
   const common = {
-    id, value, maxLength: p.max, disabled: !p.editable, 'aria-busy': s.status === 'saving' || undefined,
+    id, value, maxLength: p.max, disabled: !p.editable || rewriting, 'aria-busy': s.status === 'saving' || rewriting || undefined,
     onChange: (e: { target: { value: string } }) => p.onEdit(p.k, e.target.value),
     onBlur: () => { if (s.status === 'unsaved') p.onSave(p.k); },
     className: FIELD,
@@ -89,6 +99,26 @@ function Field(p: FieldProps) {
         </span>
       </div>
       {p.multiline ? <textarea rows={p.rows ?? 4} {...common} /> : <input type={p.type ?? 'text'} autoComplete="off" {...common} />}
+      {p.rewrite && p.editable && rw && (
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          {(() => {
+            const unsaved = s.status === 'unsaved' || s.status === 'saving' || s.status === 'failed';
+            const blocked = unsaved || rewriteBusy(p.rewrite.rewrites);
+            return (
+              <>
+                <button type="button" onClick={() => p.rewrite!.onRewrite(p.k)} disabled={blocked} aria-label={RR.rewrite.rewriteFor(p.label)} className={`text-xs ${BUTTON} !py-0.5`}>{RR.rewrite.button}</button>
+                {rw.previous !== null && rw.phase !== 'rewriting' && (
+                  <button type="button" onClick={() => p.rewrite!.onUndo(p.k)} disabled={blocked} aria-label={RR.rewrite.undoFor(p.label)} className={`text-xs ${BUTTON} !py-0.5`}>{RR.rewrite.undo}</button>
+                )}
+                {unsaved && !rewriting && <span className="text-xs text-gray-500">{RR.rewrite.unsavedFirst}</span>}
+              </>
+            );
+          })()}
+          {rewriting && <span role="status" className="text-xs text-gray-500">{RR.rewrite.rewriting}</span>}
+          {rw.phase === 'done' && <span role="status" className="text-xs text-emerald-700">{RR.rewrite.done}</span>}
+          {rw.phase === 'failed' && rw.error && <span role="alert" className="text-xs text-red-600">{rw.error}</span>}
+        </div>
+      )}
     </div>
   );
 }
@@ -159,6 +189,7 @@ export function EditorView(p: EditorViewProps) {
   const field = (k: FieldKey, label: string, o: Partial<FieldProps> = {}) => (
     <Field key={k} fields={p.fields} k={k} label={label} max={o.max ?? 200} onEdit={p.onEdit} onSave={p.onSave} editable={editable} {...o} />
   );
+  const rewritable = { rewrites: p.rewrites, onRewrite: p.onRewrite, onUndo: p.onUndoRewrite };
   return (
     <section className="space-y-4 pb-24" aria-label={p.detail.title || p.detail.address}>
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -216,10 +247,10 @@ export function EditorView(p: EditorViewProps) {
 
           <div className="space-y-3">
             <h4 className="text-sm font-semibold text-gray-900">{RR.editor.findingsTitle}</h4>
-            {field('summary', RR.editor.fieldSummary, { multiline: true, rows: 5, max: 20000 })}
+            {field('summary', RR.editor.fieldSummary, { multiline: true, rows: 5, max: 20000, rewrite: rewritable })}
             {v.findings.length === 0
               ? <p className="text-sm text-gray-500">{RR.editor.noFindings}</p>
-              : v.findings.map((_, i) => field(`finding:${i}` as FieldKey, RR.editor.finding(i + 1, typeof findings[i]?.title === 'string' ? (findings[i].title as string) : ''), { multiline: true, rows: 4, max: 20000 }))}
+              : v.findings.map((_, i) => field(`finding:${i}` as FieldKey, RR.editor.finding(i + 1, typeof findings[i]?.title === 'string' ? (findings[i].title as string) : ''), { multiline: true, rows: 4, max: 20000, rewrite: rewritable }))}
           </div>
 
           {editable && (
@@ -287,6 +318,9 @@ export default function Editor({ id, role, onBack, onArchived }: { id: string; r
   const [style, setStyle] = useState<{ template: StyleState; visualStyle: StyleState }>({ template: { busy: false, error: null }, visualStyle: { busy: false, error: null } });
   const [archive, setArchive] = useState<ArchiveState>({ phase: 'idle', error: null });
   const [share, dispatchShare] = useReducer(shareReducer, initialShare(false));
+  const [rewrites, dispatchRewrite] = useReducer(rewriteReducer, initialRewrites());
+  const rewritesRef = useRef(rewrites);
+  rewritesRef.current = rewrites;
   const [pdfState, dispatchPdf] = useReducer(pdfReducer, initialPdf());
   const pdfRef = useRef(pdfState);
   pdfRef.current = pdfState;
@@ -312,6 +346,7 @@ export default function Editor({ id, role, onBack, onArchived }: { id: string; r
         confirmed.current = d.report;
         dispatch({ type: 'reset', values: valuesOf(d) });
         dispatchShare({ type: 'reset', on: d.shareLinkOn });
+        dispatchRewrite({ type: 'reset' });
         setPhase(d.status === 'ready' ? 'ready' : d.status === 'generating' ? 'making' : 'failed');
       })
       .catch((e) => { if (alive.current) setPhase(plainMessage(e, '') === RR.editor.missing ? 'missing' : 'loadFailed'); });
@@ -320,21 +355,26 @@ export default function Editor({ id, role, onBack, onArchived }: { id: string; r
 
   const bump = () => { setPreviewLoading(true); setVersion((n) => n + 1); };
 
-  const save = useCallback((key: FieldKey) => {
-    const text = valueOf(fieldsRef.current.values, key);
+  /** Saves one field. `text` puts that text in the box first (the undo of a rewrite). Says whether it was saved. */
+  const save = useCallback((key: FieldKey, text?: string): Promise<boolean> => {
+    const values = text === undefined ? fieldsRef.current.values : withValue(fieldsRef.current.values, key, text);
+    const now = valueOf(values, key);
+    if (text !== undefined) dispatch({ type: 'edit', key, text });
     dispatch({ type: 'saving', key });
-    void chain.current.run(async () => {
-      const body = requestFor(key, fieldsRef.current.values, confirmed.current);
+    return chain.current.run(async () => {
+      const body = requestFor(key, values, confirmed.current);
       if (!body) throw new Error(RR.editor.saveFailed);
       const answer = readDetail(await updateReport(id, body));
       if (answer?.report) confirmed.current = answer.report;
       return answer;
     }).then(() => {
-      if (!alive.current) return;
-      dispatch({ type: 'saved', key, text });
+      if (!alive.current) return true;
+      dispatch({ type: 'saved', key, text: now });
       bump();
+      return true;
     }).catch((e) => {
       if (alive.current) dispatch({ type: 'failed', key, error: plainMessage(e, RR.editor.saveFailed) });
+      return false;
     });
   }, [id]);
 
@@ -387,6 +427,31 @@ export default function Editor({ id, role, onBack, onArchived }: { id: string; r
       });
   };
 
+  // A rewrite answers in the frame of the press: that one field says Rewriting... and nothing else moves. One at a time, in order with the saves.
+  const doRewrite = (key: FieldKey) => {
+    if (rewriteBusy(rewritesRef.current)) return;
+    const previous = valueOf(fieldsRef.current.values, key);
+    dispatchRewrite({ type: 'start', key });
+    const call = () => (key === 'summary' ? rewriteSummary(id) : rewriteFinding(id, Number(key.split(':')[1])));
+    void chain.current.run(() => submitRewrite({ call }, key, previous)).then((result) => {
+      if (!alive.current) return;
+      if (result.type === 'done') {
+        // The server already holds the new words: they are saved, so the box shows them as saved.
+        confirmed.current = result.report;
+        dispatch({ type: 'edit', key, text: result.text });
+        dispatch({ type: 'saved', key, text: result.text });
+        bump();
+      }
+      dispatchRewrite(result);
+    });
+  };
+  // Undo puts the old words back through the ordinary save of that field, and forgets the undo once that is saved.
+  const doUndoRewrite = (key: FieldKey) => {
+    const previous = rewritesRef.current[key]?.previous;
+    if (previous === null || previous === undefined || rewriteBusy(rewritesRef.current)) return;
+    void save(key, previous).then((saved) => { if (saved && alive.current) dispatchRewrite({ type: 'clear', key }); });
+  };
+
   // The PDF code is fetched by this click and by nothing else. The button answers in the same frame (Preparing PDF...).
   const doPdf = () => {
     if (!detail || pdfRef.current.phase === 'preparing') return;
@@ -428,6 +493,9 @@ export default function Editor({ id, role, onBack, onArchived }: { id: string; r
       share={share}
       onCopyLink={doCopyLink}
       onTurnLinkOff={doTurnLinkOff}
+      rewrites={rewrites}
+      onRewrite={doRewrite}
+      onUndoRewrite={doUndoRewrite}
       pdf={pdfState}
       onPdf={doPdf}
       send={send}
@@ -436,8 +504,8 @@ export default function Editor({ id, role, onBack, onArchived }: { id: string; r
       onSend={doSend}
       onCloseSend={() => dispatchSend({ type: 'close' })}
       onBack={onBack}
-      onEdit={(key, text) => dispatch({ type: 'edit', key, text })}
-      onSave={save}
+      onEdit={(key, text) => { dispatch({ type: 'edit', key, text }); if (rewritesRef.current[key]) dispatchRewrite({ type: 'clear', key }); }}
+      onSave={(key) => { void save(key); }}
       onTemplate={(v) => changeStyle('template', v)}
       onVisualStyle={(v) => changeStyle('visualStyle', v)}
       onAskArchive={() => setArchive({ phase: 'asking', error: null })}

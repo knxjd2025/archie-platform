@@ -104,6 +104,18 @@ export const SEND_TOO_FAST = 'You have sent a lot of emails in the last few minu
 export const SEND_KEY_REUSED = 'That was already used to send a different email. Please send it again.';
 export const SEND_SENDING = 'This email is already on its way.';
 
+/** Rewriting one finding or the summary with a model: the limits, and every sentence a person may be told. */
+export const MAX_REWRITES_PER_REPORT_PER_DAY = 20;
+export const MAX_REWRITES_PER_COMPANY_PER_DAY = 300;
+export const REWRITE_FAILED = 'The rewrite did not work, so nothing was changed. Please try again.';
+export const REWRITE_NOT_AVAILABLE = 'Rewriting is not available right now. Nothing was changed.';
+export const REWRITE_NOT_READY = 'A report can be rewritten once it is finished.';
+export const REWRITE_NO_SUCH = 'That part of the report could not be found. Please reload the report and try again.';
+export const REWRITE_CHANGED = 'The report changed while it was being rewritten, so nothing was changed. Please try again.';
+export const REWRITE_REPORT_CAPPED = 'This report has been rewritten a lot today. Please try again tomorrow.';
+export const REWRITE_COMPANY_CAPPED = 'Your company has used a lot of rewrites today. Please try again tomorrow.';
+export const REWRITE_TOO_FAST = 'You have asked for a lot of rewrites in the last few minutes. Please wait a little and try again.';
+
 export const STILL_BEING_MADE_EDIT = 'This report is still being made. Please try again once it finishes.';
 export const TOO_MANY_RECENT = 'You have made a lot of reports in the last few minutes. Please wait a little and try again.';
 
@@ -129,7 +141,7 @@ export type ReportPhotoCategory = (typeof REPORT_PHOTO_CATEGORIES)[number];
 export const SWITCHED_OFF = 'Roof reports are not switched on.';
 
 /** Every thing a person may do with a roof report. */
-export const ROOF_REPORT_ACTIONS = ['see', 'make', 'edit', 'send', 'archive', 'see_archived', 'change_job', 'remove_photo', 'share', 'unshare'] as const;
+export const ROOF_REPORT_ACTIONS = ['see', 'make', 'edit', 'send', 'archive', 'see_archived', 'change_job', 'remove_photo', 'share', 'unshare', 'rewrite'] as const;
 export type RoofReportAction = (typeof ROOF_REPORT_ACTIONS)[number];
 
 /**
@@ -138,6 +150,7 @@ export type RoofReportAction = (typeof ROOF_REPORT_ACTIONS)[number];
  * `own` is only a report the person made themselves, a leader's team excluded;
  * either way the person must also be able to see the job the report is on;
  * for `share` and `unshare`, making a customer link for a report and turning it off, the reach is the same as `send`: a role that sees everything may for any report, a leader for their team's, a salesperson for their own;
+ * for `rewrite`, asking a model to rewrite one finding or the summary, the reach is exactly the reach of `edit`;
  * for `remove_photo`, taking back a photo that is not in a report yet, `all` is
  * anyone's waiting photo in the company and `own` only one the person uploaded
  * themselves, and a photo already in a report is never removed by anyone):
@@ -160,12 +173,12 @@ export type RoofReportDecision = 'all' | 'team' | 'own' | 'no';
  * may list them.
  */
 export const ROOF_REPORT_RULES: Record<TeamRole, Record<RoofReportAction, RoofReportDecision>> = {
-  admin:            { see: 'all',  make: 'all',  edit: 'all',  send: 'all',  archive: 'all',  see_archived: 'all', change_job: 'all', remove_photo: 'all', share: 'all', unshare: 'all' },
-  sales_director:   { see: 'all',  make: 'all',  edit: 'all',  send: 'all',  archive: 'all',  see_archived: 'all', change_job: 'all', remove_photo: 'all', share: 'all', unshare: 'all' },
-  customer_service: { see: 'all',  make: 'all',  edit: 'all',  send: 'all',  archive: 'all',  see_archived: 'all', change_job: 'all', remove_photo: 'all', share: 'all', unshare: 'all' },
-  manager:          { see: 'team', make: 'team', edit: 'team', send: 'team', archive: 'team', see_archived: 'no',  change_job: 'own', remove_photo: 'own', share: 'team', unshare: 'team' },
-  sales:            { see: 'own',  make: 'own',  edit: 'own',  send: 'own',  archive: 'own',  see_archived: 'no',  change_job: 'own', remove_photo: 'own', share: 'own', unshare: 'own' },
-  production:       { see: 'no',   make: 'no',   edit: 'no',   send: 'no',   archive: 'no',   see_archived: 'no',  change_job: 'no', remove_photo: 'no', share: 'no', unshare: 'no' },
+  admin:            { see: 'all',  make: 'all',  edit: 'all',  send: 'all',  archive: 'all',  see_archived: 'all', change_job: 'all', remove_photo: 'all', share: 'all', unshare: 'all', rewrite: 'all' },
+  sales_director:   { see: 'all',  make: 'all',  edit: 'all',  send: 'all',  archive: 'all',  see_archived: 'all', change_job: 'all', remove_photo: 'all', share: 'all', unshare: 'all', rewrite: 'all' },
+  customer_service: { see: 'all',  make: 'all',  edit: 'all',  send: 'all',  archive: 'all',  see_archived: 'all', change_job: 'all', remove_photo: 'all', share: 'all', unshare: 'all', rewrite: 'all' },
+  manager:          { see: 'team', make: 'team', edit: 'team', send: 'team', archive: 'team', see_archived: 'no',  change_job: 'own', remove_photo: 'own', share: 'team', unshare: 'team', rewrite: 'team' },
+  sales:            { see: 'own',  make: 'own',  edit: 'own',  send: 'own',  archive: 'own',  see_archived: 'no',  change_job: 'own', remove_photo: 'own', share: 'own', unshare: 'own', rewrite: 'own' },
+  production:       { see: 'no',   make: 'no',   edit: 'no',   send: 'no',   archive: 'no',   see_archived: 'no',  change_job: 'no', remove_photo: 'no', share: 'no', unshare: 'no', rewrite: 'no' },
 };
 
 /** What this role may do, how far. An unknown role may do nothing. The server and the screens read the same table through this one function. */

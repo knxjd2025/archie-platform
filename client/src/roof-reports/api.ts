@@ -54,3 +54,11 @@ export const revokeShareLink = (id: string): Promise<{ shareLinkOn: boolean }> =
 /** Emails the report's link to the customer. One request key for each try, so a double press sends once. */
 export const sendReportEmail = (id: string, body: { email: string; customerName?: string; message?: string }, key: string): Promise<unknown> =>
   api.post(`/api/roof-reports/${encodeURIComponent(id)}/send`, body, { timeoutMs: 60_000, headers: { 'Idempotency-Key': key } });
+
+/** Asks for one finding to be rewritten. The answer is the new text and the report as it now stands; the call can take up to a minute. */
+export const rewriteFinding = (id: string, index: number): Promise<unknown> =>
+  api.post(`/api/roof-reports/${encodeURIComponent(id)}/rewrite-finding`, { index }, { timeoutMs: 90_000 });
+
+/** Asks for the summary to be rewritten. */
+export const rewriteSummary = (id: string): Promise<unknown> =>
+  api.post(`/api/roof-reports/${encodeURIComponent(id)}/rewrite-summary`, {}, { timeoutMs: 90_000 });

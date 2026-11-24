@@ -48,6 +48,8 @@ import { brandFor } from './brand';
 import { appOrigin, reportForPage, servedPage } from './page';
 import { registerPublicShareRoutes } from './public';
 import { registerSendRoute, type MailSender, type SendCaps } from './send';
+import { registerRewriteRoutes, type RewriteCaps } from './rewrite';
+import type { ModelCaller } from '../lib/roof-reports/model-call.js';
 import { requireRoofReportsOn } from './switch';
 
 export interface RoofReportRouteOptions {
@@ -57,6 +59,12 @@ export interface RoofReportRouteOptions {
   mail?: MailSender;
   /** The daily send limits, read on every request. Only a test replaces it. */
   sendCaps?: () => SendCaps;
+  /** The model a rewrite asks, for a report; null for none set up. Only a test replaces the real one, with a fake: no model is ever called from a test. */
+  rewriteModel?: (reportId: string) => ModelCaller | null;
+  /** The daily rewrite limits, read on every request. Only a test replaces it. */
+  rewriteCaps?: () => RewriteCaps;
+  /** The one deadline of a rewrite, in milliseconds. Only a test replaces it. */
+  rewriteDeadlineMs?: number;
 }
 
 const notFound = (res: Response) => res.status(404).json({ error: NOT_FOUND });
@@ -376,6 +384,8 @@ export function registerRoofReportsRoutes(app: Express, options: RoofReportRoute
 
   // Emailing a report: a person's click only, never a schedule.
   registerSendRoute(router, { mail: options.mail, caps: options.sendCaps });
+  // Rewriting one finding or the summary: a person's click only.
+  registerRewriteRoutes(router, { model: options.rewriteModel, caps: options.rewriteCaps, deadlineMs: options.rewriteDeadlineMs });
 
   app.use('/api/roof-reports', router);
   // The customer's link is outside /api: it needs no sign-in, and /r/* already reaches the server on the hosting.

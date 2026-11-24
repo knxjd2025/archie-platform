@@ -7,6 +7,7 @@ import { partialNotes } from '../generate-flow';
 import { initialShare, type ShareState } from '../share-model';
 import { initialSend, sendReducer } from '../send-model';
 import { initialPdf, pdfReducer } from '../pdf-model';
+import { initialRewrites, rewriteReducer } from '../rewrite-model';
 import { WARN_OUT_OF_TIME, warnSomePhotos } from '../../../../shared/roof-reports';
 
 const BANNED = new RegExp(`${String.fromCharCode(0x2014)}|✨|🪄`, 'u');
@@ -25,7 +26,7 @@ const view = (over: Partial<EditorViewProps> = {}) => render(createElement(Edito
   role: 'admin', detail: detail(), fields: initialFields(valuesOf(detail())), previewVersion: 1, previewLoading: false, partial: [],
   style: { template: { busy: false, error: null }, visualStyle: { busy: false, error: null } }, archive: { phase: 'idle', error: null },
   share: initialShare(false), onCopyLink: noop, onTurnLinkOff: noop,
-  pdf: initialPdf(), onPdf: noop, send: initialSend(), onOpenSend: noop, onEditSend: noop, onSend: noop, onCloseSend: noop,
+  rewrites: initialRewrites(), onRewrite: noop, onUndoRewrite: noop, pdf: initialPdf(), onPdf: noop, send: initialSend(), onOpenSend: noop, onEditSend: noop, onSend: noop, onCloseSend: noop,
   onBack: noop, onEdit: noop, onSave: noop, onTemplate: noop, onVisualStyle: noop, onAskArchive: noop, onCancelArchive: noop, onArchive: noop, onPreviewLoaded: noop, ...over,
 }));
 
@@ -232,6 +233,53 @@ describe('the editor: emailing the report', () => {
     expect(read({ ...base, emailSentCount: 3, emailSentAt: '2026-11-24T15:00:00.000Z' })).toMatchObject({ emailSentCount: 3, emailSentAt: '2026-11-24T15:00:00.000Z' });
     expect(read(base)).toMatchObject({ emailSentCount: 0, emailSentAt: null });
     expect(read({ ...base, emailSentCount: 'lots' })).toMatchObject({ emailSentCount: 0 });
+  });
+});
+
+describe('the editor: rewriting a finding or the summary', () => {
+  it('puts a Rewrite button on the summary and on each finding, for a role that may edit, and not for one that may not', () => {
+    const h = view({ role: 'admin' });
+    expect(h).toContain('aria-label="Rewrite Summary"');
+    expect(h).toContain('aria-label="Rewrite Finding 1: Missing shingles"');
+    expect((h.match(/>Rewrite</g) ?? []).length).toBe(2);
+    expect(view({ role: 'production' })).not.toContain('>Rewrite<');
+  });
+
+  it('says Rewriting on that one field, turns its button off and the box read-only, and leaves the others alone', () => {
+    const h = view({ rewrites: rewriteReducer(initialRewrites(), { type: 'start', key: 'finding:0' }) });
+    expect(h).toContain('Rewriting...');
+    expect((h.match(/Rewriting\.\.\./g) ?? []).length).toBe(1);
+    expect(h).toMatch(/<button[^>]*aria-label="Rewrite Finding 1: Missing shingles"[^>]*disabled=""|<button[^>]*disabled=""[^>]*aria-label="Rewrite Finding 1: Missing shingles"/);
+    expect(h).toMatch(/<textarea[^>]*id="rr-edit-finding-0"[^>]*disabled=""|<textarea[^>]*disabled=""[^>]*id="rr-edit-finding-0"/);
+    expect(h).not.toMatch(/<button[^>]*aria-label="Rewrite Summary"[^>]*disabled=""/);
+  });
+
+  it('shows Undo rewrite only after a rewrite landed, on that field', () => {
+    expect(view()).not.toContain('Undo rewrite');
+    const done = rewriteReducer(rewriteReducer(initialRewrites(), { type: 'start', key: 'summary' }), { type: 'done', key: 'summary', previous: 'Old.' });
+    const h = view({ rewrites: done });
+    expect((h.match(/>Undo rewrite</g) ?? []).length).toBe(1);
+    expect(h).toContain('aria-label="Undo rewrite of Summary"');
+  });
+
+  it('says the plain sentence when it failed, on that field', () => {
+    const failed = rewriteReducer(rewriteReducer(initialRewrites(), { type: 'start', key: 'summary' }), { type: 'failed', key: 'summary', error: 'The rewrite did not work, so nothing was changed. Please try again.' });
+    const h = view({ rewrites: failed });
+    expect(h).toContain('role="alert"');
+    expect(h).toContain('The rewrite did not work, so nothing was changed. Please try again.');
+  });
+
+  it('does not offer a rewrite of a box that holds unsaved typing, and says why', () => {
+    const typed = fieldReducer(initialFields(valuesOf(detail())), { type: 'edit', key: 'summary', text: 'Typed but not saved' });
+    const h = view({ fields: typed });
+    expect(h).toMatch(/<button[^>]*aria-label="Rewrite Summary"[^>]*disabled=""|<button[^>]*disabled=""[^>]*aria-label="Rewrite Summary"/);
+    expect(h).toContain('Save your changes to this box first.');
+  });
+
+  it('draws no sparkle, wand or magic and no em dash', () => {
+    const h = view({ rewrites: rewriteReducer(initialRewrites(), { type: 'start', key: 'summary' }) });
+    expect(h).not.toMatch(BANNED);
+    expect(h).not.toMatch(/sparkle|wand|magic/i);
   });
 });
 

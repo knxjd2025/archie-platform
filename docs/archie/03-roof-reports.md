@@ -123,6 +123,8 @@ signed-in person, and a role that may use roof reports.
 | `GET /api/clients/:externalId/roof-reports` | a job's reports, after the check that opens the job |
 | `POST /:id/share-link` | makes the customer's link for a finished report (or gives the one it has) and answers its address; needs the `share` decision |
 | `DELETE /:id/share-link` | turns the link off for good; needs the `unshare` decision. Fine to ask twice |
+| `POST /:id/rewrite-finding` | asks a model to rewrite one finding (body `{ index }`, its place in the list); needs the `rewrite` decision (the same right as editing); see "Rewriting a finding or the summary" |
+| `POST /:id/rewrite-summary` | the same for the summary (empty body) |
 | `POST /:id/send` | emails the customer a short note with the report's link (see "Emailing a report"); needs the `send` decision and an `Idempotency-Key` header |
 | `GET /r/roof/:token` | the shared report's page. No sign-in: the token is the key (see "The share link") |
 | `GET /r/roof/:token/photos/:photoId/:variant` | one photo copy of that report only |
@@ -326,6 +328,45 @@ and nothing runs on a schedule (`send.db.test.ts` holds this).
   the permanent roles test.
 - **Tests never send**: the route takes the sender as an option, and every test hands
   in a fake. The repo's email sender has no test sink of its own.
+
+## Rewriting a finding or the summary
+
+Next to the summary and each finding in the editor there is a **Rewrite** button
+(text only: no icon, no sparkle, no wand). Pressing it answers in the same frame,
+on that one field ("Rewriting..."); the new words are saved at once and **Undo
+rewrite** puts the old ones back through the field's ordinary save. Typing in the
+field yourself forgets the undo. A box with unsaved typing cannot be rewritten
+("Save your changes to this box first."), and only one rewrite runs at a time.
+
+- **Who**: `rewrite` in `ROOF_REPORT_RULES`, exactly the right to edit (the
+  permanent roles test holds that it equals `edit` for every role). Crew and another
+  company's person get "not found". Both routes are in the route walk.
+- **Metered**: each call goes through `meteredModelCaller`, so it writes one
+  `model_costs` row (operation `rewrite`, tagged with the report) for the company
+  that caused it. The model is the `rewrite` role in `models.ts` and nowhere else.
+- **What the model is told** (`promptFacts`): that report's own finding, or for
+  the summary that report's findings, with the roof's material, size and pitch and
+  the storm counts. Never a name, address, contact, inspector note, id, another
+  report, another company or a member of staff. The finding text is cleaned and cut
+  first.
+- **One deadline** (60 seconds) covers the call. What comes back is untrusted text:
+  markup, fences, wrapping quotes, control characters and em dashes are taken out
+  and it is cut to length (1,500 characters for a finding, 2,000 for the summary); a
+  reply too short to be a narrative is a failure.
+- **Stored only through the normalizer** (`sanitizeReportJson`, the one a hand edit
+  goes through), and only if the report has not changed since it was read: an edit
+  made while the model was thinking wins, and the person is told nothing was changed.
+- **A failure** of any kind (no answer, a refusal, nothing usable, out of time) is one
+  plain sentence and changes nothing. No provider words, error text or id reaches the
+  screen or a log; a log line says only the kind of failure.
+- **Limits**: 20 a day for a report, 300 a day for a company, 30 a person in ten
+  minutes, counted and taken in one locked step like the email limits (same table,
+  `roof_report_uses`). A rewrite that reached the model counts even if it did not work
+  (it may have cost money); one that could not start because no model is set up uses
+  nothing up and answers "Rewriting is not available right now."
+- Two rewrites of the same report that arrive together each ask the model (both
+  count), but only the first to finish is stored; the other finds the report already
+  changed and says so.
 
 ## The PDF
 

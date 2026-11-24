@@ -151,7 +151,7 @@ export const valueOf = (v: EditValues, key: FieldKey): string => {
   return i === null ? '' : v.findings[i] ?? '';
 };
 
-const withValue = (v: EditValues, key: FieldKey, text: string): EditValues => {
+export const withValue = (v: EditValues, key: FieldKey, text: string): EditValues => {
   if (isSimple(key)) return { ...v, [key]: text };
   if (key === 'summary') return { ...v, summary: text };
   const i = findingIndex(key);
