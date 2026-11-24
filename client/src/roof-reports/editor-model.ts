@@ -42,6 +42,8 @@ export interface ReportDetail {
   inspectorNotes: string | null;
   jobExternalId: string | null;
   createdAt: string;
+  /** The look the report is really shown in and, when that is not the one chosen, why, in one plain sentence. Null when the server said nothing. */
+  look: { shown: VisualStyleValue; notice: string | null } | null;
   /** The report's contents when it is ready, else null. */
   report: Record<string, unknown> | null;
   photos: ReportPhotoRef[];
@@ -49,6 +51,13 @@ export interface ReportDetail {
 
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const textOrNull = (v: unknown): string | null => (typeof v === 'string' ? v : null);
+
+const LOOKS: readonly string[] = ['formal', 'presentation', 'flight'];
+function readLook(v: unknown): ReportDetail['look'] {
+  if (!isObject(v) || typeof v.shown !== 'string' || !LOOKS.includes(v.shown)) return null;
+  if (v.notice !== null && typeof v.notice !== 'string') return null;
+  return { shown: v.shown as VisualStyleValue, notice: v.notice };
+}
 
 /** An answer from `GET /api/roof-reports/:id`, or null when it is not a report. */
 export function readDetail(value: unknown): ReportDetail | null {
@@ -71,6 +80,7 @@ export function readDetail(value: unknown): ReportDetail | null {
     inspectorNotes: textOrNull(value.inspectorNotes),
     jobExternalId: textOrNull(value.jobExternalId),
     createdAt: typeof value.createdAt === 'string' ? value.createdAt : '',
+    look: readLook(value.look),
     report: isObject(value.report) ? value.report : null,
     photos: Array.isArray(value.photos)
       ? value.photos.filter(isObject).map((p) => ({ id: String(p.id), category: textOrNull(p.category), thumbUrl: String(p.thumbUrl ?? '') }))

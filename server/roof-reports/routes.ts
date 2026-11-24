@@ -26,7 +26,7 @@ import { db } from '../db';
 import { roofReports, type RoofReport, type RoofReportPhoto } from '../../shared/schema';
 import {
   BAD_REQUEST_KEY, GENERATE_FAILED, NOT_FOUND, ONLY_FAILED_RETRY, PAGE_NOT_READY, STILL_BEING_MADE, STILL_BEING_MADE_EDIT,
-  REQUEST_KEY_REUSED, TOO_MANY_RECENT, TOO_MANY_TODAY, roofReportPhotoPath,
+  REQUEST_KEY_REUSED, TOO_MANY_RECENT, TOO_MANY_TODAY, roofReportPhotoPath, styleNotice,
 } from '../../shared/roof-reports';
 import { requireAuth } from '../auth/middleware';
 import { sendFailure } from '../lib/failure';
@@ -35,7 +35,7 @@ import { ownsLead, teamMemberIdByEmail, type SessionUser } from '../access/rep-s
 import { photoStore } from '../photos/store';
 import { currentCompanyId, currentProfile } from '../tenant/context';
 import { logWrite } from '../writes/log';
-import { renderReportHtml } from '../lib/roof-reports/render-report-html.js';
+import { chooseStyle, renderReportHtml } from '../lib/roof-reports/render-report-html.js';
 import { normalizeReportNumbers } from '../lib/roof-reports/report-normalize.js';
 import type { ComprehensiveRoofReport } from '../lib/roof-reports/comprehensive-roof-report.js';
 import {
@@ -86,8 +86,16 @@ function listItem(row: RoofReport, now: Date) {
   };
 }
 
+/** The look a report is really shown in and, when it is not the one chosen, one plain sentence saying why. Null while there is no report to show. */
+async function lookOf(row: RoofReport, photos: RoofReportPhoto[], origin: string): Promise<{ shown: string; notice: string | null } | null> {
+  if (effectiveState(row).status !== 'ready' || row.reportJson === null) return null;
+  // Only the photos' count matters here, so a placeholder address on the app stands in for each signed link.
+  const chosen = await chooseStyle(reportForPage(row, photos, () => `${origin}/photo`));
+  return { shown: chosen.style, notice: styleNotice(chosen.downgrade) };
+}
+
 /** One report as it is opened: the row's own fields, the report when it is ready, and its photos by the app's own routes. */
-function detail(row: RoofReport, photos: RoofReportPhoto[], now: Date) {
+function detail(row: RoofReport, photos: RoofReportPhoto[], now: Date, look: Awaited<ReturnType<typeof lookOf>> = null) {
   const state = effectiveState(row, now);
   const ready = state.status === 'ready' && row.reportJson !== null;
   return {
@@ -100,6 +108,7 @@ function detail(row: RoofReport, photos: RoofReportPhoto[], now: Date) {
     emailSentAt: iso(row.emailSentAt), emailSentCount: row.emailSentCount,
     createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(),
     report: ready ? row.reportJson : null,
+    look,
     photos: photos.map((p) => ({
       id: p.id, category: p.category, position: p.position,
       url: roofReportPhotoPath(row.id, p.id, 'working'), thumbUrl: roofReportPhotoPath(row.id, p.id, 'thumb'),
@@ -312,7 +321,8 @@ export function registerRoofReportsRoutes(app: Express, options: RoofReportRoute
       const user = roofReportUser(req)!;
       const row = await roofReportFor(user, req.params.id);
       if (!row) return notFound(res);
-      res.json(detail(row, await photosOfReport(row.id), new Date()));
+      const photos = await photosOfReport(row.id);
+      res.json(detail(row, photos, new Date(), await lookOf(row, photos, appOrigin(req))));
     } catch (error) {
       sendFailure(res, error, 'GET /api/roof-reports/:id');
     }
@@ -349,7 +359,8 @@ export function registerRoofReportsRoutes(app: Express, options: RoofReportRoute
       const [saved] = await db.update(roofReports).set(changes).where(and(eq(roofReports.id, row.id), ne(roofReports.status, 'archived'))).returning();
       if (!saved) return notFound(res);
       await logWrite({ actor: user.email, system: 'archie', action: 'roof_report_update', targetId: row.id, summary: 'roof report changed', ok: true, error: null });
-      res.json(detail(saved, await photosOfReport(saved.id), new Date()));
+      const photos = await photosOfReport(saved.id);
+      res.json(detail(saved, photos, new Date(), await lookOf(saved, photos, appOrigin(req))));
     } catch (error) {
       sendFailure(res, error, 'PUT /api/roof-reports/:id');
     }

@@ -12,7 +12,9 @@ import type { ReportTemplate } from '../comprehensive-roof-report';
 import { generateScrollPresentationHTML } from '../scroll-presentation-report';
 import { generateScrollFlightReportHTML } from '../scroll-flight-report';
 import type { AnalyzedPhoto } from '../comprehensive-roof-report';
+import { renderReportHtml } from '../render-report-html';
 import { makeReport } from './fixtures/report';
+import { richBrand, richPack, richReport } from './fixtures/injection';
 
 const EM = '—';
 const ROOT = path.resolve(__dirname, '..');
@@ -120,6 +122,22 @@ describe('no em dashes in what a person reads', () => {
         .replace(/<!--[\s\S]*?-->/g, '');
       expect(authored.includes(EM), name).toBe(false);
       expect(/&mdash;/i.test(authored), name).toBe(false);
+    }
+  });
+
+  it('every served style through the one renderer the route uses, with a pack and a nonce applied', async () => {
+    for (const style of ['formal', 'presentation', 'flight'] as const) {
+      const full = richReport('full');
+      const photos = [0, 1, 2, 3].map((i) => ({ ...full.damageAnalysis.photos[0], id: `served-${i}`, url: `https://photos.example.test/p${i}.jpg` }));
+      const out = await renderReportHtml({ ...full, reportVisualStyle: style, damageAnalysis: { ...full.damageAnalysis, photos } }, richBrand() as never, {
+        nonce: 'dGVzdC1ub25jZS0wMDAxLWFiY2RlZg==', motionBase: 'https://app.example.test/roof-reports/motion', pack: richPack(),
+      });
+      expect(out.style, style).toBe(style);
+      // The vendored engine is not ours to edit and the scripts are not words: read what a person reads.
+      const authored = out.html.replace(/<script\b[\s\S]*?<\/script>/gi, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, '');
+      expect(authored.length, style).toBeGreaterThan(500);
+      expect(authored.includes(EM), style).toBe(false);
+      expect(/&mdash;|&#8212;|&#x2014;/i.test(authored), style).toBe(false);
     }
   });
 

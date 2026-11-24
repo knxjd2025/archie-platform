@@ -85,6 +85,23 @@ describe('the editor as drawn', () => {
     expect(h).toContain('The change could not be saved. Please try again.');
   });
 
+  it('says in a plain sentence, under the Look control, when the look chosen is shown as a document instead', () => {
+    const sentence = 'This report has only 2 photos, so it is shown as a document. A flight needs 3 or more.';
+    const d = { ...detail(), visualStyle: 'flight' as const, look: { shown: 'formal' as const, notice: sentence } };
+    const h = view({ detail: d });
+    expect(h).toContain(sentence);
+    expect(h).toMatch(/id="rr-look-notice"[^>]*role="status"|role="status"[^>]*id="rr-look-notice"/);
+    // The select points at it, so a screen reader reads it with the control.
+    expect(h).toMatch(/<select[^>]*id="rr-edit-look"[^>]*aria-describedby="rr-look-notice"|<select[^>]*aria-describedby="rr-look-notice"[^>]*id="rr-edit-look"/);
+    expect(h).not.toMatch(BANNED);
+  });
+
+  it('says nothing about the look when it is shown as chosen, or when the server said nothing', () => {
+    expect(view({ detail: { ...detail(), look: { shown: 'flight' as const, notice: null } } })).not.toContain('rr-look-notice');
+    expect(view()).not.toContain('rr-look-notice');
+    expect(view()).not.toMatch(/aria-describedby="rr-look-notice"/);
+  });
+
   it('asks before archiving, says Archiving... while it waits, and says why if it failed', () => {
     expect(view()).toContain('Archive this report');
     const asking = view({ archive: { phase: 'asking', error: null } });

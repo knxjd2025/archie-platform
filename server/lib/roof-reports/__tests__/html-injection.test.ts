@@ -13,6 +13,7 @@ import { generateComprehensiveReportHTML, generateRoofAnalysisReportHTML } from 
 import { generateReportHtml } from '../measurement-report-html';
 import { generateScrollPresentationHTML } from '../scroll-presentation-report';
 import { generateScrollFlightReportHTML } from '../scroll-flight-report';
+import { renderReportHtml } from '../render-report-html';
 import { companyHeaderHTML } from '../company-header-html';
 import {
   injectDeep,
@@ -129,6 +130,28 @@ describe('every value on a report page is escaped', () => {
     const fRep = injectDeep(richReport('full'), { keep: ['url', 'thumbnailUrl'] });
     expectClean('flight/photos', leaksFrom(generateScrollFlightReportHTML(fRep.value, brand.value as never), fRep.markers, fBase));
   });
+
+  // The route serves a page through ONE function, with a nonce, the app's motion address and the company's pack. Every string in
+  // the report, the brand and the pack is turned into an attack, in each of the three styles, and the page is read back.
+  for (const style of ['formal', 'presentation', 'flight'] as const) {
+    it(`served page, ${style} style, with a nonce, the motion address and a pack applied`, async () => {
+      const NONCE = 'dGVzdC1ub25jZS0wMDAxLWFiY2RlZg==';
+      const opts = (pack: ReturnType<typeof richPack>) => ({ nonce: NONCE, motionBase: 'https://app.example.test/roof-reports/motion', pack });
+      // Four photos with plain addresses, so a flight has enough to be one; every other string is attacked.
+      const full = richReport('full');
+      const photo = (i: number) => ({ ...full.damageAnalysis.photos[0], id: `served-${i}`, url: `https://photos.example.test/p${i}.jpg`, thumbnailUrl: `https://photos.example.test/t${i}.jpg` });
+      const base = { ...full, reportVisualStyle: style, damageAnalysis: { ...full.damageAnalysis, photos: [0, 1, 2, 3].map(photo) } };
+      const baseline = await renderReportHtml(base, richBrand() as never, opts(richPack()));
+      expect(baseline.style).toBe(style);
+      const report = injectDeep(base, { keep: ['url', 'thumbnailUrl'] });
+      const brand = injectDeep(richBrand());
+      const pack = injectDeep(richPack(), { keep: ['id', 'after', 'onlyWithWork'] });
+      const out = await renderReportHtml(report.value, brand.value as never, opts(pack.value));
+      expect(out.style).toBe(style);
+      expectClean(`served/${style}`, leaksFrom(out.html, mergeMarkers(report, brand, pack), baseline.html));
+      if (style === 'presentation') expect(out.html).toContain('id="ventilation"');
+    });
+  }
 
   it('company header block', () => {
     const baseline = companyHeaderHTML(richHeaderOptions());

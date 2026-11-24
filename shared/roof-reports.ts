@@ -69,6 +69,20 @@ export const warnSomePhotos = (failed: number, total: number): string => `${fail
 export const PHOTO_IN_REPORT = 'This photo is part of a report, so it can\'t be removed.';
 export const PHOTO_NOT_REMOVED = 'The photo could not be removed. Please try again.';
 
+/**
+ * What the editor says when the look a person chose could not be used and the
+ * report is shown as a document instead. Built from the counts the renderer's
+ * own choice returns (`chooseStyle`), so it is always what the page really is.
+ */
+export interface StyleNoticeInput { kind: 'flight' | 'presentation'; have: number; need: number }
+export function styleNotice(d: StyleNoticeInput | undefined): string | null {
+  if (!d) return null;
+  const noun = d.kind === 'flight' ? 'photo' : 'chapter';
+  const has = d.have === 0 ? `no ${noun}s` : `only ${d.have} ${noun}${d.have === 1 ? '' : 's'}`;
+  const of = d.kind === 'flight' ? '' : ' of content';
+  return `This report has ${has}${of}, so it is shown as a document. ${d.kind === 'flight' ? 'A flight' : 'A presentation'} needs ${d.need} or more.`;
+}
+
 export const STILL_BEING_MADE_EDIT = 'This report is still being made. Please try again once it finishes.';
 export const TOO_MANY_RECENT = 'You have made a lot of reports in the last few minutes. Please wait a little and try again.';
 

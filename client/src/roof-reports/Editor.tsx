@@ -127,10 +127,11 @@ export function EditorView(p: EditorViewProps) {
                 <label htmlFor="rr-edit-look" className="text-sm font-medium text-gray-800">{RR.editor.lookLabel}</label>
                 {p.style.visualStyle.busy && <span role="status" className="text-xs text-gray-500">{RR.editor.saving}</span>}
               </div>
-              <select id="rr-edit-look" value={p.detail.visualStyle ?? ''} disabled={!editable || p.style.visualStyle.busy} onChange={(e) => p.onVisualStyle(e.target.value)} className={FIELD}>
+              <select id="rr-edit-look" value={p.detail.visualStyle ?? ''} disabled={!editable || p.style.visualStyle.busy} onChange={(e) => p.onVisualStyle(e.target.value)} aria-describedby={p.detail.look?.notice ? 'rr-look-notice' : undefined} className={FIELD}>
                 <option value="">{RR.editor.lookDefault}</option>
                 {VISUAL_STYLES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
+              {p.detail.look?.notice && <p id="rr-look-notice" role="status" className="text-xs text-amber-800 mt-1">{p.detail.look.notice}</p>}
               {p.style.visualStyle.error && <p role="alert" className="text-xs text-red-600 mt-1">{p.style.visualStyle.error}</p>}
             </div>
           </div>
@@ -254,9 +255,17 @@ export default function Editor({ id, role, onBack, onArchived }: { id: string; r
     const before = detail;
     setStyle((s) => ({ ...s, [field]: { busy: true, error: null } }));
     // Shown at once; put back with a sentence if the server refuses.
-    setDetail({ ...detail, [field]: field === 'visualStyle' && value === '' ? null : value } as ReportDetail);
+    // The sentence about the old look goes at once; the server's answer brings the new one.
+    setDetail({ ...detail, look: detail.look ? { ...detail.look, notice: null } : null, [field]: field === 'visualStyle' && value === '' ? null : value } as ReportDetail);
     void chain.current.run(() => updateReport(id, { [field]: field === 'visualStyle' && value === '' ? null : value }))
-      .then(() => { if (!alive.current) return; setStyle((s) => ({ ...s, [field]: { busy: false, error: null } })); bump(); })
+      .then((raw) => {
+        if (!alive.current) return;
+        // The server says which look the page really has now, and why when it is not the one chosen.
+        const answer = readDetail(raw);
+        if (answer) setDetail((d) => (d ? { ...d, look: answer.look } : d));
+        setStyle((s) => ({ ...s, [field]: { busy: false, error: null } }));
+        bump();
+      })
       .catch((e) => { if (!alive.current) return; setDetail(before); setStyle((s) => ({ ...s, [field]: { busy: false, error: plainMessage(e, RR.editor.styleFailed) } })); });
   };
 

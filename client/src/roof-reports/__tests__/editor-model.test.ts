@@ -29,6 +29,15 @@ describe('reading the report as the editor holds it', () => {
     expect(valuesOf(d).summary).toBe('');
   });
 
+  it('reads the look the server says the report is shown in, and the sentence about it, and nothing else', () => {
+    expect(readDetail(detail({ look: { shown: 'formal', notice: 'This report has only 2 photos, so it is shown as a document. A flight needs 3 or more.' } }))!.look)
+      .toEqual({ shown: 'formal', notice: 'This report has only 2 photos, so it is shown as a document. A flight needs 3 or more.' });
+    expect(readDetail(detail({ look: { shown: 'flight', notice: null } }))!.look).toEqual({ shown: 'flight', notice: null });
+    expect(readDetail(detail())!.look).toBeNull();
+    expect(readDetail(detail({ look: { shown: 'sideways', notice: 5 } }))!.look).toBeNull();
+    expect(readDetail(detail({ look: 'x' }))!.look).toBeNull();
+  });
+
   it('is nothing when the answer is not a report', () => {
     expect(readDetail(null)).toBeNull();
     expect(readDetail({ id: 'x' })).toBeNull();

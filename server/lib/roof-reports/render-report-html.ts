@@ -60,6 +60,51 @@ export interface RenderedReport {
   style: ReportVisualStyle;
   /** Set when a flight was requested but could not be rendered. */
   downgradeReason?: string;
+  /** The same fact as numbers, for a caller that says it in its own words: what was asked for, what the report has, what it needs. */
+  downgrade?: StyleDowngrade;
+}
+
+/** A look that could not be used: a flight needs photos, a presentation needs chapters of real content. */
+export interface StyleDowngrade {
+  kind: 'flight' | 'presentation';
+  have: number;
+  need: number;
+}
+
+export interface StyleChoice {
+  style: ReportVisualStyle;
+  downgrade?: StyleDowngrade;
+}
+
+/**
+ * Which look this report is shown in, and why when it is not the one asked for.
+ * `renderReportHtml` uses this and nothing else to choose, so what a person is
+ * told about the look is always the page they get. It renders nothing.
+ */
+export async function chooseStyle(
+  report: ComprehensiveRoofReport,
+  options: Pick<RenderReportOptions, 'styleFallback'> = {},
+): Promise<StyleChoice> {
+  const requested = resolveVisualStyle(report.reportTemplate, report.reportVisualStyle ?? options.styleFallback);
+  if (isFlightStyle(requested)) {
+    const flight = await import('./scroll-flight-report.js');
+    if (flight.canRenderFlight(report)) return { style: 'flight' };
+    // A flight built from one or two photographs is a slideshow, and worse than
+    // the document it replaced. Fall back rather than ship it.
+    return {
+      style: 'formal',
+      downgrade: { kind: 'flight', have: flight.orderPhotosForFlight(report.damageAnalysis?.photos || []).length, need: flight.MIN_FLIGHT_PHOTOS },
+    };
+  }
+  if (requested === 'presentation') {
+    const pres = await import('./scroll-presentation-report.js');
+    if (pres.canRenderPresentation(report)) return { style: 'presentation' };
+    // Every chapter has to be earned by data. A report thin enough to produce
+    // only two or three of them is a document with a sidebar bolted on, so send
+    // the document rather than something worse than what it replaced.
+    return { style: 'formal', downgrade: { kind: 'presentation', have: pres.presentationChapters(report).length, need: pres.MIN_PRESENTATION_CHAPTERS } };
+  }
+  return { style: requested };
 }
 
 /**
@@ -76,53 +121,24 @@ export async function renderReportHtml(
   nonceAttr(options.nonce);
   const nonce = options.nonce === undefined ? {} : { nonce: options.nonce };
   const classic = { ...nonce, ...(options.motionBase === undefined ? {} : { motionBase: options.motionBase }) };
-  const requested = resolveVisualStyle(
-    report.reportTemplate,
-    report.reportVisualStyle ?? options.styleFallback,
-  );
+  const chosen = await chooseStyle(report, options);
 
-  if (isFlightStyle(requested)) {
+  if (chosen.style === 'flight') {
     const flight = await import('./scroll-flight-report.js');
-    if (flight.canRenderFlight(report)) {
-      return {
-        html: flight.generateScrollFlightReportHTML(report, brandColors as never, nonce),
-        style: 'flight',
-      };
-    }
-    // A flight built from one or two photographs is a slideshow, and worse than
-    // the document it replaced. Fall back rather than ship it.
-    const downgradeReason =
-      `A scroll flight needs at least ${flight.MIN_FLIGHT_PHOTOS} photos. ` +
-      'This report has fewer, so it was rendered as a document.';
-    return {
-      html: generateComprehensiveReportHTML(report, brandColors as never, classic),
-      style: 'formal',
-      downgradeReason,
-    };
+    return { html: flight.generateScrollFlightReportHTML(report, brandColors as never, nonce), style: 'flight' };
   }
-
-  if (requested === 'presentation') {
+  if (chosen.style === 'presentation') {
     const pres = await import('./scroll-presentation-report.js');
-    if (pres.canRenderPresentation(report)) {
-      return {
-        html: pres.generateScrollPresentationHTML(report, brandColors as never, options.pack ?? null, nonce),
-        style: 'presentation',
-      };
-    }
-    // Every chapter has to be earned by data. A report thin enough to produce
-    // only two or three of them is a document with a sidebar bolted on, so send
-    // the document rather than something worse than what it replaced.
-    return {
-      html: generateComprehensiveReportHTML(report, brandColors as never, classic),
-      style: 'formal',
-      downgradeReason:
-        `A presentation needs at least ${pres.MIN_PRESENTATION_CHAPTERS} chapters of real content. ` +
-        'This report has fewer, so it was rendered as a document.',
-    };
+    return { html: pres.generateScrollPresentationHTML(report, brandColors as never, options.pack ?? null, nonce), style: 'presentation' };
   }
-
+  const d = chosen.downgrade;
   return {
     html: generateComprehensiveReportHTML(report, brandColors as never, classic),
-    style: requested,
+    style: chosen.style,
+    ...(d?.kind === 'flight'
+      ? { downgradeReason: `A scroll flight needs at least ${d.need} photos. This report has fewer, so it was rendered as a document.`, downgrade: d }
+      : d
+        ? { downgradeReason: `A presentation needs at least ${d.need} chapters of real content. This report has fewer, so it was rendered as a document.`, downgrade: d }
+        : {}),
   };
 }

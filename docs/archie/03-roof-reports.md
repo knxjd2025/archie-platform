@@ -157,6 +157,26 @@ can reach the app's cookies or API. The rules, in `server/roof-reports/page-poli
 - A page a person saved runs nothing: a bare `sandbox`, no `script-src`, and the
   same image and header rules.
 
+## Looks: document, presentation, flight
+
+A report is shown in one of three looks, chosen in the editor (or the template's
+usual one when none was chosen). `chooseStyle` in
+`server/lib/roof-reports/render-report-html.ts` is the only place that decides,
+and the page route (`renderReportHtml`) and the editor's answer both use it, so
+what a person is told is the page they get. A flight needs 3 photos with a usable
+address; a presentation needs 4 chapters of real content from the base set (a
+company's own chapters never make a thin report presentable). A report with less
+is shown as a document, and the editor says so under the Look control in one
+plain sentence made from the counts, for example "This report has only 2 photos,
+so it is shown as a document. A flight needs 3 or more." (`styleNotice` in
+`shared/roof-reports.ts`; `GET` and `PUT /:id` carry `look: { shown, notice }`).
+The price comes late in the presentation (`CHAPTER_ORDER`, held by its own test),
+and the flight is stills only: no renderer writes a video element, source or
+clip (`no-video.test.ts`, there is no ffmpeg on this hosting). Every script
+either style writes carries the response's nonce. The deep-walk injection test
+and the no-em-dash test run all three looks through the one renderer the route
+uses, with a nonce, the motion address and a chapter pack applied.
+
 ## Photos
 
 Report photos are kept in Archie's private photo store under
