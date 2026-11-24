@@ -90,7 +90,8 @@ describe('keeping a draft in the browser', () => {
         photos: [{ id: 'not-an-id', name: 'a.jpg' }, { id: PHOTO, name: 'ok.jpg', category: 'made-up' }, { id: PHOTO, name: 'dup.jpg' }] },
     }));
     const d = readDraft(s, key, NOW)!.draft;
-    expect(d.step).toBe(4);
+    // The waiting step is only a place to be while a try is kept; with none, the review.
+    expect(d.step).toBe(5);
     expect(d.where.address.length).toBe(200);
     expect(d.photos).toEqual([{ id: PHOTO, name: 'ok.jpg', category: null }]);
   });

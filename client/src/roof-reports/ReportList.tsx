@@ -26,6 +26,8 @@ export interface ReportListViewProps {
   onStatus: (status: ListFilters['status']) => void;
   onPage: (page: number) => void;
   onRetry: () => void;
+  /** Opens the report in the editor. */
+  onOpen: (id: string) => void;
   onAskArchive: (id: string) => void;
   onCancelArchive: () => void;
   onArchive: (id: string) => void;
@@ -118,7 +120,7 @@ export function ReportListView(p: ReportListViewProps) {
                     ) : (
                       <>
                         {v.canOpen && (
-                          <a href={v.openHref} target="_blank" rel="noopener noreferrer" aria-label={RR.list.openFor(v.headline)} className={`${BUTTON} inline-block`}>{RR.list.open}</a>
+                          <button type="button" onClick={() => p.onOpen(r.id)} aria-label={RR.list.openFor(v.headline)} className={BUTTON}>{RR.list.open}</button>
                         )}
                         {v.canArchive && (
                           <button type="button" onClick={() => p.onAskArchive(r.id)} aria-label={RR.list.archiveFor(v.headline)} className={BUTTON}>{RR.list.archive}</button>
@@ -150,7 +152,7 @@ const SEARCH_DELAY_MS = 300;
 const EMPTY_PAGING: Paging = { page: 1, pageSize: 25, total: 0, hasMore: false };
 
 /** The list with its asking, waiting and archiving. */
-export default function ReportList({ role }: { role: TeamRole }) {
+export default function ReportList({ role, onOpen, notice: flash }: { role: TeamRole; onOpen: (id: string) => void; notice?: string | null }) {
   const [typed, setTyped] = useState('');
   const [filters, setFilters] = useState<ListFilters>({ search: '', kind: '', status: '', page: 1 });
   const [reports, setReports] = useState<ReportRow[]>([]);
@@ -160,7 +162,7 @@ export default function ReportList({ role }: { role: TeamRole }) {
   const [busyIds, setBusyIds] = useState<Record<string, boolean>>({});
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(flash ?? null);
   const asked = useRef(0);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -191,7 +193,10 @@ export default function ReportList({ role }: { role: TeamRole }) {
     return () => clearTimeout(t);
   }, [typed, filters.search]);
 
-  useEffect(() => () => { if (noticeTimer.current) clearTimeout(noticeTimer.current); }, []);
+  useEffect(() => {
+    if (flash) noticeTimer.current = setTimeout(() => setNotice(null), 5000);
+    return () => { if (noticeTimer.current) clearTimeout(noticeTimer.current); };
+  }, [flash]);
 
   const pendingSearch = typed.trim() !== filters.search.trim();
   const shownPhase: ListPhase = pendingSearch && phase === 'ready' ? 'reloading' : phase;
@@ -234,6 +239,7 @@ export default function ReportList({ role }: { role: TeamRole }) {
         onStatus={(status) => setFilters((f) => ({ ...f, status, page: 1 }))}
         onPage={(page) => setFilters((f) => ({ ...f, page }))}
         onRetry={() => load(filters)}
+        onOpen={onOpen}
         onAskArchive={setConfirmId}
         onCancelArchive={() => setConfirmId(null)}
         onArchive={archive}

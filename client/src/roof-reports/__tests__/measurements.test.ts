@@ -95,10 +95,10 @@ describe('going on from the roof and damage steps', () => {
     expect(tryAdvance({ ...d, roof: roof({ squares: '25' }) }, [])).toEqual({ ok: true, step: 4 });
   });
 
-  it('stops on a count that cannot be right, and lets a good set through on the last step', () => {
+  it('stops on a count that cannot be right, and lets a good set through to the review', () => {
     const d = { ...emptyDraft(), step: 4, damage: damage({ hail: '2.5' }) };
     expect(tryAdvance(d, [])).toEqual({ ok: false, error: 'Each count must be a whole number from 0 to 9,999.' });
-    expect(tryAdvance({ ...d, damage: damage({ hail: '2' }) }, [])).toEqual({ ok: true, step: 4 });
+    expect(tryAdvance({ ...d, damage: damage({ hail: '2' }) }, [])).toEqual({ ok: true, step: 5 });
   });
 });
 

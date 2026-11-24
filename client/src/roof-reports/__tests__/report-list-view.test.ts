@@ -14,7 +14,7 @@ const base = (over: Partial<ReportListViewProps> = {}): ReportListViewProps => (
   role: 'admin', filters: { search: '', kind: '', status: '', page: 1 }, reports: [row()], paging: { page: 1, pageSize: 25, total: 1, hasMore: false },
   phase: 'ready', loadError: null, busyIds: {}, confirmId: null, rowErrors: {},
   onSearch: () => {}, onKind: () => {}, onStatus: () => {}, onPage: () => {}, onRetry: () => {},
-  onAskArchive: () => {}, onCancelArchive: () => {}, onArchive: () => {}, ...over,
+  onOpen: () => {}, onAskArchive: () => {}, onCancelArchive: () => {}, onArchive: () => {}, ...over,
 });
 const html = (over: Partial<ReportListViewProps> = {}) => renderToStaticMarkup(createElement(ReportListView, base(over)));
 
@@ -22,9 +22,9 @@ describe('the list of roof reports', () => {
   it('shows each report\'s address, customer, kind, status and date, with Open and Archive', () => {
     const h = html();
     for (const word of ['12 Elm Street', 'Cedar Falls', 'Dana Whitfield', 'Inspection', 'Ready', 'Nov 18, 2026', 'Open', 'Archive']) expect(h).toContain(word);
-    expect(h).toContain('href="/api/roof-reports/11111111-1111-4111-8111-111111111111/html"');
-    expect(h).toContain('target="_blank"');
-    expect(h).toContain('rel="noopener noreferrer"');
+    // Open is a button that opens the editor here, not a link to the page in a new tab.
+    expect(h).not.toContain('/html"');
+    expect(h).not.toContain('target="_blank"');
   });
 
   it('labels every control for a screen reader, including which report a button is about', () => {

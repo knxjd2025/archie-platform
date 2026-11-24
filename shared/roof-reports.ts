@@ -60,6 +60,12 @@ export const PAGE_NOT_READY = 'This report isn\'t ready to show yet.';
 export const BAD_REQUEST_KEY = 'That request could not be used. Please try again.';
 export const REQUEST_KEY_REUSED = 'That was already used to make a different report. Please start the report again.';
 export const PICK_PHOTO_KIND = 'Pick what the photo shows from the list.';
+/** What the server keeps with a report that is ready but partly missing. The client finds these inside the sentence to say each in its own words. */
+export const WARN_ALL_PHOTOS = 'The photos could not be analysed, so this report does not describe their condition. Please try again.';
+export const WARN_OUT_OF_TIME = 'The report ran out of time, so part of it is missing.';
+export const WARN_STORM_PARTIAL = 'Some storm data sources did not all answer in time, so the storm history may be incomplete.';
+/** "2 of the 5 photos could not be analysed." (the numbers vary), read back by `readSomePhotosFailed`. */
+export const warnSomePhotos = (failed: number, total: number): string => `${failed} of the ${total} photos could not be analysed.`;
 export const PHOTO_IN_REPORT = 'This photo is part of a report, so it can\'t be removed.';
 export const PHOTO_NOT_REMOVED = 'The photo could not be removed. Please try again.';
 

@@ -4,8 +4,8 @@
  * which picked files become photos and how many fit, and the state of each
  * photo's tile from the moment it is picked. The screens only draw this.
  */
-import { MAX_DAMAGE_COUNT, MAX_REPORT_PHOTOS, NEEDS_ADDRESS, NEEDS_CITY_STATE, NOT_FOUND, ROOF_SQUARES_MAX, type ReportPhotoCategory } from '../../../shared/roof-reports';
-import { LAST_STEP, type DamageDraft, type DraftPhoto, type RoofDraft, type WhereDraft, type WizardDraft } from './draft';
+import { MAX_DAMAGE_COUNT, MAX_REPORT_PHOTOS, NEEDS_ADDRESS, NEEDS_CITY_STATE, NOT_FOUND, PICK_A_KIND, ROOF_SQUARES_MAX, type ReportKindValue, type ReportPhotoCategory } from '../../../shared/roof-reports';
+import { LAST_STEP, REVIEW_STEP, type DamageDraft, type DraftPhoto, type ReviewDraft, type RoofDraft, type WhereDraft, type WizardDraft } from './draft';
 import { RR, plainMessage } from './words';
 
 export const STEPS = [
@@ -13,6 +13,8 @@ export const STEPS = [
   { key: 'photos', label: 'Photos' },
   { key: 'roof', label: 'Roof' },
   { key: 'damage', label: 'Damage' },
+  { key: 'review', label: 'Review' },
+  { key: 'make', label: 'Make' },
 ] as const;
 
 // ---------------------------------------------------------------- step 1
@@ -236,11 +238,64 @@ export function damageTotal(d: DamageDraft): number {
 
 export const totalLine = (n: number): string => (n > 0 ? RR.damage.total(n) : RR.damage.none);
 
+// ---------------------------------------------------------------- step 5: review
+
+const EMAIL_RE = /^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']{2,}$/;
+
+/** The sentence to show before the report can be made, or null. */
+export function checkReview(r: ReviewDraft, tiles: readonly PhotoTile[]): string | null {
+  if (photosInFlight(tiles) || photosRemoving(tiles)) return RR.wizard.photosBusyAdvance;
+  if (r.kinds.length === 0) return PICK_A_KIND;
+  const email = r.customerEmail.trim();
+  if (email && !EMAIL_RE.test(email)) return RR.review.emailBad;
+  return null;
+}
+
+/** A kind added or taken off, kept in the order the list shows them. */
+export function toggleKind(kinds: readonly ReportKindValue[], kind: ReportKindValue): ReportKindValue[] {
+  const order: ReportKindValue[] = ['inspection', 'measurement', 'storm'];
+  const next = kinds.includes(kind) ? kinds.filter((k) => k !== kind) : [...kinds, kind];
+  return order.filter((k) => next.includes(k));
+}
+
+export interface ReviewSummary {
+  address: string;
+  job: string | null;
+  photos: string;
+  /** A second line when some photos did not save. Empty for none. */
+  photosNote: string;
+  roof: string;
+  damage: string;
+}
+
+/** Everything entered so far, in plain sentences, for the review. */
+export function reviewSummary(draft: WizardDraft, tiles: readonly PhotoTile[]): ReviewSummary {
+  const w = draft.where;
+  const place = [w.address.trim(), w.city.trim(), `${w.state.trim()}${w.zip.trim() ? ` ${w.zip.trim()}` : ''}`.trim()].filter(Boolean).join(', ');
+  const saved = photoIdsForReport(tiles).length;
+  const lost = tiles.filter((t) => t.state === 'failed').length;
+  const roof = toRoofDetails(draft.roof);
+  const parts: string[] = [];
+  if (roof?.squares !== undefined) parts.push(`${roof.squares} ${roof.squares === 1 ? 'square' : 'squares'}`);
+  if (roof?.pitch) parts.push(`${roof.pitch} pitch`);
+  if (roof?.stories !== undefined) parts.push(STORIES_OPTIONS.find((o) => Number(o.value) === roof.stories)?.label ?? `${roof.stories} stories`);
+  if (roof?.material) parts.push(MATERIAL_OPTIONS.find((o) => o.value === roof.material)?.label ?? roof.material);
+  const total = damageTotal(draft.damage);
+  return {
+    address: place,
+    job: w.job ? RR.where.linkedTo(w.job.label) : null,
+    photos: saved > 0 ? RR.review.photosAdded(saved) : RR.review.noPhotos,
+    photosNote: lost > 0 ? RR.review.photosLeftOut(lost) : '',
+    roof: parts.length ? RR.review.roofFacts(parts.join(', ')) : RR.review.roofNone,
+    damage: total > 0 ? RR.review.damageCounted(total) : RR.review.damageNone,
+  };
+}
+
 // ---------------------------------------------------------------- going on
 
 export type Advance = { ok: true; step: number } | { ok: false; error: string };
 
-/** Checks the step the person is on and says which step comes next, or why not yet. */
+/** Checks the step the person is on and says which step comes next, or why not yet. Making the report (step 5 to 6) is a separate act that checks the review the same way. */
 export function tryAdvance(draft: WizardDraft, tiles: readonly PhotoTile[]): Advance {
   const next = Math.min(LAST_STEP, draft.step + 1);
   if (draft.step === 1) {
@@ -254,6 +309,10 @@ export function tryAdvance(draft: WizardDraft, tiles: readonly PhotoTile[]): Adv
     const error = checkRoof(draft.roof);
     return error ? { ok: false, error } : { ok: true, step: next };
   }
-  const error = checkDamage(draft.damage);
-  return error ? { ok: false, error } : { ok: true, step: next };
+  if (draft.step === 4) {
+    const error = checkDamage(draft.damage);
+    return error ? { ok: false, error } : { ok: true, step: next };
+  }
+  const error = checkReview(draft.review, tiles);
+  return error ? { ok: false, error } : { ok: true, step: Math.max(next, REVIEW_STEP + 1) };
 }

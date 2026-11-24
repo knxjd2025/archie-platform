@@ -12,8 +12,8 @@ const file = (name: string, type = 'image/jpeg') => ({ name, type });
 const where = (over = {}) => ({ address: '12 Elm Street', city: 'Cedar Falls', state: 'IA', zip: '', job: null, ...over });
 
 describe('the steps', () => {
-  it('are Where, Photos, Roof and Damage, in that order', () => {
-    expect(STEPS.map((s) => s.label)).toEqual(['Where', 'Photos', 'Roof', 'Damage']);
+  it('are Where, Photos, Roof, Damage, Review and Make, in that order', () => {
+    expect(STEPS.map((s) => s.label)).toEqual(['Where', 'Photos', 'Roof', 'Damage', 'Review', 'Make']);
   });
 });
 

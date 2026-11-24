@@ -34,7 +34,7 @@ import { providerCaller, type ModelCaller, type ProviderKeys } from '../lib/roof
 import type { ImageLabel } from '../lib/roof-reports/comprehensive-roof-report.js';
 import {
   GEOCODE_FAILED, GENERATE_FAILED, MAX_REPORT_PHOTOS, NEEDS_ADDRESS, NEEDS_CITY_STATE, PICK_A_KIND, TOO_MANY_PHOTOS,
-  REPORT_KINDS, TEMPLATES, roofReportPhotoPath,
+  REPORT_KINDS, TEMPLATES, WARN_ALL_PHOTOS, WARN_OUT_OF_TIME, WARN_STORM_PARTIAL, roofReportPhotoPath, warnSomePhotos,
 } from '../../shared/roof-reports';
 import { googleMapsKey } from '../lib/reports/google-key.js';
 import { meteredModelCaller, recordServiceCall, type CostOperation } from './metered';
@@ -101,9 +101,6 @@ const STORM_RADIUS_MILES = 5;
 
 const SUMMARY_NOT_ANALYSED = 'This photo could not be analysed. It is included for reference.';
 const SUMMARY_NO_TIME = 'This photo was not analysed because the report ran out of time.';
-const WARN_ALL_PHOTOS = 'The photos could not be analysed, so this report does not describe their condition. Please try again.';
-const WARN_OUT_OF_TIME = 'The report ran out of time, so part of it is missing.';
-const WARN_STORM_PARTIAL = 'Some storm data sources did not all answer in time, so the storm history may be incomplete.';
 
 const PHOTO_CATEGORIES: readonly string[] = ['roof_surface', 'gutter', 'flashing', 'vent', 'chimney', 'interior', 'overview', 'closeup', 'other'];
 const isCategory = (v: unknown): v is PhotoCategory => typeof v === 'string' && PHOTO_CATEGORIES.includes(v);
@@ -334,7 +331,7 @@ export async function runGeneration(
   const stormPartial = stormReport.partial === true;
   if ((failed > 0 || stormPartial) && signal.aborted) warnings.push(WARN_OUT_OF_TIME);
   if (total > 0 && failed === total) warnings.push(WARN_ALL_PHOTOS);
-  else if (failed > 0) warnings.push(`${failed} of the ${total} photos could not be analysed.`);
+  else if (failed > 0) warnings.push(warnSomePhotos(failed, total));
   if (stormPartial) warnings.push(WARN_STORM_PARTIAL);
   return { report, warning: warnings.length ? warnings.join(' ') : null };
 }

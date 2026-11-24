@@ -751,3 +751,84 @@ Key `archie.roofReportDraft.v1.<company id>.<email, lower case>`; so two people 
 4. The server has no route to take back an uploaded photo. "Remove" drops it from the report being made; the stored copy waits unused and counts toward the day's waiting cap of 100 until a report claims it. Said here so Task C4 or a later task can add a clean-up if wanted.
 5. A refresh while the wizard is open puts the person back in it: this tab remembers "wizard open" (session storage, same key plus `.open`), and the page reopens it only when a draft exists.
 6. Steps 5 and 6 are Task C4, so the last button of the wizard saves and closes for now.
+
+---
+
+## Stage C, expanded (C4 to C6, plus Step 0)
+
+Written before the code. The same shape as C1 to C3: every decision a screen makes sits in a plain module with its own tests; each component is a thin shell over those modules and is rendered to markup in Node for its words and labels. The old screens (`RoofReportWizard` steps 5 and 6, `ReportSelectionStep`, `ReportEditor`, `ReportSectionEditor`) were read as a reference only.
+
+### Step 0: a photo that was removed is really removed
+
+`DELETE /api/roof-reports/photos/:photoId`, behind the switch and sign-in like every route here.
+- **Access (a new action `remove_photo` in `ROOF_REPORT_RULES`)**: `all` for Admin, Sales Director, Customer Service (any waiting photo in the company); `own` for Manager and Sales (a photo they uploaded); `no` for Production. Another company's photo id, a made-up id, a photo that is not the person's and crew all answer the same "That report could not be found." The permanent roles test and the route walk list it.
+- **What it does**: for a photo with no report it deletes the row and both stored copies in one transaction. If the store cannot remove the copies the row stays (so it can be tried again) and the answer is "The photo could not be removed. Please try again." A photo already in a report is refused with "This photo is part of a report, so it can't be removed." (409): reports and their photos are archived, never deleted, and there is no draft report to detach from. The store gains an optional `delete(key)` that refuses any key that is not a roof report photo's.
+- **Wizard**: a saved photo's tile says "Removing..." in the same frame as the click (dimmed, its button off, still counted toward the cap), then goes. On failure it comes back with the sentence under it. A photo whose upload finishes after its tile was taken away is taken back too. While a removal waits the wizard cannot be closed ("Photos are still being removed.").
+
+### Files (C4 to C6)
+
+| File | Holds |
+|---|---|
+| `client/src/roof-reports/draft.ts` | the draft grows: `review` (kinds, template, inspector notes, customer name, email, phone) and `attempt` (`{ key, fingerprint }`, the one request key made for this try); six steps |
+| `client/src/roof-reports/generate-flow.ts` | pure: `buildGenerateBody`, `attemptFor` (same request, same key; any change, a new key), `readAnswer`, `failureView`, `partialNotes`, the waiting lines and `lineAt`, `nextPollDelayMs`, the give-up time |
+| `client/src/roof-reports/generate-run.ts` | the run with its dependencies handed in (`generate`, `retry`, `status`, `sleep`, `now`, `cancelled`), so it is tested in Node with fakes: start, tolerate one failed ask, poll with backoff, stop at ready, failed or "taking long" |
+| `client/src/roof-reports/StepReview.tsx` | step 5 |
+| `client/src/roof-reports/StepGenerate.tsx` | step 6: `GenerateView` (pure markup) and `StepGenerate` (the timers and the run) |
+| `client/src/roof-reports/editor-model.ts` | pure: the report as the editor holds it, editable fields, the per-field reducer (idle, unsaved, saving, saved, failed), the request for each field, the one chain that keeps report saves in order |
+| `client/src/roof-reports/Editor.tsx` | the editor |
+| `client/src/roof-reports/job-prefill.ts` | pure: a job's address and customer to a wizard start, and what to do with a draft already there |
+| `client/src/roof-reports/JobRoofReports.tsx` | the block on the job page |
+| `client/src/roof-reports/api.ts` | calls added: `generateReport`, `retryReport`, `fetchReport`, `updateReport`, `fetchJobReports` |
+| `client/src/pages/roof-reports.tsx`, `App.tsx`, `pages/client-detail.tsx` | the page holds list, wizard or editor; the job page asks to open either |
+
+### API calls
+
+- Step 6: `POST /api/roof-reports/generate` with header `Idempotency-Key: rr-<uuid>` (made once per attempt and kept in the draft) and the body the step builds: `reportTypes`, `template`, `address`, `city`, `state`, `zip`, `photoIds` (saved photos only, in order), `roofDetails`, `damageCounts`, `inspectorNotes`, `customer`, `jobExternalId`. The call lasts until the report ends (up to about 5 minutes), so its own timeout is 330 seconds. `GET /api/roof-reports/:id` is the poll. `POST /api/roof-reports/:id/retry` is "Try again" for a report the server said could not finish.
+- **Refresh during the wait**: the draft keeps the attempt, so after a refresh the same request with the same key is sent again; the server answers with the first report as it stands and starts nothing. If it is still being made the screen polls `GET /:id` at 2, 3, 5, 8 then every 10 seconds, and stops at ready, at "could not finish", or after 10 minutes with the "taking long" sentence.
+- **An error from the first call** is never trusted to mean "nothing started": the same request is sent once more, which either starts it or returns the report the server already made. Only then is a failure shown.
+- Editor: `GET /api/roof-reports/:id` (the report and its photos), `GET /api/roof-reports/:id/html?v=n` as the frame's address, `PUT /api/roof-reports/:id` with only the field being saved, `POST /api/roof-reports/:id/archive`.
+- Job page: `GET /api/clients/:externalId/roof-reports` (asked only when the app's `roofReports` is true; a 404 hides the block, so a job that is not the person's shows nothing); the existing `GET /api/clients/:externalId` already on the page gives the job's address and customer.
+
+### C4: steps 5 and 6
+
+Steps list becomes Where, Photos, Roof, Damage, Review, Make (6). "Step 5 of 6". The old "Save and close" and "Review and making the report come next." are removed.
+
+**Step 5, "Review and make"** (heading "Review your report"):
+- Four summary rows, each with a "Change" button that names the row ("Change the address", "Change the photos", "Change the roof facts", "Change the damage counts") and goes to that step: "12 Elm Street, Cedar Falls, IA 50613" (and "Linked to Dana Whitfield, 12 Elm Street" when linked), "3 photos added." or "No photos added.", "Roof facts: 25 squares, 6/12 pitch, 2 stories, Asphalt shingle." or "Roof facts: none given.", "12 damaged shingles counted." or "No damaged shingles counted."
+- "What should the report cover?" with three checkboxes: Inspection ("What the photos show: the damage found, repair costs and replacement options."), Measurements ("The roof's size and the materials it would need, from the numbers you entered."), Storm history ("Hail and wind reported near the address in recent years."). Default: Inspection.
+- "Which style?" four radio buttons with the shared labels and: Insurance claim ("Formal wording, with the storm dates and sources an adjuster looks for."), Homeowner ("Friendly wording that explains the condition and the options."), Full report ("Every section included. The complete report."), Quick summary ("One page: the roof's score, the main damage, the cost and what to do."). Default: Full report.
+- "Customer (optional)": Name, Email, Phone, with "Nothing is sent to the customer. These only go on the report." Inspector notes: "Inspector notes (optional)" with "Anything you saw that the photos do not show."
+- Checks, in plain words, before going on: none picked: "Pick at least one: inspection, measurements or storm history." (the shared sentence); an email that is not one: "That email address doesn't look right." Photos still on their way: "Photos are still being added. Please wait a moment." A hint under the kinds when Inspection is picked with no photos: "No photos were added. An inspection works best with photos."
+- Buttons: "Back" and "Make the report". Pressing it shows step 6 in the same frame.
+
+**Step 6, "Making your report"**:
+- Making: a status region: "Making your report..." and "This usually takes a minute or two. You can close this page; the report will show in your list as Being made." and "If you refresh, we pick up where we left off." Under it a thin moving bar and one line that changes every 6 seconds from the list the report will actually do, in order: "Placing the address on the map...", "Pulling storm history..." (storm or inspection picked), "Looking at your photos..." (only with photos), "Writing the findings...". The wait starts in the frame of the click, before the first answer.
+- Ready: "Your report is ready. Opening it..." and the wizard clears the draft and opens the editor on the report.
+- Could not finish (the server's own plain sentence when it sent one, else "The report could not be finished. Please try again."), with "Try again" (the retry path; when the first call never reached the server, the same request again) and "Back to the review". A wrong address (the shared sentence "We couldn't find that address on the map. Check the street, city and ZIP.") shows "Change the address" instead of "Try again".
+- Daily cap: "Your company has made a lot of reports today. Please try again tomorrow." and "Your answers are kept on this device." with only "Back to the review". Too many in a few minutes: "You have made a lot of reports in the last few minutes. Please wait a little and try again." with "Try again".
+- Taking long: "This is taking longer than usual. You can leave this page. The report will show in your list when it finishes, or say it could not be finished." with "Go to my reports".
+- A report that is ready but partly missing is opened as normal and the editor says so (below). The three cases, each in the editor's own words, found from the sentence the server keeps with the report: ran out of time ("Part of this report is missing because it took too long to finish."), photos ("2 of the 5 photos could not be looked at, so they are not described in the report." or "None of the photos could be looked at, so the report does not describe the roof's condition. Making it again may help."), storm ("Some storm history sources were slow to answer, so the storm history may be missing some storms."). The three sentences the server writes move to `shared/roof-reports.ts` so both sides read the same ones.
+
+### C5: the editor
+
+Opened from the list's "Open" (now a button, no longer a new tab) and after a report is made. "Back to reports" at the top.
+- **The page**: a frame, `sandbox="allow-scripts"` (never `allow-same-origin`), title "Preview of the report", showing `/api/roof-reports/:id/html?v=n`. The report's HTML is never put in Archie's own page. After a save the frame reloads (`v` goes up) and says "Updating the preview..." until it has.
+- **Not ready**: Being made: "This report is still being made. Please try again once it finishes." Could not finish: the server's sentence or "The report could not be finished." Archived or not found: "That report could not be found." Load failure: "The report could not be opened. Please try again." with "Try again".
+- **Fields, each saved on its own** when the person leaves it (blur), with its own state beside it: "Unsaved changes", "Saving...", "Saved", or the sentence with "Try again". Title; customer name, email and phone; inspector notes; the summary (`executiveSummary`); each finding's text (`structuredFindings[i].narrative`, its title and severity shown, not edited). The first four go with `PUT` and just that field; the last two with `PUT` of `reportJson` (the whole report with the one change), through one chain so two report saves never cross.
+- **Style**: "Report style" (the four templates) and "Look" (Classic document, Presentation, Flight over the photos, and "The style's usual look") save the moment they are chosen, show "Saving..." beside the control and go back with a sentence if refused.
+- **Archive**: "Archive this report" asks "Archive this report? It leaves your list and can't be opened again here." with "Yes, archive" and "Keep it"; while waiting the button says "Archiving..."; then the list is shown with "Report archived."
+- Edit controls are drawn only for a role the shared table lets edit; the server decides every save.
+- Partial notes (above) show at the top in amber when the report has any.
+- **Departures**: the old editor's section switches, custom sections, drag reordering and photo labels are not here (the update route does not take them). The plan's "rewrite a finding", "rewrite the summary" and "label a photo" model actions need three server routes that do not exist (`server/roof-reports/rewrite.ts` was never written); building paid model routes was outside this task, so they are left out and the editor shows nothing for them rather than a button that does nothing.
+
+### C6: on the job page
+
+`JobRoofReports` beside the existing "Roof reports" block, titled "Roof inspection reports" so the two are told apart. Drawn only when `roofReports` is true in the app's answer, and only once `GET /api/clients/:externalId/roof-reports` has answered 200: a 404 draws nothing. Shows each report (address, kinds, status, date) with "Open" (opens the editor) and, for a role that may make reports, "Make a roof report", which opens the wizard with the job linked, the street from the job's stored address, the city and state split from its display address when they can be, and the customer's name, email and phone filled in (still editable, never sent anywhere). If a draft is already open for another job the new start replaces it and says so ("Your earlier unfinished report was replaced by this one."); for the same job the draft is kept. Empty: "No roof reports for this job yet." Failure: "The roof reports could not be loaded. Please try again." with "Try again".
+
+### States, in one line each
+
+Archiving: row dims, "Archiving...". Photo removal: "Removing...". Making: the status region above, shown in the click's own frame. Retry: the same region, from the click. Saving a field: "Saving..." beside it in the frame of the blur. Style: "Saving..." beside the control. Job block: "Looking..." while it asks. Every one clears on success or failure.
+
+### Tests (first)
+
+`generate-flow.test.ts` (the body, the attempt key, answers, failures, partial notes, backoff, lines), `generate-run.test.ts` (fakes: one start; a second ask after an error; a refresh resuming with the same key; polling to ready; polling to failed; polling to give-up; cancelled), `review-views.test.ts` (steps 5 and 6 markup: every label, every state, no banned marks), `editor-model.test.ts` and `editor-views.test.ts` (the reducer, the requests, the frame's sandbox, no injected HTML), `job-prefill.test.ts`, `job-block-views.test.ts`, the words test (new sentences), and `menu-entry` style checks that with the switch off nothing new is asked.

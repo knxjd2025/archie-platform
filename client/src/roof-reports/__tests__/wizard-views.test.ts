@@ -17,11 +17,11 @@ const frame = (over: Partial<WizardFrameProps> = {}) => render(createElement(Wiz
 }, createElement('p', null, 'THE STEP')));
 
 describe('the wizard frame', () => {
-  it('names the wizard, the step and all four steps, marking the one you are on', () => {
+  it('names the wizard, the step and all six steps, marking the one you are on', () => {
     const h = frame({ step: 2 });
     expect(h).toContain('New roof report');
-    expect(h).toContain('Step 2 of 4');
-    for (const s of ['Where', 'Photos', 'Roof', 'Damage']) expect(h).toContain(s);
+    expect(h).toContain('Step 2 of 6');
+    for (const s of ['Where', 'Photos', 'Roof', 'Damage', 'Review', 'Make']) expect(h).toContain(s);
     expect(h.match(/aria-current="step"/g)).toHaveLength(1);
     expect(h).toContain('THE STEP');
   });
@@ -33,11 +33,25 @@ describe('the wizard frame', () => {
     expect(h).toContain('>Next<');
   });
 
-  it('ends, for now, by saving the draft and closing, and says what comes next', () => {
-    const h = frame({ step: 4 });
-    expect(h).toContain('Save and close');
-    expect(h).toContain('Review and making the report come next.');
+  it('shows six steps, and on the review step the button makes the report', () => {
+    const h = frame({ step: 5 });
+    expect(h).toContain('Step 5 of 6');
+    for (const s of ['Where', 'Photos', 'Roof', 'Damage', 'Review', 'Make']) expect(h).toContain(s);
+    expect(h).toContain('>Make the report<');
     expect(h).not.toContain('>Next<');
+    expect(h).not.toContain('Save and close');
+  });
+
+  it('has no Back or Next once the report is being made: that step has its own buttons', () => {
+    const h = frame({ step: 6 });
+    expect(h).toContain('Step 6 of 6');
+    expect(h).not.toContain('>Back<');
+    expect(h).not.toContain('>Make the report<');
+    expect(h).toContain('>Close<');
+  });
+
+  it('says an earlier report was replaced, when it was', () => {
+    expect(frame({ notice: 'Your earlier unfinished report was replaced by this one.' })).toContain('Your earlier unfinished report was replaced by this one.');
   });
 
   it('says a draft was kept, from how long ago, and offers Start over', () => {

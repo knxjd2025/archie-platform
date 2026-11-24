@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useAuth } from '../lib/auth';
 import { useCompany } from '../lib/company';
-import { LAST_STEP, agoText, browserStorage, clearDraft, draftKey, emptyDraft, isEmptyDraft, readDraft, writeDraft, type WizardDraft } from './draft';
-import { STEPS, draftPhotosFromTiles, photosInFlight, photosRemoving, tilesFromDraft, tryAdvance } from './wizard-model';
+import { LAST_STEP, REVIEW_STEP, agoText, browserStorage, clearDraft, draftKey, emptyDraft, isEmptyDraft, readDraft, writeDraft, type ReviewDraft, type WizardDraft } from './draft';
+import { draftForJob, type JobStart } from './job-prefill';
+import { STEPS, draftPhotosFromTiles, photoIdsForReport, photosInFlight, photosRemoving, tilesFromDraft, tryAdvance } from './wizard-model';
 import { usePhotoUploads } from './photo-uploads';
 import StepWhere from './StepWhere';
 import StepPhotos from './StepPhotos';
 import StepMeasurements from './StepMeasurements';
 import StepDamage from './StepDamage';
+import StepReview from './StepReview';
+import { GenerateView, useMakeReport } from './StepGenerate';
 import { RR } from './words';
 
 const FOCUS = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400';
@@ -19,6 +22,8 @@ export interface WizardFrameProps {
   error: string | null;
   /** "2 hours ago" when this draft was brought back; null when it is a fresh start. */
   restoredNote: string | null;
+  /** Said once in amber, for example that an earlier unfinished report was replaced. */
+  notice?: string | null;
   /** The draft has been kept on this device. */
   saved: boolean;
   /** Photos are still on their way, or being taken back: the wizard cannot be closed yet. */
@@ -41,7 +46,8 @@ export function WizardFrame(p: WizardFrameProps) {
     if (first.current) { first.current = false; return; }
     heading.current?.focus();
   }, [p.step]);
-  const last = p.step >= LAST_STEP;
+  const making = p.step >= LAST_STEP;
+  const reviewing = p.step === REVIEW_STEP;
   return (
     <section className="bg-white rounded-xl border border-gray-200 overflow-hidden" aria-label={RR.wizard.title}>
       <div className="px-5 py-4 border-b border-gray-100 flex flex-wrap items-start justify-between gap-3">
@@ -70,22 +76,23 @@ export function WizardFrame(p: WizardFrameProps) {
         </div>
       )}
 
+      {p.notice && <p role="status" className="px-5 py-2 bg-amber-50 border-b border-amber-100 text-sm text-amber-800">{p.notice}</p>}
+
       <div className="px-5 py-5">
         {p.children}
         {p.error && <p role="alert" className="mt-4 text-sm text-red-600">{p.error}</p>}
       </div>
 
-      <div className="px-5 py-4 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3">
+      {!making && <div className="px-5 py-4 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           {p.step > 1 && <button type="button" onClick={p.onBack} className={BUTTON}>{RR.wizard.back}</button>}
           {p.saved && !p.restoredNote && <button type="button" onClick={p.onStartOver} className="text-sm text-gray-500 hover:text-gray-700 underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded">{RR.wizard.startOver}</button>}
         </div>
         <div className="flex flex-wrap items-center gap-3">
           {p.saved && <span className="text-xs text-gray-400" role="status">{RR.wizard.saved}</span>}
-          {last && <span className="text-xs text-gray-500">{RR.wizard.comesNext}</span>}
-          <button type="button" onClick={p.onNext} className={PRIMARY}>{last ? RR.wizard.saveAndClose : RR.wizard.next}</button>
+          <button type="button" onClick={p.onNext} className={PRIMARY}>{reviewing ? RR.review.make : RR.wizard.next}</button>
         </div>
-      </div>
+      </div>}
     </section>
   );
 }
@@ -93,19 +100,23 @@ export function WizardFrame(p: WizardFrameProps) {
 const SAVE_DELAY_MS = 400;
 
 /** The wizard: the draft it keeps in the browser, the photos it holds, and the step in front. */
-export default function Wizard({ onClose }: { onClose: () => void }) {
+export default function Wizard({ onClose, onDone, prefill }: { onClose: () => void; onDone: (reportId: string) => void; prefill?: JobStart | null }) {
   const { user } = useAuth();
   const company = useCompany();
   const key = useMemo(() => draftKey(company.id, user?.email), [company.id, user?.email]);
 
   // What was kept last time, read once when the wizard opens.
   const restored = useMemo(() => (key ? readDraft(browserStorage(), key) : null), [key]);
-  const [draft, setDraft] = useState<WizardDraft>(() => restored?.draft ?? emptyDraft());
-  const [restoredNote, setRestoredNote] = useState<string | null>(() => (restored ? agoText(restored.savedAt) : null));
+  // Opened from a job: the job, its address and its customer are filled in, unless a draft for that same job is already open.
+  const started = useMemo(() => (prefill ? draftForJob(restored?.draft ?? null, prefill) : null), [prefill, restored]);
+  const first = started?.draft ?? restored?.draft ?? null;
+  const [draft, setDraft] = useState<WizardDraft>(() => first ?? emptyDraft());
+  const [restoredNote, setRestoredNote] = useState<string | null>(() => (restored && first === restored.draft ? agoText(restored.savedAt) : null));
+  const [replacedNote] = useState<string | null>(() => (started?.replaced ? RR.job.replaced : null));
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [dragging, setDragging] = useState(false);
-  const uploads = usePhotoUploads(useMemo(() => tilesFromDraft(restored?.draft.photos ?? []), [restored]));
+  const uploads = usePhotoUploads(useMemo(() => tilesFromDraft(first?.photos ?? []), [first]));
 
   const current = useMemo<WizardDraft>(() => ({ ...draft, photos: draftPhotosFromTiles(uploads.tiles) }), [draft, uploads.tiles]);
   const latest = useRef(current);
@@ -128,20 +139,42 @@ export default function Wizard({ onClose }: { onClose: () => void }) {
   const removing = photosRemoving(uploads.tiles);
   const busy = photosInFlight(uploads.tiles) || removing;
 
-  const next = () => {
-    if (current.step >= LAST_STEP) {
-      // Review and making the report are the next task; until then the draft is kept and the wizard closes.
-      const check = tryAdvance(current, uploads.tiles);
-      if (!check.ok) { setError(check.error); return; }
+  const make = useMakeReport({
+    draft: current,
+    photoIds: photoIdsForReport(uploads.tiles),
+    onAttempt: (attempt, step) => {
+      setDraft((d) => ({ ...d, attempt, step }));
+      // Kept at once, before anything is sent, so a refresh a moment later still knows this try.
+      latest.current = { ...latest.current, attempt, step };
       keep();
-      onClose();
-      return;
-    }
+    },
+    onReady: (reportId) => {
+      // The report exists: nothing is left to keep. The editor opens on it.
+      if (key) clearDraft(browserStorage(), key);
+      uploads.reset();
+      onDone(reportId);
+    },
+  });
+
+  // A refresh (or the wizard opened again) while a try is kept: the same request picks the report up.
+  const resumed = useRef(false);
+  useEffect(() => {
+    if (resumed.current) return;
+    resumed.current = true;
+    if (draft.step >= LAST_STEP && draft.attempt) make.resume();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const next = () => {
     const r = tryAdvance(current, uploads.tiles);
     if (!r.ok) { setError(r.error); return; }
     setError(null);
+    if (current.step >= REVIEW_STEP) { make.begin(); return; }
     patch({ step: r.step });
   };
+
+  const backToReview = () => { make.clear(); setDraft((d) => ({ ...d, attempt: null, step: REVIEW_STEP })); };
+  const changeAddress = () => { make.clear(); setDraft((d) => ({ ...d, attempt: null, step: 1 })); };
 
   const startOver = () => {
     if (key) clearDraft(browserStorage(), key);
@@ -159,6 +192,7 @@ export default function Wizard({ onClose }: { onClose: () => void }) {
       step={draft.step}
       error={error}
       restoredNote={restoredNote}
+      notice={replacedNote}
       saved={saved}
       busy={busy}
       busyNote={removing && !photosInFlight(uploads.tiles) ? RR.photos.removeBusy : undefined}
@@ -183,6 +217,20 @@ export default function Wizard({ onClose }: { onClose: () => void }) {
       )}
       {draft.step === 3 && <StepMeasurements value={draft.roof} onChange={(roof) => patch({ roof })} />}
       {draft.step === 4 && <StepDamage value={draft.damage} onChange={(damage) => patch({ damage })} />}
+      {draft.step === REVIEW_STEP && (
+        <StepReview draft={current} tiles={uploads.tiles} onReview={(review: Partial<ReviewDraft>) => patch({ review: { ...draft.review, ...review } })} onGoTo={(step) => patch({ step })} />
+      )}
+      {draft.step >= LAST_STEP && (
+        <GenerateView
+          flow={make.flow ?? { phase: 'making', reportId: null }}
+          line={make.line}
+          trying={make.trying}
+          onTryAgain={make.tryAgain}
+          onBackToReview={backToReview}
+          onChangeAddress={changeAddress}
+          onGoToReports={close}
+        />
+      )}
     </WizardFrame>
   );
 }

@@ -11,13 +11,16 @@
  *    sits inside try and catch: blocked or full storage means "no draft", said
  *    to nobody.
  */
-import { MAX_REPORT_PHOTOS, REPORT_PHOTO_CATEGORIES, type ReportPhotoCategory } from '../../../shared/roof-reports';
+import { MAX_REPORT_PHOTOS, REPORT_KINDS, REPORT_PHOTO_CATEGORIES, TEMPLATES, type ReportKindValue, type ReportPhotoCategory, type TemplateValue } from '../../../shared/roof-reports';
 
 export const DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
-export const LAST_STEP = 4;
+/** Where, Photos, Roof, Damage, Review, Make. The last is the waiting step, reached only by making the report. */
+export const LAST_STEP = 6;
+export const REVIEW_STEP = 5;
 const VERSION = 1;
 /** A draft saved by a clock this far ahead of ours is not believed. */
 const FUTURE_SLACK_MS = 5 * 60 * 1000;
+const KEY_RE = /^[A-Za-z0-9_.:-]{8,200}$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface StorageLike {
@@ -32,6 +35,17 @@ export interface DraftPhoto { id: string; name: string; category: ReportPhotoCat
 export interface RoofDraft { squares: string; pitch: string; stories: string; material: string }
 export interface DamageDraft { wind: string; hail: string; general: string }
 
+export interface ReviewDraft {
+  kinds: ReportKindValue[];
+  template: TemplateValue;
+  notes: string;
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string;
+}
+/** The one request key made for this try at making the report, and a fingerprint of what it asked for. */
+export interface AttemptDraft { key: string; fingerprint: string }
+
 export interface WizardDraft {
   step: number;
   where: WhereDraft;
@@ -40,7 +54,12 @@ export interface WizardDraft {
   photoKind: '' | ReportPhotoCategory;
   roof: RoofDraft;
   damage: DamageDraft;
+  review: ReviewDraft;
+  /** Set when "Make the report" was pressed, so a refresh picks the same report up instead of starting another. */
+  attempt: AttemptDraft | null;
 }
+
+export const emptyReview = (): ReviewDraft => ({ kinds: ['inspection'], template: 'full', notes: '', customerName: '', customerEmail: '', customerPhone: '' });
 
 export const emptyDraft = (): WizardDraft => ({
   step: 1,
@@ -49,6 +68,8 @@ export const emptyDraft = (): WizardDraft => ({
   photoKind: '',
   roof: { squares: '', pitch: '', stories: '', material: '' },
   damage: { wind: '0', hail: '0', general: '0' },
+  review: emptyReview(),
+  attempt: null,
 });
 
 /** True when nothing has been filled in, so there is nothing worth keeping. */
@@ -85,7 +106,16 @@ function cleanDraft(raw: unknown): WizardDraft | null {
   }
   const r = isObject(raw.roof) ? raw.roof : {};
   const d = isObject(raw.damage) ? raw.damage : {};
-  const step = typeof raw.step === 'number' && Number.isFinite(raw.step) ? Math.min(LAST_STEP, Math.max(1, Math.floor(raw.step))) : 1;
+  const rv = isObject(raw.review) ? raw.review : {};
+  const wantedKinds = new Set<string>(REPORT_KINDS.map((k) => k.value));
+  const kinds = (Array.isArray(rv.kinds) ? rv.kinds : []).filter((k): k is ReportKindValue => typeof k === 'string' && wantedKinds.has(k));
+  const at = isObject(raw.attempt) ? raw.attempt : null;
+  const attempt = at && typeof at.key === 'string' && KEY_RE.test(at.key) && typeof at.fingerprint === 'string' && at.fingerprint.length > 0 && at.fingerprint.length <= 64
+    ? { key: at.key, fingerprint: at.fingerprint }
+    : null;
+  const rawStep = typeof raw.step === 'number' && Number.isFinite(raw.step) ? Math.min(LAST_STEP, Math.max(1, Math.floor(raw.step))) : 1;
+  // The waiting step is only a place to be while a try is under way.
+  const step = rawStep >= LAST_STEP && !attempt ? REVIEW_STEP : rawStep;
   return {
     step,
     where: { address: text(w.address, 200), city: text(w.city, 100), state: text(w.state, 50), zip: text(w.zip, 20), job },
@@ -93,6 +123,12 @@ function cleanDraft(raw: unknown): WizardDraft | null {
     photoKind: (REPORT_PHOTO_CATEGORIES as readonly string[]).includes(raw.photoKind as string) ? (raw.photoKind as ReportPhotoCategory) : '',
     roof: { squares: text(r.squares, 12), pitch: text(r.pitch, 20), stories: text(r.stories, 6), material: text(r.material, 40) },
     damage: { wind: text(d.wind, 8) || base.damage.wind, hail: text(d.hail, 8) || base.damage.hail, general: text(d.general, 8) || base.damage.general },
+    review: {
+      kinds: kinds.length ? [...new Set(kinds)] : (Array.isArray(rv.kinds) && rv.kinds.length === 0 ? [] : base.review.kinds),
+      template: TEMPLATES.some((t) => t.value === rv.template) ? (rv.template as TemplateValue) : base.review.template,
+      notes: text(rv.notes, 20_000), customerName: text(rv.customerName, 200), customerEmail: text(rv.customerEmail, 254), customerPhone: text(rv.customerPhone, 40),
+    },
+    attempt,
   };
 }
 
