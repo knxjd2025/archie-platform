@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SEND_FAILED, SEND_REPORT_CAPPED } from '../../../../shared/roof-reports';
-import { canSubmit, initialSend, makeSendKey, sendBodyOf, sendReducer, sendsAllowed, sentLine, submitSend, type SendState } from '../send-model';
+import { canSubmit, initialSend, makeSendKey, sendBodyOf, sendPrefill, sendReducer, sendsAllowed, sentLine, submitSend, type SendState } from '../send-model';
+import { emptyValues } from '../editor-model';
 import { RR } from '../words';
 
 const open = (over: Partial<Parameters<typeof sendReducer>[1] & { type: 'open' }> = {}) =>
@@ -105,5 +106,13 @@ describe('who sees the button, and the line about earlier emails', () => {
     expect(sentLine(3, '2026-11-24T15:00:00.000Z')).toBe('Emailed 3 times. Last sent Nov 24, 2026.');
     expect(sentLine(2, null)).toBe('Emailed 2 times.');
     expect(sentLine(2, 'not a date')).toBe('Emailed 2 times.');
+  });
+});
+
+describe('what the dialog starts with', () => {
+  it('is the customer\'s address and name as they stand in the editor now, typed and saved or not, never what the report was first opened with', () => {
+    const values = { ...emptyValues(), customerEmail: 'new.address@example.com', customerName: 'Dana Whitfield' };
+    expect(sendPrefill(values)).toEqual({ email: 'new.address@example.com', name: 'Dana Whitfield' });
+    expect(sendPrefill(emptyValues())).toEqual({ email: '', name: '' });
   });
 });

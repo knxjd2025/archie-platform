@@ -10,6 +10,7 @@
  */
 import type { TeamRole } from '../../../shared/rbac';
 import { MAX_SEND_MESSAGE, decisionFor } from '../../../shared/roof-reports';
+import type { EditValues } from './editor-model';
 import { RR, plainMessage } from './words';
 
 export type SendPhase = 'closed' | 'form' | 'sending' | 'sent' | 'failed';
@@ -89,3 +90,6 @@ export function sentLine(count: number, at: string | null): string | null {
   if (!d || Number.isNaN(d.getTime())) return times;
   return `${times} ${RR.send.lastSent(d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric'}))}`;
 }
+
+/** What the dialog opens with: the customer's address and name as they stand in the editor now (what was typed, saved or not), not what the report was opened with. */
+export const sendPrefill = (values: Pick<EditValues, 'customerEmail' | 'customerName'>): { email: string; name: string } => ({ email: values.customerEmail, name: values.customerName });

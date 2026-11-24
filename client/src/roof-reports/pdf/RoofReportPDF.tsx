@@ -14,6 +14,7 @@ export interface RoofReportPDFProps {
   charts: { storm: string | null; damage: string | null };
 }
 
+const rowsOf = <T,>(items: T[], size: number): T[][] => Array.from({ length: Math.ceil(items.length / size) }, (_, i) => items.slice(i * size, i * size + size));
 const cell = (flex: number, align: 'left' | 'right' = 'left') => ({ flex, textAlign: align } as const);
 
 export function RoofReportPDF({ content: c, charts }: RoofReportPDFProps) {
@@ -81,14 +82,16 @@ export function RoofReportPDF({ content: c, charts }: RoofReportPDFProps) {
 
         {c.photos.length ? (
           <Section title="Photos">
-            <View style={styles.photoGrid}>
-              {c.photos.map((p, i) => (
-                <View key={i} style={styles.photoCell} wrap={false}>
-                  <Image src={p.dataUrl} style={{ width: '100%', height: 110, objectFit: 'cover' }} />
-                  {p.caption ? <Text style={{ ...styles.small, marginTop: 2 }}>{p.caption}</Text> : null}
-                </View>
-              ))}
-            </View>
+            {rowsOf(c.photos, 3).map((row, r) => (
+              <View key={r} style={styles.photoRow} wrap={false}>
+                {row.map((p, i) => (
+                  <View key={i} style={styles.photoCell}>
+                    <Image src={p.dataUrl} style={{ width: '100%', height: 110, objectFit: 'cover' }} />
+                    {p.caption ? <Text style={{ ...styles.small, marginTop: 2 }}>{p.caption}</Text> : null}
+                  </View>
+                ))}
+              </View>
+            ))}
           </Section>
         ) : null}
 

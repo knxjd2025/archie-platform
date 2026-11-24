@@ -5,6 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { createElement } from 'react';
+import { inflateSync } from 'node:zlib';
 import { jpegDataUrl } from './tiny-jpeg';
 import { makeReport } from '../../../../../server/lib/roof-reports/__tests__/fixtures/report';
 import { pdfContent, type PdfInput } from '../content';
@@ -20,6 +21,31 @@ async function render(input: PdfInput, charts: { storm: string | null; damage: s
   const { renderToBuffer } = await import('@react-pdf/renderer');
   const { RoofReportPDF } = await import('../RoofReportPDF');
   return renderToBuffer(createElement(RoofReportPDF, { content: pdfContent(input), charts }) as never);
+}
+/** The text of each page's drawing: the PDF's own streams, unpacked, with the hex strings of its text operators decoded. */
+function pageTexts(pdf: Buffer): string[] {
+  const raw = pdf.toString('latin1');
+  const out: string[] = [];
+  for (const m of raw.matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)) {
+    let body: string;
+    try { body = inflateSync(Buffer.from(m[1], 'latin1')).toString('latin1'); } catch { continue; }
+    if (!body.includes(' TJ')) continue;
+    // One text operator is one run of text (its pieces are kerned apart): join the pieces, and keep the runs apart.
+    const runs = [...body.matchAll(/\[([^\]]*)\]\s*TJ/g)].map((r) => [...r[1].matchAll(/<([0-9a-fA-F]+)>/g)].map((h) => Buffer.from(h[1], 'hex').toString('latin1')).join(''));
+    out.push(runs.join(' | '));
+  }
+  return out;
+}
+/** Where the footer's rule is drawn on each page that has one (a page-wide line from the left margin to the right): the page's own height from the top. */
+function footerRules(pdf: Buffer): number[] {
+  const ys: number[] = [];
+  for (const m of pdf.toString('latin1').matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)) {
+    let body: string;
+    try { body = inflateSync(Buffer.from(m[1], 'latin1')).toString('latin1'); } catch { continue; }
+    if (!body.includes(' TJ')) continue;
+    for (const r of body.matchAll(/^44 (-?\d+(?:\.\d+)?) m\n568 \1 l$/gm)) ys.push(Number(r[1]));
+  }
+  return ys;
 }
 const pages = (pdf: Buffer): number => (pdf.toString('latin1').match(/\/Type\s*\/Page\b(?!s)/g) ?? []).length;
 
@@ -53,5 +79,46 @@ describe('the PDF document', () => {
     const pdf = await render(empty);
     expect(pdf.subarray(0, 5).toString('latin1')).toBe('%PDF-');
     expect(pages(pdf)).toBeGreaterThanOrEqual(1);
+  }, 60_000);
+
+  it('puts the company line and "Page n of m" at the foot of every page but the cover', async () => {
+    const photos = Array.from({ length: 6 }, (_, i) => ({ id: `p${i}`, category: 'roof_surface', dataUrl: jpegDataUrl(i) }));
+    const pdf = await render(base(photos));
+    const texts = pageTexts(pdf);
+    const withFoot = texts.filter((t) => /Page \d+ of \d+/.test(t));
+    expect(pages(pdf)).toBeGreaterThanOrEqual(2);
+    expect(withFoot.length).toBe(pages(pdf) - 1);
+    for (const t of withFoot) expect(t).toContain('Summit Ridge Roofing');
+    expect(texts[0]).not.toMatch(/Page \d+ of \d+/);
+  }, 60_000);
+
+  it('does not wrap the labels on the cover', async () => {
+    const texts = pageTexts(await render(base()));
+    expect(texts.some((t) => t.includes('Prepared for'))).toBe(true);
+    expect(texts.some((t) => t.includes('Report date'))).toBe(true);
+  }, 60_000);
+
+  it('never leaves the Photos heading alone at the foot of a page, however much comes before it', async () => {
+    const photos = Array.from({ length: 3 }, (_, i) => ({ id: `p${i}`, category: null, dataUrl: jpegDataUrl(i) }));
+    const finding = (n: number) => ({ id: `f${n}`, title: `Finding number ${n}`, severity: 'low', narrative: 'The flashing at the chimney is loose and should be resealed before the next storm.', relatedPhotoIds: [], repairAction: 'Reseal', insuranceRelevant: false });
+    for (let n = 0; n <= 24; n++) {
+      const input = base(photos);
+      const r = makeReport({ executiveSummary: 'A short summary of the roof.', structuredFindings: Array.from({ length: n }, (_, i) => finding(i)) as never,
+        damageAnalysis: { ...makeReport().damageAnalysis, photos: photos.map((p) => ({ id: p.id, url: '', damages: [], overallSeverity: 'low', aiSummary: 'CAPTION-MARK', analyzedAt: '' })) as never } });
+      const pdf = await render({ ...input, report: r as unknown as Record<string, unknown> });
+      const texts = pageTexts(pdf);
+      const heading = texts.filter((t) => /(^|\| )Photos( \||$)/.test(t));
+      expect(heading.length, `n=${n}`).toBeGreaterThan(0);
+      for (const t of heading) expect(t, `n=${n}: the heading is on a page with no photo caption`).toContain('CAPTION-MARK');
+    }
+  }, 120_000);
+
+  it('draws the footer at the foot of the page, on every page but the cover, and not somewhere off the page', async () => {
+    const photos = Array.from({ length: 6 }, (_, i) => ({ id: `p${i}`, category: 'roof_surface', dataUrl: jpegDataUrl(i) }));
+    const doc = await render(base(photos));
+    const rules = footerRules(doc);
+    // A Letter page is 792 points tall; the footer's rule sits in the bottom margin, about 44 points up. Nothing is drawn above the top of a page either.
+    expect(rules.filter((y) => y > 740 && y < 760)).toHaveLength(pages(doc) - 1);
+    expect(rules.filter((y) => y < 0)).toEqual([]);
   }, 60_000);
 });

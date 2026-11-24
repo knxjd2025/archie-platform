@@ -12,7 +12,7 @@ import { initialRewrites, rewriteBusy, rewriteReducer, rewriteStateOf, submitRew
 import { loadPdfBuilder } from './pdf-loader';
 import { initialPdf, pdfFileName, pdfReducer, runPdf, saveFile, type PdfState } from './pdf-model';
 import { SendDialog } from './SendDialog';
-import { initialSend, makeSendKey, sendReducer, sendsAllowed, sentLine, submitSend, type SendField, type SendState } from './send-model';
+import { initialSend, makeSendKey, sendPrefill, sendReducer, sendsAllowed, sentLine, submitSend, type SendField, type SendState } from './send-model';
 import { copyLink, initialShare, shareReducer, turnLinkOff, type ShareState } from './share-model';
 import { RR, plainMessage } from './words';
 
@@ -410,7 +410,7 @@ export default function Editor({ id, role, onBack, onArchived }: { id: string; r
   };
 
   // Opening the dialog starts a try with its own request key; pressing Send answers in the same frame (Sending...), and a second press while it is sending does nothing.
-  const openSend = () => { if (detail) dispatchSend({ type: 'open', email: detail.customerEmail ?? '', name: detail.customerName ?? '', key: makeSendKey() }); };
+  const openSend = () => { if (detail) dispatchSend({ type: 'open', ...sendPrefill(fieldsRef.current.values), key: makeSendKey() }); };
   const doSend = () => {
     const now = sendRef.current;
     if (now.phase === 'sending' || now.phase === 'sent' || now.phase === 'closed') return;
