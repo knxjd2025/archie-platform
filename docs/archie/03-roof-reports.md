@@ -28,21 +28,25 @@ photo links inside a page are made against).
 
 ## Before this code is deployed
 
-Apply three migrations to the database, as the owner, before deploying code that
-reads them. All three are safe under the code that is live today (0020 and 0021
-only add tables nothing reads yet; 0022 only adds columns the live code never
+Apply four migrations to the database, as the owner, before deploying code that
+reads them. All four are safe under the code that is live today (0020, 0021 and
+0023 only add tables nothing reads yet; 0022 only adds columns the live code never
 names). Nothing in the build or deploy runs them. **0022 must be applied before
 the code that names its columns is deployed**: that code reads `roof_reports`
-with them, so deployed first it breaks every report read.
+with them, so deployed first it breaks every report read. 0023 should be applied
+first too: the page route reads its table whenever it shows a presentation; a
+deploy that got ahead of it would show the base presentation (a failed pack read
+is treated as no pack), never an error, but apply it first anyway.
 
 | file | what it adds | sha256 |
 |---|---|---|
 | `migrations/0020_roof_reports.sql` | `roof_reports`, `roof_report_photos` | `ace7bc60ebc3fc5d0dc040fb8d79ceb5b4300d5d34b8b23831b95b21c72ed55d` |
 | `migrations/0021_model_costs.sql` | `model_costs` | `ca45ee62a6b90eaa514c94dca3bc702a4a679c93a36817b5aba80014a0b1a4a5` |
 | `migrations/0022_roof_report_starts.sql` | `roof_reports.started_at` (filled from `created_at`, then required), `idempotency_key`, `request_hash`, and two indexes | `3bdf415c35ed403d629df6b7f723fc119cd6ec5b4065b35270078c13678b1e2e` |
+| `migrations/0023_presentation_chapter_packs.sql` | `presentation_chapter_packs` (a new table only, one row a company) and the trigger that keeps the app from writing it | `5c2eeb75ec1f332563fc0294a78e0addd6b45191df479f4e4f5545080aab4c45` |
 
-Check the file you apply with `sha256sum` against the table. 0020 and 0021 need
-`0008` (the system role): each table is protected with the function `0008`
+Check the file you apply with `sha256sum` against the table. 0020, 0021 and 0023
+need `0008` (the system role): each table is protected with the function `0008`
 created, so each has exactly the two company policies; 0022 needs `0020`. A
 migration is never edited once applied.
 
@@ -89,6 +93,7 @@ Never delete, skip or weaken these.
 | `server/lib/roof-reports/__tests__/engine-unchanged.test.ts` | the vendored scroll engine is never edited |
 | `server/lib/roof-reports/__tests__/vendored-motion.test.ts` | the vendored motion library's bytes match the manifest and the hashes the page code carries |
 | `server/lib/roof-reports/__tests__/report-nonce.test.ts` | every script every renderer writes carries the response's nonce, written where the renderer writes it; no renderer uses an inline handler; a script or handler that gets in anyway carries no nonce |
+| `server/roof-reports/__tests__/packs-are-company-data.db.test.ts` | a pack is only ever read for the company in context; the app role never writes one; only the loader, a dry run by default, writes through the system role; a pack with problems is refused; no pack wording in code |
 | `server/roof-reports/__tests__/html-page.db.test.ts` | the page route: a fresh nonce on every response, the same one on every script in it, the sandbox and the other policy rules, the response headers |
 | `server/crews/__tests__/crew-money-walk.db.test.ts` (existing) | crew are handed no money by any route; run it with the switch on to walk the roof report routes too |
 
@@ -176,6 +181,55 @@ clip (`no-video.test.ts`, there is no ffmpeg on this hosting). Every script
 either style writes carries the response's nonce. The deep-walk injection test
 and the no-em-dash test run all three looks through the one renderer the route
 uses, with a nonce, the motion address and a chapter pack applied.
+
+## Presentation chapters (a company's own pages in the presentation)
+
+Anything in a presentation that is a **promise** (how the crew works, what the
+warranty covers, how long a job takes) belongs to one company and is that
+company's **data**, never code, and is never chosen by matching a name, an email
+domain or a website (anyone can type a company name). The base presentation says
+only what the report found. A company with no pack gets exactly that.
+
+- **Where it lives.** `presentation_chapter_packs` (migration 0023), one row a
+  company, with the two standard company policies. The page route reads the pack
+  of the company in context (`packForCurrentCompany`, `server/roof-reports/packs.ts`)
+  and hands it to the renderer; row level security shows a company only its own
+  row, so another company's pack is simply not there. A read that fails is no
+  pack (the base presentation), logged by its kind only.
+- **The app can never write one.** A trigger refuses every insert, update and
+  delete made as `archie_app` (SQLSTATE 42501), for any company. The policies stay
+  exactly the two every company table has (the isolation tests need that), so the
+  trigger is the extra lock. The system role can read, insert and update a pack
+  but not delete one (it is replaced, never deleted).
+- **Only the operator script writes**, through the system role with a written
+  reason (`runAsSystem`), for one named company:
+
+  ```
+  npx tsx scripts/load-presentation-pack.ts --company <company id> --file <pack.json outside the repo>
+  npx tsx scripts/load-presentation-pack.ts --company <company id> --file <pack.json outside the repo> --apply
+  ```
+
+  The first form is a dry run (the default): it checks everything, says what it
+  would do and writes nothing. A person reads the rendered presentation for that
+  company before `--apply`. A file inside the repository is refused (a pack is a
+  company's own words). It prints counts and chapter ids, never the words. Run it
+  with the app's `DATABASE_URL` (user `archie_app`), as the other operator scripts.
+- **A pack is checked** (`parsePack`, in the library) when it is loaded and again
+  every time it is read back to be shown: exactly the known fields and nothing
+  more (a field a pack has no place for, such as a script, a style, a link or an
+  image address, is refused, never ignored); plain text with no angle brackets or
+  control characters, with a size cap; ids that are plain lowercase ids; whole
+  minutes from 0 to 120; only the two placeholders `{company}` and `{phone}`;
+  anchors that are a standard chapter or an earlier pack chapter; and the pack's
+  own `mustSay` and `mustNotSay` phrases. A pack with any problem is refused with
+  plain sentences and nothing is written. At render, ids and minutes are checked
+  again, and every word is escaped.
+- **The placeholders** are filled in one pass, only from the company's own brand
+  record the page was built with, never from the report and never from another
+  company. (A `$` in a company's name is a `$`; it is not a replacement pattern.)
+- **Nothing of any real company is in the code.** Tests use the fictional Summit
+  Ridge Roofing in Cedar Falls. The permanent test scans the code for the test
+  pack's wording and for any writer of the table other than the loader.
 
 ## Photos
 

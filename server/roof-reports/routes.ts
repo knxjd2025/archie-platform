@@ -42,6 +42,7 @@ import {
   decisionFor, jobExistsInCompany, mayAttachJob, mayChangeJob, requireRoofReportUser, roofReportFor, roofReportUser, visibleRoofReportWhere,
 } from './access';
 import { brandFor } from './brand';
+import { packForCurrentCompany } from './packs';
 import { GeocodeFailedError, liveDeps, modelKeysFromEnv, runGeneration, type GenerateDeps, type GenerateRequest } from './generate';
 import { authedPhotoRoutes, claimPhotos, linkedPhotoRoute, photosOfReport } from './photos';
 import { photoLinkPath, signPhotoLink } from './photo-links';
@@ -300,7 +301,9 @@ export function registerRoofReportsRoutes(app: Express, options: RoofReportRoute
         // The scroll pages carry the app's own scripts. They run in the sandbox, and only because
         // they carry this response's nonce: a script that got in any other way does not.
         const nonce = newNonce();
-        const rendered = await renderReportHtml(reportForPage(row, photos, link), brandFor(currentProfile()).brandColors, { nonce, motionBase: `${origin}${MOTION_PATH}` });
+        // The company's own chapters (its data, found by the company in context), or none: the base presentation.
+        const pack = await packForCurrentCompany();
+        const rendered = await renderReportHtml(reportForPage(row, photos, link), brandFor(currentProfile()).brandColors, { nonce, motionBase: `${origin}${MOTION_PATH}`, pack });
         html = rendered.html;
         policy = pagePolicy({ kind: 'built', nonce, appOrigin: origin, logoUrl });
       }

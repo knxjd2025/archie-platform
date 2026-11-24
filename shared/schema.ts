@@ -2375,3 +2375,27 @@ export const modelCosts = pgTable('model_costs', {
 }));
 
 export type ModelCost = typeof modelCosts.$inferSelect;
+
+/**
+ * One company's own presentation chapters (migration 0023): how its crew works,
+ * what its warranty covers, in the company's words. Company DATA, never code and
+ * never matched by name: the row belongs to the company in `company_id`, the app
+ * reads only its own company's row (row level security) and can never write one
+ * (a trigger refuses the app role), and only the operator script writes, through
+ * the system role. At most one row a company. A company with no row gets the
+ * base presentation, which promises nothing.
+ */
+export const presentationChapterPacks = pgTable('presentation_chapter_packs', {
+  companyId: companyId(),
+  id: uuid('id').primaryKey().defaultRandom(),
+  pack: jsonb('pack').notNull(),
+  loadedAt: timestamp('loaded_at', { withTimezone: true }).notNull().defaultNow(),
+  /** Who ran the operator script (the operator's login name), never an email. */
+  loadedBy: text('loaded_by').notNull(),
+}, (t) => ({
+  companyUq: uniqueIndex('presentation_chapter_packs_company_uq').on(t.companyId),
+  // An object contains the empty object; an array, a number or a string does not. (Written this way because the generic isolation tests read a table's CHECK text literals as values to insert.)
+  packIsObject: check('presentation_chapter_packs_pack_is_object', sql`${t.pack} @> '{}'::jsonb`),
+}));
+
+export type PresentationChapterPack = typeof presentationChapterPacks.$inferSelect;

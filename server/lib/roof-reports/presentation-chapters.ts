@@ -16,6 +16,7 @@
  */
 
 import { escapeHtml } from './escape-html';
+import { isSafeId } from './html-safety.js';
 import type { ComprehensiveRoofReport } from './comprehensive-roof-report';
 
 /** The base chapters, in the order they appear. A pack chapter anchors to one of these or to another pack chapter. */
@@ -67,11 +68,16 @@ export interface ChapterPack {
   mustNotSay: string[];
 }
 
-/** Fill the two placeholders, then escape. The company's values are escaped too. */
+/**
+ * Escape the pack's words, then fill the two placeholders in ONE pass, from the
+ * values this call was handed (the company's own brand record) and nothing
+ * else. A function does the filling, so a `$` in a company's name is a `$` and
+ * not a replacement pattern, and a value that looks like a placeholder is never
+ * filled a second time.
+ */
 function say(c: TenantChapterContext, text: string): string {
-  return escapeHtml(text)
-    .replace(/\{company\}/g, escapeHtml(c.company))
-    .replace(/\{phone\}/g, escapeHtml(c.phone || 'the number on this page'));
+  return escapeHtml(text).replace(/\{(company|phone)\}/g, (_m, name: string) =>
+    name === 'company' ? escapeHtml(c.company) : escapeHtml(c.phone || 'the number on this page'));
 }
 
 /**
@@ -160,4 +166,96 @@ export function packProblems(pack: ChapterPack): string[] {
     if (p && !text.includes(p)) problems.push(`The pack never says "${phrase}", which it must say.`);
   }
   return problems;
+}
+
+// ---------------------------------------------------------------- reading a pack that was typed or stored
+
+const MAX_CHAPTERS = 20;
+const MAX_PHRASES = 20;
+const LIMITS = { phrase: 300, label: 80, heading: 200, lede: 1000, ledes: 8, stepTitle: 120, stepText: 1000, steps: 12, q: 300, a: 1500, questions: 12, note: 1000 } as const;
+const MAX_MINUTES = 120;
+const PLAIN_TEXT = /^[^<>\u0000-\u0008\u000b-\u001f\u007f-\u009f\u2028\u2029]*$/;
+const PLACEHOLDER = /\{([^{}]*)\}/g;
+const ALLOWED_PLACEHOLDERS = new Set(['company', 'phone']);
+
+const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+
+export type PackReading = { ok: true; pack: ChapterPack } | { ok: false; problems: string[] };
+
+/**
+ * Reads a pack from anything (a file somebody typed, a row read back from the
+ * database) and gives back either a clean copy holding ONLY the known fields, or
+ * plain sentences saying what is wrong. Nothing is repaired and nothing extra is
+ * kept: a field the pack has no place for (a script, a style, a link, an image
+ * address) is refused, because ignoring it would let a pack that says one thing
+ * be saved as another. Text must be plain (no angle brackets, no control
+ * characters) and may use only the placeholders {company} and {phone}. The
+ * pack's own phrase checks and anchors (`packProblems`) are run as well, so one
+ * call says everything that is wrong.
+ *
+ * Run at load, and again whenever a stored pack is read to be shown.
+ */
+export function parsePack(value: unknown): PackReading {
+  const problems: string[] = [];
+  const bad = (sentence: string) => { problems.push(sentence); };
+  if (!isRecord(value)) return { ok: false, problems: ['A pack must be an object with chapters, mustSay and mustNotSay.'] };
+
+  const only = (o: Record<string, unknown>, known: readonly string[], where: string) => {
+    for (const k of Object.keys(o)) if (!known.includes(k)) bad(`${where} has a field "${k}" that a pack has no place for.`);
+  };
+  const text = (v: unknown, max: number, where: string, required = true): string => {
+    if (typeof v !== 'string') { if (required || v !== undefined) bad(`${where} must be text.`); return ''; }
+    if (required && v.trim() === '') bad(`${where} must not be empty.`);
+    if (v.length > max) bad(`${where} is too long (at most ${max} characters).`);
+    if (!PLAIN_TEXT.test(v)) bad(`${where} must be plain text: no angle brackets or control characters.`);
+    for (const m of v.matchAll(PLACEHOLDER)) if (!ALLOWED_PLACEHOLDERS.has(m[1])) bad(`${where} uses {${m[1]}}, which is not one of {company} or {phone}.`);
+    return v;
+  };
+  const list = (v: unknown, max: number, where: string): unknown[] => {
+    if (!Array.isArray(v)) { bad(`${where} must be a list.`); return []; }
+    if (v.length > max) bad(`${where} has too many entries (at most ${max}).`);
+    return v.slice(0, max);
+  };
+
+  only(value, ['chapters', 'mustSay', 'mustNotSay'], 'The pack');
+  const chapters: PackChapter[] = list(value.chapters, MAX_CHAPTERS, 'The chapters').map((raw, i) => {
+    const where = `Chapter ${i + 1}`;
+    if (!isRecord(raw)) { bad(`${where} must be an object.`); return null; }
+    only(raw, ['id', 'label', 'minutes', 'after', 'onlyWithWork', 'heading', 'ledes', 'steps', 'questions', 'note'], where);
+    if (typeof raw.id !== 'string' || !isSafeId(raw.id)) bad(`${where} has an id that is not allowed. Use lowercase letters, numbers and hyphens, starting with a letter.`);
+    if (typeof raw.after !== 'string' || !isSafeId(raw.after)) bad(`${where} follows something that is not a plain chapter id.`);
+    if (typeof raw.minutes !== 'number' || !Number.isInteger(raw.minutes) || raw.minutes < 0 || raw.minutes > MAX_MINUTES) bad(`${where} needs whole minutes from 0 to ${MAX_MINUTES}.`);
+    if (typeof raw.onlyWithWork !== 'boolean') bad(`${where} must say whether it is only for reports with work (true or false).`);
+    const ch: PackChapter = {
+      id: typeof raw.id === 'string' ? raw.id : '',
+      label: text(raw.label, LIMITS.label, `${where}'s label`),
+      minutes: typeof raw.minutes === 'number' ? raw.minutes : 0,
+      after: typeof raw.after === 'string' ? raw.after : '',
+      onlyWithWork: raw.onlyWithWork === true,
+      heading: text(raw.heading, LIMITS.heading, `${where}'s heading`),
+      ledes: list(raw.ledes, LIMITS.ledes, `${where}'s opening lines`).map((l, n) => text(l, LIMITS.lede, `${where}, opening line ${n + 1}`)),
+    };
+    if (raw.steps !== undefined) {
+      ch.steps = list(raw.steps, LIMITS.steps, `${where}'s steps`).map((s, n) => {
+        const w = `${where}, step ${n + 1}`;
+        if (!isRecord(s)) { bad(`${w} must be an object.`); return { title: '', text: '' }; }
+        only(s, ['title', 'text'], w);
+        return { title: text(s.title, LIMITS.stepTitle, `${w}'s title`), text: text(s.text, LIMITS.stepText, `${w}'s text`) };
+      });
+    }
+    if (raw.questions !== undefined) {
+      ch.questions = list(raw.questions, LIMITS.questions, `${where}'s questions`).map((q, n) => {
+        const w = `${where}, question ${n + 1}`;
+        if (!isRecord(q)) { bad(`${w} must be an object.`); return { q: '', a: '' }; }
+        only(q, ['q', 'a'], w);
+        return { q: text(q.q, LIMITS.q, `${w}'s question`), a: text(q.a, LIMITS.a, `${w}'s answer`) };
+      });
+    }
+    if (raw.note !== undefined) ch.note = text(raw.note, LIMITS.note, `${where}'s note`, false);
+    return ch;
+  }).filter((c): c is PackChapter => c !== null);
+  const phrases = (v: unknown, where: string) => list(v, MAX_PHRASES, where).map((p, i) => text(p, LIMITS.phrase, `${where}, entry ${i + 1}`));
+  const pack: ChapterPack = { chapters, mustSay: phrases(value.mustSay, 'The mustSay list'), mustNotSay: phrases(value.mustNotSay, 'The mustNotSay list') };
+  if (problems.length === 0) problems.push(...packProblems(pack));
+  return problems.length ? { ok: false, problems } : { ok: true, pack };
 }
