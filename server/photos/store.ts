@@ -36,6 +36,13 @@ export interface PhotoStore {
    * a store that cannot remove, which the caller treats as "could not".
    */
   delete?(key: string): Promise<void>;
+  /**
+   * The objects whose key starts with `prefix`, each with when it was last
+   * written. Only a company's own roof report prefix (`c/<company id>/rr/`) may
+   * be listed. Used only by the sweep that removes stored copies with no row
+   * (server/roof-reports/photo-sweep.ts). Absent on a store that cannot list.
+   */
+  list?(prefix: string): Promise<Array<{ key: string; lastModified: Date | null }>>;
 }
 
 const SETTINGS = ['ARCHIE_PHOTOS_ACCOUNT_ID', 'ARCHIE_PHOTOS_ACCESS_KEY_ID', 'ARCHIE_PHOTOS_SECRET_ACCESS_KEY', 'ARCHIE_PHOTOS_BUCKET'] as const;
@@ -51,6 +58,8 @@ const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const KEY_RE = new RegExp(`^c/${UUID}/p/${UUID}/(working|thumb)\\.jpg$`);
 /** A roof report photo: under the company's own rr/ prefix, in the word `pending` (uploaded, not yet in a report) or a report id. */
 const REPORT_KEY_RE = new RegExp(`^c/${UUID}/rr/(pending|${UUID})/${UUID}/(working|thumb)\\.jpg$`);
+
+const REPORT_PREFIX_RE = new RegExp(`^c/${UUID}/rr/$`);
 
 /**
  * Where a roof report photo's copy is kept: 'c/<company id>/rr/<scope>/<photo
@@ -152,6 +161,19 @@ function r2PhotoStore(s: R2Settings): PhotoStore {
         if (e?.name === 'NoSuchKey' || e?.$metadata?.httpStatusCode === 404) return null;
         throw e;
       }
+    },
+    async list(prefix) {
+      // Only one company's own roof report prefix may be listed.
+      if (!REPORT_PREFIX_RE.test(prefix)) throw new Error('photo prefix refused');
+      const { send, lib } = await connect();
+      const found: Array<{ key: string; lastModified: Date | null }> = [];
+      let token: string | undefined;
+      do {
+        const r = await send(new lib.ListObjectsV2Command({ Bucket: s.bucket, Prefix: prefix, ContinuationToken: token }));
+        for (const o of (r?.Contents ?? []) as Array<{ Key?: string; LastModified?: Date }>) if (o.Key) found.push({ key: o.Key, lastModified: o.LastModified ?? null });
+        token = r?.IsTruncated ? (r.NextContinuationToken as string | undefined) : undefined;
+      } while (token);
+      return found;
     },
     async delete(key) {
       // Only a roof report photo's own key may be removed, never a job photo's.

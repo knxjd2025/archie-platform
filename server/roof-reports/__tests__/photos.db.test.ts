@@ -210,17 +210,69 @@ describe.skipIf(!localDb)('report photos (database)', async () => {
       expect(keysOf(id)).toHaveLength(2);
     });
 
-    it('keeps the row when the store cannot remove the copies, so it can be tried again, and never shows why', async () => {
-      const id = (await upload(a, 'repA', makeJpeg())).body.id as string;
-      const failing = { ...store, delete: async () => { throw Object.assign(new Error('secret bucket detail c/abc'), { name: 'AccessDenied' }); } };
-      setPhotoStoreForTests(failing);
-      const r = await removeAs(a, 'repA', id);
-      expect(r.status).toBe(502);
-      expect(r.body).toEqual({ error: PHOTO_NOT_REMOVED });
-      expect(r.text).not.toMatch(/secret|bucket|c\//);
-      expect((await rowsOf(a)).some((x) => x.id === id)).toBe(true);
-      setPhotoStoreForTests(store);
-      expect((await removeAs(a, 'repA', id)).status).toBe(200);
+    describe('when the store cannot remove a copy', () => {
+      const notesOf = async (id: string) => (await runAsCompany(a.id, () => db.select().from(schema.writeLog)))
+        .filter((n) => n.action === 'remove_roof_report_photo_copy' && n.targetId === id);
+      /** A store whose delete throws for the keys the test names (after letting the real one run for the rest). */
+      const failingOn = (variants: Array<'working' | 'thumb'>) => ({
+        ...store,
+        delete: async (key: string) => {
+          if (variants.some((v) => key.endsWith(`/${v}.jpg`))) throw Object.assign(new Error('secret bucket detail c/abc'), { name: 'AccessDenied', $metadata: { httpStatusCode: 403 } });
+          await store.delete(key);
+        },
+      });
+
+      it('has already committed the removal of the row when the first copy is asked to go, so a failure can never bring back a row with no picture', async () => {
+        const id = (await upload(a, 'repA', makeJpeg())).body.id as string;
+        const sawRow: boolean[] = [];
+        setPhotoStoreForTests({ ...store, delete: async (key: string) => { sawRow.push((await rowsOf(a)).some((x) => x.id === id)); await store.delete(key); } });
+        expect((await removeAs(a, 'repA', id)).status).toBe(200);
+        expect(sawRow).toEqual([false, false]);
+      });
+
+      for (const [name, variants] of [['the working copy', ['working']], ['the thumbnail', ['thumb']], ['both copies', ['working', 'thumb']]] as Array<[string, Array<'working' | 'thumb'>]>) {
+        it(`removes the row and answers plainly when ${name} cannot be removed, still removes the other, and notes each one that was left`, async () => {
+          const id = (await upload(a, 'repA', makeJpeg())).body.id as string;
+          setPhotoStoreForTests(failingOn(variants));
+          const r = await removeAs(a, 'repA', id);
+          expect(r.status).toBe(200);
+          expect(r.body).toEqual({ id, removed: true });
+          expect(r.text).not.toMatch(/secret|bucket|c\//);
+          // The row is gone, never half there, and the copy that could go did go.
+          expect((await rowsOf(a)).some((x) => x.id === id)).toBe(false);
+          expect(keysOf(id).map((k) => k.split('/').pop()!.replace('.jpg', '')).sort()).toEqual([...variants].sort());
+          // One plain note for each copy left, with the kind of failure and never the message.
+          const notes = await notesOf(id);
+          expect(notes).toHaveLength(variants.length);
+          for (const n of notes) {
+            expect(n.ok).toBe(false);
+            expect(n.error).toBe('AccessDenied 403');
+            expect(`${n.summary} ${n.error}`).not.toMatch(/secret|bucket|c\/abc/);
+          }
+          expect((await removeAs(a, 'repA', id)).status).toBe(404);
+        });
+      }
+
+      it('does not touch either copy when the row cannot be removed because the photo went into a report', async () => {
+        const report = await reportFor(a, 'repA');
+        const id = (await upload(a, 'repA', makeJpeg())).body.id as string;
+        await runAsCompany(a.id, () => photos.claimPhotos({ email: a.people.repA.email, name: 'a', role: 'sales' }, report, [id]));
+        const asked: string[] = [];
+        setPhotoStoreForTests({ ...store, delete: async (key: string) => { asked.push(key); await store.delete(key); } });
+        expect((await removeAs(a, 'repA', id)).status).toBe(409);
+        expect(asked).toEqual([]);
+        expect(keysOf(id)).toHaveLength(2);
+      });
+
+      it('says it could not be removed when the store has no way to remove at all, and keeps the row', async () => {
+        const id = (await upload(a, 'repA', makeJpeg())).body.id as string;
+        const { delete: _unused, ...cannot } = store;
+        setPhotoStoreForTests(cannot);
+        const r = await removeAs(a, 'repA', id);
+        expect(r.status).toBe(502);
+        expect(r.body).toEqual({ error: PHOTO_NOT_REMOVED });
+        expect((await rowsOf(a)).some((x) => x.id === id)).toBe(true);
+      });
     });
 
     it('is a bare 404 while the switch is off, and 503 in plain words when the store is off', async () => {

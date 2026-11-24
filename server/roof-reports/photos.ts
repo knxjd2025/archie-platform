@@ -97,8 +97,6 @@ export async function addReportPhoto(user: SessionUser, bytes: Buffer, category:
   return { status: 200, body: { id } };
 }
 
-class PhotoGone extends Error {}
-
 /**
  * Takes back a photo that was uploaded and never put in a report: its row and
  * both stored copies. Reports and their photos are archived, never deleted, so
@@ -106,10 +104,11 @@ class PhotoGone extends Error {}
  *
  * Who: the person who uploaded it, or a role that sees every report. Anyone
  * else, another company's person and a photo that is not there all get the same
- * "not found". The row goes first, inside a transaction that also removes the
- * copies: if the store cannot remove them the row comes back and the person
- * can try again, and a claim racing this finds the row locked and then gone.
- * Removing the copies is safe to repeat.
+ * "not found". The row goes first and is committed on its own, then each stored
+ * copy is removed: a failed removal never brings back a row whose picture is
+ * gone. A copy that could not be removed is noted plainly and left for the sweep
+ * (photo-sweep.ts, run by scripts/sweep-roof-report-photos.ts). Removing a copy
+ * is safe to repeat.
  */
 export async function removeReportPhoto(user: SessionUser, photoId: string, store: PhotoStore | null): Promise<Answer> {
   if (!isId(photoId) || decisionFor(user.role, 'remove_photo') === 'no') return { status: 404, body: { error: NOT_FOUND } };
@@ -122,22 +121,29 @@ export async function removeReportPhoto(user: SessionUser, photoId: string, stor
   if (!store) return { status: 503, body: { error: PHOTO_STORE_OFF } };
   const remove = store.delete?.bind(store);
   if (!remove) return { status: 502, body: { error: PHOTO_NOT_REMOVED } };
+  // The row goes first, in one statement that commits on its own: from then on nothing can reach the photo, and no failure
+  // below can bring back a row whose picture is gone. A claim racing this finds the row locked and then gone.
+  let gone: Array<{ workingKey: string; thumbKey: string }>;
   try {
-    await db.transaction(async (tx) => {
-      const gone = await tx.delete(roofReportPhotos).where(and(eq(roofReportPhotos.id, photoId), isNull(roofReportPhotos.reportId)))
-        .returning({ workingKey: roofReportPhotos.workingKey, thumbKey: roofReportPhotos.thumbKey });
-      if (!gone.length) throw new PhotoGone();
-      await remove(gone[0].workingKey);
-      await remove(gone[0].thumbKey);
-    });
+    gone = await db.delete(roofReportPhotos).where(and(eq(roofReportPhotos.id, photoId), isNull(roofReportPhotos.reportId)))
+      .returning({ workingKey: roofReportPhotos.workingKey, thumbKey: roofReportPhotos.thumbKey });
   } catch (e) {
-    if (e instanceof PhotoGone) {
-      // Taken into a report a moment ago, or already removed.
-      const [now] = await db.select({ reportId: roofReportPhotos.reportId }).from(roofReportPhotos).where(eq(roofReportPhotos.id, photoId)).limit(1);
-      return now ? { status: 409, body: { error: PHOTO_IN_REPORT } } : { status: 404, body: { error: NOT_FOUND } };
-    }
     await logWrite({ actor: user.email, system: 'archie', action: 'remove_roof_report_photo', targetId: photoId, summary: 'a report photo was not removed', ok: false, error: describeStoreError(e) });
     return { status: 502, body: { error: PHOTO_NOT_REMOVED } };
+  }
+  if (!gone.length) {
+    // Taken into a report a moment ago, or already removed.
+    const [now] = await db.select({ reportId: roofReportPhotos.reportId }).from(roofReportPhotos).where(eq(roofReportPhotos.id, photoId)).limit(1);
+    return now ? { status: 409, body: { error: PHOTO_IN_REPORT } } : { status: 404, body: { error: NOT_FOUND } };
+  }
+  // Then the copies, each on its own so one failure never skips the other. A copy that stays is private data with no row:
+  // each is noted plainly (the kind of failure, never its message) and the sweep (photo-sweep.ts) removes it later.
+  for (const [key, which] of [[gone[0].workingKey, 'working copy'], [gone[0].thumbKey, 'thumbnail']] as const) {
+    try {
+      await remove(key);
+    } catch (e) {
+      await logWrite({ actor: user.email, system: 'archie', action: 'remove_roof_report_photo_copy', targetId: photoId, summary: `the ${which} of a removed report photo was left in the store`, ok: false, error: describeStoreError(e) });
+    }
   }
   await logWrite({ actor: user.email, system: 'archie', action: 'remove_roof_report_photo', targetId: photoId, summary: 'an unused report photo was removed', ok: true, error: null });
   return { status: 200, body: { id: photoId, removed: true } };

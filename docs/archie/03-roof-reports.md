@@ -487,6 +487,27 @@ in the address a recorded server failure keeps. The host's own access logs are
 not the app's to change, which is the other reason for the ten minutes. The
 photo response sends `Referrer-Policy: no-referrer`.
 
+**Taking back an unused photo, and what a failed removal leaves.** `DELETE
+/photos/:id` removes the row first, in one statement that commits on its own, and
+only then each stored copy (working copy and thumbnail, each on its own, so one
+failure never skips the other). A failure can therefore never bring back a row
+whose picture is gone: the person is told it was removed, and a copy the store
+could not remove is private data with no row that nothing can reach. Each such
+copy is noted in the write log (`remove_roof_report_photo_copy`, the kind of
+failure such as `AccessDenied 403`, never the error's message or a key).
+`server/roof-reports/photo-sweep.ts` finds and removes them: it lists one
+company's own `c/<company>/rr/` prefix, acts only on keys of exactly the shape
+the app builds for that company, leaves a copy younger than an hour (it may be an
+upload whose row is being saved) and any copy that has a row, and notes each
+removal or failure (`sweep_roof_report_photo_copy`). The same sweep also clears
+what an upload leaves when its row could not be saved. It is run by the operator
+script `scripts/sweep-roof-report-photos.ts`: a dry run unless `--apply`, every
+company or one with `--company <id>`, only counts printed. It is not on a
+schedule: the hosting's schedule file may not be changed by this work, so an
+operator runs it (monthly is plenty) or adds it to a cron after the owner agrees.
+The store's `list` (R2 `ListObjectsV2`) refuses any prefix that is not one
+company's `rr/` prefix.
+
 ## Generation
 
 A report is made inside the request that asks for it (about 300 seconds on this

@@ -23,11 +23,15 @@ export const localDb = process.env.ARCHIE_REHEARSAL === '1' || /@(localhost|127\
 /** An in-memory photo store: nothing here ever reaches Cloudflare. */
 export function fakeStore() {
   const objects = new Map<string, Buffer>();
+  /** When each object was last written; a test can set one to make an object old. */
+  const modified = new Map<string, Date>();
   return {
     objects,
-    put: async (key: string, body: Buffer) => { objects.set(key, Buffer.from(body)); },
+    modified,
+    put: async (key: string, body: Buffer) => { objects.set(key, Buffer.from(body)); modified.set(key, new Date()); },
+    list: async (prefix: string) => [...objects.keys()].filter((k) => k.startsWith(prefix)).map((key) => ({ key, lastModified: modified.get(key) ?? null })),
     get: async (key: string) => { const b = objects.get(key); return b ? { body: Readable.from(b), length: b.length } : null; },
-    delete: async (key: string) => { objects.delete(key); },
+    delete: async (key: string) => { objects.delete(key); modified.delete(key); },
   };
 }
 
