@@ -17,7 +17,7 @@ import { and, eq } from 'drizzle-orm';
 import { makeReport } from '../../lib/roof-reports/__tests__/fixtures/report';
 import type { ModelCaller, ModelCallRequest } from '../../lib/roof-reports/model-call';
 import { ROOF_REPORT_MODELS } from '../../lib/roof-reports/models';
-import { REWRITE_CHANGED, REWRITE_COMPANY_CAPPED, REWRITE_FAILED, REWRITE_NOT_AVAILABLE, REWRITE_NOT_READY, REWRITE_NO_SUCH, REWRITE_REPORT_CAPPED } from '../../../shared/roof-reports';
+import { REWRITE_BUSY, REWRITE_CHANGED, REWRITE_COMPANY_CAPPED, REWRITE_FAILED, REWRITE_NOT_AVAILABLE, REWRITE_NOT_READY, REWRITE_NO_SUCH, REWRITE_REPORT_CAPPED } from '../../../shared/roof-reports';
 import { localDb, startRoofApp, type Co } from './harness';
 
 vi.mock('@vercel/functions', () => ({ waitUntil: () => {} }));
@@ -28,7 +28,9 @@ describe.skipIf(!localDb)('rewriting a finding or the summary (database, fake mo
   const { __resetRateLimits } = await import('../../lib/rate-limit');
 
   const requests: ModelCallRequest[] = [];
-  let behaviour: 'ok' | 'throw' | 'empty' | 'null' | 'hang' | 'dirty' | 'long' | 'edit-meanwhile' = 'ok';
+  let behaviour: 'ok' | 'throw' | 'empty' | 'null' | 'hang' | 'dirty' | 'long' | 'edit-meanwhile' | 'gate' = 'ok';
+  /** A model that waits here (behaviour 'gate') so a test can hold a rewrite in flight and ask for another. */
+  let gate: Promise<void> = Promise.resolve();
   let onThink: (() => Promise<void>) | null = null;
   let configured = true;
   const NEW_TEXT = 'Several shingles are missing near the ridge, which leaves the underlayment open to rain. A repair should be made soon.';
@@ -42,6 +44,7 @@ describe.skipIf(!localDb)('rewriting a finding or the summary (database, fake mo
     if (behaviour === 'dirty') return { text: `"\`\`\`\n${NEW_TEXT}\u0000 — <script>alert(1)</script>\n\`\`\`"`, usage };
     if (behaviour === 'long') return { text: `${NEW_TEXT} `.repeat(200), usage };
     if (behaviour === 'edit-meanwhile') await onThink?.();
+    if (behaviour === 'gate') await gate;
     return { text: NEW_TEXT, usage };
   };
   let caps = { perReport: 20, perCompany: 300 };
@@ -79,7 +82,7 @@ describe.skipIf(!localDb)('rewriting a finding or the summary (database, fake mo
     b = await h.company('Cedar Falls Roofing Two', [['admin', 'admin']]);
   });
   beforeEach(() => {
-    __resetRateLimits(); requests.length = 0; behaviour = 'ok'; onThink = null; configured = true; caps = { perReport: 20, perCompany: 300 }; logs = [];
+    __resetRateLimits(); requests.length = 0; behaviour = 'ok'; gate = Promise.resolve(); onThink = null; configured = true; caps = { perReport: 20, perCompany: 300 }; logs = [];
     for (const m of ['log', 'info', 'warn', 'error', 'debug'] as const) spies.push(vi.spyOn(console, m).mockImplementation((...args: unknown[]) => { logs.push(args.map((x) => (x instanceof Error ? `${x.name}: ${x.message}` : String(x))).join(' ')); }));
     h.as(a, 'admin');
   });
@@ -228,30 +231,111 @@ describe.skipIf(!localDb)('rewriting a finding or the summary (database, fake mo
     expect(await liveUses(a)).toBe(usedBefore);
   });
 
-  it('holds the daily limit for one report, even when the requests arrive together', async () => {
+  /** Asks for every call together while the model waits at the gate, lets the ones that were refused answer, then opens the gate. */
+  async function together(calls: Array<() => Promise<Awaited<ReturnType<typeof rewriteSummary>>>>, refusedExpected: number) {
+    let release!: () => void;
+    gate = new Promise<void>((resolve) => { release = resolve; });
+    behaviour = 'gate';
+    const answers: Array<Awaited<ReturnType<typeof rewriteSummary>>> = [];
+    const all = calls.map((call) => call().then((r) => { answers.push(r); return r; }));
+    const until = Date.now() + 10_000;
+    while (answers.length < refusedExpected && Date.now() < until) await new Promise((r) => setTimeout(r, 10));
+    release();
+    await Promise.all(all);
+    return answers;
+  }
+
+  it('holds the daily limit for one report: each rewrite of it counts once, one after the other', async () => {
     const id = await makeRow(a, 'repa');
     caps = { perReport: 3, perCompany: 300 };
     h.as(a, 'repa');
-    const answers = await Promise.all(Array.from({ length: 7 }, () => rewriteSummary(id)));
-    // Three may ask the model. Of those, the first to finish is stored and the others find the report already changed (nothing is overwritten).
-    expect(answers.filter((r) => r.status === 200 || r.status === 409).length).toBe(3);
-    expect(answers.filter((r) => r.status === 200).length).toBeGreaterThanOrEqual(1);
-    const refused = answers.filter((r) => r.status === 429);
-    expect(refused).toHaveLength(4);
-    for (const r of refused) expect(r.body).toEqual({ error: REWRITE_REPORT_CAPPED });
+    const answers: Awaited<ReturnType<typeof rewriteSummary>>[] = [];
+    for (let i = 0; i < 5; i++) answers.push(await rewriteSummary(id));
+    expect(answers.map((r) => r.status)).toEqual([200, 200, 200, 429, 429]);
+    for (const r of answers.slice(3)) expect(r.body).toEqual({ error: REWRITE_REPORT_CAPPED });
     expect(requests).toHaveLength(3);
   });
 
   it('holds the daily limit for a whole company, across reports, even when the requests arrive together', async () => {
-    const ids = [await makeRow(a, 'repa'), await makeRow(a, 'repa'), await makeRow(a, 'repa')];
+    const ids: string[] = [];
+    for (let i = 0; i < 6; i++) ids.push(await makeRow(a, 'repa'));
     const used = await liveUses(a);
     caps = { perReport: 20, perCompany: used + 4 };
     h.as(a, 'repa');
-    const answers = await Promise.all(Array.from({ length: 9 }, (_, i) => rewriteSummary(ids[i % 3])));
-    expect(answers.filter((r) => r.status === 200 || r.status === 409).length).toBe(4);
-    expect(answers.filter((r) => r.status === 429)).toHaveLength(5);
-    for (const r of answers.filter((x) => x.status === 429)) expect(r.body).toEqual({ error: REWRITE_COMPANY_CAPPED });
+    // Two asks for each of six reports at once. Four reports fit the company's day: each runs once and its second ask is busy.
+    // The other two reports are over the company's limit, so both of their asks are refused for that.
+    const answers = await together(Array.from({ length: 12 }, (_, i) => () => rewriteSummary(ids[i % 6])), 8);
+    expect(answers.filter((r) => r.status === 200)).toHaveLength(4);
+    const capped = answers.filter((r) => r.status === 429);
+    expect(capped).toHaveLength(4);
+    for (const r of capped) expect(r.body).toEqual({ error: REWRITE_COMPANY_CAPPED });
+    expect(answers.filter((r) => r.status === 409 && r.body?.error === REWRITE_BUSY)).toHaveLength(4);
     expect(requests).toHaveLength(4);
+    expect(await liveUses(a)).toBe(used + 4);
+  });
+
+  describe('two rewrites of the same report at once', () => {
+    it('lets one run and refuses the other in plain words, so the cap counts one and the stored text is the one shown', async () => {
+      const id = await makeRow(a, 'repa');
+      caps = { perReport: 20, perCompany: 300 };
+      h.as(a, 'repa');
+      const usedBefore = await liveUses(a);
+      const answers = await together([() => rewriteFinding(id, 0), () => rewriteSummary(id), () => rewriteFinding(id, 1)], 2);
+      expect(REWRITE_BUSY).toBe('A rewrite of this report is already running.');
+      const ok = answers.filter((r) => r.status === 200);
+      const busy = answers.filter((r) => r.status === 409);
+      expect(ok).toHaveLength(1);
+      expect(busy).toHaveLength(2);
+      for (const r of busy) expect(r.body).toEqual({ error: REWRITE_BUSY });
+      // One model call, one counted use, one cost row, and what is stored is exactly what the one answer showed.
+      expect(requests).toHaveLength(1);
+      expect(await liveUses(a)).toBe(usedBefore + 1);
+      expect(await costsOf(a, id)).toHaveLength(1);
+      expect(await report(a, id)).toEqual(ok[0].body.report);
+      // The refused ones changed nothing.
+      const stored = await report(a, id);
+      const changed = [stored.executiveSummary !== SUMMARY, stored.structuredFindings[0].narrative !== OLD, stored.structuredFindings[1].narrative !== 'ZZ-OTHER-FINDING-TEXT'].filter(Boolean);
+      expect(changed).toHaveLength(1);
+    }, 30_000);
+
+    it('lets go as soon as the first one is done, whether it worked or not, so the next rewrite is allowed', async () => {
+      const id = await makeRow(a, 'repa');
+      h.as(a, 'repa');
+      behaviour = 'throw';
+      expect((await rewriteSummary(id)).status).toBe(502);
+      behaviour = 'ok';
+      expect((await rewriteSummary(id)).status).toBe(200);
+      expect((await rewriteFinding(id, 0)).status).toBe(200);
+    });
+
+    it('does not hold up a different report of the same company, or the same report\'s next day', async () => {
+      const one = await makeRow(a, 'repa');
+      const two = await makeRow(a, 'repa');
+      h.as(a, 'repa');
+      const answers = await together([() => rewriteSummary(one), () => rewriteSummary(two)], 0);
+      expect(answers.map((r) => r.status)).toEqual([200, 200]);
+      expect(requests).toHaveLength(2);
+    });
+
+    it('does not let a rewrite that died hold the report for long: a left-behind one older than two minutes is let go of', async () => {
+      const id = await makeRow(a, 'repa');
+      h.as(a, 'repa');
+      await runAsCompany(a.id, () => db.insert(schema.roofReportUses).values({ reportId: id, kind: 'rewrite', memberId: a.people.repa.id, status: 'reserved', createdAt: new Date(Date.now() - 3 * 60_000) } as any));
+      expect((await rewriteSummary(id)).status).toBe(200);
+      // A fresh one still holds it.
+      await runAsCompany(a.id, () => db.insert(schema.roofReportUses).values({ reportId: id, kind: 'rewrite', memberId: a.people.repa.id, status: 'reserved', createdAt: new Date(Date.now() - 20_000) } as any));
+      const busy = await rewriteSummary(id);
+      expect(busy.status).toBe(409);
+      expect(busy.body).toEqual({ error: REWRITE_BUSY });
+    });
+
+    it('says nothing a person should not see in the refusal', async () => {
+      const id = await makeRow(a, 'repa');
+      h.as(a, 'repa');
+      const answers = await together([() => rewriteSummary(id), () => rewriteSummary(id)], 1);
+      const busy = answers.find((r) => r.status === 409)!;
+      expect(busy.text).toBe(JSON.stringify({ error: REWRITE_BUSY }));
+    });
   });
 
   it('counts a rewrite that reached the model even when it did not work, but not one that never reached it', async () => {
@@ -308,6 +392,16 @@ describe.skipIf(!localDb)('rewriting a finding or the summary (database, fake mo
       expect((await call('not-an-id', 0)).status).toBe(404);
     }
     expect(requests).toHaveLength(0);
+  });
+
+  it('changes the report only through the normalizer when it is a finding too: a photo the report does not own never gets in, and the id is the report\'s own', async () => {
+    const id = await makeRow(a, 'repa', { reportJson: makeReport({ id: 'someone-elses', structuredFindings: FINDINGS as never, executiveSummary: SUMMARY, damageAnalysis: { ...makeReport().damageAnalysis, photos: [{ id: 'not-this-reports-photo', url: 'https://evil.example/x.jpg', damages: [], overallSeverity: 'low', aiSummary: 'x', analyzedAt: '' }] } }) });
+    expect((await rewriteFinding(id, 0)).status).toBe(200);
+    const stored = await report(a, id);
+    expect(stored.damageAnalysis.photos).toEqual([]);
+    expect(JSON.stringify(stored)).not.toContain('evil.example');
+    expect(stored.id).toBe(id);
+    expect(stored.structuredFindings[0].narrative).toBe(NEW_TEXT);
   });
 
   it('changes the report only through the normalizer: a photo the report does not own never gets in', async () => {

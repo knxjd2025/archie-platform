@@ -83,6 +83,8 @@ export function registerSendRoute(router: Router, options: SendOptions = {}): vo
       if (reserved.kind === 'report_capped') return res.status(429).json({ error: SEND_REPORT_CAPPED });
       if (reserved.kind === 'company_capped') return res.status(429).json({ error: SEND_COMPANY_CAPPED });
       if (reserved.kind === 'key_reused') return res.status(409).json({ error: SEND_KEY_REUSED });
+      // A send never asks for the one-at-a-time rule, so this cannot happen; if it ever did, it would read as one already going.
+      if (reserved.kind === 'busy') return res.json({ status: 'sending', note: SEND_SENDING });
       if (reserved.kind === 'repeat') {
         // A double click: the first request is the one that sends. Say how it stands, and send nothing.
         return res.json(reserved.use.status === 'done' ? { status: 'sent' } : { status: 'sending', note: SEND_SENDING });

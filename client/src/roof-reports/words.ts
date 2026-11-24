@@ -9,7 +9,7 @@
  * code, data, a timeout notice or an internal name is replaced by the sentence
  * written for that action.
  */
-import { MAX_REPORT_PHOTOS, REPORT_KINDS, type ReportPhotoCategory } from '../../../shared/roof-reports';
+import { MAX_REPORT_PHOTOS, NOTES_MAY_BE_SEEN, REPORT_KINDS, type ReportPhotoCategory } from '../../../shared/roof-reports';
 
 export const RR = {
   page: {
@@ -92,7 +92,7 @@ export const RR = {
     customerEmail: 'Customer email',
     customerPhone: 'Customer phone',
     notes: 'Inspector notes (optional)',
-    notesHelp: 'Anything you saw that the photos do not show.',
+    notesHelp: `Anything you saw that the photos do not show. ${NOTES_MAY_BE_SEEN}`,
     emailBad: 'That email address doesn\'t look right.',
     make: 'Make the report',
   },

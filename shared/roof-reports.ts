@@ -61,6 +61,8 @@ export const pageLinkNotAllowed = (host: string | null): string =>
   host
     ? `That page links to ${host}. A saved page can only link to this app, your own website, phone numbers and email addresses. Please take that link out.`
     : 'That page has a link or form that can\'t be saved. A saved page can only link to this app, your own website, phone numbers and email addresses.';
+/** Said by the wizard and the editor beside the inspector notes: the notes are not private to the company. */
+export const NOTES_MAY_BE_SEEN = 'These notes can appear in the report the customer sees.';
 export const PAGE_NOT_READY = 'This report isn\'t ready to show yet.';
 export const BAD_REQUEST_KEY = 'That request could not be used. Please try again.';
 export const REQUEST_KEY_REUSED = 'That was already used to make a different report. Please start the report again.';
@@ -117,6 +119,8 @@ export const REWRITE_NOT_AVAILABLE = 'Rewriting is not available right now. Noth
 export const REWRITE_NOT_READY = 'A report can be rewritten once it is finished.';
 export const REWRITE_NO_SUCH = 'That part of the report could not be found. Please reload the report and try again.';
 export const REWRITE_CHANGED = 'The report changed while it was being rewritten, so nothing was changed. Please try again.';
+/** A second rewrite asked for while one of the same report is still running. */
+export const REWRITE_BUSY = 'A rewrite of this report is already running.';
 export const REWRITE_REPORT_CAPPED = 'This report has been rewritten a lot today. Please try again tomorrow.';
 export const REWRITE_COMPANY_CAPPED = 'Your company has used a lot of rewrites today. Please try again tomorrow.';
 export const REWRITE_TOO_FAST = 'You have asked for a lot of rewrites in the last few minutes. Please wait a little and try again.';

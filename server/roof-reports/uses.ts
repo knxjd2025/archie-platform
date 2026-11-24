@@ -29,6 +29,11 @@ export type UseKind = 'send' | 'rewrite';
 
 /** A use still `reserved` after this long was left behind by a request that died; it lets go of its key. */
 export const STALE_USE_MS = 10 * 60 * 1000;
+/**
+ * A rewrite still `reserved` this long is taken to have died: it no longer keeps another rewrite of the same report
+ * waiting. Longer than the rewrite's own deadline (a minute), so a live one is never let go of.
+ */
+export const BUSY_USE_MS = 2 * 60 * 1000;
 const DAY_MS = 24 * 3600_000;
 
 export type Reserved =
@@ -36,6 +41,8 @@ export type Reserved =
   /** The same request key, asking for the same thing: the earlier use. Nothing is started. */
   | { kind: 'repeat'; use: RoofReportUse }
   | { kind: 'key_reused' }
+  /** `exclusive`: another use of this kind for this report is still in flight. Nothing is added and nothing is counted. */
+  | { kind: 'busy' }
   | { kind: 'report_capped' }
   | { kind: 'company_capped' };
 
@@ -49,6 +56,11 @@ export async function reserveUse(args: {
   hash?: string | null;
   perReport: number;
   perCompany: number;
+  /**
+   * Only one use of this kind may be in flight for the report at a time. Decided inside the same company lock as the
+   * counts, so two requests that arrive together can never both be let in, whichever copy of the app each reaches.
+   */
+  exclusive?: boolean;
   now?: Date;
 }): Promise<Reserved> {
   const now = args.now ?? new Date();
@@ -64,6 +76,13 @@ export async function reserveUse(args: {
         sql`${roofReportUses.status} IN ('reserved','done')`,
       )).limit(1);
       if (earlier) return earlier.requestHash === (args.hash ?? null) ? { kind: 'repeat', use: earlier } as const : { kind: 'key_reused' } as const;
+    }
+    if (args.exclusive) {
+      const [running] = await tx.select({ id: roofReportUses.id }).from(roofReportUses).where(and(
+        eq(roofReportUses.reportId, args.reportId), eq(roofReportUses.kind, args.kind), eq(roofReportUses.status, 'reserved'),
+        sql`${roofReportUses.createdAt} > ${new Date(now.getTime() - BUSY_USE_MS)}`,
+      )).limit(1);
+      if (running) return { kind: 'busy' } as const;
     }
     const since = new Date(now.getTime() - DAY_MS);
     const counted = sql`${roofReportUses.kind} = ${args.kind} AND ${roofReportUses.createdAt} >= ${since} AND ${roofReportUses.status} IN (${sql.join(countedStatuses(args.kind).map((s) => sql`${s}`), sql`, `)})`;

@@ -12,12 +12,15 @@ import { SISTER_PREFIX, sisterRawBody } from './sister/door';
 import { corsOptions, sessionOptions, JSON_BODY_LIMIT } from './security-config';
 import { createErrorHandler } from './lib/error-response';
 import { requestLogger } from './lib/request-log';
+import { trustedProxyHops } from './lib/trusted-proxy';
+import { MOTION_PATH } from './lib/roof-reports/report-motion';
+import { motionFilesCors } from './roof-reports/motion-files';
 import path from 'path';
 
 const app = express();
 
 // Trust proxy for production deployments
-app.set('trust proxy', 1);
+app.set('trust proxy', trustedProxyHops());
 
 // Middleware
 app.use(helmet({ contentSecurityPolicy: false }));
@@ -48,6 +51,8 @@ registerRoutes(app);
 // Serve static files in production
 if (process.env.NODE_ENV === 'production') {
   const publicPath = path.join(process.cwd(), 'dist', 'public');
+  // The motion library a report page loads (with an integrity hash, from a sandbox with no origin): see motion-files.ts.
+  app.use(MOTION_PATH, motionFilesCors());
   app.use(express.static(publicPath));
 
   // SPA fallback

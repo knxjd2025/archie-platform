@@ -28,6 +28,7 @@
  * The token is a credential: it is never logged (loggablePath hides it in
  * addresses the app writes down) and never passed on as a referrer.
  */
+import { createHash } from 'node:crypto';
 import type { Express, Request, Response } from 'express';
 import { and, eq } from 'drizzle-orm';
 import { db } from '../db';
@@ -101,15 +102,36 @@ const kindOf = (error: unknown): string => {
   return typeof e?.name === 'string' && /^\w{1,40}$/.test(e.name) ? e.name : 'unknown';
 };
 
+/** What one share link may be asked for in ten minutes, from all addresses together. */
+export const PAGE_TOKEN_LIMIT = 240;
+export const PHOTO_TOKEN_LIMIT = 3000;
+
+/** The name a token's count is kept under: a hash, so a bucket is never a credential. Anything that is not a token shares one bucket. */
+export function tokenBucketKey(token: unknown): string {
+  const t = typeof token === 'string' && SHARE_TOKEN_RE.test(token) ? token : '-';
+  return `token:${createHash('sha256').update(t).digest('hex').slice(0, 24)}`;
+}
+
 export function registerPublicShareRoutes(app: Express): void {
   // Per address, and generous: a customer reopening their report, or a household passing the link round on one WiFi,
   // stays far under it. Answered as a page, since whoever hits it is looking at a browser window. A page is a few
   // database reads and a photo-heavy one is what a person loads once, so photos have an allowance of their own.
+  //
+  // Which address: `req.ip`, which is the address `trustedProxyHops()` proxies in from the right of X-Forwarded-For
+  // (one on the host's own proxy, ARCHIE_TRUSTED_PROXY_HOPS to change it; server/lib/trusted-proxy.ts). Whatever the
+  // visitor put to the left of that is never believed. Buckets live in this process only (server/lib/rate-limit.ts),
+  // so each running copy of the app counts on its own.
   const byAddress = (req: Request) => req.ip || 'anon';
-  const pageLimiter = rateLimit(120, 10 * 60 * 1000, (_req, res) => sendPlain(res, 429, SHARE_BUSY), byAddress);
-  const photoLimiter = rateLimit(1200, 10 * 60 * 1000, (_req, res) => sendPlain(res, 429, SHARE_BUSY), byAddress);
+  const busy = (_req: Request, res: Response) => sendPlain(res, 429, SHARE_BUSY);
+  const pageLimiter = rateLimit(120, 10 * 60 * 1000, busy, byAddress);
+  const photoLimiter = rateLimit(1200, 10 * 60 * 1000, busy, byAddress);
+  // A second count, on the token itself, so one link cannot be hammered from many addresses at once. The same family and
+  // far above what a household passing a link round could do. The bucket is named by a hash, never by the token.
+  const byToken = (req: Request) => tokenBucketKey(req.params.token);
+  const pageTokenLimiter = rateLimit(PAGE_TOKEN_LIMIT, 10 * 60 * 1000, busy, byToken);
+  const photoTokenLimiter = rateLimit(PHOTO_TOKEN_LIMIT, 10 * 60 * 1000, busy, byToken);
 
-  app.get('/r/roof/:token', requireRoofReportsOn, pageLimiter, async (req: Request, res: Response) => {
+  app.get('/r/roof/:token', requireRoofReportsOn, pageLimiter, pageTokenLimiter, async (req: Request, res: Response) => {
     try {
       const token = String(req.params.token ?? '');
       const found = await findShared(token);
@@ -134,7 +156,7 @@ export function registerPublicShareRoutes(app: Express): void {
     }
   });
 
-  app.get('/r/roof/:token/photos/:photoId/:variant', requireRoofReportsOn, photoLimiter, async (req: Request, res: Response) => {
+  app.get('/r/roof/:token/photos/:photoId/:variant', requireRoofReportsOn, photoLimiter, photoTokenLimiter, async (req: Request, res: Response) => {
     try {
       const { photoId, variant } = req.params;
       const found = await findShared(req.params.token);

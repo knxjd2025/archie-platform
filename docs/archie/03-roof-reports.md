@@ -156,7 +156,20 @@ can reach the app's cookies or API. The rules, in `server/roof-reports/page-poli
   GreenSock's standard "no charge" licence) is vendored byte for byte into
   `client/public/roof-reports/motion/`, with a `manifest.json` that records its
   version, sizes and hashes; `vendored-motion.test.ts` holds that the bytes on
-  disk are the bytes recorded and are never edited. The page loads the two files
+  disk are the bytes recorded and are never edited, and checks them against the
+  npm package itself: `gsap` is a pinned devDependency (exactly `3.14.2`, its
+  registry sha512 in `package-lock.json`), the manifest records the package's name,
+  version, integrity string and tarball address (and each file's path inside it),
+  and the test asserts the manifest agrees with `package-lock.json` and that each
+  vendored file equals the file inside `node_modules/gsap` byte for byte (a check
+  against the package, not against a hash of the same copy). Each of the app's own
+  script tags carries the file's `sha384` integrity hash next to the nonce, with
+  `crossorigin="anonymous"` (the sandbox has no origin, so the load is cross-origin
+  and the browser needs CORS to check a hash): the folder is answered with
+  `Access-Control-Allow-Origin: *` by the host's static files and, where the app
+  serves them itself, by `motionFilesCors` (`server/roof-reports/motion-files.ts`).
+  If a deploy ever serves them without it, the scripts are refused and the report
+  reads in full without motion. The page loads the two files
   from the app's own address (`/roof-reports/motion`), each script carrying the
   response's nonce, and `report-motion.ts` accepts only that exact folder. Motion
   is an enhancement: every hidden starting state sits under a class only the
@@ -232,18 +245,34 @@ only what the report found. A company with no pack gets exactly that.
   delete made as `archie_app` (SQLSTATE 42501), for any company. The policies stay
   exactly the two every company table has (the isolation tests need that), so the
   trigger is the extra lock. The system role can read, insert and update a pack
-  but not delete one (it is replaced, never deleted).
+  but not delete one (it is replaced, never deleted). **The trigger blocks only
+  the app role.** Any code that runs under the system role could write a pack, and
+  so could anyone holding the owner's connection; the database cannot tell the
+  loader from other system-role code. The guard for that is the permanent grep
+  test in `packs-are-company-data.db.test.ts`: it reads every file under `server/`
+  and `scripts/` (code, SQL and shell, outside the test folders) and fails if any
+  file other than the loader (`pack-loader.ts`) writes the table in any form (a
+  Drizzle `insert`, `update` or `delete`, an alias of the table, raw SQL,
+  `truncate`, `on conflict`), and if any file other than the loader and the reader
+  (`packs.ts`) names the table at all. A new code path that needs to write a pack
+  goes through the loader, or the test fails. The pack test needs no owner
+  connection: a pack is never deleted, so each test that writes one does it for a
+  company made for that test, and leaves it (the standard test database is thrown
+  away and rebuilt by `scripts/test-db.sh`).
 - **Only the operator script writes**, through the system role with a written
   reason (`runAsSystem`), for one named company:
 
   ```
   npx tsx scripts/load-presentation-pack.ts --company <company id> --file <pack.json outside the repo>
-  npx tsx scripts/load-presentation-pack.ts --company <company id> --file <pack.json outside the repo> --apply
+  npx tsx scripts/load-presentation-pack.ts --company <company id> --file <pack.json outside the repo> --apply --company-name "<exact name>"
   ```
 
   The first form is a dry run (the default): it checks everything, says what it
-  would do and writes nothing. A person reads the rendered presentation for that
-  company before `--apply`. A file inside the repository is refused (a pack is a
+  would do and writes nothing. Both forms print the company's NAME from its own
+  record (`Company: ...`), so a wrong but valid id is seen. `--apply` also needs
+  `--company-name` with that name exactly (case, spaces and all); without it, or
+  with another name, nothing is written and the sentence says so. A person reads
+  the rendered presentation for that company before `--apply`. A file inside the repository is refused (a pack is a
   company's own words). It prints counts and chapter ids, never the words. Run it
   with the app's `DATABASE_URL` (user `archie_app`), as the other operator scripts.
 - **A pack is checked** (`parsePack`, in the library) when it is loaded and again
@@ -301,7 +330,23 @@ off..."). Nothing is ever sent to the customer by it.
   id is in a page.
 - **How often.** One address may ask for 120 pages in ten minutes (as the
   public page of Archie's own documents does) and 1,200 photos; past that it is
-  answered a plain page to wait, with `Retry-After`.
+  answered a plain page to wait, with `Retry-After`. A second count is on the
+  token itself, from all addresses together: 240 pages and 3,000 photos in ten
+  minutes (`PAGE_TOKEN_LIMIT`, `PHOTO_TOKEN_LIMIT` in `public.ts`), so one link
+  cannot be hammered from many addresses at once. Its bucket is named by a hash of
+  the token, never the token. **Which address is counted:** Express's `req.ip`,
+  which is the address that many proxies in from the RIGHT of `X-Forwarded-For`.
+  Both entry points (`server/index.ts` and `api/index.ts`) set `trust proxy` from
+  `trustedProxyHops()` (`server/lib/trusted-proxy.ts`): ONE hop by default, which
+  is the host's own proxy on Vercel (it sets the header to the address it saw, so
+  `req.ip` is the visitor's). Whatever a visitor puts to the left of that is never
+  believed. If a second proxy is ever put in front (a CDN before the host), set
+  `ARCHIE_TRUSTED_PROXY_HOPS=2`, or `0` when the app is reached directly; any value
+  that is not a whole number from 0 to 5 is ignored and one hop kept. **The buckets
+  are per process** (`server/lib/rate-limit.ts`): each running copy of the app
+  counts on its own, so on a host that runs several copies the real allowance is
+  that many times larger. That is the same trade-off as every other limiter in the
+  app, and the numbers are chosen well above any household's use.
 - **Logging.** The token is a credential: it is never logged, and the request
   logger hides it in the addresses it writes down. Creating and turning off a
   link are written to the write log (without the token).
@@ -385,9 +430,21 @@ field yourself forgets the undo. A box with unsaved typing cannot be rewritten
   `roof_report_uses`). A rewrite that reached the model counts even if it did not work
   (it may have cost money); one that could not start because no model is set up uses
   nothing up and answers "Rewriting is not available right now."
-- Two rewrites of the same report that arrive together each ask the model (both
-  count), but only the first to finish is stored; the other finds the report already
-  changed and says so.
+- **One rewrite of a report at a time.** `reserveUse` (`uses.ts`) is asked with
+  `exclusive`, and inside the same company lock that counts the day it refuses a
+  rewrite while another rewrite of that report is still `reserved` (started in the
+  last two minutes, longer than the 60 second deadline, so one that died does not
+  hold the report). The second is answered 409, "A rewrite of this report is
+  already running.", asks no model and counts for nothing: the day's count is the
+  number of rewrites that ran, and the text stored is the text the one answer showed.
+  Different reports of one company run at the same time. This holds across copies
+  of the app because it is decided in the database. The stale-edit check stays
+  (an edit made while the model was thinking still wins).
+- **Held by** `rewrite.db.test.ts`, proved by mutation: breaking the daily cap
+  (report and company, each alone), the metering (the cost row, its operation, its
+  report), the normalizer (for a summary and for a finding, each alone), the
+  stale-edit check, the cleaning of the text, the deadline or the exclusive lock,
+  one at a time, makes a test fail each time.
 
 ## The PDF
 
@@ -439,6 +496,13 @@ page loads, every draft of anyone that is past its day, from a clock far ahead,
 not readable or of another version is removed too. Blocked storage means nothing
 to clear, said to nobody. The functions are pure over a storage and are tested
 in `draft-clean.test.ts`.
+
+## Inspector notes
+
+The inspector notes field says plainly, in the wizard's review step and beside the
+field in the editor, "These notes can appear in the report the customer sees."
+(`NOTES_MAY_BE_SEEN`, `shared/roof-reports.ts`): the notes are not private to the
+company, so a person writes them knowing that.
 
 ## Photos
 

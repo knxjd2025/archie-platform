@@ -91,6 +91,18 @@ describe('motionRuntime under a nonce, with the app\'s own copy of the library',
     expect(out).not.toContain('cdn.jsdelivr.net');
   });
 
+  it('gives each of the app\'s own script tags a sha384 integrity hash, taken from the manifest, next to the nonce, and the CORS mode the check needs', async () => {
+    const manifest = JSON.parse((await import('node:fs')).readFileSync(new URL('../../../../client/public/roof-reports/motion/manifest.json', import.meta.url), 'utf8')) as { files: Array<{ name: string; sha384: string }> };
+    const out = motionRuntime({ nonce: NONCE, assetBase: BASE });
+    const external = tags(out).filter((t) => /\ssrc=/.test(t));
+    for (const [i, name] of ['gsap-3.14.2.min.js', 'ScrollTrigger-3.14.2.min.js'].entries()) {
+      const want = manifest.files.find((f) => f.name === name)!.sha384;
+      expect(external[i]).toContain(`integrity="${want}"`);
+      expect(external[i]).toContain(`nonce="${NONCE}"`);
+      expect(external[i]).toContain('crossorigin="anonymous"');
+    }
+  });
+
   it('writes no outside script when it has a nonce but no address for the app\'s copy', () => {
     expect(tags(motionRuntime({ nonce: NONCE })).filter((t) => /\ssrc=/.test(t))).toEqual([]);
   });

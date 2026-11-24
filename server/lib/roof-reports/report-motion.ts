@@ -90,6 +90,14 @@ const ST_CDN = `https://cdn.jsdelivr.net/npm/gsap@${GSAP_VERSION}/dist/ScrollTri
  */
 export const GSAP_INTEGRITY = 'sha384-sG0Hv1tP1lZCk9KQmrIbY/XNwi+OY84GQqhMscbnsoBFqAz8KNCil1kvfL3Hbbk2';
 export const ST_INTEGRITY = 'sha384-xNHNOfrykny9oFwnmpfNbkSc6isny38d1GZvTRVuFV0l9fTMIZKhULvomyQJSMRl';
+/*
+ * These two are also the `sha384` of the two files in the manifest beside the
+ * vendored copies (client/public/roof-reports/motion/manifest.json, which this
+ * folder may not import), and the same hash is put on the app's own script tags
+ * below, next to the nonce. vendored-motion.test.ts holds that they equal the
+ * manifest's, and that the manifest's are the hashes of the files inside the
+ * installed npm package.
+ */
 
 export function motionRuntime(opts: MotionRuntimeOptions = {}): string {
   const { enabled = true, intensity = 'standard', gsapSource, nonce, assetBase } = opts;
@@ -105,7 +113,11 @@ export function motionRuntime(opts: MotionRuntimeOptions = {}): string {
     ? `<script${n}>${gsapSource}</script>`
     : nonce !== undefined
       ? base
-        ? `<script${n} src="${base}/gsap-${GSAP_VERSION}.min.js"></script>\n<script${n} src="${base}/ScrollTrigger-${GSAP_VERSION}.min.js"></script>`
+        // The app's own copy is checked against the manifest's hash as well as carrying the nonce. `crossorigin` is what lets the
+        // browser check it: the page is a sandbox with no origin of its own, so these are cross-origin requests, and the folder
+        // is served with Access-Control-Allow-Origin (motion-files.ts, and the host's static files). If a deploy ever serves it
+        // without, the scripts are refused and the report reads in full without motion (every hidden state needs the library).
+        ? `<script${n} src="${base}/gsap-${GSAP_VERSION}.min.js" integrity="${GSAP_INTEGRITY}" crossorigin="anonymous"></script>\n<script${n} src="${base}/ScrollTrigger-${GSAP_VERSION}.min.js" integrity="${ST_INTEGRITY}" crossorigin="anonymous"></script>`
         : ''
       : `<script src="${GSAP_CDN}" integrity="${GSAP_INTEGRITY}" crossorigin="anonymous"></script>\n<script src="${ST_CDN}" integrity="${ST_INTEGRITY}" crossorigin="anonymous"></script>`;
 

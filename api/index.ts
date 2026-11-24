@@ -10,11 +10,12 @@ import { SISTER_PREFIX, sisterRawBody } from '../server/sister/door';
 import { corsOptions, sessionOptions, JSON_BODY_LIMIT } from '../server/security-config';
 import { createErrorHandler } from '../server/lib/error-response';
 import { requestLogger } from '../server/lib/request-log';
+import { trustedProxyHops } from '../server/lib/trusted-proxy';
 
 const app = express();
 
 // Trust proxy for production deployments
-app.set('trust proxy', 1);
+app.set('trust proxy', trustedProxyHops());
 
 // Middleware
 app.use(helmet({

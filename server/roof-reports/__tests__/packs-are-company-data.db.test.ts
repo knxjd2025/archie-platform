@@ -26,7 +26,6 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { eq, sql } from 'drizzle-orm';
-import { Client } from 'pg';
 import { setPhotoStoreForTests } from '../../photos/store';
 import type { ChapterPack } from '../../lib/roof-reports/presentation-chapters';
 import { makeJpeg } from '../../photos/__tests__/jpeg-fixtures';
@@ -55,6 +54,8 @@ const PACK: ChapterPack = {
   mustSay: ['swept up with a magnet'],
   mustNotSay: ['lifetime guarantee'],
 };
+const A_NAME = 'Summit Ridge Roofing';
+const B_NAME = 'Cedar Falls Roofing Two';
 const WORDS = [PACK.chapters[0].heading, PACK.chapters[0].ledes[0], PACK.chapters[0].questions![0].a, PACK.chapters[1].heading, PACK.chapters[1].ledes[0]];
 const sqlState = (p: Promise<unknown>): Promise<string | null> => p.then(() => null, (e) => e?.cause?.code ?? e?.code ?? 'no-code');
 
@@ -64,7 +65,7 @@ describe.skipIf(!localDb)('chapter packs are company data (PERMANENT)', async ()
   const { liveDeps } = await import('../generate');
   const { __resetRateLimits } = await import('../../lib/rate-limit');
   const { packForCurrentCompany } = await import('../packs');
-  const { loadPack, parseLoaderArgs } = await import('../pack-loader');
+  const { loadPack, parseLoaderArgs, loadLines } = await import('../pack-loader');
   const { runAsCompany, runAsSystem } = await import('../../tenant/context');
   const { db, pool } = await import('../../db');
   const { presentationChapterPacks: packs } = await import('../../../shared/schema');
@@ -82,19 +83,6 @@ describe.skipIf(!localDb)('chapter packs are company data (PERMANENT)', async ()
   const savedSwitch = process.env.ARCHIE_ROOF_REPORTS;
   let a: Co; let b: Co; let reportA = ''; let reportB = '';
   const GOOD = { reportTypes: ['inspection', 'storm'], template: 'full', address: '12 Elm Street', city: 'Cedar Falls', state: 'IA', zip: '50613' };
-  /** The owner removes a test pack: the system role may not delete one by design, and neither may the app. */
-  async function ownerRemoves(...companyIds: string[]): Promise<void> {
-    const url = process.env.ARCHIE_TEST_OWNER_URL;
-    if (!url) return;
-    const owner = new Client({ connectionString: url });
-    await owner.connect();
-    try {
-      for (const id of companyIds) {
-        await owner.query("select set_config('app.company_id', $1, false)", [id]);
-        await owner.query('delete from presentation_chapter_packs where company_id = $1', [id]);
-      }
-    } finally { await owner.end(); }
-  }
   const rowsOf = (company: string) => runAsCompany(company, () => db.select().from(packs), { loadProfile: false });
 
   async function makeReport(co: Co): Promise<string> {
@@ -109,13 +97,12 @@ describe.skipIf(!localDb)('chapter packs are company data (PERMANENT)', async ()
   beforeAll(async () => {
     process.env.ARCHIE_ROOF_REPORTS = 'on';
     setPhotoStoreForTests(fakeStore());
-    a = await h.company('Summit Ridge Roofing', [['rep', 'sales']]);
-    b = await h.company('Cedar Falls Roofing Two', [['rep', 'sales']]);
+    a = await h.company(A_NAME, [['rep', 'sales']]);
+    b = await h.company(B_NAME, [['rep', 'sales']]);
     reportA = await makeReport(a);
     reportB = await makeReport(b);
   });
   afterAll(async () => {
-    await ownerRemoves(a.id, b.id);
     setPhotoStoreForTests(null);
     if (savedSwitch === undefined) delete process.env.ARCHIE_ROOF_REPORTS; else process.env.ARCHIE_ROOF_REPORTS = savedSwitch;
     await h.close();
@@ -137,19 +124,51 @@ describe.skipIf(!localDb)('chapter packs are company data (PERMANENT)', async ()
   });
 
   it('writes a pack through the system role, once a company, and says who loaded it', async () => {
-    const r = await loadPack({ companyId: a.id, raw: PACK, apply: true, by: 'tester' });
+    const r = await loadPack({ companyId: a.id, companyName: A_NAME, raw: PACK, apply: true, by: 'tester' });
     expect(r).toMatchObject({ ok: true, applied: true, replaced: false });
     const [row] = await rowsOf(a.id);
     expect(row.companyId).toBe(a.id);
     expect(row.loadedBy).toBe('tester');
     expect(row.pack).toEqual(PACK);
     // Again: replaced, still one row.
-    const again = await loadPack({ companyId: a.id, raw: { ...PACK, mustSay: [] }, apply: true, by: 'second' });
+    const again = await loadPack({ companyId: a.id, companyName: A_NAME, raw: { ...PACK, mustSay: [] }, apply: true, by: 'second' });
     expect(again).toMatchObject({ ok: true, applied: true, replaced: true });
     const rows = await rowsOf(a.id);
     expect(rows).toHaveLength(1);
     expect(rows[0].loadedBy).toBe('second');
-    await loadPack({ companyId: a.id, raw: PACK, apply: true, by: 'tester' });
+    await loadPack({ companyId: a.id, companyName: A_NAME, raw: PACK, apply: true, by: 'tester' });
+  });
+
+  describe('the company\'s name is shown, and applying needs it typed back exactly', () => {
+    it('says the company\'s name from its own record on a dry run and on an apply', async () => {
+      const dry = await loadPack({ companyId: a.id, raw: PACK, apply: false, by: 'tester' });
+      expect(dry).toMatchObject({ ok: true, applied: false, companyName: A_NAME });
+      const done = await loadPack({ companyId: a.id, companyName: A_NAME, raw: PACK, apply: true, by: 'tester' });
+      expect(done).toMatchObject({ ok: true, applied: true, companyName: A_NAME });
+      expect(loadLines(dry as any).join('\n')).toContain(A_NAME);
+      expect(loadLines(done as any).join('\n')).toContain(A_NAME);
+    });
+
+    it('refuses an apply with no name, and an apply with the wrong name, writing nothing, even though the id is a real company', async () => {
+      const d = await h.company('Maple Court Roofing', [['rep', 'sales']]);
+      for (const wrong of [undefined, '', 'Summit Ridge Roofing', 'maple court roofing', ' Maple Court Roofing', 'Maple Court Roofing ']) {
+        const r = await loadPack({ companyId: d.id, companyName: wrong, raw: PACK, apply: true, by: 'tester' });
+        expect(r.ok, String(wrong)).toBe(false);
+        if (r.ok) continue;
+        expect(r.problems.join(' ')).toMatch(/--company-name/);
+        expect(await rowsOf(d.id)).toEqual([]);
+      }
+      const right = await loadPack({ companyId: d.id, companyName: 'Maple Court Roofing', raw: PACK, apply: true, by: 'tester' });
+      expect(right).toMatchObject({ ok: true, applied: true, companyName: 'Maple Court Roofing' });
+      expect(await rowsOf(d.id)).toHaveLength(1);
+    });
+
+    it('does not need the name for a dry run, which writes nothing, and never prints a pack\'s words', async () => {
+      const r = await loadPack({ companyId: b.id, raw: PACK, apply: false, by: 'tester' });
+      expect(r).toMatchObject({ ok: true, applied: false, companyName: B_NAME });
+      for (const line of loadLines(r as any)) for (const w of WORDS) expect(line).not.toContain(w);
+      expect(await rowsOf(b.id)).toEqual([]);
+    });
   });
 
   it('reads a pack only for the company in context: B never sees A\'s, and with no company there is none', async () => {
@@ -179,19 +198,22 @@ describe.skipIf(!localDb)('chapter packs are company data (PERMANENT)', async ()
 
   it('fills each company\'s placeholders from that company\'s own record, never from another\'s', async () => {
     const own = { ...PACK, chapters: [{ ...PACK.chapters[0], id: 'cedar-own', note: 'Written for {company}.' }, PACK.chapters[1]] };
-    await loadPack({ companyId: b.id, raw: own, apply: true, by: 'tester' });
-    try {
+    // A company of its own for this test: a pack is never deleted (by design), so it needs no cleanup and leaves B as it was.
+    const c = await h.company('Cedar Falls Roofing Two', [['rep', 'sales']]);
+    const reportC = await makeReport(c);
+    await loadPack({ companyId: c.id, companyName: 'Cedar Falls Roofing Two', raw: own, apply: true, by: 'tester' });
+    {
       __resetRateLimits();
-      h.as(b, 'rep');
-      const pageB = await h.get(`/api/roof-reports/${reportB}/html`);
+      h.as(c, 'rep');
+      const pageB = await h.get(`/api/roof-reports/${reportC}/html`);
       expect(pageB.text).toContain('Written for Cedar Falls Roofing Two.');
       expect(pageB.text).not.toContain('Summit Ridge Roofing');
       h.as(a, 'rep');
       const pageA = await h.get(`/api/roof-reports/${reportA}/html`);
       expect(pageA.text).not.toContain('Cedar Falls Roofing Two');
       expect(pageA.text).not.toContain('cedar-own');
-    } finally {
-      await ownerRemoves(b.id);
+      h.as(b, 'rep');
+      expect((await h.get(`/api/roof-reports/${reportB}/html`)).text).not.toContain('cedar-own');
     }
   });
 
@@ -220,7 +242,7 @@ describe.skipIf(!localDb)('chapter packs are company data (PERMANENT)', async ()
 
   describe('the loader refuses a pack with problems, says why in plain sentences, and writes nothing', () => {
     const refused = async (raw: unknown, company = b.id, expectIn?: string) => {
-      const r = await loadPack({ companyId: company, raw, apply: true, by: 'tester' });
+      const r = await loadPack({ companyId: company, companyName: B_NAME, raw, apply: true, by: 'tester' });
       expect(r.ok).toBe(false);
       if (r.ok) return;
       expect(r.problems.length).toBeGreaterThan(0);
@@ -239,11 +261,11 @@ describe.skipIf(!localDb)('chapter packs are company data (PERMANENT)', async ()
     it('a field a pack has no place for', () => refused({ ...PACK, chapters: [{ ...PACK.chapters[0], script: 'x' }, PACK.chapters[1]] }, b.id, '"script"'));
     it('markup in its words', () => refused({ ...PACK, chapters: [{ ...PACK.chapters[0], heading: '<img src=x onerror=1>' }, PACK.chapters[1]] }));
     it('a company that is not there', async () => {
-      const r = await loadPack({ companyId: '00000000-0000-4000-8000-000000000000', raw: PACK, apply: true, by: 'tester' });
+      const r = await loadPack({ companyId: '00000000-0000-4000-8000-000000000000', companyName: 'Nobody', raw: PACK, apply: true, by: 'tester' });
       expect(r).toEqual({ ok: false, problems: ['There is no company with that id.'] });
     });
     it('something that is not a company id', async () => {
-      const r = await loadPack({ companyId: 'summit-ridge', raw: PACK, apply: true, by: 'tester' });
+      const r = await loadPack({ companyId: 'summit-ridge', companyName: A_NAME, raw: PACK, apply: true, by: 'tester' });
       expect(r.ok).toBe(false);
     });
   });
@@ -254,8 +276,19 @@ describe.skipIf(!localDb)('chapter packs are company data (PERMANENT)', async ()
       expect(parseLoaderArgs(['--file', '/tmp/pack.json'], REPO)).toMatchObject({ ok: false });
       expect(parseLoaderArgs(['--company', a.id], REPO)).toMatchObject({ ok: false });
       expect(parseLoaderArgs(['--company', 'not-a-uuid', '--file', '/tmp/pack.json'], REPO)).toMatchObject({ ok: false });
-      expect(parseLoaderArgs(['--company', a.id, '--file', '/tmp/pack.json'], REPO)).toEqual({ ok: true, companyId: a.id, file: '/tmp/pack.json', apply: false });
-      expect(parseLoaderArgs(['--company', a.id, '--file', '/tmp/pack.json', '--apply'], REPO)).toMatchObject({ ok: true, apply: true });
+      expect(parseLoaderArgs(['--company', a.id, '--file', '/tmp/pack.json'], REPO)).toEqual({ ok: true, companyId: a.id, file: '/tmp/pack.json', apply: false, companyName: undefined });
+      expect(parseLoaderArgs(['--company', a.id, '--file', '/tmp/pack.json', '--apply', '--company-name', 'X Roofing'], REPO)).toMatchObject({ ok: true, apply: true });
+    });
+    it('reads the company\'s exact name from --company-name, spaces and all, and does not mistake it for --company', () => {
+      const r = parseLoaderArgs(['--company', a.id, '--company-name', 'Summit Ridge Roofing', '--file', '/tmp/pack.json', '--apply'], REPO);
+      expect(r).toEqual({ ok: true, companyId: a.id, file: '/tmp/pack.json', apply: true, companyName: 'Summit Ridge Roofing' });
+      const flipped = parseLoaderArgs(['--company-name', 'Summit Ridge Roofing', '--company', a.id, '--file', '/tmp/pack.json'], REPO);
+      expect(flipped).toMatchObject({ ok: true, companyId: a.id, companyName: 'Summit Ridge Roofing' });
+    });
+    it('refuses --apply without --company-name before anything is read', () => {
+      const r = parseLoaderArgs(['--company', a.id, '--file', '/tmp/pack.json', '--apply'], REPO);
+      expect(r).toMatchObject({ ok: false });
+      if (!r.ok) expect(r.error).toMatch(/--company-name/);
     });
     it('refuses a file inside the repository, however it is written', () => {
       for (const file of [path.join(REPO, 'pack.json'), path.join(REPO, 'server/x/../pack.json'), 'pack.json', './docs/pack.json']) {
@@ -265,31 +298,62 @@ describe.skipIf(!localDb)('chapter packs are company data (PERMANENT)', async ()
     });
   });
 
-  it('holds none of a pack\'s wording in code, and lets nothing but the loader write the table', () => {
+  it('holds none of a pack\'s wording in code, and lets nothing but the loader write the table (every file under server/ and scripts/)', () => {
     const root = path.resolve(__dirname, '../../..');
-    const files: string[] = [];
-    const walk = (dir: string) => {
+    const everything: string[] = [];
+    const walk = (dir: string, into: string[], skipTests: boolean) => {
       for (const name of readdirSync(dir)) {
-        if (name === 'node_modules' || name === '__tests__') continue;
+        if (name === 'node_modules' || name === 'dist' || name === '.git' || (skipTests && name === '__tests__')) continue;
         const full = path.join(dir, name);
-        if (statSync(full).isDirectory()) walk(full);
-        else if (/\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name)) files.push(full);
+        if (statSync(full).isDirectory()) walk(full, into, skipTests);
+        else into.push(full);
       }
     };
-    walk(path.join(root, 'server'));
-    walk(path.join(root, 'shared'));
-    walk(path.join(root, 'client/src'));
-    expect(files.length).toBeGreaterThan(300);
-    const wording: string[] = []; const writers: string[] = [];
-    for (const f of files) {
+    // Every file under server/ and scripts/, of every kind (code, SQL, shell), outside the test folders (a test may
+    // try a write to prove it is refused; it cannot be what the app runs).
+    walk(path.join(root, 'server'), everything, true);
+    walk(path.join(root, 'scripts'), everything, true);
+    expect(everything.filter((f) => f.endsWith('.ts')).length).toBeGreaterThan(250);
+    expect(everything.some((f) => f.startsWith(path.join(root, 'scripts')))).toBe(true);
+
+    // The wording check also covers shared/ and the client.
+    const wordingFiles: string[] = [...everything];
+    walk(path.join(root, 'shared'), wordingFiles, true);
+    walk(path.join(root, 'client/src'), wordingFiles, true);
+    const wording: string[] = [];
+    for (const f of wordingFiles) {
+      if (!/\.(tsx?|jsx?|mjs|cjs|sql|sh|json)$/.test(f)) continue;
       const text = readFileSync(f, 'utf8');
       for (const w of WORDS) if (text.includes(w)) wording.push(`${path.relative(root, f)}: ${w}`);
-      if (/(insert|update|delete)\(\s*presentationChapterPacks\b/.test(text) || /(insert into|update|delete from)\s+"?presentation_chapter_packs/i.test(text)) writers.push(path.relative(root, f));
     }
     expect(wording).toEqual([]);
+
+    // A file that names the table at all (as the schema's identifier, an alias of it, or the table's own name) may not write
+    // anything, in any form, unless it is the loader. A file that only reads has none of these.
+    const NAMES_TABLE = /presentationChapterPacks|presentation_chapter_packs/;
+    const WRITES = /\.\s*(insert|update|delete)\s*\(|\b(insert\s+into|delete\s+from|truncate|on\s+conflict|alter\s+table|drop\s+table)\b|\bupdate\s+"?\w+"?\s+set\b|\.onConflict\w*\s*\(/i;
+    const stripComments = (t: string) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1').replace(/^\s*--.*$/gm, '');
+    const writers: string[] = [];
+    const namers: string[] = [];
+    for (const f of everything) {
+      if (!/\.(tsx?|jsx?|mjs|cjs|sql|sh)$/.test(f)) continue;
+      const text = stripComments(readFileSync(f, 'utf8'));
+      if (!NAMES_TABLE.test(text)) continue;
+      namers.push(path.relative(root, f));
+      if (WRITES.test(text)) writers.push(path.relative(root, f));
+    }
     expect(writers.sort()).toEqual(['server/roof-reports/pack-loader.ts']);
-    // And the scripts folder: the only caller of the loader is the operator script.
-    const scripts = readdirSync(path.join(root, 'scripts')).filter((n) => n.endsWith('.ts')).filter((n) => /presentationChapterPacks|presentation_chapter_packs/.test(readFileSync(path.join(root, 'scripts', n), 'utf8')));
-    expect(scripts).toEqual([]);
+    // The only code that names the table: the loader (writes), the reader, and nothing in scripts/ (the script goes through the loader).
+    expect(namers.sort()).toEqual(['server/roof-reports/pack-loader.ts', 'server/roof-reports/packs.ts']);
+  });
+
+  it('the grep that guards the table would catch a write placed anywhere else (its own check)', () => {
+    const WRITES = /\.\s*(insert|update|delete)\s*\(|\b(insert\s+into|delete\s+from|truncate|on\s+conflict|alter\s+table|drop\s+table)\b|\bupdate\s+"?\w+"?\s+set\b|\.onConflict\w*\s*\(/i;
+    for (const sample of [
+      'await db.insert(presentationChapterPacks).values(x)', 'await db.insert(packs).values(x)', 'db.update(packs).set({})', 'db.delete(packs)',
+      'insert into presentation_chapter_packs (a) values (1)', 'UPDATE presentation_chapter_packs SET pack = 1', 'delete from presentation_chapter_packs',
+      'truncate presentation_chapter_packs', 'db.execute(sql`insert  into   presentation_chapter_packs`)', 'x.onConflictDoUpdate({})',
+    ]) expect(WRITES.test(sample), sample).toBe(true);
+    for (const sample of ['await db.select().from(presentationChapterPacks)', 'select pack from presentation_chapter_packs where company_id = $1']) expect(WRITES.test(sample), sample).toBe(false);
   });
 });

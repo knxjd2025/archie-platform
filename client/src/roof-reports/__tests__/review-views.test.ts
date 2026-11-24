@@ -25,6 +25,16 @@ const review = (over: Partial<ReviewViewProps> = {}) => render(createElement(Rev
   draft: filled(), tiles: [tile({ key: 'a' }), tile({ key: 'b', id: ID(2) }), tile({ key: 'c', id: ID(3) })], onReview: noop, onGoTo: noop, ...over,
 }));
 
+describe('the inspector notes field', () => {
+  it('says plainly that the customer may see the notes, right by the field', () => {
+    const html = review();
+    expect(html).toContain('These notes can appear in the report the customer sees.');
+    const help = /<p id="rr-notes-help"[^>]*>([^<]*)<\/p>/.exec(html)![1];
+    expect(help).toContain('These notes can appear in the report the customer sees.');
+    expect(html).toMatch(/<textarea id="rr-notes"[^>]*aria-describedby="rr-notes-help"/);
+  });
+});
+
 describe('what the review sums up', () => {
   it('says the address, the job, the photos, the roof facts and the damage in plain sentences', () => {
     const s = reviewSummary(filled(), [tile({ key: 'a' }), tile({ key: 'b', id: ID(2) }), tile({ key: 'c', state: 'failed', id: null })]);

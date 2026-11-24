@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { TeamRole } from '../../../shared/rbac';
-import { TEMPLATES, VISUAL_STYLES } from '../../../shared/roof-reports';
+import { NOTES_MAY_BE_SEEN, TEMPLATES, VISUAL_STYLES } from '../../../shared/roof-reports';
 import { archiveReport, createShareLink, fetchReport, revokeShareLink, rewriteFinding, rewriteSummary, sendReportEmail, updateReport } from './api';
 import {
   FRAME_SANDBOX, SaveChain, editsAllowed, emptyValues, fieldReducer, initialFields, previewSrc, readDetail, requestFor, sharesAllowed, valueOf, valuesOf, withValue,
@@ -74,6 +74,8 @@ function State({ fields, k, label }: { fields: FieldsState; k: FieldKey; label: 
 interface FieldProps {
   fields: FieldsState; k: FieldKey; label: string; multiline?: boolean; rows?: number; type?: string; max: number; onEdit: EditorViewProps['onEdit']; onSave: EditorViewProps['onSave']; editable: boolean;
   /** A field a model may rewrite (the summary, a finding): its state, and what its buttons do. */
+  /** A line under the field that the field's own text describes it by. */
+  help?: string;
   rewrite?: { rewrites: RewriteMap; onRewrite: (key: FieldKey) => void; onUndo: (key: FieldKey) => void };
 }
 
@@ -98,7 +100,8 @@ function Field(p: FieldProps) {
           {s.status === 'failed' && <button type="button" onClick={() => p.onSave(p.k)} aria-label={RR.editor.tryFor(p.label)} className={`text-xs ${BUTTON} !py-0.5`}>{RR.editor.tryAgain}</button>}
         </span>
       </div>
-      {p.multiline ? <textarea rows={p.rows ?? 4} {...common} /> : <input type={p.type ?? 'text'} autoComplete="off" {...common} />}
+      {p.multiline ? <textarea rows={p.rows ?? 4} aria-describedby={p.help ? `${id}-help` : undefined} {...common} /> : <input type={p.type ?? 'text'} autoComplete="off" aria-describedby={p.help ? `${id}-help` : undefined} {...common} />}
+      {p.help && <p id={`${id}-help`} className="text-xs text-gray-500 mt-1">{p.help}</p>}
       {p.rewrite && p.editable && rw && (
         <div className="mt-1 flex flex-wrap items-center gap-2">
           {(() => {
@@ -212,7 +215,7 @@ export function EditorView(p: EditorViewProps) {
             {field('customerName', RR.editor.fieldCustomerName)}
             {field('customerEmail', RR.editor.fieldCustomerEmail, { type: 'email', max: 254 })}
             {field('customerPhone', RR.editor.fieldCustomerPhone, { type: 'tel', max: 40 })}
-            {field('inspectorNotes', RR.editor.fieldNotes, { multiline: true, rows: 4, max: 20000 })}
+            {field('inspectorNotes', RR.editor.fieldNotes, { multiline: true, rows: 4, max: 20000, help: NOTES_MAY_BE_SEEN })}
           </div>
 
           <div className="space-y-3">

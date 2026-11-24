@@ -30,6 +30,24 @@ const view = (over: Partial<EditorViewProps> = {}) => render(createElement(Edito
   onBack: noop, onEdit: noop, onSave: noop, onTemplate: noop, onVisualStyle: noop, onAskArchive: noop, onCancelArchive: noop, onArchive: noop, onPreviewLoaded: noop, ...over,
 }));
 
+describe('the inspector notes field', () => {
+  it('says next to the field that the customer may see the notes', () => {
+    const html = view();
+    expect(html).toContain('These notes can appear in the report the customer sees.');
+    const at = html.indexOf('These notes can appear in the report the customer sees.');
+    const field = html.indexOf('id="rr-edit-inspectorNotes"');
+    expect(field).toBeGreaterThan(-1);
+    // Close to the notes field and in the same block as its label.
+    expect(Math.abs(at - field)).toBeLessThan(900);
+    const textarea = /<textarea[^>]*id="rr-edit-inspectorNotes"[^>]*>/.exec(html)![0];
+    expect(textarea).toContain('aria-describedby="rr-edit-inspectorNotes-help"');
+    expect(html).toContain('id="rr-edit-inspectorNotes-help"');
+  });
+  it('shows it for a read-only person too, since they see the same field', () => {
+    expect(view({ role: 'crew' as any })).toContain('These notes can appear in the report the customer sees.');
+  });
+});
+
 describe('the editor as drawn', () => {
   it('shows the page in a frame that cannot reach the app, and never puts the report\'s HTML in the app\'s own page', () => {
     const h = view();

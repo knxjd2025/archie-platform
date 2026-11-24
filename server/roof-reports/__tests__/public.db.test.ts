@@ -27,6 +27,7 @@ describe.skipIf(!localDb)('the share link (database)', async () => {
   const { liveDeps } = await import('../generate');
   const { __resetRateLimits } = await import('../../lib/rate-limit');
   const { signPhotoLink } = await import('../photo-links');
+  const publicLimits = await import('../public');
 
   const fakeDeps = (reportId: string) => ({
     ...liveDeps(reportId, { keys: {} }),
@@ -37,7 +38,8 @@ describe.skipIf(!localDb)('the share link (database)', async () => {
     label: async () => null,
     sleep: async () => {},
   });
-  const h = await startRoofApp(tag, (app) => registerRoofReportsRoutes(app, { deps: fakeDeps }));
+  // As in production (server/index.ts): one trusted proxy in front, so the address a request counts under is the one the proxy saw.
+  const h = await startRoofApp(tag, (app) => { app.set('trust proxy', 1); registerRoofReportsRoutes(app, { deps: fakeDeps }); });
   const savedSwitch = process.env.ARCHIE_ROOF_REPORTS;
   let a: Co; let b: Co;
   let report = ''; let other = ''; let reportB = '';
@@ -378,6 +380,44 @@ describe.skipIf(!localDb)('the share link (database)', async () => {
       // Photos are counted on their own, so a page that is being looked at still loads its pictures.
       expect((await open(`/r/roof/${token}/photos/${photos[0]}/thumb`)).status).toBe(200);
     }, 60_000);
+  });
+
+  describe('one token asked for from many addresses', () => {
+    const { PAGE_TOKEN_LIMIT, PHOTO_TOKEN_LIMIT } = publicLimits;
+    const from = (i: number, path: string) => { h.signedOut(); return h.send('GET', path, undefined, { headers: { 'x-forwarded-for': `10.${(i >> 16) & 255}.${(i >> 8) & 255}.${i & 255}` } }); };
+
+    it('stops a single token being hammered even when every request comes from a different address, and leaves other tokens and photos alone', async () => {
+      h.as(a, 'repa');
+      const token = tokenOf((await create()).body.url);
+      h.as(b, 'admin');
+      const tokenB = tokenOf((await create(reportB)).body.url);
+      __resetRateLimits();
+      let firstLimited = -1;
+      for (let i = 0; i < PAGE_TOKEN_LIMIT + 5; i++) {
+        const r = await from(i, `/r/roof/${token}`);
+        if (r.status === 429) { firstLimited = i; break; }
+        expect(r.status).toBe(200);
+      }
+      // Each address asked once: only the token's own limit can have said wait, and exactly after its allowance.
+      expect(firstLimited).toBe(PAGE_TOKEN_LIMIT);
+      const limited = await from(9_999, `/r/roof/${token}`);
+      expect(limited.status).toBe(429);
+      expect(limited.headers.get('retry-after')).toBeTruthy();
+      expect(limited.text).not.toMatch(/\{|error|[0-9a-f]{64}/i);
+      // Another token from a fresh address, and the same token's photos, are not held up by it.
+      expect((await from(10_000, `/r/roof/${tokenB}`)).status).toBe(200);
+      expect((await from(10_001, `/r/roof/${token}/photos/${photos[0]}/thumb`)).status).toBe(200);
+      expect(PHOTO_TOKEN_LIMIT).toBeGreaterThan(PAGE_TOKEN_LIMIT);
+    }, 120_000);
+
+    it('keys the limit on the token without keeping the token itself, so a bucket name is never a credential', async () => {
+      const { tokenBucketKey } = publicLimits;
+      const t = 'a'.repeat(64);
+      expect(tokenBucketKey(t)).not.toContain(t);
+      expect(tokenBucketKey(t)).toBe(tokenBucketKey(t));
+      expect(tokenBucketKey(t)).not.toBe(tokenBucketKey('b'.repeat(64)));
+      expect(tokenBucketKey(undefined)).toBe(tokenBucketKey('not a token'));
+    });
   });
 
   describe('the switch', () => {

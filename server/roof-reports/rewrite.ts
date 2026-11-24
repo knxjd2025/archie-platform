@@ -18,7 +18,11 @@
  * plain sentence and changes nothing; no provider words, no error text, no id.
  *
  * A report and a company each have a daily limit, counted and taken in one locked
- * step (uses.ts), so requests that arrive together cannot overrun it. A rewrite
+ * step (uses.ts), so requests that arrive together cannot overrun it. The same
+ * locked step lets only ONE rewrite of a report run at a time: a second asked for
+ * while one is running is refused ("A rewrite of this report is already running.")
+ * and counts for nothing, so the day's count is the number of rewrites that ran and
+ * the text that is stored is the text the one answer showed. A rewrite
  * that reached the model counts even if it did not work (it may have cost money);
  * one that could not start (no model set up) uses nothing up.
  */
@@ -27,7 +31,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../db';
 import { roofReports } from '../../shared/schema';
 import {
-  MAX_REWRITES_PER_COMPANY_PER_DAY, MAX_REWRITES_PER_REPORT_PER_DAY, NOT_FOUND, REWRITE_CHANGED, REWRITE_COMPANY_CAPPED, REWRITE_FAILED, REWRITE_NOT_AVAILABLE,
+  MAX_REWRITES_PER_COMPANY_PER_DAY, MAX_REWRITES_PER_REPORT_PER_DAY, NOT_FOUND, REWRITE_BUSY, REWRITE_CHANGED, REWRITE_COMPANY_CAPPED, REWRITE_FAILED, REWRITE_NOT_AVAILABLE,
   REWRITE_NOT_READY, REWRITE_NO_SUCH, REWRITE_REPORT_CAPPED, REWRITE_TOO_FAST,
 } from '../../shared/roof-reports';
 import { teamMemberIdByEmail } from '../access/rep-scope';
@@ -96,7 +100,9 @@ export function registerRewriteRoutes(router: Router, options: RewriteOptions = 
       if (!base) { res.status(503).json({ error: REWRITE_NOT_AVAILABLE }); return; }
 
       const limit = caps();
-      const reserved = await reserveUse({ kind: 'rewrite', reportId: row.id, memberId: await teamMemberIdByEmail(user.email), perReport: limit.perReport, perCompany: limit.perCompany });
+      const reserved = await reserveUse({ kind: 'rewrite', reportId: row.id, memberId: await teamMemberIdByEmail(user.email), perReport: limit.perReport, perCompany: limit.perCompany, exclusive: true });
+      // One rewrite of a report at a time: a second would count against the cap but could only be thrown away, since the first to finish is the one stored.
+      if (reserved.kind === 'busy') { res.status(409).json({ error: REWRITE_BUSY }); return; }
       if (reserved.kind === 'report_capped') { res.status(429).json({ error: REWRITE_REPORT_CAPPED }); return; }
       if (reserved.kind === 'company_capped') { res.status(429).json({ error: REWRITE_COMPANY_CAPPED }); return; }
       if (reserved.kind !== 'reserved') { res.status(409).json({ error: REWRITE_FAILED }); return; }
