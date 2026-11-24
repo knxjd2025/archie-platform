@@ -1,6 +1,9 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { TeamRole } from '../../../shared/rbac';
 import { decisionFor } from '../../../shared/roof-reports';
+import { useAuth } from '../lib/auth';
+import { useCompany } from '../lib/company';
+import { browserStorage, draftKey, markWizardOpen, readDraft, tabStorage, wasWizardOpen } from '../roof-reports/draft';
 import ReportList from '../roof-reports/ReportList';
 import Wizard from '../roof-reports/Wizard';
 import { RR } from '../roof-reports/words';
@@ -12,7 +15,12 @@ import { RR } from '../roof-reports/words';
  * server answers every request here itself, so nothing below is a lock.
  */
 export default function RoofReportsPage({ role }: { role: TeamRole }) {
-  const [making, setMaking] = useState(false);
+  const { user } = useAuth();
+  const company = useCompany();
+  const key = useMemo(() => draftKey(company.id, user?.email), [company.id, user?.email]);
+  // A refresh puts the person back in the wizard they were in, with their draft; a new visit starts at the list.
+  const [making, setMaking] = useState(() => !!key && wasWizardOpen(tabStorage(), key) && readDraft(browserStorage(), key) !== null);
+  const setWizard = (open: boolean) => { if (key) markWizardOpen(tabStorage(), key, open); setMaking(open); };
   const mayMake = decisionFor(role, 'make') !== 'no';
   return (
     <div className="space-y-6">
@@ -24,14 +32,14 @@ export default function RoofReportsPage({ role }: { role: TeamRole }) {
         {mayMake && !making && (
           <button
             type="button"
-            onClick={() => setMaking(true)}
+            onClick={() => setWizard(true)}
             className="px-4 py-2 text-sm font-medium rounded-lg bg-brand text-on-brand hover:bg-brand-dark focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
           >
             {RR.page.make}
           </button>
         )}
       </div>
-      {making ? <Wizard onClose={() => setMaking(false)} /> : <ReportList role={role} />}
+      {making ? <Wizard onClose={() => setWizard(false)} /> : <ReportList role={role} />}
     </div>
   );
 }

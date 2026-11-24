@@ -70,6 +70,10 @@ export const roofReportPhotoPath = (reportId: string, photoId: string, variant: 
 
 /** The most photos one report may hold. The same cap as Archie's own documents. */
 export const MAX_REPORT_PHOTOS = 40;
+/** The largest roof the form takes, in squares (100 square feet each). The server holds the same cap. */
+export const ROOF_SQUARES_MAX = 1000;
+/** The most damaged shingles one count may hold. */
+export const MAX_DAMAGE_COUNT = 9999;
 /** The most uploaded photos one person may leave waiting, unused, in a day. */
 export const MAX_WAITING_PHOTOS = 100;
 /** The most reports one company may start in a day. */

@@ -6,6 +6,8 @@ import { STEPS, draftPhotosFromTiles, photosInFlight, tilesFromDraft, tryAdvance
 import { usePhotoUploads } from './photo-uploads';
 import StepWhere from './StepWhere';
 import StepPhotos from './StepPhotos';
+import StepMeasurements from './StepMeasurements';
+import StepDamage from './StepDamage';
 import { RR } from './words';
 
 const FOCUS = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400';
@@ -175,6 +177,8 @@ export default function Wizard({ onClose }: { onClose: () => void }) {
           onRetry={uploads.retry}
         />
       )}
+      {draft.step === 3 && <StepMeasurements value={draft.roof} onChange={(roof) => patch({ roof })} />}
+      {draft.step === 4 && <StepDamage value={draft.damage} onChange={(damage) => patch({ damage })} />}
     </WizardFrame>
   );
 }

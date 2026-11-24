@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DRAFT_TTL_MS, agoText, clearDraft, draftKey, emptyDraft, readDraft, writeDraft, type StorageLike, type WizardDraft } from '../draft';
+import { DRAFT_TTL_MS, agoText, clearDraft, draftKey, emptyDraft, markWizardOpen, readDraft, wasWizardOpen, writeDraft, type StorageLike, type WizardDraft } from '../draft';
 
 const memory = (): StorageLike & { data: Map<string, string> } => {
   const data = new Map<string, string>();
@@ -130,5 +130,33 @@ describe('saying how old a draft is', () => {
     expect(agoText(NOW - 60 * 60_000, NOW)).toBe('1 hour ago');
     expect(agoText(NOW - 2 * 3_600_000, NOW)).toBe('2 hours ago');
     expect(agoText(NOW - 23 * 3_600_000, NOW)).toBe('23 hours ago');
+  });
+});
+
+describe('reopening the wizard after a refresh', () => {
+  const key = draftKey(COMPANY, 'dana@example.com')!;
+
+  it('remembers, for this tab only, that the wizard was open, and forgets it when it is closed', () => {
+    const tab = memory();
+    expect(wasWizardOpen(tab, key)).toBe(false);
+    markWizardOpen(tab, key, true);
+    expect(wasWizardOpen(tab, key)).toBe(true);
+    markWizardOpen(tab, key, false);
+    expect(wasWizardOpen(tab, key)).toBe(false);
+  });
+
+  it('is kept per person and company, like the draft', () => {
+    const tab = memory();
+    markWizardOpen(tab, key, true);
+    expect(wasWizardOpen(tab, draftKey(COMPANY, 'lee@example.com')!)).toBe(false);
+    expect(wasWizardOpen(tab, draftKey(OTHER_COMPANY, 'dana@example.com')!)).toBe(false);
+  });
+
+  it('copes with storage that is missing or blocked', () => {
+    const throwing: StorageLike = { getItem: () => { throw new Error('blocked'); }, setItem: () => { throw new Error('blocked'); }, removeItem: () => { throw new Error('blocked'); } };
+    expect(wasWizardOpen(throwing, key)).toBe(false);
+    expect(() => markWizardOpen(throwing, key, true)).not.toThrow();
+    expect(wasWizardOpen(null, key)).toBe(false);
+    expect(() => markWizardOpen(null, key, true)).not.toThrow();
   });
 });

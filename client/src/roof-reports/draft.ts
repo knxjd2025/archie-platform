@@ -141,6 +141,25 @@ export function browserStorage(): StorageLike | null {
   try { return typeof window !== 'undefined' ? window.localStorage : null; } catch { return null; }
 }
 
+/** This tab's own storage, or null where it is blocked. Used only for "the wizard was open", which a refresh keeps and a new tab does not. */
+export function tabStorage(): StorageLike | null {
+  try { return typeof window !== 'undefined' ? window.sessionStorage : null; } catch { return null; }
+}
+
+const openKey = (key: string) => `${key}.open`;
+
+/** Notes that the wizard is open (or closed) in this tab, so a refresh can put the person back in it. */
+export function markWizardOpen(storage: StorageLike | null, key: string, open: boolean): void {
+  try {
+    if (!storage) return;
+    if (open) storage.setItem(openKey(key), '1'); else storage.removeItem(openKey(key));
+  } catch { /* blocked storage: the person just lands on the list and taps Make a roof report */ }
+}
+
+export function wasWizardOpen(storage: StorageLike | null, key: string): boolean {
+  try { return storage?.getItem(openKey(key)) === '1'; } catch { return false; }
+}
+
 /** How long ago, in plain words: "just now", "5 minutes ago", "2 hours ago". */
 export function agoText(savedAt: number, now: number = Date.now()): string {
   const minutes = Math.floor(Math.max(0, now - savedAt) / 60_000);

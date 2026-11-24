@@ -107,6 +107,32 @@ export const RR = {
     progress: (done: number, total: number) => `${done} of ${total} photos added.`,
     failedLine: (n: number) => `${n} photo${n === 1 ? '' : 's'} did not save and will be left out.`,
   },
+  roof: {
+    title: 'About the roof',
+    squares: 'Size in squares',
+    squaresHelp: 'One square is 100 square feet.',
+    squareFeet: (feet: string | number) => `About ${feet} square feet.`,
+    squaresBad: 'Roof size must be more than 0 and no more than 1,000 squares.',
+    pitch: 'Pitch',
+    stories: 'Stories',
+    material: 'Roof material',
+    notSure: 'Not sure',
+  },
+  damage: {
+    title: 'Damaged shingles',
+    help: 'Count the shingles you can see.',
+    bad: 'Each count must be a whole number from 0 to 9,999.',
+    none: 'No damaged shingles counted yet.',
+    total: (n: number) => `${n} damaged shingle${n === 1 ? '' : 's'} in all.`,
+    reset: 'Reset',
+    resetFor: 'Reset every count to zero',
+    add1: 'Add 1',
+    add5: 'Add 5',
+    take1: 'Take off 1',
+    add1For: (what: string | number) => `Add 1 to ${what}`,
+    add5For: (what: string | number) => `Add 5 to ${what}`,
+    take1For: (what: string | number) => `Take off 1 from ${what}`,
+  },
 } as const;
 
 /** What each kind of photo is called on screen. The keys are the ones the server accepts. */

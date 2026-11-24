@@ -7,9 +7,10 @@
  * Used by the generation (./generate.ts) and by the routes (./routes.ts).
  */
 import type { MeasurementReportSection } from '../lib/roof-reports/comprehensive-roof-report.js';
+import { ROOF_SQUARES_MAX } from '../../shared/roof-reports';
 
-/** The largest roof the form accepts, in squares (100 square feet each). */
-export const ROOF_SQUARES_MAX = 1000;
+/** The largest roof the form accepts, in squares (100 square feet each). The screen reads the same number. */
+export { ROOF_SQUARES_MAX };
 const EDGE_KEYS = ['ridge', 'hip', 'valley', 'eave', 'rake', 'dripEdge', 'flashing'] as const;
 const DEFAULT_WASTE_PERCENT = 15;
 const DATA_SOURCES = ['google-solar-api', 'manual', 'hybrid', 'eagleview'] as const;

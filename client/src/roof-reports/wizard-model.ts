@@ -4,8 +4,8 @@
  * which picked files become photos and how many fit, and the state of each
  * photo's tile from the moment it is picked. The screens only draw this.
  */
-import { MAX_REPORT_PHOTOS, NEEDS_ADDRESS, NEEDS_CITY_STATE, type ReportPhotoCategory } from '../../../shared/roof-reports';
-import { LAST_STEP, type DraftPhoto, type WhereDraft, type WizardDraft } from './draft';
+import { MAX_DAMAGE_COUNT, MAX_REPORT_PHOTOS, NEEDS_ADDRESS, NEEDS_CITY_STATE, ROOF_SQUARES_MAX, type ReportPhotoCategory } from '../../../shared/roof-reports';
+import { LAST_STEP, type DamageDraft, type DraftPhoto, type RoofDraft, type WhereDraft, type WizardDraft } from './draft';
 import { RR } from './words';
 
 export const STEPS = [
@@ -128,6 +128,101 @@ export const tilesFromDraft = (photos: readonly DraftPhoto[]): PhotoTile[] =>
 export const photoIdsForReport = (tiles: readonly PhotoTile[]): string[] =>
   tiles.filter((t) => t.state === 'done' && t.id).map((t) => t.id as string);
 
+// ---------------------------------------------------------------- step 3: the roof
+
+export const PITCH_OPTIONS = ['3/12', '4/12', '5/12', '6/12', '7/12', '8/12', '9/12', '10/12', '12/12'] as const;
+
+export const STORIES_OPTIONS = [
+  { value: '1', label: '1 story' },
+  { value: '1.5', label: '1.5 stories' },
+  { value: '2', label: '2 stories' },
+  { value: '2.5', label: '2.5 stories' },
+  { value: '3', label: '3 stories' },
+] as const;
+
+/** The values are the words the pricing already reads; the labels are what a person sees. */
+export const MATERIAL_OPTIONS = [
+  { value: 'asphalt_shingle', label: 'Asphalt shingle' },
+  { value: 'metal', label: 'Metal' },
+  { value: 'tile', label: 'Tile' },
+  { value: 'slate', label: 'Slate' },
+  { value: 'wood_shake', label: 'Wood shake' },
+  { value: 'flat_tpo', label: 'TPO membrane' },
+  { value: 'flat_epdm', label: 'EPDM (rubber)' },
+  { value: 'flat_membrane', label: 'Flat membrane (other)' },
+  { value: 'modified_bitumen', label: 'Modified bitumen' },
+  { value: 'other', label: 'Other' },
+] as const;
+
+/** A size in squares as a number, or null when it is not one the report can use (more than 0, at most the cap). */
+function parseSquares(text: string): number | null {
+  const t = text.trim().replace(/,/g, '');
+  if (!/^\d+(\.\d+)?$/.test(t)) return null;
+  const n = Number(t);
+  return n > 0 && n <= ROOF_SQUARES_MAX ? n : null;
+}
+
+/** The sentence to show when the roof's size cannot be right, or null. Every fact may be left out. */
+export function checkRoof(r: RoofDraft): string | null {
+  return r.squares.trim() !== '' && parseSquares(r.squares) === null ? RR.roof.squaresBad : null;
+}
+
+/** "About 2,500 square feet." for a good size, else nothing. */
+export function squareFeetLine(squares: string): string {
+  const n = parseSquares(squares);
+  return n === null ? '' : RR.roof.squareFeet(Math.round(n * 100).toLocaleString('en-US'));
+}
+
+/** The roof facts the report is made from, only the ones given; undefined when none were. */
+export function toRoofDetails(r: RoofDraft): { squares?: number; pitch?: string; stories?: number; material?: string } | undefined {
+  const out: { squares?: number; pitch?: string; stories?: number; material?: string } = {};
+  const squares = parseSquares(r.squares);
+  if (squares !== null) out.squares = squares;
+  if (r.pitch.trim()) out.pitch = r.pitch.trim();
+  const stories = Number(r.stories);
+  if (r.stories.trim() && Number.isFinite(stories) && stories > 0) out.stories = stories;
+  if (r.material.trim()) out.material = r.material.trim();
+  return Object.keys(out).length ? out : undefined;
+}
+
+// ---------------------------------------------------------------- step 4: damaged shingles
+
+export const DAMAGE_ROWS: readonly { field: keyof DamageDraft; label: string; what: string; description: string }[] = [
+  { field: 'wind', label: 'Wind damage', what: 'wind damage', description: 'Creased, lifted or missing shingles' },
+  { field: 'hail', label: 'Hail damage', what: 'hail damage', description: 'Bruised, cracked or losing granules' },
+  { field: 'general', label: 'Other damage', what: 'other damage', description: 'Cracked, curling or worn' },
+];
+
+/** A count as a whole number from 0 up to the cap. A blank is none. Null when it is anything else. */
+function parseCount(text: string): number | null {
+  const t = text.trim();
+  if (t === '') return 0;
+  if (!/^\d+$/.test(t)) return null;
+  const n = Number(t);
+  return n <= MAX_DAMAGE_COUNT ? n : null;
+}
+
+export function checkDamage(d: DamageDraft): string | null {
+  return [d.wind, d.hail, d.general].some((v) => parseCount(v) === null) ? RR.damage.bad : null;
+}
+
+/** The counts the report is made from. */
+export function toDamageCounts(d: DamageDraft): { windDamaged: number; hailDamaged: number; generalDamaged: number } {
+  return { windDamaged: parseCount(d.wind) ?? 0, hailDamaged: parseCount(d.hail) ?? 0, generalDamaged: parseCount(d.general) ?? 0 };
+}
+
+/** One count moved up or down, kept between 0 and the cap. Anything that is not a number counts as 0 first. */
+export function bumpCount(text: string, by: number): string {
+  const n = parseCount(text) ?? 0;
+  return String(Math.min(MAX_DAMAGE_COUNT, Math.max(0, n + by)));
+}
+
+export function damageTotal(d: DamageDraft): number {
+  return (parseCount(d.wind) ?? 0) + (parseCount(d.hail) ?? 0) + (parseCount(d.general) ?? 0);
+}
+
+export const totalLine = (n: number): string => (n > 0 ? RR.damage.total(n) : RR.damage.none);
+
 // ---------------------------------------------------------------- going on
 
 export type Advance = { ok: true; step: number } | { ok: false; error: string };
@@ -142,5 +237,10 @@ export function tryAdvance(draft: WizardDraft, tiles: readonly PhotoTile[]): Adv
   if (draft.step === 2) {
     return photosInFlight(tiles) ? { ok: false, error: RR.wizard.photosBusyAdvance } : { ok: true, step: next };
   }
-  return { ok: true, step: next };
+  if (draft.step === 3) {
+    const error = checkRoof(draft.roof);
+    return error ? { ok: false, error } : { ok: true, step: next };
+  }
+  const error = checkDamage(draft.damage);
+  return error ? { ok: false, error } : { ok: true, step: next };
 }
