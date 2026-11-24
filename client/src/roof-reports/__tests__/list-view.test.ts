@@ -96,3 +96,13 @@ describe('paging', () => {
     expect(pagingText({ page: 1, pageSize: 25, total: 0 })).toBe('');
   });
 });
+
+describe('which reports can be picked for a comparison', () => {
+  const r = (status: string) => ({ id: '11111111-1111-4111-8111-111111111111', title: null, address: '12 Elm Street', city: 'Cedar Falls', status, problem: null, reportTypes: ['inspection'], template: 'full', createdAt: '2026-11-18T15:00:00.000Z', customerName: null, jobExternalId: null, totalEstimate: null });
+  it('is a finished report, for a role that may see reports', () => {
+    expect(rowView(r('ready'), 'admin').canCompare).toBe(true);
+    expect(rowView(r('ready'), 'sales').canCompare).toBe(true);
+    for (const status of ['generating', 'failed', 'archived']) expect(rowView(r(status), 'admin').canCompare, status).toBe(false);
+    expect(rowView(r('ready'), 'production').canCompare).toBe(false);
+  });
+});

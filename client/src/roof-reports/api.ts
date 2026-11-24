@@ -4,6 +4,7 @@
  * except the photo upload, which needs progress and so lives in ./upload.ts.
  */
 import { api } from '../lib/api';
+import type { ReportSummary } from '../../../shared/roof-reports';
 import { listPath, type ListFilters, type Paging, type ReportRow } from './list-view';
 
 export interface ReportPage extends Paging { reports: ReportRow[] }
@@ -62,3 +63,7 @@ export const rewriteFinding = (id: string, index: number): Promise<unknown> =>
 /** Asks for the summary to be rewritten. */
 export const rewriteSummary = (id: string): Promise<unknown> =>
   api.post(`/api/roof-reports/${encodeURIComponent(id)}/rewrite-summary`, {}, { timeoutMs: 90_000 });
+
+/** Two finished reports, as a comparison reads them. Asked in one call, so either one missing is one plain answer and never half a comparison. */
+export const fetchComparison = (a: string, b: string): Promise<{ a: ReportSummary; b: ReportSummary }> =>
+  api.get(`/api/roof-reports/compare?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`, { timeoutMs: 20_000 });

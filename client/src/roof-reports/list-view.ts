@@ -74,6 +74,8 @@ export interface RowView {
   note: string | null;
   canOpen: boolean;
   canArchive: boolean;
+  /** A finished report the person may see can be picked for a comparison. */
+  canCompare: boolean;
   openHref: string;
 }
 
@@ -97,6 +99,7 @@ export function rowView(r: ReportRow, role: TeamRole): RowView {
     note,
     canOpen: status === 'ready' && may('see'),
     canArchive: (status === 'ready' || status === 'failed') && may('archive'),
+    canCompare: status === 'ready' && may('see'),
     openHref: `/api/roof-reports/${r.id}/html`,
   };
 }

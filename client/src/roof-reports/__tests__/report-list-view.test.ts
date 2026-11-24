@@ -13,6 +13,7 @@ const row = (over: Partial<ReportRow> = {}): ReportRow => ({
 const base = (over: Partial<ReportListViewProps> = {}): ReportListViewProps => ({
   role: 'admin', filters: { search: '', kind: '', status: '', page: 1 }, reports: [row()], paging: { page: 1, pageSize: 25, total: 1, hasMore: false },
   phase: 'ready', loadError: null, busyIds: {}, confirmId: null, rowErrors: {},
+  selected: [], onToggleSelect: () => {}, onCompare: () => {},
   onSearch: () => {}, onKind: () => {}, onStatus: () => {}, onPage: () => {}, onRetry: () => {},
   onOpen: () => {}, onAskArchive: () => {}, onCancelArchive: () => {}, onArchive: () => {}, ...over,
 });

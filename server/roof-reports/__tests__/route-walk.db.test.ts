@@ -167,13 +167,13 @@ describe.skipIf(!localDb)('every roof report route, walked (PERMANENT)', async (
       'PUT /api/roof-reports/:id', 'POST /api/roof-reports/:id/archive', 'POST /api/roof-reports/:id/retry', 'GET /api/roof-reports/:id/html',
       'GET /api/clients/:externalId/roof-reports', 'POST /api/roof-reports/:id/share-link', 'DELETE /api/roof-reports/:id/share-link',
       'GET /r/roof/:token', 'GET /r/roof/:token/photos/:photoId/:variant', 'POST /api/roof-reports/:id/send',
-      'POST /api/roof-reports/:id/rewrite-finding', 'POST /api/roof-reports/:id/rewrite-summary',
+      'POST /api/roof-reports/:id/rewrite-finding', 'POST /api/roof-reports/:id/rewrite-summary', 'GET /api/roof-reports/compare',
     ]));
     // Written out by hand, so a route added or removed is seen and decided on purpose.
     expect(lines.sort()).toEqual([
       'DELETE /api/roof-reports/:id/share-link', 'POST /api/roof-reports/:id/share-link', 'GET /r/roof/:token', 'GET /r/roof/:token/photos/:photoId/:variant',
       'DELETE /api/roof-reports/photos/:photoId', 'GET /api/clients/:externalId/roof-reports', 'GET /api/roof-reports', 'GET /api/roof-reports/:id', 'GET /api/roof-reports/:id/html',
-      'GET /api/roof-reports/:id/photos/:photoId/:variant', 'GET /api/roof-reports/linked-photo/:token', 'GET /api/roof-reports/status',
+      'GET /api/roof-reports/:id/photos/:photoId/:variant', 'GET /api/roof-reports/linked-photo/:token', 'GET /api/roof-reports/status', 'GET /api/roof-reports/compare',
       'POST /api/roof-reports/:id/archive', 'POST /api/roof-reports/:id/retry', 'POST /api/roof-reports/generate', 'POST /api/roof-reports/photos',
       'PUT /api/roof-reports/:id', 'POST /api/roof-reports/:id/send', 'POST /api/roof-reports/:id/rewrite-finding', 'POST /api/roof-reports/:id/rewrite-summary',
     ].sort());
@@ -231,6 +231,26 @@ describe.skipIf(!localDb)('every roof report route, walked (PERMANENT)', async (
     as(a, 'admin'); expect((await send('GET', `/api/roof-reports/${reportA}`)).status).toBe(200);
     as(a, 'csr'); expect((await send('GET', `/api/roof-reports/${reportA}`)).status).toBe(200);
     as(a, 'manager'); expect((await send('GET', `/api/roof-reports/${reportA}`)).status).toBe(404);
+  });
+
+  it('compares only reports the person may open: another company\'s, or one a salesperson does not own, is "not found" with nothing of either', async () => {
+    const path = (x: string, y: string) => `/api/roof-reports/compare?a=${x}&b=${y}`;
+    const before = await rowOfA();
+    // Company B's people, naming company A's report with their own, in either order.
+    for (const [x, y] of [[reportA, reportB], [reportB, reportA]]) {
+      as(b, 'admin');
+      const res = await send('GET', path(x, y));
+      expect(res.status, `${x} ${y}`).toBe(404);
+      for (const mark of [...A_MARKS, ...B_MARKS, reportA, reportB, photoA]) expect(res.text, `leaked ${mark}`).not.toContain(mark);
+    }
+    // Company A: crew, and the salesperson who does not own the report, are told the same thing.
+    for (const who of ['crew', 'repb']) {
+      as(a, who);
+      const res = await send('GET', path(reportA, reportB));
+      expect(res.status, who).toBe(404);
+      for (const mark of [...A_MARKS, reportA]) expect(res.text, `${who} leaked ${mark}`).not.toContain(mark);
+    }
+    expect(await rowOfA()).toEqual(before);
   });
 
   it('answers a signed photo link made up from the ids alone with "not found", whoever holds it, and a real one only for its one photo', async () => {

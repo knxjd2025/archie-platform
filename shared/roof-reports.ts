@@ -125,6 +125,26 @@ export const REWRITE_REPORT_CAPPED = 'This report has been rewritten a lot today
 export const REWRITE_COMPANY_CAPPED = 'Your company has used a lot of rewrites today. Please try again tomorrow.';
 export const REWRITE_TOO_FAST = 'You have asked for a lot of rewrites in the last few minutes. Please wait a little and try again.';
 
+/** Comparing two finished reports side by side: every sentence a person may be told. */
+export const COMPARE_NOT_FOUND = 'One of those two reports could not be found. Please go back to the list and pick again.';
+export const COMPARE_PICK_TWO = 'Pick two different reports to compare.';
+export const COMPARE_NOT_READY = 'Only finished reports can be compared. Please wait for both to finish.';
+export const COMPARE_FAILED = 'The reports could not be compared. Please try again.';
+
+/** One report as a comparison carries it: facts only, a fact the report does not hold is null ("not known"), never zero. */
+export interface ReportSummary {
+  id: string;
+  title: string | null;
+  address: string;
+  city: string | null;
+  createdAt: string;
+  condition: { score: number | null; grade: string | null; severity: string | null };
+  findings: Array<{ title: string; severity: string | null }>;
+  storm: { events: number | null; hail: number | null; wind: number | null; largestHailInches: number | null; risk: string | null; claimPotential: string | null };
+  cost: number | null;
+  measurements: { squares: number | null; pitch: string | null; stories: number | null; material: string | null; ageYears: number | null };
+}
+
 export const STILL_BEING_MADE_EDIT = 'This report is still being made. Please try again once it finishes.';
 export const TOO_MANY_RECENT = 'You have made a lot of reports in the last few minutes. Please wait a little and try again.';
 

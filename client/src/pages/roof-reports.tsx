@@ -5,13 +5,14 @@ import { useAuth } from '../lib/auth';
 import { useCompany } from '../lib/company';
 import { sweepExpiredRoofReportDrafts } from '../roof-reports/draft-clean';
 import { browserStorage, draftKey, markWizardOpen, readDraft, tabStorage, wasWizardOpen } from '../roof-reports/draft';
+import Comparison from '../roof-reports/Comparison';
 import Editor from '../roof-reports/Editor';
 import type { JobStart } from '../roof-reports/job-prefill';
 import ReportList from '../roof-reports/ReportList';
 import Wizard from '../roof-reports/Wizard';
 import { RR } from '../roof-reports/words';
 
-type View = { kind: 'list'; notice: string | null } | { kind: 'wizard' } | { kind: 'editor'; id: string };
+type View = { kind: 'list'; notice: string | null } | { kind: 'wizard' } | { kind: 'editor'; id: string } | { kind: 'compare'; a: string; b: string };
 
 /**
  * Roof reports: the company's roof reports as a list, the wizard that makes a
@@ -73,7 +74,8 @@ export default function RoofReportsPage({ role, prefill, openId }: { role: TeamR
           onArchived={() => setView({ kind: 'list', notice: RR.editor.archived })}
         />
       )}
-      {view.kind === 'list' && <ReportList role={role} notice={view.notice} onOpen={(id) => setView({ kind: 'editor', id })} />}
+      {view.kind === 'compare' && <Comparison key={`${view.a}-${view.b}`} a={view.a} b={view.b} onBack={() => setView({ kind: 'list', notice: null })} />}
+      {view.kind === 'list' && <ReportList role={role} notice={view.notice} onOpen={(id) => setView({ kind: 'editor', id })} onCompare={(a, b) => setView({ kind: 'compare', a, b })} />}
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TeamRole } from '../../../shared/rbac';
 import { KIND_FILTERS, pagingText, rowView, statusOptions, type ListFilters, type Paging, type ReportRow } from './list-view';
 import { archiveReport, fetchReports } from './api';
+import { MAX_SELECTED, compareHint, toggleSelected } from './compare-model';
 import { RR, plainMessage } from './words';
 
 const FOCUS = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400';
@@ -21,6 +22,11 @@ export interface ReportListViewProps {
   /** The one report being asked "archive this?". */
   confirmId: string | null;
   rowErrors: Record<string, string>;
+  /** The ids ticked for a comparison (at most two). */
+  selected: string[];
+  onToggleSelect: (id: string) => void;
+  /** Opens the comparison of the two ticked reports. */
+  onCompare: () => void;
   onSearch: (text: string) => void;
   onKind: (kind: ListFilters['kind']) => void;
   onStatus: (status: ListFilters['status']) => void;
@@ -101,6 +107,16 @@ export function ReportListView(p: ReportListViewProps) {
             return (
               <li key={r.id} className={`px-4 py-3 transition-opacity ${busy ? 'opacity-50' : ''}`} aria-busy={busy}>
                 <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
+                  {v.canCompare && (
+                    <input
+                      type="checkbox"
+                      checked={p.selected.includes(r.id)}
+                      disabled={!p.selected.includes(r.id) && p.selected.length >= MAX_SELECTED}
+                      onChange={() => p.onToggleSelect(r.id)}
+                      aria-label={RR.compare.pickFor(v.headline)}
+                      className={`mt-1 h-4 w-4 rounded border-gray-300 ${FOCUS}`}
+                    />
+                  )}
                   <div className="min-w-0 flex-1 basis-56">
                     <p className="text-sm font-semibold text-gray-900 truncate">{v.headline}{v.place && <span className="font-normal text-gray-500">, {v.place}</span>}</p>
                     <p className="text-xs text-gray-500 mt-0.5 truncate">{v.customer} · {v.kinds} · {v.date}</p>
@@ -135,6 +151,13 @@ export function ReportListView(p: ReportListViewProps) {
         </ul>
       )}
 
+      {p.reports.some((r) => rowView(r, p.role).canCompare) && p.phase !== 'failed' && p.phase !== 'first' && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3">
+          <p className="text-sm text-gray-700" aria-live="polite">{compareHint(p.selected.length)}</p>
+          <button type="button" onClick={p.onCompare} disabled={p.selected.length !== MAX_SELECTED} className={BUTTON}>{RR.compare.pick}</button>
+        </div>
+      )}
+
       {p.reports.length > 0 && p.phase !== 'failed' && p.phase !== 'first' && (
         <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-gray-500">
           <p aria-live="polite">{pagingText(p.paging)}</p>
@@ -152,7 +175,7 @@ const SEARCH_DELAY_MS = 300;
 const EMPTY_PAGING: Paging = { page: 1, pageSize: 25, total: 0, hasMore: false };
 
 /** The list with its asking, waiting and archiving. */
-export default function ReportList({ role, onOpen, notice: flash }: { role: TeamRole; onOpen: (id: string) => void; notice?: string | null }) {
+export default function ReportList({ role, onOpen, onCompare, notice: flash }: { role: TeamRole; onOpen: (id: string) => void; onCompare: (a: string, b: string) => void; notice?: string | null }) {
   const [typed, setTyped] = useState('');
   const [filters, setFilters] = useState<ListFilters>({ search: '', kind: '', status: '', page: 1 });
   const [reports, setReports] = useState<ReportRow[]>([]);
@@ -162,6 +185,7 @@ export default function ReportList({ role, onOpen, notice: flash }: { role: Team
   const [busyIds, setBusyIds] = useState<Record<string, boolean>>({});
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
+  const [selected, setSelected] = useState<string[]>([]);
   const [notice, setNotice] = useState<string | null>(flash ?? null);
   const asked = useRef(0);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -208,6 +232,7 @@ export default function ReportList({ role, onOpen, notice: flash }: { role: Team
     try {
       await archiveReport(id);
       setReports((list) => list.filter((r) => r.id !== id));
+      setSelected((picked) => picked.filter((x) => x !== id));
       setPaging((p) => ({ ...p, total: Math.max(0, p.total - 1) }));
       setNotice(RR.list.archived);
       if (noticeTimer.current) clearTimeout(noticeTimer.current);
@@ -234,6 +259,9 @@ export default function ReportList({ role, onOpen, notice: flash }: { role: Team
         busyIds={busyIds}
         confirmId={confirmId}
         rowErrors={rowErrors}
+        selected={selected}
+        onToggleSelect={(id) => setSelected((picked) => toggleSelected(picked, id))}
+        onCompare={() => { if (selected.length === MAX_SELECTED) onCompare(selected[0], selected[1]); }}
         onSearch={setTyped}
         onKind={(kind) => setFilters((f) => ({ ...f, kind, page: 1 }))}
         onStatus={(status) => setFilters((f) => ({ ...f, status, page: 1 }))}

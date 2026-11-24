@@ -49,6 +49,7 @@ import { appOrigin, reportForPage, servedPage } from './page';
 import { registerPublicShareRoutes } from './public';
 import { registerSendRoute, type MailSender, type SendCaps } from './send';
 import { registerRewriteRoutes, type RewriteCaps } from './rewrite';
+import { registerCompareRoute } from './compare';
 import type { ModelCaller } from '../lib/roof-reports/model-call.js';
 import { requireRoofReportsOn } from './switch';
 
@@ -147,6 +148,9 @@ export function registerRoofReportsRoutes(app: Express, options: RoofReportRoute
   router.get('/status', (_req, res) => {
     res.json({ on: true, photoStore: photoStore() !== null, analysis: Boolean(modelKeysFromEnv().groq) });
   });
+
+  // Two finished reports side by side. Before the routes that take an id, so "compare" is never read as one.
+  registerCompareRoute(router);
 
   // ---------------------------------------------------------------- making one
   /**
