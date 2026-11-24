@@ -32,7 +32,11 @@ export interface StorageLike {
 export interface DraftJob { externalId: string; label: string }
 export interface WhereDraft { address: string; city: string; state: string; zip: string; job: DraftJob | null }
 export interface DraftPhoto { id: string; name: string; category: ReportPhotoCategory | null }
-export interface RoofDraft { squares: string; pitch: string; stories: string; material: string }
+/**
+ * `estimate` holds the text of each field that was filled in from a satellite picture and has not been changed since
+ * ('' for a field that was not). It is what lets the screen say "estimated" for as long as it is true, even after a refresh.
+ */
+export interface RoofDraft { squares: string; pitch: string; stories: string; material: string; estimate?: { squares: string; pitch: string } }
 export interface DamageDraft { wind: string; hail: string; general: string }
 
 export interface ReviewDraft {
@@ -85,6 +89,18 @@ export function draftKey(companyId: string | null | undefined, email: string | n
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const text = (v: unknown, max: number): string => (typeof v === 'string' ? v.slice(0, max) : '');
 
+/** The roof facts as stored: four short texts, and the estimate mark only when it is two short texts and marks something. */
+export function cleanRoof(raw: unknown): RoofDraft {
+  const r = isObject(raw) ? raw : {};
+  const out: RoofDraft = { squares: text(r.squares, 12), pitch: text(r.pitch, 20), stories: text(r.stories, 6), material: text(r.material, 40) };
+  const e = isObject(r.estimate) ? r.estimate : null;
+  if (e) {
+    const mark = { squares: text(e.squares, 12), pitch: text(e.pitch, 20) };
+    if (mark.squares || mark.pitch) out.estimate = mark;
+  }
+  return out;
+}
+
 /** Checks and cuts down whatever was stored; null when it is not a draft at all. */
 function cleanDraft(raw: unknown): WizardDraft | null {
   if (!isObject(raw)) return null;
@@ -104,7 +120,6 @@ function cleanDraft(raw: unknown): WizardDraft | null {
     const category = (REPORT_PHOTO_CATEGORIES as readonly string[]).includes(p.category as string) ? (p.category as ReportPhotoCategory) : null;
     photos.push({ id, name: text(p.name, 120), category });
   }
-  const r = isObject(raw.roof) ? raw.roof : {};
   const d = isObject(raw.damage) ? raw.damage : {};
   const rv = isObject(raw.review) ? raw.review : {};
   const wantedKinds = new Set<string>(REPORT_KINDS.map((k) => k.value));
@@ -121,7 +136,7 @@ function cleanDraft(raw: unknown): WizardDraft | null {
     where: { address: text(w.address, 200), city: text(w.city, 100), state: text(w.state, 50), zip: text(w.zip, 20), job },
     photos,
     photoKind: (REPORT_PHOTO_CATEGORIES as readonly string[]).includes(raw.photoKind as string) ? (raw.photoKind as ReportPhotoCategory) : '',
-    roof: { squares: text(r.squares, 12), pitch: text(r.pitch, 20), stories: text(r.stories, 6), material: text(r.material, 40) },
+    roof: cleanRoof(raw.roof),
     damage: { wind: text(d.wind, 8) || base.damage.wind, hail: text(d.hail, 8) || base.damage.hail, general: text(d.general, 8) || base.damage.general },
     review: {
       kinds: kinds.length ? [...new Set(kinds)] : (Array.isArray(rv.kinds) && rv.kinds.length === 0 ? [] : base.review.kinds),

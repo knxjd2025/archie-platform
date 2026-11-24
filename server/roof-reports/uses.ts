@@ -15,7 +15,7 @@
  * What counts toward the day: a send counts while it is reserved or done (a send
  * that was not delivered gives its place back); a rewrite counts in every state
  * but `unused`, because a rewrite that reached a model may have cost money even
- * if it did not work.
+ * if it did not work. A satellite look-up counts like a rewrite: it spends money (the picture and the model) even when the answer is no use.
  *
  * A row holds no address, name or text. Every function runs as the company in
  * context, so another company's rows are simply not there.
@@ -25,7 +25,7 @@ import { db } from '../db';
 import { roofReportUses, roofReports, type RoofReportUse } from '../../shared/schema';
 import { requireCompanyId } from '../tenant/context';
 
-export type UseKind = 'send' | 'rewrite';
+export type UseKind = 'send' | 'rewrite' | 'satellite';
 
 /** A use still `reserved` after this long was left behind by a request that died; it lets go of its key. */
 export const STALE_USE_MS = 10 * 60 * 1000;

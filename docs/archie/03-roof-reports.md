@@ -9,9 +9,9 @@ changed; roof reports are their own family beside them.
 
 This page covers what has been built so far: the tables, the photos, the
 generation, the routes and the rules around them, the screens, the three looks,
-the share link, emailing a report and (below) the PDF and rewriting a finding.
-Comparison, satellite measurement and the copy of old reports come in later
-stages.
+the share link, emailing a report, the PDF, rewriting a finding, comparing two
+reports and finding the roof from a satellite picture. The copy of old reports
+comes in a later stage.
 
 ## The switch
 
@@ -30,10 +30,10 @@ photo links inside a page are made against).
 
 ## Before this code is deployed
 
-Apply five migrations to the database, as the owner, before deploying code that
-reads them. All five are safe under the code that is live today (0020, 0021, 0023
+Apply six migrations to the database, as the owner, before deploying code that
+reads them. All six are safe under the code that is live today (0020, 0021, 0023
 and 0024 only add tables nothing reads yet; 0022 only adds columns the live code never
-names). Nothing in the build or deploy runs them. **0022 must be applied before
+names; 0025 only lets one existing check accept one more word). Nothing in the build or deploy runs them. **0022 must be applied before
 the code that names its columns is deployed**: that code reads `roof_reports`
 with them, so deployed first it breaks every report read. 0023 should be applied
 first too: the page route reads its table whenever it shows a presentation; a
@@ -47,11 +47,19 @@ is treated as no pack), never an error, but apply it first anyway.
 | `migrations/0022_roof_report_starts.sql` | `roof_reports.started_at` (filled from `created_at`, then required), `idempotency_key`, `request_hash`, and two indexes | `3bdf415c35ed403d629df6b7f723fc119cd6ec5b4065b35270078c13678b1e2e` |
 | `migrations/0023_presentation_chapter_packs.sql` | `presentation_chapter_packs` (a new table only, one row a company) and the trigger that keeps the app from writing it | `5c2eeb75ec1f332563fc0294a78e0addd6b45191df479f4e4f5545080aab4c45` |
 | `migrations/0024_roof_report_uses.sql` | `roof_report_uses` (a new table only: the record of each Send and each Rewrite, for the daily limits and the double click) | `c4d0d4a747bf6f9be230a1b18aeb5c384791a11feb4e9371bb010e7ac99d283a` |
+| `migrations/0025_roof_report_satellite_use.sql` | no new table or column: the one check on `roof_report_uses.kind` now also accepts `satellite` (see "Finding the roof from a satellite picture") | `3a4b0d133ae0d8a815bc52d6979eac1e352887be017d507888972d2b2856337e` |
 
 Check the file you apply with `sha256sum` against the table. 0020, 0021, 0023 and 0024
 need `0008` (the system role): each table is protected with the function `0008`
-created, so each has exactly the two company policies; 0022 needs `0020`. A
+created, so each has exactly the two company policies; 0022 needs `0020`; 0025
+needs `0024`. A
 migration is never edited once applied.
+
+0025 drops one check and adds it back with one more allowed word. It takes a brief
+exclusive lock on `roof_report_uses` (five second timeout) and reads that small
+table once. The code that is live today never writes a word the old check would
+refuse, so applying it first is safe, and it must be applied before the satellite
+button is used: until then a press of it would be refused by the database.
 
 0022 is safe on a live table: one transaction, with a five second lock timeout.
 The column is added with no default, filled from `created_at`, and only then
@@ -120,6 +128,8 @@ signed-in person, and a role that may use roof reports.
 | `POST /:id/archive` | put it away; nothing is deleted |
 | `POST /:id/retry` | run a failed report again from what was typed and the photos it has |
 | `GET /:id/html` | the page, built only by the escaped renderers, served in a sandbox |
+| `GET /compare?a=<id>&b=<id>` | two finished reports side by side (see "Comparing two reports") |
+| `POST /measurements/detect` | finds the roof at an address from a satellite picture (see "Finding the roof from a satellite picture"); needs the `measure` decision |
 | `GET /api/clients/:externalId/roof-reports` | a job's reports, after the check that opens the job |
 | `POST /:id/share-link` | makes the customer's link for a finished report (or gives the one it has) and answers its address; needs the `share` decision |
 | `DELETE /:id/share-link` | turns the link off for good; needs the `unshare` decision. Fine to ask twice |
@@ -291,6 +301,97 @@ only what the report found. A company with no pack gets exactly that.
 - **Nothing of any real company is in the code.** Tests use the fictional Summit
   Ridge Roofing in Cedar Falls. The permanent test scans the code for the test
   pack's wording and for any writer of the table other than the loader.
+
+## Comparing two reports
+
+In the list, tick two finished reports and press **Compare**. One request,
+`GET /api/roof-reports/compare?a=<id>&b=<id>` (`server/roof-reports/compare.ts`),
+asks for both, so there is never half a comparison.
+
+- **Each id goes through exactly the check of opening a report** (`roofReportFor`).
+  A report the person may not see, another company's, an archived one, one that is
+  not there and an id that is not an id are all the same answer, "One of those two
+  reports could not be found. Please go back to the list and pick again.", and that
+  answer carries nothing of the other report. Crew get the same 404 as everywhere.
+  The same id twice, or a missing one, is a plain 400. A report still being made or
+  one that failed is a plain 409.
+- **What a comparison carries** (`summaryOf`, a plain function) is only the roof's
+  condition, its findings (title and how serious), its storm events, its repair cost
+  and its roof facts. No customer, no notes, no photos, no link, no long text. A fact
+  the report does not hold is "Not known", never zero.
+- **No model is called** and nothing is counted or recorded as a cost.
+- The screen sets the two side by side in a table and writes every difference in
+  words as well as colour ("Report A is higher by 28 points", "Different", "Not known
+  for report B"). The only place colour also says "better" is the condition score.
+  Findings are matched by title and shown as in both, only in A, only in B.
+- Tests: `compare-summary.test.ts`, `compare.db.test.ts` (another company's report, a
+  salesperson who does not own one, crew, archived, missing and bad ids, two reports
+  not ready, no cost row, switch off), the client `compare-model.test.ts` and
+  `compare-views.test.ts`, and a case added to the permanent route walk.
+
+## Finding the roof from a satellite picture
+
+On the roof step of the wizard, **Find it from the satellite** looks at a satellite
+picture of the address on the draft and fills in a size and, when it can, a pitch.
+It only **prefills** the step:
+
+- It says "Looking at the satellite picture..." at once, and the button waits.
+- The numbers it fills are marked "Estimated from a satellite picture. Check these
+  numbers." for as long as they are still the numbers it gave. The mark is kept in the
+  draft (`RoofDraft.estimate`), so a refresh does not lose it, and a field the person
+  changes stops being marked. When the picture was not clear it says so.
+- It **never overwrites a number the person already typed.** It keeps what was typed
+  and asks "You already typed a size. Use the satellite numbers instead?" with "Use the
+  satellite numbers" and "Keep what I typed".
+- Nothing about the roof is stored on the server: no report, no photo, no outline.
+
+`POST /api/roof-reports/measurements/detect` with `{ address, city, state, zip }` and
+nothing else (`server/roof-reports/measure.ts`, `satellite-answer.ts`):
+
+1. **Who:** behind the switch and the sign-in, with the new `measure` decision in
+   `ROOF_REPORT_RULES`, which is exactly the right to make a report (crew never). The
+   permanent roles test holds it; the route walk lists the route.
+2. **The address** comes from the draft. The geocoder (the same Google lookup the storm
+   step uses) places it, and the coordinates are checked to be real numbers in range.
+3. **The picture** is fetched only from `maps.googleapis.com`, only the one static map
+   path, over https, built in code from two numbers and the key (`staticMapUrl`), checked
+   again right before the fetch (`assertMapUrl`), server side, through the pinned safe
+   download (`downloadPublicMedia`: it resolves once, refuses a private address, follows no
+   redirect and bounds the size). **The map key never reaches the person, a URL shown to
+   them, a log or an error record**: every failure is logged by its kind only, never its
+   message, and what the person is told is always one of the sentences below.
+4. **The model** is the `measurement` role of `models.ts` (a Groq model, a United States
+   provider), asked about the picture alone: its prompt holds no address and nothing about
+   a person.
+5. **The answer is checked strictly** (`readSatelliteAnswer`): a closed outline of at most
+   40 points inside the picture, not crossing itself, between 150 square feet and 80
+   percent of the picture; at most 12 facets, each with a known pitch and direction; a known
+   roof type; a confidence that is high, medium or low (or a number from 0 to 1). The
+   model's own notes are never carried on. Anything else is one sentence, with nothing
+   stored: "We could not find the roof in the satellite picture. Enter the measurements by
+   hand."
+6. **The estimate** is the footprint (outline and the picture's scale at that latitude)
+   made steeper by the pitch most of the roof is said to have. The pitch is only ever one the
+   roof step offers.
+7. **Cost:** the geocoding lookup, the map picture and the model each write one `model_costs`
+   row for the company that caused them (`geocode`, `satellite_image`, `measurement_detect`;
+   `ref` is empty because there is no report yet). None has a confirmed price, so each is
+   unpriced: 0 cents and `priced = false`, with the model's tokens kept. No price was invented.
+8. **One deadline** (60 seconds) covers all three calls; each call is given what is left of it.
+9. **A daily limit and a request key** go through the `roof_report_uses` table with the new kind
+   `satellite` (migration 0025; a press has no report yet, so it is kept under the all-zero report
+   id). A company may make 100 a day, and the limit is taken in one locked step before anything is
+   paid for, so presses that arrive together cannot overrun it. The same `Idempotency-Key` pressed
+   twice is told "That satellite picture was already asked for" and pays nothing twice; a press
+   that failed lets go of its key. A press counts once something paid for has been called, even
+   when the answer was no use. A person who presses it a great deal in ten minutes is slowed.
+10. **Not set up** (no map key, no Groq key): one plain sentence, nothing called, nothing counted.
+
+Every sentence is in `shared/roof-reports.ts` (`SATELLITE_*`). Tests, all with a fake map host,
+a fake geocoder and a fake model, never a real call: `satellite-answer.test.ts`,
+`measure.db.test.ts`, `measure-geocode.db.test.ts`, `measure-fetch.test.ts`,
+`migration-0025.db.test.ts`, and the client `satellite-model.test.ts` and
+`satellite-views.test.ts`.
 
 ## The share link
 
@@ -617,7 +718,9 @@ guess. No schema change was needed for it (the table already holds `google` and
 the operation is free text). Only the two Anthropic prices are confirmed. The Groq
 and Google prices are **unconfirmed**: those calls are recorded with their
 tokens, 0 cents and `priced = false`, never a guess. Add a price only after
-reading the provider's own page.
+reading the provider's own page. The satellite measurement uses the `measurement` role (a
+Groq id, unpriced) and the Google static map picture (`operation = 'satellite_image'`, model
+name `google-static-maps`, no confirmed price, unpriced), as described above.
 
 ## Nothing is deleted
 
@@ -630,3 +733,80 @@ The old program's monthly report limits (Archie has no free plan; there is a
 per-person and per-company rate limit instead), its signing and claim columns,
 its hosted report worker, and sending anything about a report to a customer by
 itself: nothing is sent automatically.
+
+## Before switching roof reports on
+
+Do these in this order. Nothing in the build or the deploy does any of it for you.
+
+**1. Apply the migrations, by hand, as the owner, in this order, checking each file with
+`sha256sum` first.** Each is safe under the code that is live today. Apply all of them
+before any deploy of this code, and before `ARCHIE_ROOF_REPORTS` is set to `on`.
+
+| order | file | sha256 |
+|---|---|---|
+| 1 | `migrations/0020_roof_reports.sql` | `ace7bc60ebc3fc5d0dc040fb8d79ceb5b4300d5d34b8b23831b95b21c72ed55d` |
+| 2 | `migrations/0021_model_costs.sql` | `ca45ee62a6b90eaa514c94dca3bc702a4a679c93a36817b5aba80014a0b1a4a5` |
+| 3 | `migrations/0022_roof_report_starts.sql` | `3bdf415c35ed403d629df6b7f723fc119cd6ec5b4065b35270078c13678b1e2e` |
+| 4 | `migrations/0023_presentation_chapter_packs.sql` | `5c2eeb75ec1f332563fc0294a78e0addd6b45191df479f4e4f5545080aab4c45` |
+| 5 | `migrations/0024_roof_report_uses.sql` | `c4d0d4a747bf6f9be230a1b18aeb5c384791a11feb4e9371bb010e7ac99d283a` |
+| 6 | `migrations/0025_roof_report_satellite_use.sql` | `3a4b0d133ae0d8a815bc52d6979eac1e352887be017d507888972d2b2856337e` |
+
+Migration 0025 was added by the satellite button, after the 0020 to 0024 set was first written
+down: the table 0024 made only allowed two kinds of use, and a third was needed. It needs 0024.
+
+**2. Set these, by name only (never write a value in a document, a ticket or a log).** A missing
+one never breaks Archie; it turns that one part off.
+
+| setting | what it does | safe default |
+|---|---|---|
+| `ARCHIE_ROOF_REPORTS` | the switch. Every roof report route answers a bare 404 unless it is exactly `on` | unset (off). Set it last |
+| `ARCHIE_PHOTOS_ACCOUNT_ID`, `ARCHIE_PHOTOS_ACCESS_KEY_ID`, `ARCHIE_PHOTOS_SECRET_ACCESS_KEY`, `ARCHIE_PHOTOS_BUCKET` | the private photo store (all four, or none). Without them photo upload answers 503 in plain words and no report has photos | unset |
+| `GROQ_API_KEY` | the photo analysis and the satellite measurement. Without it photos are not analysed and the satellite button says it is not available | unset |
+| `GEMINI_API_KEY` | the photo analysis fallback | unset |
+| `ANTHROPIC_API_KEY` | the written findings, the photo labels and rewriting a finding. Without it a report has no written findings and Rewrite says it is not available | unset |
+| `GOOGLE_MAPS_API_KEY` (the code also reads the spellings `GOOGLEMAPS_API_KEY`, `GOOGLE_MAPS_KEY` and `MAPS_API_KEY`) | places the address on the map, and is the key of the satellite picture. Without it the address is placed by a free lookup and the satellite button says it is not available | unset |
+| `APP_BASE_URL` | the address the page's photo links, the share link and the emailed link are made against | unset (the request's own address is used) |
+| `SESSION_SECRET` | already set for sign-in; the short signed photo links are signed with a key derived from it | already set |
+| `DATABASE_URL` | already set; the two operator scripts below use it as the app does (user `archie_app`) | already set |
+
+Emailing a report uses the company's own connected email (Google or its CRM), not a setting.
+The storm sources (NOAA and Iowa State) need no key.
+
+**3. Operator scripts, and when to run each.** Both are dry runs unless `--apply` is given.
+
+- `scripts/load-presentation-pack.ts --company <id> --file <pack.json outside the repo>`:
+  loads one company's own presentation chapters. Run it only when the owner has the company's
+  approved pack, a person has read the rendered presentation, and then with `--apply
+  --company-name "<exact name>"`. A company with no pack gets the base presentation, which
+  promises nothing, so nothing has to be run to switch the feature on.
+- `scripts/sweep-roof-report-photos.ts [--company <id>] [--apply]`: removes stored photo copies
+  that have no row. Run it about monthly, after the photo store's key is confirmed able to delete
+  (see below).
+
+**4. What is still unconfirmed.** Do not treat any of this as settled:
+
+- **Model ids and prices.** Only the two Anthropic ids and prices (`claude-sonnet-5`,
+  `claude-haiku-4-5`) were confirmed. The Groq ids (`meta-llama/llama-4-scout-17b-16e-instruct`,
+  `meta-llama/llama-4-maverick-17b-128e-instruct`, `llama-3.3-70b-versatile`) and the Google id
+  (`gemini-2.5-flash`) have not been checked against the providers' own pages: whether they are
+  still listed, and at what price. Their calls are recorded with 0 cents and `priced = false`.
+  The Google geocoding lookup and the Google static map picture have no confirmed price either.
+  Read each provider's page before adding a price in `server/lib/roof-reports/models.ts`.
+- **The animation library's licence text.** GSAP 3.14.2 is vendored under GreenSock's standard "no
+  charge" licence, but the licence text itself has not been read and kept with the files. Read it
+  and keep a copy beside the vendored files before the classic document's motion is relied on.
+- **Whether the hosting sends the headers the self-hosted motion files need.** The report page loads
+  the two motion files from the app's own address with a hash and `crossorigin="anonymous"`, from a
+  sandboxed page with no origin, so the browser needs `Access-Control-Allow-Origin: *` on that folder.
+  The app answers it itself where it serves the files, but whether the hosting's own static files carry
+  it has not been checked on the real deploy. If not, the motion is refused and the report reads in
+  full without it.
+- **Whether the photo store's key may delete objects.** Taking back a photo and the sweep script both
+  delete stored copies. Whether the key in `ARCHIE_PHOTOS_SECRET_ACCESS_KEY` is allowed to delete in the
+  real bucket has not been tried. If it is not, a photo that is taken back stays (its row is kept so it can
+  be tried again) and the sweep removes nothing.
+
+**5. Nothing has yet been run against the real thing.** Every test uses fakes. Nothing built so far has
+been run against the real storm sources (NOAA and Iowa State), a real model (Groq, Google or Anthropic),
+the real Google map and geocoding services, or the real photo store. The first real run should be a
+single report made by the owner, with the cost rows read afterwards.

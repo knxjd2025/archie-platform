@@ -168,12 +168,13 @@ describe.skipIf(!localDb)('every roof report route, walked (PERMANENT)', async (
       'GET /api/clients/:externalId/roof-reports', 'POST /api/roof-reports/:id/share-link', 'DELETE /api/roof-reports/:id/share-link',
       'GET /r/roof/:token', 'GET /r/roof/:token/photos/:photoId/:variant', 'POST /api/roof-reports/:id/send',
       'POST /api/roof-reports/:id/rewrite-finding', 'POST /api/roof-reports/:id/rewrite-summary', 'GET /api/roof-reports/compare',
+      'POST /api/roof-reports/measurements/detect',
     ]));
     // Written out by hand, so a route added or removed is seen and decided on purpose.
     expect(lines.sort()).toEqual([
       'DELETE /api/roof-reports/:id/share-link', 'POST /api/roof-reports/:id/share-link', 'GET /r/roof/:token', 'GET /r/roof/:token/photos/:photoId/:variant',
       'DELETE /api/roof-reports/photos/:photoId', 'GET /api/clients/:externalId/roof-reports', 'GET /api/roof-reports', 'GET /api/roof-reports/:id', 'GET /api/roof-reports/:id/html',
-      'GET /api/roof-reports/:id/photos/:photoId/:variant', 'GET /api/roof-reports/linked-photo/:token', 'GET /api/roof-reports/status', 'GET /api/roof-reports/compare',
+      'GET /api/roof-reports/:id/photos/:photoId/:variant', 'GET /api/roof-reports/linked-photo/:token', 'GET /api/roof-reports/status', 'GET /api/roof-reports/compare', 'POST /api/roof-reports/measurements/detect',
       'POST /api/roof-reports/:id/archive', 'POST /api/roof-reports/:id/retry', 'POST /api/roof-reports/generate', 'POST /api/roof-reports/photos',
       'PUT /api/roof-reports/:id', 'POST /api/roof-reports/:id/send', 'POST /api/roof-reports/:id/rewrite-finding', 'POST /api/roof-reports/:id/rewrite-summary',
     ].sort());
@@ -251,6 +252,32 @@ describe.skipIf(!localDb)('every roof report route, walked (PERMANENT)', async (
       for (const mark of [...A_MARKS, reportA]) expect(res.text, `${who} leaked ${mark}`).not.toContain(mark);
     }
     expect(await rowOfA()).toEqual(before);
+  });
+
+  it('finds the roof from a satellite picture only for people who may make a report, and calls nothing for anyone else', async () => {
+    const path = '/api/roof-reports/measurements/detect';
+    const body = { address: '12 Elm Street', city: 'Cedar Falls', state: 'IA', zip: '50613' };
+    const costs = () => runAsCompany(a.id, async () => (await db.select().from(schema.modelCosts)).length);
+    const before = await costs();
+    // However this machine is set up, no map key and no model are in play here.
+    const saved = ['GOOGLE_MAPS_API_KEY', 'GOOGLEMAPS_API_KEY', 'GOOGLE_MAPS_KEY', 'MAPS_API_KEY', 'GROQ_API_KEY'].map((k) => [k, process.env[k]] as const);
+    for (const [k] of saved) delete process.env[k];
+    try {
+    for (const [co, who] of [[a, 'crew'], [b, 'crew']] as Array<[Co, string]>) {
+      as(co, who);
+      expect((await send('POST', path, body)).status, `${who} of ${co.id === a.id ? 'a' : 'b'}`).toBe(404);
+    }
+    // Nothing is set up in this run (no map key, no model), so the people who may are told so, and nothing is called.
+    for (const who of ['admin', 'csr', 'repa']) {
+      as(a, who);
+      const res = await send('POST', path, body);
+      expect(res.status, who).toBeLessThan(500);
+      for (const mark of [reportA, photoA, jobA, ...B_MARKS]) expect(res.text, `${who} leaked ${mark}`).not.toContain(mark);
+    }
+    expect(await costs()).toBe(before);
+    } finally {
+      for (const [k, v] of saved) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+    }
   });
 
   it('answers a signed photo link made up from the ids alone with "not found", whoever holds it, and a real one only for its one photo', async () => {

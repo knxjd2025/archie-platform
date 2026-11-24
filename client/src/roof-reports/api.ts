@@ -67,3 +67,10 @@ export const rewriteSummary = (id: string): Promise<unknown> =>
 /** Two finished reports, as a comparison reads them. Asked in one call, so either one missing is one plain answer and never half a comparison. */
 export const fetchComparison = (a: string, b: string): Promise<{ a: ReportSummary; b: ReportSummary }> =>
   api.get(`/api/roof-reports/compare?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`, { timeoutMs: 20_000 });
+
+/**
+ * Asks for the roof at an address to be found from a satellite picture. The answer is an estimate that only prefills the roof
+ * step. One request key for each press, so a repeated press is not paid for twice.
+ */
+export const detectRoof = (body: { address: string; city: string; state: string; zip: string }, key: string): Promise<unknown> =>
+  api.post('/api/roof-reports/measurements/detect', body, { timeoutMs: 90_000, headers: { 'Idempotency-Key': key } });

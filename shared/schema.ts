@@ -2388,7 +2388,7 @@ export const roofReportUses = pgTable('roof_report_uses', {
   companyId: companyId(),
   id: uuid('id').primaryKey().defaultRandom(),
   reportId: uuid('report_id').notNull(),
-  kind: text('kind').notNull(),                       // send | rewrite
+  kind: text('kind').notNull(),                       // send | rewrite | satellite (finding the roof from a satellite picture; migration 0025)
   memberId: integer('member_id'),                     // team_members.id of the person who pressed it
   idempotencyKey: text('idempotency_key'),
   requestHash: text('request_hash'),
@@ -2399,7 +2399,7 @@ export const roofReportUses = pgTable('roof_report_uses', {
   kindCreatedIdx: index('roof_report_uses_company_kind_created').on(t.companyId, t.kind, t.createdAt),
   reportKindCreatedIdx: index('roof_report_uses_company_report_kind_created').on(t.companyId, t.reportId, t.kind, t.createdAt),
   keyUq: uniqueIndex('roof_report_uses_key_uq').on(t.companyId, t.reportId, t.kind, t.idempotencyKey).where(sql`${t.idempotencyKey} IS NOT NULL AND ${t.status} IN ('reserved','done')`),
-  kindCheck: check('roof_report_uses_kind_check', sql`${t.kind} IN ('send','rewrite')`),
+  kindCheck: check('roof_report_uses_kind_check', sql`${t.kind} IN ('send','rewrite','satellite')`),
   statusCheck: check('roof_report_uses_status_check', sql`${t.status} IN ('reserved','done','failed','unused')`),
 }));
 

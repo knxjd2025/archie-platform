@@ -145,6 +145,20 @@ export interface ReportSummary {
   measurements: { squares: number | null; pitch: string | null; stories: number | null; material: string | null; ageYears: number | null };
 }
 
+/** Finding the roof from a satellite picture: the limit, the pitches the form offers, and every sentence a person may be told. */
+export const MAX_SATELLITE_PER_COMPANY_PER_DAY = 100;
+/** The pitches the roof step offers, in its own spelling. A pitch found from a picture is only ever one of these. */
+export const ROOF_PITCH_CHOICES = ['3/12', '4/12', '5/12', '6/12', '7/12', '8/12', '9/12', '10/12', '12/12'] as const;
+export const SATELLITE_NOT_FOUND = 'We could not find the roof in the satellite picture. Enter the measurements by hand.';
+export const SATELLITE_NO_PICTURE = 'We could not get a satellite picture of that address. Enter the measurements by hand.';
+export const SATELLITE_NOT_AVAILABLE = 'Finding the roof from a satellite picture is not available right now. Enter the measurements by hand.';
+export const SATELLITE_CAPPED = 'Your company has looked at a lot of satellite pictures today. Please try again tomorrow, or enter the measurements by hand.';
+export const SATELLITE_TOO_FAST = 'You have asked for a lot of satellite pictures in the last few minutes. Please wait a little and try again.';
+export const SATELLITE_REPEAT = 'That satellite picture was already asked for. If nothing appeared, please press the button again.';
+export const SATELLITE_KEY_REUSED = 'That was already used for a different address. Please press the button again.';
+/** Said beside every number that came from a satellite picture, for as long as it has not been changed. */
+export const SATELLITE_ESTIMATE_NOTE = 'Estimated from a satellite picture. Check these numbers.';
+
 export const STILL_BEING_MADE_EDIT = 'This report is still being made. Please try again once it finishes.';
 export const TOO_MANY_RECENT = 'You have made a lot of reports in the last few minutes. Please wait a little and try again.';
 
@@ -170,7 +184,7 @@ export type ReportPhotoCategory = (typeof REPORT_PHOTO_CATEGORIES)[number];
 export const SWITCHED_OFF = 'Roof reports are not switched on.';
 
 /** Every thing a person may do with a roof report. */
-export const ROOF_REPORT_ACTIONS = ['see', 'make', 'edit', 'send', 'archive', 'see_archived', 'change_job', 'remove_photo', 'share', 'unshare', 'rewrite'] as const;
+export const ROOF_REPORT_ACTIONS = ['see', 'make', 'edit', 'send', 'archive', 'see_archived', 'change_job', 'remove_photo', 'share', 'unshare', 'rewrite', 'measure'] as const;
 export type RoofReportAction = (typeof ROOF_REPORT_ACTIONS)[number];
 
 /**
@@ -180,6 +194,7 @@ export type RoofReportAction = (typeof ROOF_REPORT_ACTIONS)[number];
  * either way the person must also be able to see the job the report is on;
  * for `share` and `unshare`, making a customer link for a report and turning it off, the reach is the same as `send`: a role that sees everything may for any report, a leader for their team's, a salesperson for their own;
  * for `rewrite`, asking a model to rewrite one finding or the summary, the reach is exactly the reach of `edit`;
+ * for `measure`, asking for the roof to be found from a satellite picture while a report is being made, the reach is exactly the reach of `make`;
  * for `remove_photo`, taking back a photo that is not in a report yet, `all` is
  * anyone's waiting photo in the company and `own` only one the person uploaded
  * themselves, and a photo already in a report is never removed by anyone):
@@ -202,12 +217,12 @@ export type RoofReportDecision = 'all' | 'team' | 'own' | 'no';
  * may list them.
  */
 export const ROOF_REPORT_RULES: Record<TeamRole, Record<RoofReportAction, RoofReportDecision>> = {
-  admin:            { see: 'all',  make: 'all',  edit: 'all',  send: 'all',  archive: 'all',  see_archived: 'all', change_job: 'all', remove_photo: 'all', share: 'all', unshare: 'all', rewrite: 'all' },
-  sales_director:   { see: 'all',  make: 'all',  edit: 'all',  send: 'all',  archive: 'all',  see_archived: 'all', change_job: 'all', remove_photo: 'all', share: 'all', unshare: 'all', rewrite: 'all' },
-  customer_service: { see: 'all',  make: 'all',  edit: 'all',  send: 'all',  archive: 'all',  see_archived: 'all', change_job: 'all', remove_photo: 'all', share: 'all', unshare: 'all', rewrite: 'all' },
-  manager:          { see: 'team', make: 'team', edit: 'team', send: 'team', archive: 'team', see_archived: 'no',  change_job: 'own', remove_photo: 'own', share: 'team', unshare: 'team', rewrite: 'team' },
-  sales:            { see: 'own',  make: 'own',  edit: 'own',  send: 'own',  archive: 'own',  see_archived: 'no',  change_job: 'own', remove_photo: 'own', share: 'own', unshare: 'own', rewrite: 'own' },
-  production:       { see: 'no',   make: 'no',   edit: 'no',   send: 'no',   archive: 'no',   see_archived: 'no',  change_job: 'no', remove_photo: 'no', share: 'no', unshare: 'no', rewrite: 'no' },
+  admin:            { see: 'all',  make: 'all',  edit: 'all',  send: 'all',  archive: 'all',  see_archived: 'all', change_job: 'all', remove_photo: 'all', share: 'all', unshare: 'all', rewrite: 'all', measure: 'all' },
+  sales_director:   { see: 'all',  make: 'all',  edit: 'all',  send: 'all',  archive: 'all',  see_archived: 'all', change_job: 'all', remove_photo: 'all', share: 'all', unshare: 'all', rewrite: 'all', measure: 'all' },
+  customer_service: { see: 'all',  make: 'all',  edit: 'all',  send: 'all',  archive: 'all',  see_archived: 'all', change_job: 'all', remove_photo: 'all', share: 'all', unshare: 'all', rewrite: 'all', measure: 'all' },
+  manager:          { see: 'team', make: 'team', edit: 'team', send: 'team', archive: 'team', see_archived: 'no',  change_job: 'own', remove_photo: 'own', share: 'team', unshare: 'team', rewrite: 'team', measure: 'team' },
+  sales:            { see: 'own',  make: 'own',  edit: 'own',  send: 'own',  archive: 'own',  see_archived: 'no',  change_job: 'own', remove_photo: 'own', share: 'own', unshare: 'own', rewrite: 'own', measure: 'own' },
+  production:       { see: 'no',   make: 'no',   edit: 'no',   send: 'no',   archive: 'no',   see_archived: 'no',  change_job: 'no', remove_photo: 'no', share: 'no', unshare: 'no', rewrite: 'no', measure: 'no' },
 };
 
 /** What this role may do, how far. An unknown role may do nothing. The server and the screens read the same table through this one function. */

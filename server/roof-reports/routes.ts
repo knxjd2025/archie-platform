@@ -50,6 +50,8 @@ import { registerPublicShareRoutes } from './public';
 import { registerSendRoute, type MailSender, type SendCaps } from './send';
 import { registerRewriteRoutes, type RewriteCaps } from './rewrite';
 import { registerCompareRoute } from './compare';
+import { registerMeasureRoute, type MeasureOptions } from './measure';
+import { readRequestKey } from './request-key';
 import type { ModelCaller } from '../lib/roof-reports/model-call.js';
 import { requireRoofReportsOn } from './switch';
 
@@ -66,6 +68,8 @@ export interface RoofReportRouteOptions {
   rewriteCaps?: () => RewriteCaps;
   /** The one deadline of a rewrite, in milliseconds. Only a test replaces it. */
   rewriteDeadlineMs?: number;
+  /** The map, the geocoder and the model "Find it from the satellite" uses, and its limits. Only a test replaces any of them, with fakes: nothing is ever called from a test. */
+  measure?: MeasureOptions;
 }
 
 const notFound = (res: Response) => res.status(404).json({ error: NOT_FOUND });
@@ -76,13 +80,6 @@ function kindOf(error: unknown): string {
   const code = e?.cause?.code ?? e?.code;
   if (typeof code === 'string' && /^[\w.-]{1,16}$/.test(code)) return code;
   return typeof e?.name === 'string' && /^\w{1,40}$/.test(e.name) ? e.name : 'unknown';
-}
-
-/** A request key: 8 to 200 plain characters. Absent is fine (no repeat protection); present and unusable is refused, never quietly ignored. */
-function readRequestKey(req: Request): { ok: true; key: string | null } | { ok: false } {
-  const raw = req.get('idempotency-key');
-  if (raw === undefined) return { ok: true, key: null };
-  return /^[A-Za-z0-9_.:-]{8,200}$/.test(raw) ? { ok: true, key: raw } : { ok: false };
 }
 
 const money = (v: string | null): number | null => (v === null ? null : Number(v));
@@ -391,6 +388,8 @@ export function registerRoofReportsRoutes(app: Express, options: RoofReportRoute
   registerSendRoute(router, { mail: options.mail, caps: options.sendCaps });
   // Rewriting one finding or the summary: a person's click only.
   registerRewriteRoutes(router, { model: options.rewriteModel, caps: options.rewriteCaps, deadlineMs: options.rewriteDeadlineMs });
+  // Finding the roof from a satellite picture while a report is being made: a person's click only.
+  registerMeasureRoute(router, options.measure);
 
   app.use('/api/roof-reports', router);
   // The customer's link is outside /api: it needs no sign-in, and /r/* already reaches the server on the hosting.

@@ -176,6 +176,13 @@
       "when": 1795489854750,
       "tag": "0024_roof_report_uses",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1795495200000,
+      "tag": "0025_roof_report_satellite_use",
+      "breakpoints": true
     }
   ]
 }

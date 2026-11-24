@@ -34,18 +34,19 @@ import { decisionFor, mayUseRoofReports, requireRoofReportUser } from '../access
 // 'own' is only a report the person made themselves, a leader's team included.
 // share and unshare (making a customer link for a report, and turning it off) reach exactly as far as send.
 // rewrite (asking a model to rewrite one finding or the summary, which changes the report's words) is exactly the right to edit it.
+// measure (asking for the roof to be found from a satellite picture while a report is being made, which spends money) is exactly the right to make a report.
 const D: Record<TeamRole, Record<RoofReportAction, RoofReportDecision>> = {
-  admin:            { see: 'all',  make: 'all',  edit: 'all', rewrite: 'all',  send: 'all',  archive: 'all',  see_archived: 'all', change_job: 'all', remove_photo: 'all', share: 'all', unshare: 'all' },
-  sales_director:   { see: 'all',  make: 'all',  edit: 'all', rewrite: 'all',  send: 'all',  archive: 'all',  see_archived: 'all', change_job: 'all', remove_photo: 'all', share: 'all', unshare: 'all' },
-  customer_service: { see: 'all',  make: 'all',  edit: 'all', rewrite: 'all',  send: 'all',  archive: 'all',  see_archived: 'all', change_job: 'all', remove_photo: 'all', share: 'all', unshare: 'all' },
-  manager:          { see: 'team', make: 'team', edit: 'team', rewrite: 'team', send: 'team', archive: 'team', see_archived: 'no',  change_job: 'own', remove_photo: 'own', share: 'team', unshare: 'team' },
-  sales:            { see: 'own',  make: 'own',  edit: 'own', rewrite: 'own',  send: 'own',  archive: 'own',  see_archived: 'no',  change_job: 'own', remove_photo: 'own', share: 'own', unshare: 'own' },
-  production:       { see: 'no',   make: 'no',   edit: 'no', rewrite: 'no',   send: 'no',   archive: 'no',   see_archived: 'no',  change_job: 'no', remove_photo: 'no', share: 'no', unshare: 'no' },
+  admin:            { see: 'all',  make: 'all',  edit: 'all', rewrite: 'all',  send: 'all',  archive: 'all',  see_archived: 'all', change_job: 'all', remove_photo: 'all', share: 'all', unshare: 'all', measure: 'all' },
+  sales_director:   { see: 'all',  make: 'all',  edit: 'all', rewrite: 'all',  send: 'all',  archive: 'all',  see_archived: 'all', change_job: 'all', remove_photo: 'all', share: 'all', unshare: 'all', measure: 'all' },
+  customer_service: { see: 'all',  make: 'all',  edit: 'all', rewrite: 'all',  send: 'all',  archive: 'all',  see_archived: 'all', change_job: 'all', remove_photo: 'all', share: 'all', unshare: 'all', measure: 'all' },
+  manager:          { see: 'team', make: 'team', edit: 'team', rewrite: 'team', send: 'team', archive: 'team', see_archived: 'no',  change_job: 'own', remove_photo: 'own', share: 'team', unshare: 'team', measure: 'team' },
+  sales:            { see: 'own',  make: 'own',  edit: 'own', rewrite: 'own',  send: 'own',  archive: 'own',  see_archived: 'no',  change_job: 'own', remove_photo: 'own', share: 'own', unshare: 'own', measure: 'own' },
+  production:       { see: 'no',   make: 'no',   edit: 'no', rewrite: 'no',   send: 'no',   archive: 'no',   see_archived: 'no',  change_job: 'no', remove_photo: 'no', share: 'no', unshare: 'no', measure: 'no' },
 };
 
 describe('who may do what with a roof report (the written decisions)', () => {
   it('decides every action for every role Archie has, and nothing else', () => {
-    expect([...ROOF_REPORT_ACTIONS].sort()).toEqual(['archive', 'change_job', 'edit', 'make', 'remove_photo', 'rewrite', 'see', 'see_archived', 'send', 'share', 'unshare']);
+    expect([...ROOF_REPORT_ACTIONS].sort()).toEqual(['archive', 'change_job', 'edit', 'make', 'measure', 'remove_photo', 'rewrite', 'see', 'see_archived', 'send', 'share', 'unshare']);
     expect(Object.keys(ROOF_REPORT_RULES).sort()).toEqual([...ALL_ROLES].sort());
     expect(Object.keys(D).sort()).toEqual([...ALL_ROLES].sort());
     for (const role of ALL_ROLES) {
@@ -77,6 +78,13 @@ describe('who may do what with a roof report (the written decisions)', () => {
   it('gives rewriting exactly the right to edit, for every role', () => {
     for (const role of ALL_ROLES) expect(decisionFor(role, 'rewrite'), role).toBe(decisionFor(role, 'edit'));
     expect(decisionFor('owner' as TeamRole, 'rewrite')).toBe('no');
+  });
+
+  it('gives finding the roof from a satellite picture exactly the right to make a report, for every role, and crew never', () => {
+    for (const role of ALL_ROLES) expect(decisionFor(role, 'measure'), role).toBe(decisionFor(role, 'make'));
+    expect(decisionFor('production', 'measure')).toBe('no');
+    expect(decisionFor('owner' as TeamRole, 'measure')).toBe('no');
+    for (const r of ROOFLI_ROLES) expect(decisionFor(ROLE_MAP[r], 'measure'), r).toBe(r === 'crew' ? 'no' : decisionFor(ROLE_MAP[r], 'make'));
   });
 
   it('lets every role but crew use roof reports, and an unknown role nothing', () => {

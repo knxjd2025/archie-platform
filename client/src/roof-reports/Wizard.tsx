@@ -8,6 +8,7 @@ import { usePhotoUploads } from './photo-uploads';
 import StepWhere from './StepWhere';
 import StepPhotos from './StepPhotos';
 import StepMeasurements from './StepMeasurements';
+import { useSatellite } from './use-satellite';
 import StepDamage from './StepDamage';
 import StepReview from './StepReview';
 import { GenerateView, useMakeReport } from './StepGenerate';
@@ -135,6 +136,8 @@ export default function Wizard({ onClose, onDone, prefill }: { onClose: () => vo
     return () => clearTimeout(t);
   }, [current, keep]);
 
+  // "Find it from the satellite" is kept here, so an answer still lands in the draft if the person moves on while it looks.
+  const satellite = useSatellite(draft.where, (change) => setDraft((d) => ({ ...d, roof: change(d.roof) })));
   const patch = (next: Partial<WizardDraft>) => { setError(null); setDraft((d) => ({ ...d, ...next })); };
   const removing = photosRemoving(uploads.tiles);
   const busy = photosInFlight(uploads.tiles) || removing;
@@ -215,7 +218,13 @@ export default function Wizard({ onClose, onDone, prefill }: { onClose: () => vo
           onRetry={uploads.retry}
         />
       )}
-      {draft.step === 3 && <StepMeasurements value={draft.roof} onChange={(roof) => patch({ roof })} />}
+      {draft.step === 3 && (
+        <StepMeasurements
+          value={draft.roof}
+          onChange={(roof) => patch({ roof })}
+          satellite={{ state: satellite.state, confidence: satellite.confidence, onFind: satellite.find, onUse: satellite.use, onKeep: satellite.keep }}
+        />
+      )}
       {draft.step === 4 && <StepDamage value={draft.damage} onChange={(damage) => patch({ damage })} />}
       {draft.step === REVIEW_STEP && (
         <StepReview draft={current} tiles={uploads.tiles} onReview={(review: Partial<ReviewDraft>) => patch({ review: { ...draft.review, ...review } })} onGoTo={(step) => patch({ step })} />
