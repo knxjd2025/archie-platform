@@ -189,6 +189,8 @@ function App() {
 
   const isActive = (page: Page) => activePage === page;
   const go = (page: Page) => {
+    // A page opened from the menu starts clean: nothing a job's page asked it to open (a report, a new report for that job) is left over.
+    setPageData(null);
     setCurrentPage(page); setMoreOpen(false); setNavMoreOpen(false); setUserMenuOpen(false);
   };
   const badgeFor = (page: Page) => (page === 'leads' ? newLeads : page === 'conversations' ? unreadMessages : 0);
@@ -455,7 +457,7 @@ function App() {
           // — and the write handlers below target `lead.externalId` from that
           // stale state, so a slow response could land an edit on the customer
           // the rep just navigated away from.
-          <ClientDetail key={pageData.externalId} externalId={pageData.externalId} onBack={() => setCurrentPage(clientOrigin)} onOpenPlaybook={(docId) => handleNavigate('playbook', { docId, externalId: pageData.externalId })} />
+          <ClientDetail key={pageData.externalId} externalId={pageData.externalId} onBack={() => setCurrentPage(clientOrigin)} onOpenPlaybook={(docId) => handleNavigate('playbook', { docId, externalId: pageData.externalId })} onMakeRoofReport={(start) => handleNavigate('roof-reports', { prefill: start })} onOpenRoofReport={(id) => handleNavigate('roof-reports', { openId: id })} />
         )}
         {activePage === 'canvass' && <Canvass />}
         {activePage === 'kpis' && <Kpis onOpenPlaybook={(docId) => handleNavigate('playbook', { docId })} />}
@@ -475,7 +477,14 @@ function App() {
           <Claims onOpenClient={openClient} />
         )}
         {activePage === 'documents' && <Documents />}
-        {activePage === 'roof-reports' && <RoofReportsPage role={user.role as TeamRole} />}
+        {activePage === 'roof-reports' && (
+          <RoofReportsPage
+            key={`${pageData?.openId ?? ''}|${pageData?.prefill?.job?.externalId ?? ''}`}
+            role={user.role as TeamRole}
+            prefill={pageData?.prefill ?? null}
+            openId={pageData?.openId ?? null}
+          />
+        )}
         {activePage === 'schedule' && <Schedule onOpenClient={openClient} />}
         {activePage === 'assignments' && <Assignments onOpenClient={openClient} />}
         {activePage === 'integrations' && <Integrations />}

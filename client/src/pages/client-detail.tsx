@@ -5,6 +5,9 @@ import { fmtDate, formatPhone, money } from '../lib/format';
 import { toDateInput } from '../lib/canvass';
 import FollowUps from '../components/FollowUps';
 import RoofReports from '../components/RoofReports';
+import JobRoofReports from '../roof-reports/JobRoofReports';
+import type { JobStart } from '../roof-reports/job-prefill';
+import type { TeamRole } from '../../../shared/rbac';
 import JobPhotos from '../components/JobPhotos';
 import InspectionForm from '../components/InspectionForm';
 import PreConstructionChecklist from '../components/PreConstructionChecklist';
@@ -72,7 +75,7 @@ const STAGE_OPTIONS = [
 ];
 
 
-export default function ClientDetail({ externalId, onBack, onOpenPlaybook }: { externalId: string; onBack: () => void; onOpenPlaybook?: (docId: string) => void }) {
+export default function ClientDetail({ externalId, onBack, onOpenPlaybook, onMakeRoofReport, onOpenRoofReport }: { externalId: string; onBack: () => void; onOpenPlaybook?: (docId: string) => void; onMakeRoofReport?: (start: JobStart) => void; onOpenRoofReport?: (id: string) => void }) {
   const company = useCompany();
   const { user } = useAuth();
   const [lead, setLead] = useState<Lead | null>(null);
@@ -580,6 +583,17 @@ export default function ClientDetail({ externalId, onBack, onOpenPlaybook }: { e
 
           {/* Roof reports (Archie) */}
           <RoofReports externalId={externalId} defaultEmail={lead.email} />
+
+          {/* Roof inspection reports (made in the report wizard): drawn only when the server says this person may see this job's reports */}
+          {user && onMakeRoofReport && onOpenRoofReport && (
+            <JobRoofReports
+              externalId={externalId}
+              lead={{ externalId, customer: lead.customer, email: lead.email, phone: lead.phone, address: lead.address, addressLine: lead.addressLine }}
+              role={user.role as TeamRole}
+              onMake={onMakeRoofReport}
+              onOpen={onOpenRoofReport}
+            />
+          )}
 
           {/* Neighbor letters — knock, email and mail the street while the roof goes up */}
           <StageChecklists externalId={externalId} stage={lead.stage} onOpenPlaybook={onOpenPlaybook} />
