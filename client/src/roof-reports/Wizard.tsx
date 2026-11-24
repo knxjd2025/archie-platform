@@ -137,7 +137,7 @@ export default function Wizard({ onClose, onDone, prefill }: { onClose: () => vo
   }, [current, keep]);
 
   // "Find it from the satellite" is kept here, so an answer still lands in the draft if the person moves on while it looks.
-  const satellite = useSatellite(draft.where, (change) => setDraft((d) => ({ ...d, roof: change(d.roof) })));
+  const satellite = useSatellite(draft.where, draft.roof, (roof) => setDraft((d) => ({ ...d, roof })));
   const patch = (next: Partial<WizardDraft>) => { setError(null); setDraft((d) => ({ ...d, ...next })); };
   const removing = photosRemoving(uploads.tiles);
   const busy = photosInFlight(uploads.tiles) || removing;

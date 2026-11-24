@@ -5,8 +5,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { detectRoof } from './api';
 import type { RoofDraft, WhereDraft } from './draft';
-import { applyEstimate, readEstimate, useEstimate, whereBody, type PendingEstimate } from './satellite-model';
-import { RR, plainMessage } from './words';
+import { findRoof, useEstimate, type PendingEstimate } from './satellite-model';
 
 export type SatelliteState =
   | { phase: 'idle' }
@@ -20,12 +19,13 @@ function pressKey(): string {
   return `sat-${random}`;
 }
 
-export function useSatellite(where: WhereDraft, setRoof: (change: (roof: RoofDraft) => RoofDraft) => void) {
+export function useSatellite(where: WhereDraft, roof: RoofDraft, setRoof: (roof: RoofDraft) => void) {
   const [state, setState] = useState<SatelliteState>({ phase: 'idle' });
   const [confidence, setConfidence] = useState<'high' | 'medium' | 'low' | null>(null);
   const busy = useRef(false);
-  const latestWhere = useRef(where);
-  latestWhere.current = where;
+  // What the screen holds right now, read when the answer arrives.
+  const latest = useRef({ where, roof, setRoof });
+  latest.current = { where, roof, setRoof };
   const pendingRef = useRef<PendingEstimate | null>(null);
 
   const find = useCallback(async () => {
@@ -33,27 +33,19 @@ export function useSatellite(where: WhereDraft, setRoof: (change: (roof: RoofDra
     busy.current = true;
     setState({ phase: 'looking' }); // said in the frame of the press, before anything is asked
     setConfidence(null);
-    try {
-      const read = readEstimate(await detectRoof(whereBody(latestWhere.current), pressKey()));
-      if (!read.ok) { setState({ phase: 'failed', message: read.message }); return; }
-      let asked: PendingEstimate | null = null;
-      setRoof((roof) => { const r = applyEstimate(roof, read.estimate); asked = r.pending; return r.roof; });
-      setConfidence(read.confidence);
-      pendingRef.current = asked;
-      setState(asked ? { phase: 'choose', pending: asked } : { phase: 'idle' });
-    } catch (e) {
-      setState({ phase: 'failed', message: plainMessage(e, RR.satellite.failed) });
-    } finally {
-      busy.current = false;
-    }
-  }, [setRoof]);
+    const r = await findRoof({ where: latest.current.where, getRoof: () => latest.current.roof, setRoof: (next) => latest.current.setRoof(next), detect: detectRoof, key: pressKey });
+    pendingRef.current = r.state.phase === 'choose' ? r.state.pending : null;
+    setConfidence(r.confidence);
+    setState(r.state);
+    busy.current = false;
+  }, []);
 
   const use = useCallback(() => {
     const pending = pendingRef.current;
-    if (pending) setRoof((roof) => useEstimate(roof, pending));
+    if (pending) latest.current.setRoof(useEstimate(latest.current.roof, pending));
     pendingRef.current = null;
     setState({ phase: 'idle' });
-  }, [setRoof]);
+  }, []);
 
   const keep = useCallback(() => { pendingRef.current = null; setState({ phase: 'idle' }); }, []);
 

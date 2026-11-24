@@ -10,6 +10,7 @@
  */
 import { ROOF_PITCH_CHOICES, ROOF_SQUARES_MAX, SATELLITE_ESTIMATE_NOTE, SATELLITE_NOT_FOUND } from '../../../shared/roof-reports';
 import type { RoofDraft, WhereDraft } from './draft';
+import { RR, plainMessage } from './words';
 
 export interface SatelliteEstimate { squares: number; pitch: string | null }
 /** The estimate's text for each field the person had already typed into, which was kept. */
@@ -80,4 +81,32 @@ export function readEstimate(body: unknown): EstimateRead {
   if (pitch !== null && (typeof pitch !== 'string' || !(ROOF_PITCH_CHOICES as readonly string[]).includes(pitch))) return fail;
   const c = (body as { confidence?: unknown }).confidence;
   return { ok: true, estimate: { squares, pitch: pitch as string | null }, confidence: c === 'high' || c === 'medium' || c === 'low' ? c : null };
+}
+
+export type FindState =
+  | { phase: 'idle' }
+  | { phase: 'failed'; message: string }
+  | { phase: 'choose'; pending: PendingEstimate };
+
+/**
+ * One press, after "Looking..." is already on the screen. The roof is read at the moment the answer arrives (not when
+ * the press began), so what the person typed while it looked is what is kept. A field they typed is never overwritten;
+ * the question for them comes back with the answer.
+ */
+export async function findRoof(args: {
+  where: WhereDraft;
+  getRoof: () => RoofDraft;
+  setRoof: (roof: RoofDraft) => void;
+  detect: (body: ReturnType<typeof whereBody>, key: string) => Promise<unknown>;
+  key: () => string;
+}): Promise<{ state: FindState; confidence: 'high' | 'medium' | 'low' | null }> {
+  try {
+    const read = readEstimate(await args.detect(whereBody(args.where), args.key()));
+    if (!read.ok) return { state: { phase: 'failed', message: read.message }, confidence: null };
+    const applied = applyEstimate(args.getRoof(), read.estimate);
+    args.setRoof(applied.roof);
+    return { state: applied.pending ? { phase: 'choose', pending: applied.pending } : { phase: 'idle' }, confidence: read.confidence };
+  } catch (e) {
+    return { state: { phase: 'failed', message: plainMessage(e, RR.satellite.failed) }, confidence: null };
+  }
 }
