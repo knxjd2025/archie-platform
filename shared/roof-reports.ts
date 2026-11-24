@@ -116,3 +116,9 @@ export const ROOF_REPORT_RULES: Record<TeamRole, Record<RoofReportAction, RoofRe
   sales:            { see: 'own',  make: 'own',  edit: 'own',  send: 'own',  archive: 'own',  see_archived: 'no',  change_job: 'own' },
   production:       { see: 'no',   make: 'no',   edit: 'no',   send: 'no',   archive: 'no',   see_archived: 'no',  change_job: 'no' },
 };
+
+/** What this role may do, how far. An unknown role may do nothing. The server and the screens read the same table through this one function. */
+export function decisionFor(role: TeamRole, action: RoofReportAction): RoofReportDecision {
+  if (typeof role !== 'string' || !Object.hasOwn(ROOF_REPORT_RULES, role)) return 'no';
+  return ROOF_REPORT_RULES[role][action] ?? 'no';
+}

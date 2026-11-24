@@ -13,23 +13,27 @@ import { and, eq, inArray, isNotNull, isNull, ne, or, sql, type SQL } from 'driz
 import { db } from '../db';
 import { leads, roofReports, type RoofReport } from '../../shared/schema';
 import type { TeamRole } from '../../shared/rbac';
-import {
-  NOT_FOUND, ROOF_REPORT_RULES, type RoofReportAction, type RoofReportDecision,
-} from '../../shared/roof-reports';
+import { NOT_FOUND, decisionFor } from '../../shared/roof-reports';
+import { roofReportsOn } from './switch';
 import { ownsLead, scopedLeadWhere, teamMemberIdByEmail, type SessionUser } from '../access/rep-scope';
 import { visibleIdsFor } from '../access/team-scope';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** What this role may do, how far. An unknown role may do nothing. */
-export function decisionFor(role: TeamRole, action: RoofReportAction): RoofReportDecision {
-  if (typeof role !== 'string' || !Object.hasOwn(ROOF_REPORT_RULES, role)) return 'no';
-  return ROOF_REPORT_RULES[role][action] ?? 'no';
-}
+export { decisionFor };
 
 /** False for crew (reports carry prices), and for any role nobody has decided. */
 export function mayUseRoofReports(role: TeamRole): boolean {
   return decisionFor(role, 'see') !== 'no';
+}
+
+/**
+ * Whether the app draws the Roof reports entry for this role: the switch is on
+ * AND the role may see reports. The app asks the server (it is a field of
+ * /api/auth/me) and never works this out itself.
+ */
+export function roofReportsEntryFor(role: TeamRole, env: Record<string, string | undefined> = process.env): boolean {
+  return roofReportsOn(env) && mayUseRoofReports(role);
 }
 
 /** The person making the request, from the signed-in session only. Nothing in the body, address or headers is read. */

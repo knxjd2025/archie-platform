@@ -682,3 +682,71 @@ About 4 tasks, the first two in the old repo, after James says go.
 7. Anything sent to a customer without a person's click (D5).
 8. Anything deleted or changed at the old program or its storage (E1 to E4, F1 to F4).
 9. A provider error, id or code on a screen; an em dash in new copy (all).
+
+---
+
+## Stage C, expanded (C1 to C3)
+
+Written before the code, from reading Archie's client (`App.tsx`, `lib/api.ts`, `lib/auth.tsx`, `components/JobPhotos.tsx`, `pages/documents.tsx`, `shared/menu.ts`) and the old screens as a reference only. What the client test setup allows decided the shape: Vitest in a Node environment, `*.test.ts` only, no browser and no DOM library. So every decision a screen makes sits in a plain module with its own tests, and each component is a thin shell over those modules (components are also rendered to markup in Node for their words and labels). There is no browser test setup in the repo to extend; the real browser is used by hand for the screenshots.
+
+### How the entry appears (the one place it is decided)
+
+- **Decided by the server, in an answer the app already asks for.** `GET /api/auth/me` gains one field, `roofReports: boolean`, which is `roofReportsOn() && mayUseRoofReports(role)` (new `roofReportsEntryFor(role, env)` in `server/roof-reports/access.ts`). The role comes from the session. The app reads it into the sign-in state (`lib/auth.tsx`). With the switch off the field is `false`, the app makes no roof report request of any kind, and nothing new is drawn.
+- Departure from the Stage C line above: `GET /api/roof-reports/status` is not used for this. Asking it with the switch off would be a new request (a 404), which the brief rules out. The status route stays for the wizard, which only opens once the entry exists.
+- **The menu item** is defined in `shared/menu.ts` as `ROOF_REPORTS_ITEM` and joined to the list by `navItemsFor({ roofReports })` (group `deliver`, after Documents). It is not added to `MENU_PAGES`, so the Company page grid, the saved "hidden pages" and the existing menu tests are untouched with the switch off. Cost: a company cannot hide this one page from a level; the server's role rule is the only gate. If James wants that, the page joins `MENU_PAGES` in a later change.
+- `App.tsx` allows the page only when `roofReports` is true (and not billing-locked); a stored "last page" of `roof-reports` falls back to Home when it is not.
+
+### Files
+
+| File | Holds |
+|---|---|
+| `server/roof-reports/access.ts`, `server/auth/routes.ts` | `roofReportsEntryFor`, the `roofReports` field on `/api/auth/me` (tests: `server/roof-reports/__tests__/menu-entry.db.test.ts`) |
+| `shared/menu.ts` | `ROOF_REPORTS_ITEM`, `navItemsFor` |
+| `shared/roof-reports.ts` | `decisionFor` (moved here from `server/roof-reports/access.ts`, which still exports it, so the screens read the same written table the server does) |
+| `client/src/lib/auth.tsx` | `roofReports` in the auth state (kept from the last good answer; false when signed out) |
+| `client/src/roof-reports/words.ts` | every sentence a person reads in this feature, and `plainMessage(error, fallback)` (a server sentence passes; a status code, JSON, an internal name or a timeout message becomes the fallback) |
+| `client/src/roof-reports/list-view.ts` | list query string, row view (address, customer, kinds, status label and tone, date), which actions a row offers from `ROOF_REPORT_RULES`, paging text |
+| `client/src/roof-reports/draft.ts` | the browser-kept draft: key, 24 hour life, shape check, try and catch around storage |
+| `client/src/roof-reports/wizard-model.ts` | the steps, checks for each step in plain words, photo caps and their sentences, the photo tile reducer, `toRoofDetails`, `toDamageCounts` |
+| `client/src/roof-reports/upload.ts` | preparing a JPEG in the browser, sending it with progress, mapping the answer to a sentence, a small "three at a time" runner |
+| `client/src/roof-reports/api.ts` | the calls (below) |
+| `client/src/roof-reports/ReportList.tsx`, `Wizard.tsx`, `StepWhere.tsx`, `StepPhotos.tsx`, `StepMeasurements.tsx`, `StepDamage.tsx` | the screens |
+| `client/src/pages/roof-reports.tsx` | the page: the list, or the wizard |
+
+### API calls each screen makes
+
+- List: `GET /api/roof-reports?search=&kind=&status=&page=` (answers `reports`, `page`, `pageSize`, `total`, `hasMore`). Asked again on every change of search (after 300 ms), filter or page; an answer from an older ask is dropped.
+- Archive: `POST /api/roof-reports/:id/archive`. Open is a plain link to `GET /api/roof-reports/:id/html` in a new tab (the editor is Task C5).
+- Wizard step 1: `GET /api/search?q=` (the same rep-scoped job search the header search uses; the server re-checks the job when the report is made, so a job the person may not see is never attached).
+- Wizard step 2: `POST /api/roof-reports/photos?category=` once per photo, a raw JPEG body, with progress events. Photos are redrawn as 1600 px JPEGs in the browser first (the same `shrinkImage` the job photo box uses), which also drops location data before it leaves the device.
+- Steps 3 and 4 make no call. They fill `roofDetails` (`squares`, `pitch`, `stories`, `material`) and `damageCounts` (`windDamaged`, `hailDamaged`, `generalDamaged`) for Task C4's generate call.
+
+### The draft
+
+Key `archie.roofReportDraft.v1.<company id>.<email, lower case>`; so two people on one machine, or one person in two companies, never see each other's. It holds the step, the address fields, the linked job (key and label), the photos as `{ id, name, category }` (the server's id and the file's name; no bytes, no thumbnail, no address of a photo), the roof facts and the damage counts as typed, and `savedAt`. Older than 24 hours, unreadable or in the wrong shape reads as no draft and is removed. Every read and write is inside try and catch. Saved on every change (after 400 ms). Cleared by "Start over".
+
+### Every sentence (the words module holds these; the tests read them from it)
+
+- Page: "Roof reports" / "Inspections, measurements and storm history for a roof." / button "Make a roof report".
+- List: search label "Search reports", placeholder "Search by address, customer or title"; filter labels "Status" (All, Being made, Ready, Could not finish, Archived; the last only for a role that sees archived) and "Kind" (All kinds, Inspection, Measurements, Storm history). Empty: "No roof reports yet." with "Make one from an address, with or without photos."; empty search: "No reports match that search."; load failure: "The reports could not be loaded. Please try again." with "Try again". Row: status "Being made" / "Ready" / "Could not finish" / "Archived"; a report being made reads "Still being made. This takes a minute or two."; a failed one shows the server's sentence or "The report could not be finished."; no customer reads "No customer named". Actions "Open" and "Archive"; confirm "Archive this report? It leaves this list and can't be opened again here." with "Yes, archive" and "Keep it"; while waiting the row dims and reads "Archiving..."; failure "The report could not be archived. Please try again." Paging "Showing 26 to 50 of 90", "Previous page", "Next page".
+- Wizard: "New roof report", "Step 1 of 4" and the step names "Where", "Photos", "Roof", "Damage". Draft notices "We kept your draft from 2 hours ago." with "Start over", and "Saved on this device. Kept for 24 hours."
+- Step 1: "Where is the roof?", "Street address", "City", "State", "ZIP code (optional)"; job: "Link to a job (optional)", "Pick a job to keep this report with it. You can only pick jobs you can see.", "Search your jobs", "No jobs match that.", "Jobs could not be searched. Please try again.", chosen "Linked to Dana Whitfield, 12 Elm Street" with "Remove link". Checks: "Please enter the street address.", "Please enter the city and state as well.", "Please enter a 5 digit ZIP code."
+- Step 2: "Add photos (optional)"; drop zone "Drag photos here, or press to choose them." (its label: "Add photos. Drag pictures here, or press Enter to choose them."); buttons "Choose photos" and "Take a photo"; "What the next photos show" (Not sure, Whole roof, Roof surface, Flashing, Vents and pipes, Chimney, Gutters, Inside the house, Close up, Something else). Caps: "A report holds up to 40 photos.", "12 photos added. 28 more fit.", "That is the most photos a report holds (40).", "3 photos were left out because a report holds 40.", "1 file was left out because it is not a picture." Tiles: "Getting ready...", "Uploading 45%", "Added", "Not saved" with "Try again" and "Remove photo". Summary "3 of 5 photos added." and "2 photos did not save and will be left out." Privacy line: "Photos are kept private. Location data is removed."
+- Step 3: "About the roof", "Size in squares" with "One square is 100 square feet." and "About 2,500 square feet."; "Pitch", "Stories", "Roof material" (each with "Not sure"). Check: "Roof size must be a number between 0 and 1,000 squares."
+- Step 4: "Damaged shingles", "Count the shingles you can see." Rows "Wind damage" (Creased, lifted or missing shingles), "Hail damage" (Bruised, cracked or worn through to the mat), "Other damage" (Cracked, curling or worn). Buttons "Add 1", "Add 5", "Take off 1" (each labelled with the row). Total "12 damaged shingles in all." and "Reset". Check: "Each count must be a whole number from 0 to 9,999."
+- Buttons: "Back", "Next", "Close" (keeps the draft). On step 4 the next button is "Save and close", with "Review and making the report come next." (Task C4 replaces it.)
+
+### What each state shows, and when
+
+- A click that waits shows its state in the same frame: the row dims and says "Archiving..."; a photo tile appears at once as "Getting ready..." and then shows its own bar; the search box shows a thin bar while looking. Each clears on success or failure. The list keeps its old rows (dimmed, `aria-busy`) while a new page loads; only the very first load shows placeholder rows.
+- Errors: the server's own sentence when it sent one that reads as a sentence, else the fallback for that action. Never a status code, JSON, a timeout message or a name.
+- Photo drop zone: a button (Enter and Space open the chooser), a visible focus ring, a text label, and a live region that says the count. Every input, select and button has a label; counters name their row.
+- Switch off: the app's answer says `roofReports: false`, the menu item is not drawn, and no roof report request is made.
+
+### Departures from the plan's one-liners
+
+1. Entry decided from `/api/auth/me`, not `/api/roof-reports/status` (above).
+2. `ROOF_REPORTS_ITEM` is joined to the menu by `navItemsFor` rather than put in `MENU_PAGES`.
+3. The draft key is per company and per person by email (the app does not know a team member id), not `<memberId>`.
+4. The server has no route to take back an uploaded photo. "Remove" drops it from the report being made; the stored copy waits unused and counts toward the day's waiting cap of 100 until a report claims it. Said here so Task C4 or a later task can add a clean-up if wanted.
+5. Steps 5 and 6 are Task C4, so the last button of the wizard saves and closes for now.

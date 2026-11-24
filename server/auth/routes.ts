@@ -9,6 +9,7 @@ import { isOperatorEmail } from '../operator/allowlist';
 import { runAsCompany } from '../tenant/context';
 import { requireAuth } from './middleware';
 import { hiddenPagesFor } from '../../shared/menu';
+import { roofReportsEntryFor } from '../roof-reports/access';
 
 // Build the Google callback URL from the incoming request's host, so login
 // works on whatever domain the app is served from with no env cutover. The auth request and the
@@ -186,6 +187,10 @@ export function registerAuthRoutes(app: Express) {
       // Only shows or hides the Operator page. The operator routes check
       // ARCHIE_OPERATOR_EMAILS again on every request (server/operator).
       isOperator: isOperatorEmail(req.session.user!.email),
+      // Whether the app draws the Roof reports entry: the switch is on and this
+      // role may see reports. Decided here, from the session's role, never by
+      // the app. With the switch off it is false and the app asks for nothing.
+      roofReports: roofReportsEntryFor(req.session.user!.role, process.env),
     });
   });
 }

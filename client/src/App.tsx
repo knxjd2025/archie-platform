@@ -10,7 +10,7 @@ import KynexProBanner from './components/KynexProBanner';
 import { useAuth } from './lib/auth';
 import { CompanyMark, PRODUCT_NAME, useCompany } from './lib/company';
 import { ROLE_LABEL, type TeamRole } from '../../shared/rbac';
-import { MENU_GROUPS, MENU_ITEMS, pageVisible, type MenuPage } from '../../shared/menu';
+import { MENU_GROUPS, navItemsFor, pageVisible, type MenuPage } from '../../shared/menu';
 import Login from './pages/Login';
 import SetPassword from './pages/SetPassword';
 import { isSetPasswordPath } from './lib/password-pages';
@@ -39,6 +39,7 @@ import CallBar from './components/CallBar';
 import BugReportButton from './components/BugReportButton';
 import Bugs from './pages/bugs';
 import Operator from './pages/operator';
+import RoofReportsPage from './pages/roof-reports';
 import BillingPage from './pages/billing';
 import BillingBanner from './components/BillingBanner';
 import { useBillingStatus } from './lib/billing';
@@ -46,7 +47,8 @@ import { setBugPage } from './lib/bug-monitor';
 
 // 'operator' is not on the company menu: it is for the people who run Archie,
 // shown from the account menu when /api/auth/me says isOperator.
-type Page = MenuPage | 'client' | 'operator';
+// 'roof-reports' is on the menu only while the server says it is on for this person.
+type Page = MenuPage | 'client' | 'operator' | 'roof-reports';
 
 /**
  * One source of truth for navigation: shared/menu.ts. It drives the desktop
@@ -59,7 +61,6 @@ type Page = MenuPage | 'client' | 'operator';
  * the same seventeen are four short columns you can scan in one look.
  */
 const GROUPS = MENU_GROUPS;
-const NAV = MENU_ITEMS;
 
 /** Stripe sends people back to /?billing=success (or cancelled, or portal): open the Billing page. */
 const BILLING_RETURNS = ['success', 'cancelled', 'portal'];
@@ -94,7 +95,9 @@ function App() {
   // remembers whichever page you actually came from.
   const [clientOrigin, setClientOrigin] = useState<Page>('leads');
 
-  const { user, profile, loading, offline, signOut, isOperator } = useAuth();
+  const { user, profile, loading, offline, signOut, isOperator, roofReports } = useAuth();
+  // The menu: Roof reports is added only when the server has said it is on for this person.
+  const NAV = navItemsFor({ roofReports });
   const company = useCompany();
   const billing = useBillingStatus(!!user);
 
@@ -167,8 +170,9 @@ function App() {
   const canSeePage = (page: Page): boolean => {
     if (locked) return isAdmin && page === 'billing';
     if (page === 'operator') return isOperator;
+    if (page === 'roof-reports') return roofReports;
     if (page === 'billing' && !billing.status.enabled) return false;
-    return pageVisible(user.role as TeamRole, page, hiddenPages);
+    return pageVisible(user.role as TeamRole, page as MenuPage | 'client', hiddenPages);
   };
   const activePage: Page = canSeePage(currentPage) ? currentPage : locked ? 'billing' : 'dashboard';
   // So a bug report, or an error caught on its own, says which screen it came from.
@@ -471,6 +475,7 @@ function App() {
           <Claims onOpenClient={openClient} />
         )}
         {activePage === 'documents' && <Documents />}
+        {activePage === 'roof-reports' && <RoofReportsPage role={user.role as TeamRole} />}
         {activePage === 'schedule' && <Schedule onOpenClient={openClient} />}
         {activePage === 'assignments' && <Assignments onOpenClient={openClient} />}
         {activePage === 'integrations' && <Integrations />}

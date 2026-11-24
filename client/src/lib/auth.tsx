@@ -34,9 +34,15 @@ interface AuthState {
   isOperator: boolean;
   /** Why the last session ended, when the server said (a paused company). Shown on the sign-in page. */
   notice: string | null;
+  /**
+   * The server says Roof reports is on and this person's role may see them
+   * (/api/auth/me). Only shows or hides the entry: the app never works this
+   * out itself, and the server checks every roof report request.
+   */
+  roofReports: boolean;
 }
 
-const Ctx = createContext<AuthState>({ user: null, profile: null, loading: true, expired: false, offline: false, signOut: async () => {}, refresh: async () => {}, isOperator: false, notice: null });
+const Ctx = createContext<AuthState>({ user: null, profile: null, loading: true, expired: false, offline: false, signOut: async () => {}, refresh: async () => {}, isOperator: false, notice: null, roofReports: false });
 
 /**
  * Who was signed in last time the server answered.
@@ -116,6 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [expired, setExpired] = useState(false);
   const [offline, setOffline] = useState(false);
   const [isOperator, setIsOperator] = useState(false);
+  const [roofReports, setRoofReports] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const checkRef = useRef<(() => Promise<void>) | null>(null);
 
@@ -124,7 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const onExpired = (e: Event) => {
       const reason = (e as CustomEvent<{ reason?: string } | undefined>).detail?.reason ?? null;
-      setUser(null); setProfile(null); setIsOperator(false); setNotice(reason); setExpired(!reason); setOffline(false);
+      setUser(null); setProfile(null); setIsOperator(false); setRoofReports(false); setNotice(reason); setExpired(!reason); setOffline(false);
       writeCachedUser(null); writeCachedProfile(null);
     };
     window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
@@ -147,6 +154,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(u);
           setProfile(p);
           setIsOperator(d?.isOperator === true);
+          setRoofReports(d?.roofReports === true);
           setOffline(false);
           writeCachedUser(u);
           writeCachedProfile(p);
@@ -160,6 +168,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (!cancelled && d?.code === COMPANY_INACTIVE_CODE && typeof d?.message === 'string') setNotice(d.message);
           retry.cancel();
           setIsOperator(false);
+          setRoofReports(false);
           setUser(null);
           setProfile(null);
           setOffline(false);
@@ -205,6 +214,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setProfile(null);
     setIsOperator(false);
+    setRoofReports(false);
     setNotice(null);
     setExpired(false);
     setOffline(false);
@@ -225,7 +235,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refresh = async () => { await checkRef.current?.(); };
 
-  return <Ctx.Provider value={{ user, profile, loading, expired, offline, signOut, refresh, isOperator, notice }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ user, profile, loading, expired, offline, signOut, refresh, isOperator, notice, roofReports }}>{children}</Ctx.Provider>;
 }
 
 export function useAuth() { return useContext(Ctx); }

@@ -87,6 +87,30 @@ export const MENU_ITEMS: MenuItem[] = [
   { page: 'account', label: 'My Account', icon: '🗂️', group: 'setup' },
 ];
 
+/**
+ * A menu entry the app may draw that is not one of the company's menu pages.
+ * Roof reports is one: it is off until the server says it is on (the switch
+ * ARCHIE_ROOF_REPORTS and the person's role, as /api/auth/me reports them), so
+ * it is not in MENU_PAGES. The Company page grid, a company's saved choices
+ * and every existing menu check stay exactly as they were while it is off.
+ */
+export type NavPage = MenuPage | 'roof-reports';
+export interface NavItem extends Omit<MenuItem, 'page'> { page: NavPage }
+
+export const ROOF_REPORTS_ITEM: NavItem = { page: 'roof-reports', label: 'Roof reports', icon: '📐', group: 'deliver' };
+
+/**
+ * The menu the app draws: MENU_ITEMS, plus Roof reports (under Deliver, after
+ * Documents) only when the server has said it is on for this person.
+ */
+export function navItemsFor(server: { roofReports: boolean }): NavItem[] {
+  if (!server.roofReports) return MENU_ITEMS;
+  const at = MENU_ITEMS.findIndex((m) => m.page === 'documents');
+  const items: NavItem[] = [...MENU_ITEMS];
+  items.splice(at < 0 ? items.length : at + 1, 0, ROOF_REPORTS_ITEM);
+  return items;
+}
+
 export const isMenuPage = (v: unknown): v is MenuPage => typeof v === 'string' && (MENU_PAGES as readonly string[]).includes(v);
 export const isTeamRole = (v: unknown): v is TeamRole => typeof v === 'string' && (ALL_ROLES as string[]).includes(v);
 
