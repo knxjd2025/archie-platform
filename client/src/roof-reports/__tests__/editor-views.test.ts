@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { EditorView, EditorMessage, type EditorViewProps } from '../Editor';
 import { initialFields, readDetail, valuesOf, fieldReducer, type ReportDetail } from '../editor-model';
 import { partialNotes } from '../generate-flow';
+import { initialShare, type ShareState } from '../share-model';
 import { WARN_OUT_OF_TIME, warnSomePhotos } from '../../../../shared/roof-reports';
 
 const BANNED = new RegExp(`${String.fromCharCode(0x2014)}|✨|🪄`, 'u');
@@ -21,6 +22,7 @@ const detail = (): ReportDetail => readDetail({
 const view = (over: Partial<EditorViewProps> = {}) => render(createElement(EditorView, {
   role: 'admin', detail: detail(), fields: initialFields(valuesOf(detail())), previewVersion: 1, previewLoading: false, partial: [],
   style: { template: { busy: false, error: null }, visualStyle: { busy: false, error: null } }, archive: { phase: 'idle', error: null },
+  share: initialShare(false), onCopyLink: noop, onTurnLinkOff: noop,
   onBack: noop, onEdit: noop, onSave: noop, onTemplate: noop, onVisualStyle: noop, onAskArchive: noop, onCancelArchive: noop, onArchive: noop, onPreviewLoaded: noop, ...over,
 }));
 
@@ -100,6 +102,66 @@ describe('the editor as drawn', () => {
     expect(view({ detail: { ...detail(), look: { shown: 'flight' as const, notice: null } } })).not.toContain('rr-look-notice');
     expect(view()).not.toContain('rr-look-notice');
     expect(view()).not.toMatch(/aria-describedby="rr-look-notice"/);
+  });
+
+  describe('the customer link', () => {
+    const URL1 = 'https://app.example.test/r/roof/' + 'a'.repeat(64);
+    const withShare = (share: ShareState, over: Partial<EditorViewProps> = {}) => view({ share, ...over });
+
+    it('offers Copy link, and Turn link off only while a link is on, each as a real labelled button', () => {
+      const off = withShare(initialShare(false));
+      expect(off).toContain('Share with the customer');
+      expect(off).toMatch(/<button[^>]*>Copy link<\/button>/);
+      expect(off).not.toContain('Turn link off');
+      expect(off).toContain('Nothing is sent to the customer.');
+      const on = withShare(initialShare(true));
+      expect(on).toContain('A share link is on. Anyone who has it can open this report.');
+      expect(on).toMatch(/<button[^>]*>Turn link off<\/button>/);
+      expect(on).toMatch(/<button[^>]*>Copy link<\/button>/);
+    });
+
+    it('answers a click in the same frame: Making the link... while it waits, and the button cannot be pressed twice', () => {
+      const h = withShare({ on: false, phase: 'making', url: null, error: null });
+      expect(h).toContain('Making the link...');
+      expect(h).toMatch(/<button[^>]*disabled=""[^>]*>Copy link<\/button>|<button[^>]*>Copy link<\/button>/);
+      expect(h).toMatch(/role="status"[^>]*>[^<]*Making the link\.\.\./);
+    });
+
+    it('says the link was copied, with a status the screen reader reads', () => {
+      const h = withShare({ on: true, phase: 'copied', url: URL1, error: null });
+      expect(h).toContain('Link copied. Anyone who has it can open this report.');
+      expect(h).toMatch(/role="status"[^>]*>[^<]*Link copied/);
+    });
+
+    it('shows the link in a labelled field to copy by hand when the browser would not', () => {
+      const h = withShare({ on: true, phase: 'manual', url: URL1, error: null });
+      expect(h).toContain('Your browser would not copy it. Copy the link from here.');
+      expect(h).toMatch(/<label[^>]*for="rr-share-link"[^>]*>Share link<\/label>/);
+      expect(h).toMatch(/<input[^>]*id="rr-share-link"[^>]*readOnly=""|<input[^>]*readonly=""[^>]*id="rr-share-link"|<input[^>]*id="rr-share-link"[^>]*readonly=""/);
+      expect(h).toContain(URL1);
+    });
+
+    it('says Turning the link off... at once, then that it is off', () => {
+      expect(withShare({ on: true, phase: 'turningOff', url: null, error: null })).toContain('Turning the link off...');
+      const off = withShare({ on: false, phase: 'off', url: null, error: null });
+      expect(off).toContain('The link is off. It no longer opens this report.');
+      expect(off).not.toContain('Turn link off');
+    });
+
+    it('says in a plain sentence when it could not be done, and keeps the buttons', () => {
+      const h = withShare({ on: false, phase: 'idle', url: null, error: 'The link could not be made. Please try again.' });
+      expect(h).toContain('The link could not be made. Please try again.');
+      expect(h).toContain('role="alert"');
+      expect(h).toContain('Copy link');
+    });
+
+    it('draws nothing for a role that may not share, and has no banned marks', () => {
+      const h = view({ role: 'production', share: initialShare(true) });
+      expect(h).not.toContain('Copy link');
+      expect(h).not.toContain('Turn link off');
+      expect(h).not.toContain('Share with the customer');
+      expect(withShare({ on: true, phase: 'copied', url: URL1, error: null })).not.toMatch(BANNED);
+    });
   });
 
   it('asks before archiving, says Archiving... while it waits, and says why if it failed', () => {

@@ -32,18 +32,19 @@ import { decisionFor, mayUseRoofReports, requireRoofReportUser } from '../access
 // 'own' only the person's own, 'no' never. For change_job (move a report to
 // another job, or take it off its job) 'all' is any report the role may see and
 // 'own' is only a report the person made themselves, a leader's team included.
+// share and unshare (making a customer link for a report, and turning it off) reach exactly as far as send.
 const D: Record<TeamRole, Record<RoofReportAction, RoofReportDecision>> = {
-  admin:            { see: 'all',  make: 'all',  edit: 'all',  send: 'all',  archive: 'all',  see_archived: 'all', change_job: 'all', remove_photo: 'all' },
-  sales_director:   { see: 'all',  make: 'all',  edit: 'all',  send: 'all',  archive: 'all',  see_archived: 'all', change_job: 'all', remove_photo: 'all' },
-  customer_service: { see: 'all',  make: 'all',  edit: 'all',  send: 'all',  archive: 'all',  see_archived: 'all', change_job: 'all', remove_photo: 'all' },
-  manager:          { see: 'team', make: 'team', edit: 'team', send: 'team', archive: 'team', see_archived: 'no',  change_job: 'own', remove_photo: 'own' },
-  sales:            { see: 'own',  make: 'own',  edit: 'own',  send: 'own',  archive: 'own',  see_archived: 'no',  change_job: 'own', remove_photo: 'own' },
-  production:       { see: 'no',   make: 'no',   edit: 'no',   send: 'no',   archive: 'no',   see_archived: 'no',  change_job: 'no', remove_photo: 'no' },
+  admin:            { see: 'all',  make: 'all',  edit: 'all',  send: 'all',  archive: 'all',  see_archived: 'all', change_job: 'all', remove_photo: 'all', share: 'all', unshare: 'all' },
+  sales_director:   { see: 'all',  make: 'all',  edit: 'all',  send: 'all',  archive: 'all',  see_archived: 'all', change_job: 'all', remove_photo: 'all', share: 'all', unshare: 'all' },
+  customer_service: { see: 'all',  make: 'all',  edit: 'all',  send: 'all',  archive: 'all',  see_archived: 'all', change_job: 'all', remove_photo: 'all', share: 'all', unshare: 'all' },
+  manager:          { see: 'team', make: 'team', edit: 'team', send: 'team', archive: 'team', see_archived: 'no',  change_job: 'own', remove_photo: 'own', share: 'team', unshare: 'team' },
+  sales:            { see: 'own',  make: 'own',  edit: 'own',  send: 'own',  archive: 'own',  see_archived: 'no',  change_job: 'own', remove_photo: 'own', share: 'own', unshare: 'own' },
+  production:       { see: 'no',   make: 'no',   edit: 'no',   send: 'no',   archive: 'no',   see_archived: 'no',  change_job: 'no', remove_photo: 'no', share: 'no', unshare: 'no' },
 };
 
 describe('who may do what with a roof report (the written decisions)', () => {
   it('decides every action for every role Archie has, and nothing else', () => {
-    expect([...ROOF_REPORT_ACTIONS].sort()).toEqual(['archive', 'change_job', 'edit', 'make', 'remove_photo', 'see', 'see_archived', 'send']);
+    expect([...ROOF_REPORT_ACTIONS].sort()).toEqual(['archive', 'change_job', 'edit', 'make', 'remove_photo', 'see', 'see_archived', 'send', 'share', 'unshare']);
     expect(Object.keys(ROOF_REPORT_RULES).sort()).toEqual([...ALL_ROLES].sort());
     expect(Object.keys(D).sort()).toEqual([...ALL_ROLES].sort());
     for (const role of ALL_ROLES) {
@@ -60,6 +61,8 @@ describe('who may do what with a roof report (the written decisions)', () => {
     for (const role of ALL_ROLES) {
       for (const action of ROOF_REPORT_ACTIONS) {
         if (action === 'see_archived' || role === 'production') continue;
+        // Making a customer link and turning it off reach exactly as far as the role's own scope, like send.
+        if (action === 'share' || action === 'unshare') { expect(decisionFor(role, action), `${role} / ${action}`).toBe(word[dataScope(role)]); expect(decisionFor(role, action), `${role} / ${action}`).toBe(decisionFor(role, 'send')); continue; }
         // Taking back a photo that is not in a report yet: a role that sees everything may for anyone's, every narrower one only for a photo it uploaded itself.
         if (action === 'remove_photo') { expect(decisionFor(role, action), role).toBe(dataScope(role) === 'all' ? 'all' : 'own'); continue; }
         // Moving a report off its job reaches only as far as the role's own scope, and never past the

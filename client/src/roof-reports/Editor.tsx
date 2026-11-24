@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { TeamRole } from '../../../shared/rbac';
 import { TEMPLATES, VISUAL_STYLES } from '../../../shared/roof-reports';
-import { archiveReport, fetchReport, updateReport } from './api';
+import { archiveReport, createShareLink, fetchReport, revokeShareLink, updateReport } from './api';
 import {
-  FRAME_SANDBOX, SaveChain, editsAllowed, emptyValues, fieldReducer, initialFields, previewSrc, readDetail, requestFor, valueOf, valuesOf,
+  FRAME_SANDBOX, SaveChain, editsAllowed, emptyValues, fieldReducer, initialFields, previewSrc, readDetail, requestFor, sharesAllowed, valueOf, valuesOf,
   type FieldKey, type FieldsState, type ReportDetail,
 } from './editor-model';
 import { partialNotes, type PartialNote } from './generate-flow';
+import { copyLink, initialShare, shareReducer, turnLinkOff, type ShareState } from './share-model';
 import { RR, plainMessage } from './words';
 
 const FOCUS = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400';
@@ -25,6 +26,9 @@ export interface EditorViewProps {
   partial: PartialNote[];
   style: { template: StyleState; visualStyle: StyleState };
   archive: ArchiveState;
+  share: ShareState;
+  onCopyLink: () => void;
+  onTurnLinkOff: () => void;
   onBack: () => void;
   onEdit: (key: FieldKey, text: string) => void;
   /** The person left the field, or pressed Try again. */
@@ -73,6 +77,38 @@ function Field(p: FieldProps) {
         </span>
       </div>
       {p.multiline ? <textarea rows={p.rows ?? 4} {...common} /> : <input type={p.type ?? 'text'} autoComplete="off" {...common} />}
+    </div>
+  );
+}
+
+/** The customer link: copy it, turn it off. Each click is answered in its own frame, and every state says in words what happened. */
+function ShareControls({ share, onCopyLink, onTurnLinkOff }: { share: ShareState; onCopyLink: () => void; onTurnLinkOff: () => void }) {
+  const busy = share.phase === 'making' || share.phase === 'turningOff';
+  const message = share.phase === 'making' ? RR.share.making
+    : share.phase === 'copied' ? RR.share.copied
+    : share.phase === 'manual' ? RR.share.manual
+    : share.phase === 'turningOff' ? RR.share.turningOff
+    : share.phase === 'off' ? RR.share.off
+    : share.on ? RR.share.on : null;
+  const live = share.phase !== 'idle';
+  return (
+    <div className="space-y-3">
+      <h4 className="text-sm font-semibold text-gray-900">{RR.share.title}</h4>
+      <p className="text-sm text-gray-600">{RR.share.help}</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" onClick={onCopyLink} disabled={busy} aria-busy={share.phase === 'making' || undefined} className={BUTTON}>{RR.share.copy}</button>
+        {share.on && share.phase !== 'off' && <button type="button" onClick={onTurnLinkOff} disabled={busy} aria-busy={share.phase === 'turningOff' || undefined} className={BUTTON}>{RR.share.turnOff}</button>}
+      </div>
+      {message && (live
+        ? <p role="status" className={`text-sm ${share.phase === 'copied' ? 'text-emerald-700' : 'text-gray-600'}`}>{message}</p>
+        : <p className="text-sm text-gray-600">{message}</p>)}
+      {share.phase === 'manual' && share.url && (
+        <div>
+          <label htmlFor="rr-share-link" className="text-sm font-medium text-gray-800">{RR.share.linkLabel}</label>
+          <input id="rr-share-link" type="text" readOnly value={share.url} onFocus={(e) => e.currentTarget.select()} className={`${FIELD} mt-1`} />
+        </div>
+      )}
+      {share.error && <p role="alert" className="text-xs text-red-600">{share.error}</p>}
     </div>
   );
 }
@@ -135,6 +171,8 @@ export function EditorView(p: EditorViewProps) {
               {p.style.visualStyle.error && <p role="alert" className="text-xs text-red-600 mt-1">{p.style.visualStyle.error}</p>}
             </div>
           </div>
+
+          {sharesAllowed(p.role) && <ShareControls share={p.share} onCopyLink={p.onCopyLink} onTurnLinkOff={p.onTurnLinkOff} />}
 
           <div className="space-y-3">
             <h4 className="text-sm font-semibold text-gray-900">{RR.editor.findingsTitle}</h4>
@@ -207,6 +245,7 @@ export default function Editor({ id, role, onBack, onArchived }: { id: string; r
   const [previewLoading, setPreviewLoading] = useState(false);
   const [style, setStyle] = useState<{ template: StyleState; visualStyle: StyleState }>({ template: { busy: false, error: null }, visualStyle: { busy: false, error: null } });
   const [archive, setArchive] = useState<ArchiveState>({ phase: 'idle', error: null });
+  const [share, dispatchShare] = useReducer(shareReducer, initialShare(false));
   const confirmed = useRef<Record<string, unknown> | null>(null);
   const chain = useRef(new SaveChain());
   const fieldsRef = useRef(fields);
@@ -224,6 +263,7 @@ export default function Editor({ id, role, onBack, onArchived }: { id: string; r
         setDetail(d);
         confirmed.current = d.report;
         dispatch({ type: 'reset', values: valuesOf(d) });
+        dispatchShare({ type: 'reset', on: d.shareLinkOn });
         setPhase(d.status === 'ready' ? 'ready' : d.status === 'generating' ? 'making' : 'failed');
       })
       .catch((e) => { if (alive.current) setPhase(plainMessage(e, '') === RR.editor.missing ? 'missing' : 'loadFailed'); });
@@ -269,6 +309,18 @@ export default function Editor({ id, role, onBack, onArchived }: { id: string; r
       .catch((e) => { if (!alive.current) return; setDetail(before); setStyle((s) => ({ ...s, [field]: { busy: false, error: plainMessage(e, RR.editor.styleFailed) } })); });
   };
 
+  // Both answer in the frame of the click (the state changes before anything is asked), and clear on success or failure.
+  const doCopyLink = () => {
+    dispatchShare({ type: 'making' });
+    void copyLink({ create: () => createShareLink(id), write: (text) => navigator.clipboard.writeText(text) })
+      .then((action) => { if (alive.current) dispatchShare(action); });
+  };
+  const doTurnLinkOff = () => {
+    dispatchShare({ type: 'turningOff' });
+    void turnLinkOff({ revoke: () => revokeShareLink(id) })
+      .then((action) => { if (alive.current) dispatchShare(action); });
+  };
+
   const doArchive = () => {
     setArchive({ phase: 'busy', error: null });
     archiveReport(id)
@@ -291,6 +343,9 @@ export default function Editor({ id, role, onBack, onArchived }: { id: string; r
       partial={partial}
       style={style}
       archive={archive}
+      share={share}
+      onCopyLink={doCopyLink}
+      onTurnLinkOff={doTurnLinkOff}
       onBack={onBack}
       onEdit={(key, text) => dispatch({ type: 'edit', key, text })}
       onSave={save}

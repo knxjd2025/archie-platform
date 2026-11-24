@@ -22,6 +22,9 @@ export const previewSrc = (id: string, version: number): string => `/api/roof-re
 /** Edit controls are drawn only for a role the shared table lets edit. The server decides every save. */
 export const editsAllowed = (role: TeamRole): boolean => decisionFor(role, 'edit') !== 'no';
 
+/** The customer link controls are drawn only for a role the shared table lets share (and turn it off). The server decides every request. */
+export const sharesAllowed = (role: TeamRole): boolean => decisionFor(role, 'share') !== 'no' && decisionFor(role, 'unshare') !== 'no';
+
 export interface ReportPhotoRef { id: string; category: string | null; thumbUrl: string }
 
 export interface ReportDetail {
@@ -44,6 +47,8 @@ export interface ReportDetail {
   createdAt: string;
   /** The look the report is really shown in and, when that is not the one chosen, why, in one plain sentence. Null when the server said nothing. */
   look: { shown: VisualStyleValue; notice: string | null } | null;
+  /** Whether a customer link is on. Only that: the address is made and shown by its own call, never listed. */
+  shareLinkOn: boolean;
   /** The report's contents when it is ready, else null. */
   report: Record<string, unknown> | null;
   photos: ReportPhotoRef[];
@@ -81,6 +86,7 @@ export function readDetail(value: unknown): ReportDetail | null {
     jobExternalId: textOrNull(value.jobExternalId),
     createdAt: typeof value.createdAt === 'string' ? value.createdAt : '',
     look: readLook(value.look),
+    shareLinkOn: value.shareLinkOn === true,
     report: isObject(value.report) ? value.report : null,
     photos: Array.isArray(value.photos)
       ? value.photos.filter(isObject).map((p) => ({ id: String(p.id), category: textOrNull(p.category), thumbUrl: String(p.thumbUrl ?? '') }))

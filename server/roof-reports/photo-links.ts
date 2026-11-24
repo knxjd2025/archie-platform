@@ -81,3 +81,20 @@ export function verifyPhotoLink(token: unknown, now: number = Date.now(), secret
 
 /** The address a token is read at, relative to the app. */
 export const photoLinkPath = (token: string): string => `/api/roof-reports/linked-photo/${token}`;
+
+/**
+ * What a photo link says it is for, read WITHOUT checking its signature or its
+ * age. It is not proof of anything. It exists for one use: turning an old signed
+ * address inside a saved page into the share link's own photo address, which
+ * checks the photo belongs to the report itself. Null when it names nothing usable.
+ */
+export function photoLinkNamed(token: unknown): { reportId: string; photoId: string; variant: LinkVariant } | null {
+  if (typeof token !== 'string' || token.length === 0 || token.length > MAX_TOKEN_LENGTH) return null;
+  const parts = token.split('.');
+  if (parts.length !== 2) return null;
+  let data: { r?: unknown; p?: unknown; v?: unknown };
+  try { data = JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf8')); } catch { return null; }
+  if (typeof data.r !== 'string' || typeof data.p !== 'string' || !UUID_RE.test(data.r) || !UUID_RE.test(data.p)) return null;
+  if (data.v !== 'working' && data.v !== 'thumb') return null;
+  return { reportId: data.r, photoId: data.p, variant: data.v };
+}

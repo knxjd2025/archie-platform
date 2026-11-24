@@ -209,3 +209,26 @@ export async function beginRetry(reportId: string, now: Date = new Date(), cap: 
     return row ?? null;
   });
 }
+
+
+// ---------------------------------------------------------------- the share link
+
+/**
+ * The share token of a finished report, making one if there is none: ONE
+ * statement that sets it only where it is empty, so two people pressing at the
+ * same moment get the same link. Null when the report is not finished (or not
+ * there). Runs as the company in context.
+ */
+export async function ensureShareToken(reportId: string): Promise<string | null> {
+  const [made] = await db.update(roofReports).set({ shareToken: newShareToken() })
+    .where(and(eq(roofReports.id, reportId), isNull(roofReports.shareToken), eq(roofReports.status, 'ready')))
+    .returning({ token: roofReports.shareToken });
+  if (made?.token) return made.token;
+  const [row] = await db.select({ token: roofReports.shareToken }).from(roofReports).where(and(eq(roofReports.id, reportId), eq(roofReports.status, 'ready'))).limit(1);
+  return row?.token ?? null;
+}
+
+/** Turns a report's link off: the token is gone for good, and a link made later is a different one. Fine to ask twice. */
+export async function clearShareToken(reportId: string): Promise<void> {
+  await db.update(roofReports).set({ shareToken: null }).where(eq(roofReports.id, reportId));
+}

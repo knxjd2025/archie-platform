@@ -42,3 +42,11 @@ export const updateReport = (id: string, fields: Record<string, unknown>): Promi
 /** A job's reports. A 404 means the person may not see reports for this job. */
 export const fetchJobReports = (externalId: string): Promise<{ reports: ReportRow[] }> =>
   api.get(`/api/clients/${encodeURIComponent(externalId)}/roof-reports`, { timeoutMs: 20_000 });
+
+/** Makes the customer's link for a finished report, or gives the one it already has. The answer is the address to share. */
+export const createShareLink = (id: string): Promise<{ url: string }> =>
+  api.post(`/api/roof-reports/${encodeURIComponent(id)}/share-link`, undefined, { timeoutMs: 20_000 });
+
+/** Turns the customer's link off for good. A link made later is a different one. */
+export const revokeShareLink = (id: string): Promise<{ shareLinkOn: boolean }> =>
+  api.delete(`/api/roof-reports/${encodeURIComponent(id)}/share-link`, { timeoutMs: 20_000 });

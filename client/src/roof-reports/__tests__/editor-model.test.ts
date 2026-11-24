@@ -38,6 +38,14 @@ describe('reading the report as the editor holds it', () => {
     expect(readDetail(detail({ look: 'x' }))!.look).toBeNull();
   });
 
+  it('reads whether a share link is on, and nothing else about it', () => {
+    expect(readDetail(detail({ shareLinkOn: true }))!.shareLinkOn).toBe(true);
+    expect(readDetail(detail({ shareLinkOn: false }))!.shareLinkOn).toBe(false);
+    expect(readDetail(detail())!.shareLinkOn).toBe(false);
+    expect(readDetail(detail({ shareLinkOn: 'yes', shareToken: 'x'.repeat(64) }))!.shareLinkOn).toBe(false);
+    expect(JSON.stringify(readDetail(detail({ shareToken: 'x'.repeat(64) })))).not.toContain('x'.repeat(64));
+  });
+
   it('is nothing when the answer is not a report', () => {
     expect(readDetail(null)).toBeNull();
     expect(readDetail({ id: 'x' })).toBeNull();

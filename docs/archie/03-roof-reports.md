@@ -94,12 +94,13 @@ Never delete, skip or weaken these.
 | `server/lib/roof-reports/__tests__/vendored-motion.test.ts` | the vendored motion library's bytes match the manifest and the hashes the page code carries |
 | `server/lib/roof-reports/__tests__/report-nonce.test.ts` | every script every renderer writes carries the response's nonce, written where the renderer writes it; no renderer uses an inline handler; a script or handler that gets in anyway carries no nonce |
 | `server/roof-reports/__tests__/packs-are-company-data.db.test.ts` | a pack is only ever read for the company in context; the app role never writes one; only the loader, a dry run by default, writes through the system role; a pack with problems is refused; no pack wording in code |
+| `server/roof-reports/__tests__/public.db.test.ts` | the share link: one report and only its photos, the same plain page for an unknown, a turned-off and an archived link, the page's policy and headers, the rate limit, no token or internal id in a page |
 | `server/roof-reports/__tests__/html-page.db.test.ts` | the page route: a fresh nonce on every response, the same one on every script in it, the sandbox and the other policy rules, the response headers |
 | `server/crews/__tests__/crew-money-walk.db.test.ts` (existing) | crew are handed no money by any route; run it with the switch on to walk the roof report routes too |
 
 ## The routes
 
-All under `/api/roof-reports` except the last. Each needs the switch, a
+All under `/api/roof-reports` except the job's list and the two customer-link routes (`/r/roof/...`, which the hosting already sends to the server with the rest of `/r/*`; no hosting setting changes). Each needs the switch, a
 signed-in person, and a role that may use roof reports.
 
 | method and path | what it does |
@@ -117,6 +118,10 @@ signed-in person, and a role that may use roof reports.
 | `POST /:id/retry` | run a failed report again from what was typed and the photos it has |
 | `GET /:id/html` | the page, built only by the escaped renderers, served in a sandbox |
 | `GET /api/clients/:externalId/roof-reports` | a job's reports, after the check that opens the job |
+| `POST /:id/share-link` | makes the customer's link for a finished report (or gives the one it has) and answers its address; needs the `share` decision |
+| `DELETE /:id/share-link` | turns the link off for good; needs the `unshare` decision. Fine to ask twice |
+| `GET /r/roof/:token` | the shared report's page. No sign-in: the token is the key (see "The share link") |
+| `GET /r/roof/:token/photos/:photoId/:variant` | one photo copy of that report only |
 
 The company always comes from the session. Nothing in a body, a query or an
 address says whose a report is; an update with a company, a status, a share token
@@ -230,6 +235,53 @@ only what the report found. A company with no pack gets exactly that.
 - **Nothing of any real company is in the code.** Tests use the fictional Summit
   Ridge Roofing in Cedar Falls. The permanent test scans the code for the test
   pack's wording and for any writer of the table other than the loader.
+
+## The share link
+
+A person who may share a report (`share` and `unshare` in `ROOF_REPORT_RULES`,
+the same reach as sending: everything, a leader's team, or their own) makes a
+customer link from the editor ("Copy link") and turns it off ("Turn link off").
+Each click is answered in its own frame ("Making the link...", "Turning the link
+off..."). Nothing is ever sent to the customer by it.
+
+- **The token** is 32 random bytes, written as 64 hex characters, made when the
+  link is made. It is stored as it is made, in `roof_reports.share_token`, the
+  same way the share links of Archie's own documents (`/r/:token`) are, and is
+  never listed or put in a report's answer (the answer says only `shareLinkOn`).
+  Making a link is one statement that fills the token only where it is empty, so
+  two people pressing at once get the same link. Turning it off clears the token;
+  a link made afterwards is a different token and the old one stays dead.
+- **It opens one report.** A narrow system lookup finds the report and its
+  company from the token (and nothing else); everything after runs as that
+  company. Only a finished report that is not archived opens: **archiving the
+  report kills the link at once** (the row and the token stay, as for every
+  archived report; the link stops working).
+- **Unknown, turned off, archived, still being made, not a token: one answer.**
+  They take one code path and give the same plain page ("This report is not
+  available."), the same status (404) and the same headers, byte for byte
+  (`public.db.test.ts` compares them). The page never says which it was.
+- **The page** is built by the same code as the signed-in view (`page.ts`) and
+  served under the same sandbox and nonce policy (no `allow-same-origin`; scripts
+  only with the response's nonce; images only from the app). It is sent with
+  `Cache-Control: no-store`, `Referrer-Policy: no-referrer`, `X-Robots-Tag: noindex, nofollow`
+  and `nosniff`. A page a person saved is shown as saved (no script), with every
+  photo address in it turned into this link's own or taken out, so no other
+  report's photo can be shown.
+- **Photos** come only through `/r/roof/:token/photos/:photoId/:variant`, which
+  asks for the photo and the report together: another report's photo id (of the
+  same company or another) under this token is the same "not available". No
+  storage key, company id, staff email or id, job key, cost or other report's
+  id is in a page.
+- **How often.** One address may ask for 120 pages in ten minutes (as the
+  public page of Archie's own documents does) and 1,200 photos; past that it is
+  answered a plain page to wait, with `Retry-After`.
+- **Logging.** The token is a credential: it is never logged, and the request
+  logger hides it in the addresses it writes down. Creating and turning off a
+  link are written to the write log (without the token).
+- **Held by** `public.db.test.ts`; both authenticated routes and both public
+  routes are walked by `route-walk.db.test.ts` (with the switch off, as another
+  company, as crew and as a salesperson who does not own the report);
+  `share` and `unshare` have their rows in `roof-report-roles.db.test.ts`.
 
 ## Photos
 

@@ -22,6 +22,16 @@ describe('loggablePath', () => {
     expect(loggablePath('/api/roof-reports/linked-photo/x')).toBe('/api/roof-reports/linked-photo/[token]');
   });
 
+  it('hides the token of a share link, on its page and on its photos, wherever the address sits', () => {
+    const share = 'a1'.repeat(32);
+    expect(loggablePath(`/r/roof/${share}`)).toBe('/r/roof/[token]');
+    expect(loggablePath(`/r/roof/${share}/photos/9c1e/thumb`)).toBe('/r/roof/[token]/photos/9c1e/thumb');
+    expect(loggablePath(`GET https://app.example.test/r/roof/${share}?x=1 404`)).toBe('GET https://app.example.test/r/roof/[token]?x=1 404');
+    expect(loggablePath('/r/roof/short')).toBe('/r/roof/[token]');
+    // The other share links keep their own addresses.
+    for (const p of ['/r/roof', '/r/roof/', '/r/abc', '/r/sign/abc']) expect(loggablePath(p), p).toBe(p);
+  });
+
   it('leaves every other address as it is', () => {
     for (const p of ['/api/roof-reports', '/api/roof-reports/linked-photo', '/api/roof-reports/linked-photo/', '/api/roof-reports/4b0f/photos/9c1e/thumb', '/api/clients/abc/roof-reports', '/api/user', '/']) {
       expect(loggablePath(p), p).toBe(p);

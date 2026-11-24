@@ -83,6 +83,12 @@ export function styleNotice(d: StyleNoticeInput | undefined): string | null {
   return `This report has ${has}${of}, so it is shown as a document. ${d.kind === 'flight' ? 'A flight' : 'A presentation'} needs ${d.need} or more.`;
 }
 
+/** The share link: what is told when a link cannot be made yet, and what a customer sees when a link does not open. */
+export const SHARE_NOT_READY = 'A link can be made once the report is finished.';
+export const SHARE_UNAVAILABLE = 'This report is not available.';
+export const SHARE_BUSY = 'This report has been opened a lot in the last few minutes. Wait a little and reload the page.';
+export const SHARE_FAILED = 'This report could not be opened right now. Please try again.';
+
 export const STILL_BEING_MADE_EDIT = 'This report is still being made. Please try again once it finishes.';
 export const TOO_MANY_RECENT = 'You have made a lot of reports in the last few minutes. Please wait a little and try again.';
 
@@ -108,7 +114,7 @@ export type ReportPhotoCategory = (typeof REPORT_PHOTO_CATEGORIES)[number];
 export const SWITCHED_OFF = 'Roof reports are not switched on.';
 
 /** Every thing a person may do with a roof report. */
-export const ROOF_REPORT_ACTIONS = ['see', 'make', 'edit', 'send', 'archive', 'see_archived', 'change_job', 'remove_photo'] as const;
+export const ROOF_REPORT_ACTIONS = ['see', 'make', 'edit', 'send', 'archive', 'see_archived', 'change_job', 'remove_photo', 'share', 'unshare'] as const;
 export type RoofReportAction = (typeof ROOF_REPORT_ACTIONS)[number];
 
 /**
@@ -116,6 +122,7 @@ export type RoofReportAction = (typeof ROOF_REPORT_ACTIONS)[number];
  * another job or taking it off its job, `all` is any report the role may see and
  * `own` is only a report the person made themselves, a leader's team excluded;
  * either way the person must also be able to see the job the report is on;
+ * for `share` and `unshare`, making a customer link for a report and turning it off, the reach is the same as `send`: a role that sees everything may for any report, a leader for their team's, a salesperson for their own;
  * for `remove_photo`, taking back a photo that is not in a report yet, `all` is
  * anyone's waiting photo in the company and `own` only one the person uploaded
  * themselves, and a photo already in a report is never removed by anyone):
@@ -138,12 +145,12 @@ export type RoofReportDecision = 'all' | 'team' | 'own' | 'no';
  * may list them.
  */
 export const ROOF_REPORT_RULES: Record<TeamRole, Record<RoofReportAction, RoofReportDecision>> = {
-  admin:            { see: 'all',  make: 'all',  edit: 'all',  send: 'all',  archive: 'all',  see_archived: 'all', change_job: 'all', remove_photo: 'all' },
-  sales_director:   { see: 'all',  make: 'all',  edit: 'all',  send: 'all',  archive: 'all',  see_archived: 'all', change_job: 'all', remove_photo: 'all' },
-  customer_service: { see: 'all',  make: 'all',  edit: 'all',  send: 'all',  archive: 'all',  see_archived: 'all', change_job: 'all', remove_photo: 'all' },
-  manager:          { see: 'team', make: 'team', edit: 'team', send: 'team', archive: 'team', see_archived: 'no',  change_job: 'own', remove_photo: 'own' },
-  sales:            { see: 'own',  make: 'own',  edit: 'own',  send: 'own',  archive: 'own',  see_archived: 'no',  change_job: 'own', remove_photo: 'own' },
-  production:       { see: 'no',   make: 'no',   edit: 'no',   send: 'no',   archive: 'no',   see_archived: 'no',  change_job: 'no', remove_photo: 'no' },
+  admin:            { see: 'all',  make: 'all',  edit: 'all',  send: 'all',  archive: 'all',  see_archived: 'all', change_job: 'all', remove_photo: 'all', share: 'all', unshare: 'all' },
+  sales_director:   { see: 'all',  make: 'all',  edit: 'all',  send: 'all',  archive: 'all',  see_archived: 'all', change_job: 'all', remove_photo: 'all', share: 'all', unshare: 'all' },
+  customer_service: { see: 'all',  make: 'all',  edit: 'all',  send: 'all',  archive: 'all',  see_archived: 'all', change_job: 'all', remove_photo: 'all', share: 'all', unshare: 'all' },
+  manager:          { see: 'team', make: 'team', edit: 'team', send: 'team', archive: 'team', see_archived: 'no',  change_job: 'own', remove_photo: 'own', share: 'team', unshare: 'team' },
+  sales:            { see: 'own',  make: 'own',  edit: 'own',  send: 'own',  archive: 'own',  see_archived: 'no',  change_job: 'own', remove_photo: 'own', share: 'own', unshare: 'own' },
+  production:       { see: 'no',   make: 'no',   edit: 'no',   send: 'no',   archive: 'no',   see_archived: 'no',  change_job: 'no', remove_photo: 'no', share: 'no', unshare: 'no' },
 };
 
 /** What this role may do, how far. An unknown role may do nothing. The server and the screens read the same table through this one function. */

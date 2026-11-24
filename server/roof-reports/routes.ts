@@ -26,7 +26,7 @@ import { db } from '../db';
 import { roofReports, type RoofReport, type RoofReportPhoto } from '../../shared/schema';
 import {
   BAD_REQUEST_KEY, GENERATE_FAILED, NOT_FOUND, ONLY_FAILED_RETRY, PAGE_NOT_READY, STILL_BEING_MADE, STILL_BEING_MADE_EDIT,
-  REQUEST_KEY_REUSED, TOO_MANY_RECENT, TOO_MANY_TODAY, roofReportPhotoPath, styleNotice,
+  REQUEST_KEY_REUSED, SHARE_NOT_READY, TOO_MANY_RECENT, TOO_MANY_TODAY, roofReportPhotoPath, styleNotice,
 } from '../../shared/roof-reports';
 import { requireAuth } from '../auth/middleware';
 import { sendFailure } from '../lib/failure';
@@ -36,20 +36,17 @@ import { photoStore } from '../photos/store';
 import { currentCompanyId, currentProfile } from '../tenant/context';
 import { logWrite } from '../writes/log';
 import { chooseStyle, renderReportHtml } from '../lib/roof-reports/render-report-html.js';
-import { normalizeReportNumbers } from '../lib/roof-reports/report-normalize.js';
-import type { ComprehensiveRoofReport } from '../lib/roof-reports/comprehensive-roof-report.js';
 import {
   decisionFor, jobExistsInCompany, mayAttachJob, mayChangeJob, requireRoofReportUser, roofReportFor, roofReportUser, visibleRoofReportWhere,
 } from './access';
-import { brandFor } from './brand';
-import { packForCurrentCompany } from './packs';
 import { GeocodeFailedError, liveDeps, modelKeysFromEnv, runGeneration, type GenerateDeps, type GenerateRequest } from './generate';
 import { authedPhotoRoutes, claimPhotos, linkedPhotoRoute, photosOfReport } from './photos';
 import { photoLinkPath, signPhotoLink } from './photo-links';
-import { beginRetry, effectiveState, failureSentence, markFailed, requestFingerprint, saveGenerated, startReport, statusFilter } from './store';
+import { beginRetry, clearShareToken, effectiveState, ensureShareToken, failureSentence, markFailed, requestFingerprint, saveGenerated, startReport, statusFilter } from './store';
 import { PAGE_SIZE, parseGenerateBody, parseListQuery, parseUpdateBody, sanitizeReportJson, type UpdateFields } from './validate';
-import { newNonce, pagePolicy } from './page-policy';
-import { MOTION_PATH } from '../lib/roof-reports/report-motion.js';
+import { brandFor } from './brand';
+import { appOrigin, reportForPage, servedPage } from './page';
+import { registerPublicShareRoutes } from './public';
 import { requireRoofReportsOn } from './switch';
 
 export interface RoofReportRouteOptions {
@@ -107,6 +104,8 @@ function detail(row: RoofReport, photos: RoofReportPhoto[], now: Date, look: Awa
     inspectionDate: iso(row.inspectionDate), inspectorNotes: row.inspectorNotes, jobExternalId: row.jobExternalId,
     totalEstimate: money(row.totalEstimate), damageSeverity: row.damageSeverity, stormEventsCount: row.stormEventsCount, dataQuality: row.dataQuality,
     emailSentAt: iso(row.emailSentAt), emailSentCount: row.emailSentCount,
+    // Whether a share link is on. The link itself is made and shown only by its own route, never listed or carried here.
+    shareLinkOn: Boolean(row.shareToken),
     createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(),
     report: ready ? row.reportJson : null,
     look,
@@ -115,36 +114,6 @@ function detail(row: RoofReport, photos: RoofReportPhoto[], now: Date, look: Awa
       url: roofReportPhotoPath(row.id, p.id, 'working'), thumbUrl: roofReportPhotoPath(row.id, p.id, 'thumb'),
     })),
   };
-}
-
-/** The report to show a person: the saved report with the row's own settings on top, and every photo from a short signed link. */
-function reportForPage(row: RoofReport, photos: RoofReportPhoto[], link: (photoId: string, variant: 'working' | 'thumb') => string): ComprehensiveRoofReport {
-  const base = normalizeReportNumbers(row.reportJson as unknown as ComprehensiveRoofReport);
-  const own = new Map(photos.map((p) => [p.id, p]));
-  return {
-    ...base,
-    reportTemplate: row.template as ComprehensiveRoofReport['reportTemplate'],
-    reportVisualStyle: (row.visualStyle ?? undefined) as ComprehensiveRoofReport['reportVisualStyle'],
-    customerName: row.customerName ?? undefined,
-    customerEmail: row.customerEmail ?? undefined,
-    inspectionDate: row.inspectionDate ? row.inspectionDate.toISOString() : undefined,
-    inspectorNotes: row.inspectorNotes ?? base.inspectorNotes,
-    damageAnalysis: {
-      ...base.damageAnalysis,
-      // A photo not on this report is shown with no picture, whatever address the saved report holds.
-      photos: (base.damageAnalysis?.photos ?? []).map((p) => ({
-        ...p,
-        url: own.has(p.id) ? link(p.id, 'working') : '',
-        thumbnailUrl: own.has(p.id) ? link(p.id, 'thumb') : undefined,
-      })),
-    },
-  };
-}
-
-/** The address the app is reached at, for the links inside a page. */
-function appOrigin(req: Request): string {
-  const configured = (process.env.APP_BASE_URL || '').trim().replace(/\/+$/, '');
-  return configured || `${req.protocol}://${req.get('host')}`;
 }
 
 const escapeLike = (s: string) => s.replace(/[\\%_]/g, '\\$&');
@@ -285,28 +254,12 @@ export function registerRoofReportsRoutes(app: Express, options: RoofReportRoute
       const state = effectiveState(row);
       if (state.status !== 'ready' || row.reportJson === null) return res.status(409).json({ error: PAGE_NOT_READY });
       const origin = appOrigin(req);
-      const logoUrl = brandFor(currentProfile()).brandColors.companyLogo;
-      let html: string;
-      let policy: string;
-      if (row.editedHtml) {
-        // A page a person saved is shown as saved, in a sandbox that cannot run script or reach anything of the app's.
-        html = row.editedHtml;
-        policy = pagePolicy({ kind: 'saved', appOrigin: origin, logoUrl });
-      } else {
-        const photos = await photosOfReport(row.id);
-        const companyId = currentCompanyId();
-        if (!companyId) return notFound(res);
-        const link = (photoId: string, variant: 'working' | 'thumb') =>
-          `${origin}${photoLinkPath(signPhotoLink({ companyId, reportId: row.id, photoId, variant }))}`;
-        // The scroll pages carry the app's own scripts. They run in the sandbox, and only because
-        // they carry this response's nonce: a script that got in any other way does not.
-        const nonce = newNonce();
-        // The company's own chapters (its data, found by the company in context), or none: the base presentation.
-        const pack = await packForCurrentCompany();
-        const rendered = await renderReportHtml(reportForPage(row, photos, link), brandFor(currentProfile()).brandColors, { nonce, motionBase: `${origin}${MOTION_PATH}`, pack });
-        html = rendered.html;
-        policy = pagePolicy({ kind: 'built', nonce, appOrigin: origin, logoUrl });
-      }
+      const companyId = currentCompanyId();
+      if (!companyId) return notFound(res);
+      const photos = await photosOfReport(row.id);
+      // The page's pictures come from short signed links, made now that the access rules have passed.
+      const link = (photoId: string, variant: 'working' | 'thumb') => `${origin}${photoLinkPath(signPhotoLink({ companyId, reportId: row.id, photoId, variant }))}`;
+      const { html, policy } = await servedPage({ row, photos, origin, link });
       res.status(200)
         .set('Content-Type', 'text/html; charset=utf-8')
         .set('Content-Security-Policy', policy)
@@ -386,7 +339,39 @@ export function registerRoofReportsRoutes(app: Express, options: RoofReportRoute
     }
   });
 
+  // ---------------------------------------------------------------- the customer's link
+  // Made and turned off here, by a person who may share the report. The link itself opens in public.ts with no sign-in.
+  router.post('/:id/share-link', async (req, res) => {
+    try {
+      const user = roofReportUser(req)!;
+      const row = await roofReportFor(user, req.params.id);
+      if (!row || decisionFor(user.role, 'share') === 'no') return notFound(res);
+      if (effectiveState(row).status !== 'ready' || row.reportJson === null) return res.status(409).json({ error: SHARE_NOT_READY });
+      const token = await ensureShareToken(row.id);
+      if (!token) return res.status(409).json({ error: SHARE_NOT_READY });
+      await logWrite({ actor: user.email, system: 'archie', action: 'roof_report_share_link', targetId: row.id, summary: 'roof report link made', ok: true, error: null });
+      res.json({ url: `${appOrigin(req)}/r/roof/${token}` });
+    } catch (error) {
+      sendFailure(res, error, 'POST /api/roof-reports/:id/share-link');
+    }
+  });
+
+  router.delete('/:id/share-link', async (req, res) => {
+    try {
+      const user = roofReportUser(req)!;
+      const row = await roofReportFor(user, req.params.id);
+      if (!row || decisionFor(user.role, 'unshare') === 'no') return notFound(res);
+      await clearShareToken(row.id);
+      await logWrite({ actor: user.email, system: 'archie', action: 'roof_report_share_link_off', targetId: row.id, summary: 'roof report link turned off', ok: true, error: null });
+      res.json({ shareLinkOn: false });
+    } catch (error) {
+      sendFailure(res, error, 'DELETE /api/roof-reports/:id/share-link');
+    }
+  });
+
   app.use('/api/roof-reports', router);
+  // The customer's link is outside /api: it needs no sign-in, and /r/* already reaches the server on the hosting.
+  registerPublicShareRoutes(app);
 
   // ---------------------------------------------------------------- a job's reports
   app.get('/api/clients/:externalId/roof-reports', ...guard, async (req: Request, res: Response) => {

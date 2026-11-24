@@ -15,9 +15,10 @@
  *     error and nothing of the other company's;
  *   - with the switch off, as anyone or no one: a bare 404, and nothing changes.
  *
- * A short signed photo link is the one route that answers without a session,
- * because the signature IS its check. It is walked with this company's ids and
- * no valid signature, and must be "not found" for everyone.
+ * A short signed photo link and the two share link routes (`/r/roof/...`) are
+ * the routes that answer without a session, because the signature or the long
+ * random token IS the check. They are walked with this company's ids and no
+ * valid signature or token, and must be "not found" for everyone.
  *
  * A new route is walked the moment it exists. One that must be open to a role
  * that is refused here has to be decided on purpose in the tables below.
@@ -65,7 +66,7 @@ function allRoutes(app: express.Express): Array<{ method: string; path: string }
   return out;
 }
 
-const isRoofReportRoute = (path: string) => path === '/api/roof-reports' || path.startsWith('/api/roof-reports/') || /^\/api\/clients\/:\w+\/roof-reports/.test(path);
+const isRoofReportRoute = (path: string) => path === '/api/roof-reports' || path.startsWith('/api/roof-reports/') || path.startsWith('/r/roof/') || /^\/api\/clients\/:\w+\/roof-reports/.test(path);
 
 /** A route that names something by id: asked about another company's thing it must say "not found". */
 const NAMES_SOMETHING = /:(id|photoId|token|externalId)\b/;
@@ -164,10 +165,12 @@ describe.skipIf(!localDb)('every roof report route, walked (PERMANENT)', async (
       'GET /api/roof-reports/status', 'POST /api/roof-reports/photos', 'GET /api/roof-reports/:id/photos/:photoId/:variant',
       'GET /api/roof-reports/linked-photo/:token', 'POST /api/roof-reports/generate', 'GET /api/roof-reports', 'GET /api/roof-reports/:id',
       'PUT /api/roof-reports/:id', 'POST /api/roof-reports/:id/archive', 'POST /api/roof-reports/:id/retry', 'GET /api/roof-reports/:id/html',
-      'GET /api/clients/:externalId/roof-reports',
+      'GET /api/clients/:externalId/roof-reports', 'POST /api/roof-reports/:id/share-link', 'DELETE /api/roof-reports/:id/share-link',
+      'GET /r/roof/:token', 'GET /r/roof/:token/photos/:photoId/:variant',
     ]));
     // Written out by hand, so a route added or removed is seen and decided on purpose.
     expect(lines.sort()).toEqual([
+      'DELETE /api/roof-reports/:id/share-link', 'POST /api/roof-reports/:id/share-link', 'GET /r/roof/:token', 'GET /r/roof/:token/photos/:photoId/:variant',
       'DELETE /api/roof-reports/photos/:photoId', 'GET /api/clients/:externalId/roof-reports', 'GET /api/roof-reports', 'GET /api/roof-reports/:id', 'GET /api/roof-reports/:id/html',
       'GET /api/roof-reports/:id/photos/:photoId/:variant', 'GET /api/roof-reports/linked-photo/:token', 'GET /api/roof-reports/status',
       'POST /api/roof-reports/:id/archive', 'POST /api/roof-reports/:id/retry', 'POST /api/roof-reports/generate', 'POST /api/roof-reports/photos',
@@ -214,7 +217,7 @@ describe.skipIf(!localDb)('every roof report route, walked (PERMANENT)', async (
 
   it('lets the people who may see the report read it, and never shows them the other company\'s', async () => {
     for (const who of ['admin', 'csr', 'manager', 'repa']) {
-      for (const r of routes().filter((x) => x.method === 'GET' && x.path !== '/api/roof-reports/linked-photo/:token')) {
+      for (const r of routes().filter((x) => x.method === 'GET' && x.path !== '/api/roof-reports/linked-photo/:token' && !x.path.startsWith('/r/roof/'))) {
         as(a, who);
         const res = await call(r);
         const label = `${who}: ${r.method} ${r.path}`;
@@ -236,6 +239,32 @@ describe.skipIf(!localDb)('every roof report route, walked (PERMANENT)', async (
     }
     // The decided exception: the link made after the access rules passed is itself the credential.
     expect((await send('GET', `/api/roof-reports/linked-photo/${tokenA}`)).status).toBe(200);
+  });
+
+  it('answers a share link made up from the ids alone with the plain "not available" page, whoever holds it, and a real one only for its own report\'s photos', async () => {
+    const guess = [`/r/roof/${reportA}`, `/r/roof/${forged}`, `/r/roof/${'0'.repeat(64)}`, `/r/roof/${photoA}/photos/${photoA}/working`, `/r/roof/${'0'.repeat(64)}/photos/${photoA}/working`];
+    for (const [co, who] of [[a, 'admin'], [b, 'admin'], [a, 'crew']] as Array<[Co, string]>) {
+      as(co, who);
+      for (const path of guess) {
+        const res = await send('GET', path);
+        expect(res.status, `${who}: ${path}`).toBe(404);
+        expect(res.text, path).toContain('This report is not available.');
+        for (const mark of [...A_MARKS, reportA, photoA]) expect(res.text, `${path} leaked ${mark}`).not.toContain(mark);
+      }
+    }
+    // The decided exception: the long random token is itself the credential, for its one report.
+    as(a, 'admin');
+    const made = await send('POST', `/api/roof-reports/${reportA}/share-link`);
+    expect(made.status).toBe(200);
+    const token = /\/r\/roof\/([0-9a-f]{64})$/.exec(made.body.url)![1];
+    expect((await send('GET', `/r/roof/${token}`)).status).toBe(200);
+    expect((await send('GET', `/r/roof/${token}/photos/${photoA}/working`)).status).toBe(200);
+    // Company B asking with company A's token still gets A's one report, and nothing of B's: the token is the only key.
+    as(b, 'admin');
+    expect((await send('GET', `/r/roof/${token}/photos/${reportB}/working`)).status).toBe(404);
+    as(a, 'admin');
+    expect((await send('DELETE', `/api/roof-reports/${reportA}/share-link`)).status).toBe(200);
+    expect((await send('GET', `/r/roof/${token}`)).status).toBe(404);
   });
 
   it('is a bare 404 on every route while the switch is off, for anyone, and changes nothing', async () => {

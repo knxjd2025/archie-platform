@@ -9,15 +9,23 @@
  * server failure keeps (server/bugs/routes.ts) both go through `loggablePath`.
  * (The host's own access logs are not the app's to change; the token is short
  * lived and for one photo for that reason.)
+ *
+ * A share link's token (`/r/roof/<token>`) is a different matter: it lives until
+ * the link is turned off, and it is the whole key to one report, so it is hidden
+ * in the same way. The request log writes down API requests only, and the share
+ * link is not one, but the address a recorded server failure keeps must not hold it.
  */
 import type { NextFunction, Request, Response } from 'express';
 
 /** The photo link's address: its token is the rest of the path segment. */
 const PHOTO_LINK = /(\/api\/roof-reports\/linked-photo\/)[^/?#\s]+/g;
 
-/** An address, or a line holding one, with the token of a photo link hidden. Anything else comes back as it was. */
+/** A roof report share link's address (page and photos): the token is the segment after /r/roof/. It is the whole key to the report. */
+const SHARE_LINK = /(\/r\/roof\/)[^/?#\s]+/g;
+
+/** An address, or a line holding one, with the token of a photo link or a share link hidden. Anything else comes back as it was. */
 export function loggablePath(value: string): string {
-  return typeof value === 'string' ? value.replace(PHOTO_LINK, '$1[token]') : '';
+  return typeof value === 'string' ? value.replace(PHOTO_LINK, '$1[token]').replace(SHARE_LINK, '$1[token]') : '';
 }
 
 /** One line for every API request when it finishes: the method, the address, the status and the time. */

@@ -47,6 +47,15 @@ describe('the words of the roof report screens', () => {
     expect(plainMessage(undefined, fallback)).toBe(fallback);
   });
 
+  it('has the share link sentences, in plain words, none of them naming how it works inside', () => {
+    expect(RR.share.title).toBe('Share with the customer');
+    expect(RR.share.help).toBe('Anyone who has the link can open this report and its photos. Nothing is sent to the customer. Turn the link off to stop sharing.');
+    for (const s of everySentence(RR.share)) {
+      expect(s, s).not.toMatch(/token|url|http|api|server|database/i);
+      expect(s, s).not.toMatch(/^[a-z]/);
+    }
+  });
+
   it('names a report status in plain words', () => {
     expect(statusLabel('generating')).toBe('Being made');
     expect(statusLabel('ready')).toBe('Ready');
