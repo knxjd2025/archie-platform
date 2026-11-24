@@ -43,7 +43,8 @@ async function main() {
       return;
     }
     const s = result.summary;
-    console.log(`${result.applied ? 'Loaded' : 'Checked (dry run, nothing written)'}: ${s.chapters} chapter${s.chapters === 1 ? '' : 's'} (${s.ids.join(', ')}), ${s.mustSay} must-say and ${s.mustNotSay} must-not-say phrase${s.mustSay + s.mustNotSay === 1 ? '' : 's'}.`);
+    const n = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
+    console.log(`${result.applied ? 'Loaded' : 'Checked (dry run, nothing written)'}: ${n(s.chapters, 'chapter')} (${s.ids.join(', ')}), ${n(s.mustSay, 'must-say phrase')} and ${n(s.mustNotSay, 'must-not-say phrase')}.`);
     console.log(result.applied
       ? (result.replaced ? 'This company\'s earlier pack was replaced.' : 'This company had no pack before.')
       : `Run again with --apply to write it${result.replaced ? ' (it would replace this company\'s earlier pack)' : ''}. Read the rendered presentation for that company before you do.`);
