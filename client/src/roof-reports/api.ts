@@ -12,3 +12,8 @@ export const fetchReports = (filters: ListFilters): Promise<ReportPage> => api.g
 
 export const archiveReport = (id: string): Promise<{ id: string; status: string }> =>
   api.post(`/api/roof-reports/${encodeURIComponent(id)}/archive`, undefined, { timeoutMs: 20_000 });
+
+/** A job the person may pick, as the header search finds it (rep-scoped on the server). */
+export interface JobResult { externalId: string | null; name: string; location: string | null }
+
+export const searchJobs = (q: string): Promise<{ results: JobResult[] }> => api.get(`/api/search?q=${encodeURIComponent(q.trim())}`);

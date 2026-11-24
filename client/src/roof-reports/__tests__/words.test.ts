@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { RR, plainMessage, statusLabel, kindsLabel } from '../words';
+import { REPORT_PHOTO_CATEGORIES } from '../../../../shared/roof-reports';
+import { PHOTO_KIND_LABEL, RR, plainMessage, statusLabel, kindsLabel } from '../words';
 
 /** Every string a person can read in this feature, walked through, so a new sentence is checked the day it is added. */
 function everySentence(value: unknown, out: string[] = []): string[] {
   if (typeof value === 'string') out.push(value);
   else if (typeof value === 'function') {
     for (const args of [[1], [2], [1, 2], [12, 40], [3, 5], ['Dana Whitfield', '12 Elm Street'], ['wind damage'], ['2 hours ago']]) {
+      if (args.length !== value.length) continue; // only probe with the arguments the sentence takes
       try { const r = (value as (...a: unknown[]) => unknown)(...args); if (typeof r === 'string') out.push(r); } catch { /* wrong arity for this probe */ }
     }
   } else if (Array.isArray(value)) value.forEach((v) => everySentence(v, out));
@@ -17,7 +19,7 @@ describe('the words of the roof report screens', () => {
   const all = everySentence(RR);
 
   it('has a good many sentences to check', () => {
-    expect(all.length).toBeGreaterThan(20);
+    expect(all.length).toBeGreaterThan(60);
   });
 
   it('uses no long dash, no sparkle or wand, no status code and no raw data', () => {
@@ -57,5 +59,10 @@ describe('the words of the roof report screens', () => {
     expect(kindsLabel(['inspection'])).toBe('Inspection');
     expect(kindsLabel(['storm', 'inspection', 'measurement'])).toBe('Inspection, Measurements, Storm history');
     expect(kindsLabel([])).toBe('');
+  });
+
+  it('has a plain name for every kind of photo the server accepts, and no other', () => {
+    expect(Object.keys(PHOTO_KIND_LABEL).sort()).toEqual([...REPORT_PHOTO_CATEGORIES].sort());
+    for (const label of Object.values(PHOTO_KIND_LABEL)) expect(label).toMatch(/^[A-Z][A-Za-z ]+$/);
   });
 });
