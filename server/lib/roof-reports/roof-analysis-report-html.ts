@@ -16,7 +16,7 @@ import { formatCurrency, formatUnit } from './roof-repair-pricing.js';
 import { escapeHtml } from './escape-html.js';
 import { PLATFORM_NAME } from './platform.js';
 import { motionStyles, motionRuntime } from './report-motion.js';
-import { safeColor as safeHexColor, safeUrl as safeLinkUrl, safeHttpUrl, safeImageSrc } from './html-safety.js';
+import { nonceAttr, safeColor as safeHexColor, safeUrl as safeLinkUrl, safeHttpUrl, safeImageSrc } from './html-safety.js';
 import { normalizeReportNumbers } from './report-normalize.js';
 
 const FEATURE_COLORS: Record<string, string> = {
@@ -1000,8 +1000,11 @@ interface BrandColors {
  */
 export function generateComprehensiveReportHTML(
   rawReport: ComprehensiveRoofReport,
-  brandColors: BrandColors = {}
+  brandColors: BrandColors = {},
+  options: { nonce?: string } = {},
 ): string {
+  // Checked first, so a nonce that is not a plain token fails before any page is built.
+  const scriptNonce = nonceAttr(options.nonce);
   // Every figure below is formatted from a number, whatever the saved JSON held.
   const report = normalizeReportNumbers(rawReport);
   const brandPrimary = safeColor(brandColors.brandPrimaryColor, DEFAULT_BRAND_PRIMARY);
@@ -1349,12 +1352,18 @@ export function generateComprehensiveReportHTML(
 
   <!-- Print button (hidden in print) -->
   <div class="no-print" style="position:fixed;bottom:24px;right:24px;z-index:1000;">
-    <button onclick="window.print()" class="cta-button" style="display:inline-flex;align-items:center;gap:8px;padding:12px 24px;background:var(--brand-primary);color:#fff;font-size:14px;font-weight:600;border:none;border-radius:var(--radius-md);cursor:pointer;box-shadow:var(--shadow-elevated);">
+    <button type="button" id="archie-print-report" class="cta-button" style="display:inline-flex;align-items:center;gap:8px;padding:12px 24px;background:var(--brand-primary);color:#fff;font-size:14px;font-weight:600;border:none;border-radius:var(--radius-md);cursor:pointer;box-shadow:var(--shadow-elevated);">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
       Print Report
     </button>
   </div>
-  ${motionRuntime()}
+  <script${scriptNonce}>
+    (function () {
+      var button = document.getElementById('archie-print-report');
+      if (button) button.addEventListener('click', function () { window.print(); });
+    })();
+  </script>
+  ${motionRuntime({ nonce: options.nonce })}
 </body>
 </html>
   `;

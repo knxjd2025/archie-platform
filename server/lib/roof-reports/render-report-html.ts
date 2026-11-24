@@ -23,6 +23,7 @@
 
 import { generateComprehensiveReportHTML } from './roof-analysis-report-html.js';
 import { resolveVisualStyle, isFlightStyle } from './report-templates.js';
+import { nonceAttr } from './html-safety.js';
 import type { ComprehensiveRoofReport, ReportVisualStyle } from './comprehensive-roof-report.js';
 import type { ChapterPack } from './presentation-chapters.js';
 
@@ -38,6 +39,12 @@ export interface RenderReportOptions {
    * presentation style uses it; none is the safe default.
    */
   pack?: ChapterPack | null;
+  /**
+   * The nonce of the response the page is served in. Every script the renderers
+   * write carries it, and none is written without it when this is set. Omitted
+   * for a page that is stored or exported rather than served.
+   */
+  nonce?: string;
 }
 
 export interface RenderedReport {
@@ -58,6 +65,9 @@ export async function renderReportHtml(
   brandColors: Record<string, unknown> = {},
   options: RenderReportOptions = {},
 ): Promise<RenderedReport> {
+  // A nonce that is not a plain token fails here, before any style is picked.
+  nonceAttr(options.nonce);
+  const nonce = options.nonce === undefined ? {} : { nonce: options.nonce };
   const requested = resolveVisualStyle(
     report.reportTemplate,
     report.reportVisualStyle ?? options.styleFallback,
@@ -67,7 +77,7 @@ export async function renderReportHtml(
     const flight = await import('./scroll-flight-report.js');
     if (flight.canRenderFlight(report)) {
       return {
-        html: flight.generateScrollFlightReportHTML(report, brandColors as never),
+        html: flight.generateScrollFlightReportHTML(report, brandColors as never, nonce),
         style: 'flight',
       };
     }
@@ -77,7 +87,7 @@ export async function renderReportHtml(
       `A scroll flight needs at least ${flight.MIN_FLIGHT_PHOTOS} photos. ` +
       'This report has fewer, so it was rendered as a document.';
     return {
-      html: generateComprehensiveReportHTML(report, brandColors as never),
+      html: generateComprehensiveReportHTML(report, brandColors as never, nonce),
       style: 'formal',
       downgradeReason,
     };
@@ -87,7 +97,7 @@ export async function renderReportHtml(
     const pres = await import('./scroll-presentation-report.js');
     if (pres.canRenderPresentation(report)) {
       return {
-        html: pres.generateScrollPresentationHTML(report, brandColors as never, options.pack ?? null),
+        html: pres.generateScrollPresentationHTML(report, brandColors as never, options.pack ?? null, nonce),
         style: 'presentation',
       };
     }
@@ -95,7 +105,7 @@ export async function renderReportHtml(
     // only two or three of them is a document with a sidebar bolted on, so send
     // the document rather than something worse than what it replaced.
     return {
-      html: generateComprehensiveReportHTML(report, brandColors as never),
+      html: generateComprehensiveReportHTML(report, brandColors as never, nonce),
       style: 'formal',
       downgradeReason:
         `A presentation needs at least ${pres.MIN_PRESENTATION_CHAPTERS} chapters of real content. ` +
@@ -104,7 +114,7 @@ export async function renderReportHtml(
   }
 
   return {
-    html: generateComprehensiveReportHTML(report, brandColors as never),
+    html: generateComprehensiveReportHTML(report, brandColors as never, nonce),
     style: requested,
   };
 }

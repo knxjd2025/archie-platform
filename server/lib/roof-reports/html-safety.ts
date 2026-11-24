@@ -73,3 +73,21 @@ export function jsonForScript(value: unknown): string {
     .replace(/\u2028/g, '\\u2028')
     .replace(/\u2029/g, '\\u2029');
 }
+
+/**
+ * ` nonce="..."` for a script tag, or '' when the page has no nonce.
+ *
+ * A served report page is allowed to run only the scripts that carry the
+ * nonce of that response, so every renderer writes it AT THE POINT it writes
+ * a script of its own. Never add it to a finished page with a pass over its
+ * tags: that would bless a script that got in by mistake as well.
+ *
+ * A nonce that is not a plain token (base64 or base64url, 16 to 256 characters)
+ * is refused rather than written, so it can never close the attribute or open
+ * another. `undefined` means no nonce; anything else that is not a token throws.
+ */
+export function nonceAttr(nonce?: string): string {
+  if (nonce === undefined) return '';
+  if (typeof nonce !== 'string' || !/^[A-Za-z0-9+/_-]{16,256}={0,2}$/.test(nonce)) throw new Error('a script nonce must be a plain base64 token');
+  return ` nonce="${nonce}"`;
+}

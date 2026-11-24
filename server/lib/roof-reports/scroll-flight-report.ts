@@ -29,7 +29,7 @@
 
 import { SCROLLCRAFT_CSS, SCROLLCRAFT_JS } from '../reports/scrollcraft-engine.js';
 import { escapeHtml } from './escape-html';
-import { safeColor, safeHttpUrl } from './html-safety';
+import { nonceAttr, safeColor, safeHttpUrl } from './html-safety';
 import { normalizeReportNumbers } from './report-normalize';
 import type {
   AnalyzedPhoto,
@@ -189,7 +189,10 @@ const money = (n: number): string =>
 export function generateScrollFlightReportHTML(
   rawReport: ComprehensiveRoofReport,
   brand: FlightBrandColors = {},
+  options: { nonce?: string } = {},
 ): string {
+  // Every script below carries the nonce of the response the page is served in.
+  const nonce = nonceAttr(options.nonce);
   const report = normalizeReportNumbers(rawReport);
   const primary = safeColor(brand.brandPrimaryColor, DEFAULT_PRIMARY);
   const secondary = safeColor(brand.brandSecondaryColor, DEFAULT_SECONDARY);
@@ -499,8 +502,8 @@ h1,h2{text-wrap:balance;text-shadow:0 2px 30px rgba(0,0,0,.6)}
   <div data-sc-spacer aria-hidden="true"></div>
 </div>
 
-<script>${SCROLLCRAFT_JS}</script>
-<script>
+<script${nonce}>${SCROLLCRAFT_JS}</script>
+<script${nonce}>
 (function () {
   ScrollCraft.mount(document.body);
 

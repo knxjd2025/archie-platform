@@ -9,7 +9,7 @@ import type { MaterialTakeoff } from './material-takeoff.js';
 import { formatArea, sqFeetToSquares, pitchFactor } from './geometry-utils.js';
 import { escapeHtml } from './escape-html.js';
 import { motionStyles, motionRuntime } from './report-motion.js';
-import { safeColor, safeHttpUrl } from './html-safety.js';
+import { nonceAttr, safeColor, safeHttpUrl } from './html-safety.js';
 import { toNumber } from './report-normalize.js';
 
 // ─── Brand color defaults ──────────────────────────────────────────────
@@ -228,7 +228,8 @@ export interface ReportData {
  * The document uses only inline CSS (no external dependencies) so it
  * renders correctly when opened in a new window or saved as a file.
  */
-export function generateReportHtml(rawData: ReportData): string {
+export function generateReportHtml(rawData: ReportData, options: { nonce?: string } = {}): string {
+  nonceAttr(options.nonce);
   // A saved report can hold text where a figure belongs; every figure below is a number.
   const data: ReportData = {
     ...rawData,
@@ -565,7 +566,7 @@ ${data.costs && data.costs.length > 0 ? buildCostSection(data.costs, brandSecond
   <span>${escapeHtml(data.date)}</span>
 </div>
 
-${motionRuntime()}
+${motionRuntime({ nonce: options.nonce })}
 </body>
 </html>`;
 }

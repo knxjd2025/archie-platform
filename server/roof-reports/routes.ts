@@ -47,6 +47,7 @@ import { authedPhotoRoutes, claimPhotos, linkedPhotoRoute, photosOfReport } from
 import { photoLinkPath, signPhotoLink } from './photo-links';
 import { beginRetry, effectiveState, failureSentence, markFailed, requestFingerprint, saveGenerated, startReport } from './store';
 import { PAGE_SIZE, parseGenerateBody, parseListQuery, parseUpdateBody, sanitizeReportJson, type UpdateFields } from './validate';
+import { newNonce, pagePolicy } from './page-policy';
 import { requireRoofReportsOn } from './switch';
 
 export interface RoofReportRouteOptions {
@@ -273,24 +274,25 @@ export function registerRoofReportsRoutes(app: Express, options: RoofReportRoute
       const state = effectiveState(row);
       if (state.status !== 'ready' || row.reportJson === null) return res.status(409).json({ error: PAGE_NOT_READY });
       const origin = appOrigin(req);
-      const images = `img-src ${origin} https: data:`;
-      const common = `default-src 'none'; ${images}; style-src 'unsafe-inline' https:; font-src https: data:; base-uri 'none'; form-action 'none'; frame-ancestors 'self'`;
+      const logoUrl = brandFor(currentProfile()).brandColors.companyLogo;
       let html: string;
       let policy: string;
       if (row.editedHtml) {
         // A page a person saved is shown as saved, in a sandbox that cannot run script or reach anything of the app's.
         html = row.editedHtml;
-        policy = `sandbox; ${common}`;
+        policy = pagePolicy({ kind: 'saved', appOrigin: origin, logoUrl });
       } else {
         const photos = await photosOfReport(row.id);
         const companyId = currentCompanyId();
         if (!companyId) return notFound(res);
         const link = (photoId: string, variant: 'working' | 'thumb') =>
           `${origin}${photoLinkPath(signPhotoLink({ companyId, reportId: row.id, photoId, variant }))}`;
-        const rendered = await renderReportHtml(reportForPage(row, photos, link), brandFor(currentProfile()).brandColors);
+        // The scroll pages carry the app's own scripts. They run in the sandbox, and only because
+        // they carry this response's nonce: a script that got in any other way does not.
+        const nonce = newNonce();
+        const rendered = await renderReportHtml(reportForPage(row, photos, link), brandFor(currentProfile()).brandColors, { nonce });
         html = rendered.html;
-        // The scroll pages carry the app's own script; it runs in the sandbox with no access to anything else.
-        policy = `sandbox allow-scripts; ${common}; script-src 'unsafe-inline'; connect-src 'none'`;
+        policy = pagePolicy({ kind: 'built', nonce, appOrigin: origin, logoUrl });
       }
       res.status(200)
         .set('Content-Type', 'text/html; charset=utf-8')

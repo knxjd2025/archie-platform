@@ -13,6 +13,8 @@
  * callers fall back to a pinned CDN.
  */
 
+import { nonceAttr } from './html-safety.js';
+
 export function motionStyles(): string {
   return `
 /* ── Archie report motion (content-first; hidden states gated by .gsap-anim) ── */
@@ -43,6 +45,13 @@ export interface MotionRuntimeOptions {
    * pass user/tenant-controlled data through it (stored XSS in R2-hosted reports).
    */
   gsapSource?: string;
+  /**
+   * The nonce of the response this page is served in. With one, the page's own
+   * scripts carry it and no OUTSIDE script is written at all: the served page's
+   * policy lets nothing from another host run, so a CDN tag would only be a
+   * blocked request. Without one, nothing changes.
+   */
+  nonce?: string;
 }
 
 const GSAP_VERSION = '3.14.2';
@@ -67,20 +76,23 @@ const GSAP_INTEGRITY = 'sha384-sG0Hv1tP1lZCk9KQmrIbY/XNwi+OY84GQqhMscbnsoBFqAz8K
 const ST_INTEGRITY = 'sha384-xNHNOfrykny9oFwnmpfNbkSc6isny38d1GZvTRVuFV0l9fTMIZKhULvomyQJSMRl';
 
 export function motionRuntime(opts: MotionRuntimeOptions = {}): string {
-  const { enabled = true, intensity = 'standard', gsapSource } = opts;
+  const { enabled = true, intensity = 'standard', gsapSource, nonce } = opts;
+  const n = nonceAttr(nonce);
   if (!enabled) return '';
 
   const dist = intensity === 'subtle' ? 24 : 40;
   const dur = intensity === 'subtle' ? 0.5 : 0.7;
 
   const libTags = gsapSource
-    ? `<script>${gsapSource}</script>`
-    : `<script src="${GSAP_CDN}" integrity="${GSAP_INTEGRITY}" crossorigin="anonymous"></script>\n<script src="${ST_CDN}" integrity="${ST_INTEGRITY}" crossorigin="anonymous"></script>`;
+    ? `<script${n}>${gsapSource}</script>`
+    : nonce !== undefined
+      ? ''
+      : `<script src="${GSAP_CDN}" integrity="${GSAP_INTEGRITY}" crossorigin="anonymous"></script>\n<script src="${ST_CDN}" integrity="${ST_INTEGRITY}" crossorigin="anonymous"></script>`;
 
   return `
 <!-- archie-motion-runtime -->
 ${libTags}
-<script>
+<script${n}>
 (function(){
   if (typeof window === 'undefined' || !window.gsap || !window.ScrollTrigger) return;
   var gsap = window.gsap, ScrollTrigger = window.ScrollTrigger;
