@@ -15,6 +15,7 @@ import { db } from '../db';
 import { runAsSystem } from '../tenant/context';
 import { requireAuth, requireRole } from '../auth/middleware';
 import { rateLimit } from '../lib/rate-limit';
+import { loggablePath } from '../lib/request-log';
 import { sendFailure, onServerFailure } from '../lib/failure';
 import { sendOperatorEmail } from '../integrations/operator-mail';
 import { parseNaiveTimestampAsUtc } from '../lib/pg-timestamps';
@@ -113,7 +114,7 @@ export function recordServerError(where: string, error: unknown, req?: Request):
     where,
     message: message || 'Unknown error',
     stack: err.stack ? redactSecrets(err.stack) : null,
-    url: req?.originalUrl ? clip(req.originalUrl.split('?')[0], 500) : null,
+    url: req?.originalUrl ? clip(loggablePath(req.originalUrl.split('?')[0]), 500) : null,
     userEmail: req?.session?.user?.email ?? null,
     context: req ? { method: req.method } : {},
   })

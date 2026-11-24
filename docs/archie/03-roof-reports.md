@@ -64,6 +64,14 @@ request. Reports carry prices, so crew never see one.
 | Sales Rep (Roof Lee's salesperson) | only their own: reports on their own jobs, and address reports they made | the same |
 | Production (crew) | nothing | nothing |
 
+Moving a report to another job, or taking it off its job, takes more than being
+allowed to change it (the `change_job` decision). The person must be able to see
+the job it is on, **and** be the report's maker or a role that sees everything:
+a salesperson or a manager may do it only for a report they made, never for a
+colleague's or a team member's. The job it moves to must be one they may attach.
+Putting a report that has no job onto one is not changing a job, and asking for
+the job it already has changes nothing. Anyone else gets the plain "not found".
+
 A report that is not yours, is in another company, is archived or is not there
 at all is the same answer, "not found", never "forbidden". The written decisions
 are `ROOF_REPORT_RULES` in `shared/roof-reports.ts`, held by the permanent test
@@ -95,7 +103,7 @@ signed-in person, and a role that may use roof reports.
 | `GET /:id/photos/:photoId/:variant` | one photo copy (`working` or `thumb`), after the report's access rule |
 | `GET /linked-photo/:token` | one photo copy for a short signed link; no session, the signature is the check |
 | `POST /generate` | make a report; 40 a person every ten minutes, 200 a company a day (a new report and a retry both count). An optional `Idempotency-Key` header makes a repeated submit return the first report and start nothing |
-| `GET /` | list (`search`, `kind`, `status`, `page`), 25 a page, only what the person may see |
+| `GET /` | list (`search`, `kind`, `status`, `page`), 25 a page, only what the person may see. `status` filters on the status the list shows: a run still `generating` after eight minutes is shown as failed, so `failed` includes it and `generating` leaves it out |
 | `GET /:id` | one report with its photos, no share token |
 | `PUT /:id` | change the named fields only; anything else is refused |
 | `POST /:id/archive` | put it away; nothing is deleted |
@@ -143,6 +151,16 @@ ever reaches the store. An upload is checked by what it is: a real JPEG (SVG,
 PNG, HEIC and the rest are refused), no larger than the size cap, and at most
 100 photos waiting unused per person per day; a report holds at most 40.
 
+Each photo is stored twice: the full cleaned copy (the working copy the report and
+the analysis use) and a real thumbnail, made from the cleaned copy by
+`server/roof-reports/thumbnail.ts`: the longest side shrunk to 480 px (never
+enlarged), written as a fresh JPEG that holds only a bare JFIF header and the
+picture, then walked by the same cleaner, so no location can come through it.
+It is made with `jpeg-js` (pure JavaScript, no native code, no dependencies,
+about 76 KB), the only JPEG library Archie has and the one added for this. A
+picture that cleans but cannot be decoded, or that claims more than 48 million
+pixels, keeps the cleaned copy as its thumbnail, as it always was.
+
 A photo belongs to one report of one company. It is uploaded first, then
 claimed by the report its maker starts: only by the person who uploaded it, only
 once, and only into a report of their own company that they may see. A claim
@@ -155,6 +173,21 @@ those links after the same rule passes: each names the company, the report, the
 photo and the copy, is signed with a key derived from the session secret, and
 runs out after ten minutes. The links stop working when a report is archived. A
 token is a credential and is never logged.
+
+**Why the token is in the address.** A cookie or a header would keep it out of
+access logs, but the page is sandboxed without an origin of its own: a cookie is
+not sent with its image requests (they count as cross-site), an `<img>` cannot
+carry a header, and the page's script may not connect anywhere (`connect-src
+'none'`), which is what would turn a header into a blob. Loosening the sandbox
+to get one would be the larger risk, so the token stays in the address and is
+kept to one purpose: one photo copy of one report, signed with a key made for
+this alone, `GET` only, and **ten minutes**, which is as short as a long page
+needs (its pictures load as the reader scrolls to them). The app itself never
+writes the address down with the token in it: both entrypoints use
+`requestLogger` (`server/lib/request-log.ts`), and `loggablePath` also hides it
+in the address a recorded server failure keeps. The host's own access logs are
+not the app's to change, which is the other reason for the ten minutes. The
+photo response sends `Referrer-Policy: no-referrer`.
 
 ## Generation
 
@@ -193,7 +226,12 @@ ready report.
 US providers only: Groq, Google and Anthropic. Every model id lives in
 `server/lib/roof-reports/models.ts`. Every paid call goes through the metered
 call (`server/roof-reports/metered.ts`) and writes one `model_costs` row for the
-company that caused it. Only the two Anthropic prices are confirmed. The Groq
+company that caused it. The storm step's Google geocoding lookup is a paid call
+too, and is recorded the same way (`operation = 'geocode'`, provider `google`,
+no tokens) once for each lookup made, answered or not. Its price is
+unconfirmed, so the row is unpriced: 0 cents and `priced = false`, never a
+guess. No schema change was needed for it (the table already holds `google` and
+the operation is free text). Only the two Anthropic prices are confirmed. The Groq
 and Google prices are **unconfirmed**: those calls are recorded with their
 tokens, 0 cents and `priced = false`, never a guess. Add a price only after
 reading the provider's own page.

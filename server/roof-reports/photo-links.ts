@@ -11,6 +11,20 @@
  * Why not just the signed-in route: the page is shown in a sandboxed frame
  * that carries no cookie, so its images need to prove themselves.
  *
+ * Why the token is in the address and not somewhere that is not logged (a
+ * cookie, or a header): the page is sandboxed without an origin of its own, so
+ * a cookie is not sent with its image requests (they count as cross-site), an
+ * <img> cannot carry a header, and the policy forbids the page's own script to
+ * fetch anything (connect-src 'none'), which is what would turn a header into a
+ * blob. Loosening the sandbox to get one would be the larger risk, so the token
+ * stays in the address and is kept to one purpose: it names one photo copy of
+ * one report, is signed with a key made for this alone, works for GET only, and
+ * runs out after ten minutes, which is as short as a long page needs because
+ * its pictures load as the reader scrolls to them. The app never writes the
+ * address down with the token in it (server/lib/request-log.ts, loggablePath);
+ * the host's own access logs are not the app's to change, which is the other
+ * reason for the ten minutes.
+ *
  * The token is a credential while it lasts: it is never logged.
  */
 import { createHmac, timingSafeEqual } from 'node:crypto';

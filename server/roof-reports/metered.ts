@@ -32,14 +32,18 @@ export type CostOperation =
   | 'photo_labels'
   | 'rewrite'
   | 'measurement_detect'
-  | 'satellite_image';
+  | 'satellite_image'
+  | 'geocode';
 
 /** The Google Static Maps picture the satellite measurement looks at. It has no model id and no confirmed price. */
 const STATIC_MAP = { provider: 'google', id: 'google-static-maps' } as const;
 
+/** The Google Geocoding lookup the storm step places the address with. A paid service, not a model: no model id and no confirmed price. */
+const GEOCODING = { provider: 'google', id: 'google-geocoding' } as const;
+
 export interface MeteredInput {
   operation: CostOperation;
-  role: ModelRole | 'staticMap';
+  role: ModelRole | 'staticMap' | 'geocode';
   /** The report the call is for, when there is one. */
   ref: string | null;
 }
@@ -63,7 +67,7 @@ export function estimateCents(modelId: string, usage: Usage | undefined): { cent
 }
 
 function whoIs(role: MeteredInput['role']): { provider: string; id: string } {
-  return role === 'staticMap' ? STATIC_MAP : ROOF_REPORT_MODELS[role];
+  return role === 'staticMap' ? STATIC_MAP : role === 'geocode' ? GEOCODING : ROOF_REPORT_MODELS[role];
 }
 
 function tokenCount(n: unknown): number | null {
@@ -128,6 +132,19 @@ export async function meteredModelCall<T>(
   }
   await writeCost(input, who, readUsage(result.usage), false);
   return result.value;
+}
+
+/**
+ * Records one paid call that is not a model call and has no tokens (today, the
+ * Google geocoding lookup), for the company in context. The same provider list
+ * and the same price list apply: a service with no confirmed price is recorded
+ * as unpriced (0 cents, `priced = false`), never a guess. Like every cost row,
+ * a row that cannot be written is logged by its kind and never fails the work.
+ */
+export async function recordServiceCall(input: MeteredInput): Promise<void> {
+  const who = whoIs(input.role);
+  if (!(US_MODEL_PROVIDERS as readonly string[]).includes(who.provider)) throw new NotUsProviderError();
+  await writeCost(input, who, undefined, false);
 }
 
 /**

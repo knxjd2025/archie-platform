@@ -2360,7 +2360,7 @@ export type RoofReportPhoto = typeof roofReportPhotos.$inferSelect;
 export const modelCosts = pgTable('model_costs', {
   companyId: companyId(),
   id: uuid('id').primaryKey().defaultRandom(),
-  operation: text('operation').notNull(),   // photo_analysis | narrative | photo_labels | rewrite | measurement_detect | satellite_image
+  operation: text('operation').notNull(),   // photo_analysis | narrative | photo_labels | rewrite | measurement_detect | satellite_image | geocode
   provider: text('provider').notNull(),     // groq | google | anthropic
   model: text('model'),
   inputTokens: integer('input_tokens'),

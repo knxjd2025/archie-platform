@@ -11,6 +11,7 @@
  */
 import type { ErrorRequestHandler, NextFunction, Request, Response } from 'express';
 import { BUSY_MESSAGE, BUSY_RETRY_AFTER_SECONDS, findDatabaseBusy } from './db-busy';
+import { loggablePath } from './request-log';
 
 /** Same wording as server/lib/failure.ts, so a failure reads the same either way. */
 export const GENERIC_SERVER_ERROR =
@@ -48,13 +49,13 @@ export function createErrorHandler(record: ServerErrorRecorder): ErrorRequestHan
     if (findDatabaseBusy(err)) {
       // Saturated, not broken: tell the client to come back, and do not write
       // a bug report into the database that is already full.
-      console.warn(`[db] busy: ${req.method} ${req.path} answered 503`);
+      console.warn(`[db] busy: ${req.method} ${loggablePath(req.path)} answered 503`);
       res.setHeader('Retry-After', String(BUSY_RETRY_AFTER_SECONDS));
       return res.status(503).json({ message: BUSY_MESSAGE });
     }
     console.error('Error:', err);
     const status = errorStatus(err);
-    if (status >= 500) record(`${req.method} ${req.route?.path ?? req.path}`, err, req);
+    if (status >= 500) record(`${req.method} ${req.route?.path ?? loggablePath(req.path)}`, err, req);
     const stack = err instanceof Error ? err.stack : undefined;
     res.status(status).json({
       message: clientErrorMessage(err, status, isProduction()),

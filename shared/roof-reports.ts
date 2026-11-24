@@ -82,11 +82,14 @@ export type ReportPhotoCategory = (typeof REPORT_PHOTO_CATEGORIES)[number];
 export const SWITCHED_OFF = 'Roof reports are not switched on.';
 
 /** Every thing a person may do with a roof report. */
-export const ROOF_REPORT_ACTIONS = ['see', 'make', 'edit', 'send', 'archive', 'see_archived'] as const;
+export const ROOF_REPORT_ACTIONS = ['see', 'make', 'edit', 'send', 'archive', 'see_archived', 'change_job'] as const;
 export type RoofReportAction = (typeof ROOF_REPORT_ACTIONS)[number];
 
 /**
- * How far an action reaches for a role:
+ * How far an action reaches for a role (for `change_job`, moving a report to
+ * another job or taking it off its job, `all` is any report the role may see and
+ * `own` is only a report the person made themselves, a leader's team excluded;
+ * either way the person must also be able to see the job the report is on):
  *   all   every report in the company
  *   team  the person's own reports and their direct reports' (a sales leader)
  *   own   only the person's own: reports on their own jobs, and address
@@ -106,10 +109,10 @@ export type RoofReportDecision = 'all' | 'team' | 'own' | 'no';
  * may list them.
  */
 export const ROOF_REPORT_RULES: Record<TeamRole, Record<RoofReportAction, RoofReportDecision>> = {
-  admin:            { see: 'all',  make: 'all',  edit: 'all',  send: 'all',  archive: 'all',  see_archived: 'all' },
-  sales_director:   { see: 'all',  make: 'all',  edit: 'all',  send: 'all',  archive: 'all',  see_archived: 'all' },
-  customer_service: { see: 'all',  make: 'all',  edit: 'all',  send: 'all',  archive: 'all',  see_archived: 'all' },
-  manager:          { see: 'team', make: 'team', edit: 'team', send: 'team', archive: 'team', see_archived: 'no' },
-  sales:            { see: 'own',  make: 'own',  edit: 'own',  send: 'own',  archive: 'own',  see_archived: 'no' },
-  production:       { see: 'no',   make: 'no',   edit: 'no',   send: 'no',   archive: 'no',   see_archived: 'no' },
+  admin:            { see: 'all',  make: 'all',  edit: 'all',  send: 'all',  archive: 'all',  see_archived: 'all', change_job: 'all' },
+  sales_director:   { see: 'all',  make: 'all',  edit: 'all',  send: 'all',  archive: 'all',  see_archived: 'all', change_job: 'all' },
+  customer_service: { see: 'all',  make: 'all',  edit: 'all',  send: 'all',  archive: 'all',  see_archived: 'all', change_job: 'all' },
+  manager:          { see: 'team', make: 'team', edit: 'team', send: 'team', archive: 'team', see_archived: 'no',  change_job: 'own' },
+  sales:            { see: 'own',  make: 'own',  edit: 'own',  send: 'own',  archive: 'own',  see_archived: 'no',  change_job: 'own' },
+  production:       { see: 'no',   make: 'no',   edit: 'no',   send: 'no',   archive: 'no',   see_archived: 'no',  change_job: 'no' },
 };

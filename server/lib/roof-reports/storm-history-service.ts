@@ -524,6 +524,12 @@ export async function geocodeAddress(
   zip?: string,
   googleApiKey?: string,
   signal?: AbortSignal,
+  /**
+   * Told once for each paid Google lookup, after it was made (answered or not),
+   * and waited for, so the caller can record its cost. A hook that throws is ignored. Never
+   * called when there is no Google key, because nothing paid is then called.
+   */
+  onGoogleLookup?: () => void | Promise<void>,
 ): Promise<GeocodingResult | null> {
   // Each lookup has its own limit, and also stops at the request-wide deadline.
   const limit = (): AbortSignal => (signal ? AbortSignal.any([AbortSignal.timeout(GEOCODE_FETCH_TIMEOUT_MS), signal]) : AbortSignal.timeout(GEOCODE_FETCH_TIMEOUT_MS));
@@ -532,10 +538,15 @@ export async function geocodeAddress(
   // Try Google Geocoding if API key provided
   if (googleApiKey) {
     try {
-      const response = await fetch(
-        `${GOOGLE_GEOCODE_BASE_URL}?address=${encodeURIComponent(fullAddress)}&key=${googleApiKey}`,
-        { signal: limit() }
-      );
+      let response: Response;
+      try {
+        response = await fetch(
+          `${GOOGLE_GEOCODE_BASE_URL}?address=${encodeURIComponent(fullAddress)}&key=${googleApiKey}`,
+          { signal: limit() }
+        );
+      } finally {
+        try { await onGoogleLookup?.(); } catch { /* recording a cost never fails a lookup */ }
+      }
 
       if (response.ok) {
         const data = await response.json();
@@ -1076,6 +1087,8 @@ export async function generateStormReport(
     yearsBack?: number;
     searchRadiusMiles?: number;
     googleApiKey?: string;
+    /** Told once for each paid Google geocoding lookup, so its cost can be recorded. */
+    onGoogleLookup?: () => void | Promise<void>;
     /** The request-wide deadline. Without one, a 240 second budget applies. When it fires the report is returned with what had arrived, flagged `partial`. */
     signal?: AbortSignal;
   } = {}
@@ -1085,7 +1098,7 @@ export async function generateStormReport(
   const signal = options.signal ?? createDeadline();
 
   // Geocode the address
-  const geoResult = await geocodeAddress(address, city, state, zip, options.googleApiKey, signal);
+  const geoResult = await geocodeAddress(address, city, state, zip, options.googleApiKey, signal, options.onGoogleLookup);
 
   if (!geoResult) {
     // Out of time before the address could be placed: nothing can be searched, and that is not an error.

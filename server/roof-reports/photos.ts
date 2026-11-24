@@ -17,8 +17,10 @@
  * ever confirms such an id exists. Everything runs as the company, so another
  * company's photo is simply not there.
  *
- * The thumbnail is the cleaned copy itself: Archie has no image library and
- * adds none for this.
+ * The thumbnail is a real small copy (./thumbnail.ts: longest side 480 px, a
+ * fresh JPEG made from the cleaned copy, so no location data either). When a
+ * picture cannot be made small (a file that cleans but does not decode), the
+ * cleaned copy itself is kept as the thumbnail, as it always was.
  */
 import { randomUUID } from 'node:crypto';
 import express, { Router, type NextFunction, type Request, type Response } from 'express';
@@ -41,6 +43,7 @@ import { currentCompanyId, runAsCompany } from '../tenant/context';
 import { logWrite } from '../writes/log';
 import { decisionFor, requireRoofReportUser, roofReportFor, roofReportUser } from './access';
 import { verifyPhotoLink } from './photo-links';
+import { makeThumbnail } from './thumbnail';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isId = (v: unknown): v is string => typeof v === 'string' && UUID_RE.test(v);
@@ -84,7 +87,7 @@ export async function addReportPhoto(user: SessionUser, bytes: Buffer, category:
   // Both copies go in first, then the row: a row always has its copies behind it.
   try {
     await store.put(workingKey, clean.jpeg, 'image/jpeg');
-    await store.put(thumbKey, clean.jpeg, 'image/jpeg');
+    await store.put(thumbKey, makeThumbnail(clean.jpeg) ?? clean.jpeg, 'image/jpeg');
   } catch (e) {
     await logWrite({ actor: user.email, system: 'archie', action: 'upload_roof_report_photo', targetId: id, summary: 'a report photo was not saved', ok: false, error: describeStoreError(e) });
     return { status: 502, body: { error: PHOTO_NOT_SAVED } };
@@ -174,6 +177,8 @@ function sendPhoto(res: Response, bytes: Buffer): void {
     .set('Content-Type', 'image/jpeg')
     .set('Content-Length', String(bytes.length))
     .set('X-Content-Type-Options', 'nosniff')
+    // A photo link's token is in its address: never pass that address on as a referrer.
+    .set('Referrer-Policy', 'no-referrer')
     // Private: a signed-in person's own copy, kept by their browser only.
     .set('Cache-Control', 'private, max-age=300')
     .end(bytes);

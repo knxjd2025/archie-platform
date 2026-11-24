@@ -9,6 +9,7 @@ import { recordServerError } from '../server/bugs/routes';
 import { SISTER_PREFIX, sisterRawBody } from '../server/sister/door';
 import { corsOptions, sessionOptions, JSON_BODY_LIMIT } from '../server/security-config';
 import { createErrorHandler } from '../server/lib/error-response';
+import { requestLogger } from '../server/lib/request-log';
 
 const app = express();
 
@@ -40,24 +41,8 @@ app.use(session(sessionOptions()));
 // Every request from a signed-in person runs as their company (row level security).
 app.use(tenantFromSession);
 
-// Request logging
-app.use((req: Request, _res: Response, next: NextFunction) => {
-  const start = Date.now();
-  const reqPath = req.path;
-  let logged = false;
-
-  _res.on('finish', () => {
-    if (!logged) {
-      const duration = Date.now() - start;
-      if (reqPath.startsWith('/api')) {
-        console.log(`${req.method} ${reqPath} ${_res.statusCode} - ${duration}ms`);
-      }
-      logged = true;
-    }
-  });
-
-  next();
-});
+// Request logging (a photo link's token is never written down: server/lib/request-log.ts)
+app.use(requestLogger());
 
 // Unauthenticated liveness check, deliberately minimal — no config/integration
 // detail (a prior version leaked which API keys were configured to anyone).

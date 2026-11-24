@@ -109,6 +109,24 @@ describe.skipIf(!localDb)('the report page route (database)', async () => {
     expect(r.headers.get('cache-control')).toBe('private, no-store');
   });
 
+  it('serves a photo from its short link with no referrer and no sniffing, and the link runs out after ten minutes', async () => {
+    await h.put(`/api/roof-reports/${id}`, { visualStyle: 'formal' });
+    const r = await page();
+    const token = /\/api\/roof-reports\/linked-photo\/([A-Za-z0-9_.-]+)/.exec(r.text)?.[1];
+    expect(token).toBeTruthy();
+    h.signedOut();
+    const img = await h.get(`/api/roof-reports/linked-photo/${token}`);
+    expect(img.status).toBe(200);
+    expect(img.headers.get('referrer-policy')).toBe('no-referrer');
+    expect(img.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(img.headers.get('cache-control')).toMatch(/^private,/);
+    // The longest it may work: the pictures of a long page load as the reader scrolls to them.
+    const { LINK_TTL_SECONDS, verifyPhotoLink } = await import('../photo-links');
+    expect(LINK_TTL_SECONDS).toBe(600);
+    expect(verifyPhotoLink(token, Date.now() + 599_000)).not.toBeNull();
+    expect(verifyPhotoLink(token, Date.now() + 601_000)).toBeNull();
+  });
+
   it('serves a saved page as strictly as before: no script, no nonce, and the same image and header rules', async () => {
     await h.put(`/api/roof-reports/${id}`, { editedHtml: '<!doctype html><html><body><h1>My edit</h1></body></html>' });
     const r = await page();

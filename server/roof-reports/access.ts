@@ -16,7 +16,7 @@ import type { TeamRole } from '../../shared/rbac';
 import {
   NOT_FOUND, ROOF_REPORT_RULES, type RoofReportAction, type RoofReportDecision,
 } from '../../shared/roof-reports';
-import { ownsLead, scopedLeadWhere, type SessionUser } from '../access/rep-scope';
+import { ownsLead, scopedLeadWhere, teamMemberIdByEmail, type SessionUser } from '../access/rep-scope';
 import { visibleIdsFor } from '../access/team-scope';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -110,4 +110,33 @@ export async function mayAttachJob(user: SessionUser, jobExternalId: string): Pr
   const [job] = await db.select({ id: leads.id }).from(leads).where(eq(leads.externalId, jobExternalId)).limit(1);
   if (!job) return false;
   return ownsLead(user, jobExternalId);
+}
+
+/**
+ * May this person move this report to another job, or take it off its job?
+ *
+ * Changing or removing a job needs the same right as seeing that job AND being
+ * the report's maker or a role that sees everything (the `change_job` decision).
+ * The job it goes to must be one the person may attach (`mayAttachJob`). Putting
+ * a report that has no job onto one is not changing a job: only the job it goes
+ * to is checked. Asking for the job it already has changes nothing and is
+ * allowed. The caller has already shown the person may see the report.
+ */
+export async function mayChangeJob(
+  user: SessionUser,
+  report: Pick<RoofReport, 'jobExternalId' | 'createdByMemberId'>,
+  to: string | null,
+): Promise<boolean> {
+  const decision = decisionFor(user?.role, 'change_job');
+  if (decision === 'no') return false;
+  const from = report.jobExternalId ?? null;
+  if (from === to) return true;
+  if (from !== null) {
+    if (decision !== 'all') {
+      const me = await teamMemberIdByEmail(user.email);
+      if (me === null || report.createdByMemberId !== me) return false;
+    }
+    if (!(await ownsLead(user, from))) return false;
+  }
+  return to === null ? true : mayAttachJob(user, to);
 }

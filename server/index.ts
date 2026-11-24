@@ -11,6 +11,7 @@ import { seedAll } from './seed';
 import { SISTER_PREFIX, sisterRawBody } from './sister/door';
 import { corsOptions, sessionOptions, JSON_BODY_LIMIT } from './security-config';
 import { createErrorHandler } from './lib/error-response';
+import { requestLogger } from './lib/request-log';
 import path from 'path';
 
 const app = express();
@@ -38,24 +39,8 @@ app.use(session(sessionOptions()));
 // Every request from a signed-in person runs as their company (row level security).
 app.use(tenantFromSession);
 
-// Request logging
-app.use((req: Request, _res: Response, next: NextFunction) => {
-  const start = Date.now();
-  const path = req.path;
-  let logged = false;
-
-  _res.on('finish', () => {
-    if (!logged) {
-      const duration = Date.now() - start;
-      if (path.startsWith('/api')) {
-        console.log(`${req.method} ${path} ${_res.statusCode} - ${duration}ms`);
-      }
-      logged = true;
-    }
-  });
-
-  next();
-});
+// Request logging (a photo link's token is never written down: server/lib/request-log.ts)
+app.use(requestLogger());
 
 // API routes
 registerRoutes(app);

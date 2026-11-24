@@ -16,7 +16,7 @@
  * report from the state it expects, so a late run cannot undo a newer one.
  */
 import { createHash, randomBytes } from 'node:crypto';
-import { and, eq, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, eq, gte, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import { db } from '../db';
 import { roofReports, type RoofReport } from '../../shared/schema';
 import { GENERATE_FAILED, MAX_REPORTS_PER_DAY } from '../../shared/roof-reports';
@@ -172,6 +172,21 @@ export function failureSentence(error: unknown): string {
 export function effectiveState(row: Pick<RoofReport, 'status' | 'problem' | 'updatedAt'>, now: Date = new Date()): { status: string; problem: string | null } {
   if (row.status === 'generating' && now.getTime() - row.updatedAt.getTime() > STALE_AFTER_MS) return { status: 'failed', problem: GENERATE_FAILED };
   return { status: row.status, problem: row.problem ?? null };
+}
+
+/**
+ * The filter for one status as a list SHOWS it, in SQL: the same rule as
+ * `effectiveState`. A report still `generating` after eight minutes is shown as
+ * failed, so `failed` includes it and `generating` leaves it out. `archived` is
+ * not here: it is a state a person put it in, handled with who may see archived
+ * reports. Any other word matches nothing but its own stored status.
+ */
+export function statusFilter(status: string, now: Date = new Date()): SQL {
+  const cutoff = new Date(now.getTime() - STALE_AFTER_MS);
+  const dead = and(eq(roofReports.status, 'generating'), lt(roofReports.updatedAt, cutoff)) as SQL;
+  if (status === 'failed') return or(eq(roofReports.status, 'failed'), dead) as SQL;
+  if (status === 'generating') return and(eq(roofReports.status, 'generating'), gte(roofReports.updatedAt, cutoff)) as SQL;
+  return eq(roofReports.status, status);
 }
 
 /**

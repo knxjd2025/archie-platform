@@ -29,19 +29,21 @@ import { decisionFor, mayUseRoofReports, requireRoofReportUser } from '../access
 
 // What every role may do with a report, written out by hand. 'all' is every
 // report in the company, 'team' the person's own and their direct reports',
-// 'own' only the person's own, 'no' never.
+// 'own' only the person's own, 'no' never. For change_job (move a report to
+// another job, or take it off its job) 'all' is any report the role may see and
+// 'own' is only a report the person made themselves, a leader's team included.
 const D: Record<TeamRole, Record<RoofReportAction, RoofReportDecision>> = {
-  admin:            { see: 'all',  make: 'all',  edit: 'all',  send: 'all',  archive: 'all',  see_archived: 'all' },
-  sales_director:   { see: 'all',  make: 'all',  edit: 'all',  send: 'all',  archive: 'all',  see_archived: 'all' },
-  customer_service: { see: 'all',  make: 'all',  edit: 'all',  send: 'all',  archive: 'all',  see_archived: 'all' },
-  manager:          { see: 'team', make: 'team', edit: 'team', send: 'team', archive: 'team', see_archived: 'no' },
-  sales:            { see: 'own',  make: 'own',  edit: 'own',  send: 'own',  archive: 'own',  see_archived: 'no' },
-  production:       { see: 'no',   make: 'no',   edit: 'no',   send: 'no',   archive: 'no',   see_archived: 'no' },
+  admin:            { see: 'all',  make: 'all',  edit: 'all',  send: 'all',  archive: 'all',  see_archived: 'all', change_job: 'all' },
+  sales_director:   { see: 'all',  make: 'all',  edit: 'all',  send: 'all',  archive: 'all',  see_archived: 'all', change_job: 'all' },
+  customer_service: { see: 'all',  make: 'all',  edit: 'all',  send: 'all',  archive: 'all',  see_archived: 'all', change_job: 'all' },
+  manager:          { see: 'team', make: 'team', edit: 'team', send: 'team', archive: 'team', see_archived: 'no',  change_job: 'own' },
+  sales:            { see: 'own',  make: 'own',  edit: 'own',  send: 'own',  archive: 'own',  see_archived: 'no',  change_job: 'own' },
+  production:       { see: 'no',   make: 'no',   edit: 'no',   send: 'no',   archive: 'no',   see_archived: 'no',  change_job: 'no' },
 };
 
 describe('who may do what with a roof report (the written decisions)', () => {
   it('decides every action for every role Archie has, and nothing else', () => {
-    expect([...ROOF_REPORT_ACTIONS].sort()).toEqual(['archive', 'edit', 'make', 'see', 'see_archived', 'send']);
+    expect([...ROOF_REPORT_ACTIONS].sort()).toEqual(['archive', 'change_job', 'edit', 'make', 'see', 'see_archived', 'send']);
     expect(Object.keys(ROOF_REPORT_RULES).sort()).toEqual([...ALL_ROLES].sort());
     expect(Object.keys(D).sort()).toEqual([...ALL_ROLES].sort());
     for (const role of ALL_ROLES) {
@@ -58,6 +60,9 @@ describe('who may do what with a roof report (the written decisions)', () => {
     for (const role of ALL_ROLES) {
       for (const action of ROOF_REPORT_ACTIONS) {
         if (action === 'see_archived' || role === 'production') continue;
+        // Moving a report off its job reaches only as far as the role's own scope, and never past the
+        // person's own reports: a role that sees everything may; every narrower one may only for a report it made.
+        if (action === 'change_job') { expect(decisionFor(role, action), role).toBe(dataScope(role) === 'all' ? 'all' : 'own'); continue; }
         expect(decisionFor(role, action), `${role} / ${action}`).toBe(word[dataScope(role)]);
       }
     }
@@ -149,7 +154,7 @@ describe.skipIf(!local)('who sees which report (database)', async () => {
   const schema = await import('../../../shared/schema');
   const { runAsCompany } = await import('../../tenant/context');
   const { createCompany } = await import('../../tenant/companies');
-  const { visibleRoofReportWhere, roofReportFor, mayAttachJob } = await import('../access');
+  const { visibleRoofReportWhere, roofReportFor, mayAttachJob, mayChangeJob } = await import('../access');
   const { and } = await import('drizzle-orm');
 
   const tag = `rr-roles-${process.pid}-${Date.now()}`;
@@ -204,6 +209,7 @@ describe.skipIf(!local)('who sees which report (database)', async () => {
       await add('addrA', { createdByMemberId: member.repA, status: 'ready' });
       await add('addrM', { createdByMemberId: member.manager, status: 'ready' });
       await add('archived', { jobExternalId: `${tag}-jobA`, createdByMemberId: member.repA, status: 'archived' });
+      // Only for the job-change rule: these two are not in the lists above (they are added below, after the lists are read).
     });
     await runAsCompany(b, async () => {
       // The other company has a job with the very same key, and a report on it.
@@ -294,6 +300,69 @@ describe.skipIf(!local)('who sees which report (database)', async () => {
     expect(await listFor('repA')).toEqual(['addrA', 'jobA']);
     expect(await listFor('manager')).toEqual(['addrA', 'addrM', 'jobA']);
     expect(await openFor('repB')).toEqual(['jobB', 'jobC']);
+  });
+
+  describe('changing or removing a report\'s job', () => {
+    // Reports made for this block only, so the lists above are not changed.
+    const made: Record<string, { jobExternalId: string | null; createdByMemberId: number | null }> = {};
+    beforeAll(async () => {
+      const members = await runAsCompany(a, async () => db.select().from(schema.teamMembers));
+      const id = (w: Who) => members.find((m) => m.email === email(w))!.id;
+      made.byCsrOnA = { jobExternalId: `${tag}-jobA`, createdByMemberId: id('csr') };
+      made.byRepAOnA = { jobExternalId: `${tag}-jobA`, createdByMemberId: id('repA') };
+      // Made by rep A on a job that was handed to rep B afterwards: rep A no longer sees that job.
+      made.byRepAOnB = { jobExternalId: `${tag}-jobB`, createdByMemberId: id('repA') };
+      made.addrByRepA = { jobExternalId: null, createdByMemberId: id('repA') };
+      made.addrByCsr = { jobExternalId: null, createdByMemberId: id('csr') };
+      // A second job of rep A's, so "move it to another job they may see" can be asked.
+      await runAsCompany(a, async () => { await db.insert(schema.leads).values({ externalId: `${tag}-jobA2`, source: 'jobtread', firstName: 'Kim', jtSalesRep: 'Rep Alpha' } as any); });
+    });
+    const can = (w: Who, report: string, to: string | null) => runAsCompany(a, () => mayChangeJob(user(w), made[report], to));
+
+    it('lets a role that sees everything change or remove any report\'s job, onto a job that exists in the company', async () => {
+      for (const w of ['admin', 'director', 'csr'] as Who[]) {
+        expect(await can(w, 'byRepAOnA', null), w).toBe(true);
+        expect(await can(w, 'byRepAOnA', `${tag}-jobB`), w).toBe(true);
+        expect(await can(w, 'byCsrOnA', null), w).toBe(true);
+        expect(await can(w, 'byRepAOnB', `${tag}-jobA`), w).toBe(true);
+        expect(await can(w, 'byRepAOnA', `${tag}-no-such-job`), w).toBe(false);
+        expect(await can(w, 'byRepAOnA', `${tag}-bjob`), `${w} / the other company's job`).toBe(false);
+      }
+    });
+
+    it('lets a salesperson change or remove the job only of a report they made, and only while they may see that job', async () => {
+      expect(await can('repA', 'byRepAOnA', null)).toBe(true);
+      expect(await can('repA', 'byRepAOnA', `${tag}-jobA2`)).toBe(true);
+      // Asking for the job it already has changes nothing.
+      expect(await can('repA', 'byCsrOnA', `${tag}-jobA`)).toBe(true);
+      // Not onto a job they may not see, however it is asked.
+      expect(await can('repA', 'byRepAOnA', `${tag}-jobB`)).toBe(false);
+      // A colleague's report, or the office's, even on their own job.
+      expect(await can('repA', 'byCsrOnA', null)).toBe(false);
+      expect(await can('repA', 'byCsrOnA', `${tag}-jobA2`)).toBe(false);
+      expect(await can('repB', 'byRepAOnA', null)).toBe(false);
+      // Their own report on a job they no longer see: no.
+      expect(await can('repA', 'byRepAOnB', null)).toBe(false);
+      expect(await can('repA', 'byRepAOnB', `${tag}-jobA`)).toBe(false);
+    });
+
+    it('lets a manager change the job only of a report they made, not of a report of their team', async () => {
+      expect(await can('manager', 'byRepAOnA', null)).toBe(false);
+      expect(await can('manager', 'byRepAOnA', `${tag}-jobA2`)).toBe(false);
+      expect(await can('manager', 'byCsrOnA', null)).toBe(false);
+    });
+
+    it('does not count putting a report on a job when it had none as changing one: only the job itself is checked', async () => {
+      expect(await can('repA', 'addrByRepA', `${tag}-jobA`)).toBe(true);
+      expect(await can('repA', 'addrByRepA', `${tag}-jobB`)).toBe(false);
+      expect(await can('manager', 'addrByRepA', `${tag}-jobA`)).toBe(true);
+      expect(await can('csr', 'addrByCsr', `${tag}-jobB`)).toBe(true);
+      expect(await can('crew', 'addrByCsr', `${tag}-jobA`)).toBe(false);
+    });
+
+    it('lets crew change nothing', async () => {
+      for (const report of Object.keys(made)) { expect(await can('crew', report, null), report).toBe(false); expect(await can('crew', report, `${tag}-jobA`), report).toBe(false); }
+    });
   });
 
   describe('attaching a report to a job', () => {

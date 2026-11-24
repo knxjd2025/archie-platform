@@ -37,7 +37,7 @@ import {
   REPORT_KINDS, TEMPLATES, roofReportPhotoPath,
 } from '../../shared/roof-reports';
 import { googleMapsKey } from '../lib/reports/google-key.js';
-import { meteredModelCaller, type CostOperation } from './metered';
+import { meteredModelCaller, recordServiceCall, type CostOperation } from './metered';
 import { estimateRoofAge } from './roof-age';
 import { buildMeasurementSection, cleanDamageCounts, cleanMeasurements, cleanRoofDetails, cleanText } from './inputs';
 import { loadReportPhoto } from './photos';
@@ -371,7 +371,11 @@ export function liveDeps(reportId: string, options: { keys?: ProviderKeys; base?
   const anyKey = Boolean(keys.groq || keys.google || keys.anthropic) || options.base !== undefined;
   const metered = (operation: CostOperation) => meteredModelCaller(base, { operation, ref: reportId });
   return {
-    storm: (address, city, state, zip, opts) => generateStormReport(address, city, state, zip, { ...opts, googleApiKey: googleMapsKey() }),
+    // The Google geocoding lookup is paid: each one writes an (unpriced) cost row for the company, tagged with this report.
+    storm: (address, city, state, zip, opts) => generateStormReport(address, city, state, zip, {
+      ...opts, googleApiKey: googleMapsKey(),
+      onGoogleLookup: () => recordServiceCall({ operation: 'geocode', role: 'geocode', ref: reportId }),
+    }),
     enhancedStorm: buildEnhancedStormData,
     analyze: async (photo, ctx) => {
       if (!anyKey) return NOT_ANALYSED;

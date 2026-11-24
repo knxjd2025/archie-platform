@@ -39,13 +39,13 @@ import { renderReportHtml } from '../lib/roof-reports/render-report-html.js';
 import { normalizeReportNumbers } from '../lib/roof-reports/report-normalize.js';
 import type { ComprehensiveRoofReport } from '../lib/roof-reports/comprehensive-roof-report.js';
 import {
-  decisionFor, jobExistsInCompany, mayAttachJob, requireRoofReportUser, roofReportFor, roofReportUser, visibleRoofReportWhere,
+  decisionFor, jobExistsInCompany, mayAttachJob, mayChangeJob, requireRoofReportUser, roofReportFor, roofReportUser, visibleRoofReportWhere,
 } from './access';
 import { brandFor } from './brand';
 import { GeocodeFailedError, liveDeps, modelKeysFromEnv, runGeneration, type GenerateDeps, type GenerateRequest } from './generate';
 import { authedPhotoRoutes, claimPhotos, linkedPhotoRoute, photosOfReport } from './photos';
 import { photoLinkPath, signPhotoLink } from './photo-links';
-import { beginRetry, effectiveState, failureSentence, markFailed, requestFingerprint, saveGenerated, startReport } from './store';
+import { beginRetry, effectiveState, failureSentence, markFailed, requestFingerprint, saveGenerated, startReport, statusFilter } from './store';
 import { PAGE_SIZE, parseGenerateBody, parseListQuery, parseUpdateBody, sanitizeReportJson, type UpdateFields } from './validate';
 import { newNonce, pagePolicy } from './page-policy';
 import { requireRoofReportsOn } from './switch';
@@ -240,7 +240,7 @@ export function registerRoofReportsRoutes(app: Express, options: RoofReportRoute
   // ---------------------------------------------------------------- listing
   async function listWhere(user: SessionUser, query: ReturnType<typeof parseListQuery>, extra?: SQL): Promise<SQL> {
     const parts: SQL[] = [await visibleRoofReportWhere(user, { archived: query.status === 'archived' })];
-    if (query.status && query.status !== 'archived') parts.push(eq(roofReports.status, query.status));
+    if (query.status && query.status !== 'archived') parts.push(statusFilter(query.status));
     if (query.kind) parts.push(sql`${roofReports.reportTypes} @> ARRAY[${query.kind}]::text[]`);
     if (query.search) {
       const pattern = `%${escapeLike(query.search)}%`;
@@ -326,7 +326,8 @@ export function registerRoofReportsRoutes(app: Express, options: RoofReportRoute
       const parsed = parseUpdateBody(req.body);
       if (!parsed.ok) return res.status(400).json({ error: parsed.error });
       const fields: UpdateFields = parsed.value;
-      if (fields.jobExternalId && !(await mayAttachJob(user, fields.jobExternalId))) return notFound(res);
+      // Moving a report to another job, or off its job, takes more than being able to edit it (see mayChangeJob).
+      if ('jobExternalId' in fields && !(await mayChangeJob(user, row, fields.jobExternalId ?? null))) return notFound(res);
 
       const changes: Partial<typeof roofReports.$inferInsert> = { updatedAt: new Date() };
       for (const key of ['title', 'customerName', 'customerEmail', 'customerPhone', 'inspectorNotes', 'inspectionDate', 'template', 'visualStyle', 'jobExternalId'] as const) {
