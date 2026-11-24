@@ -51,8 +51,8 @@ deploying this code".
 
 The old roof reports program is being merged into Archie: reports from an address, with or without
 photos, kept private and cleaned of location data. Stage B (the tables, the photos, the generation and
-the routes) is in. All of it is off until `ARCHIE_ROOF_REPORTS=on`. **Apply migrations `0020` and `0021`
-as the owner before deploying code that reads them**; both are safe under the code live today. See
+the routes) is in. All of it is off until `ARCHIE_ROOF_REPORTS=on`. **Apply migrations `0020`, `0021` and `0022`
+as the owner before deploying code that reads them**; all are safe under the code live today. See
 docs/archie/03-roof-reports.md.
 
 ## Not in this repo on purpose

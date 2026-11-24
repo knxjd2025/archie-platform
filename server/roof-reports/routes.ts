@@ -25,8 +25,8 @@ import { and, count, desc, eq, ilike, ne, or, sql, type SQL } from 'drizzle-orm'
 import { db } from '../db';
 import { roofReports, type RoofReport, type RoofReportPhoto } from '../../shared/schema';
 import {
-  GENERATE_FAILED, MAX_REPORTS_PER_DAY, NOT_FOUND, ONLY_FAILED_RETRY, PAGE_NOT_READY, STILL_BEING_MADE, STILL_BEING_MADE_EDIT,
-  TOO_MANY_RECENT, TOO_MANY_TODAY, roofReportPhotoPath,
+  BAD_REQUEST_KEY, GENERATE_FAILED, NOT_FOUND, ONLY_FAILED_RETRY, PAGE_NOT_READY, STILL_BEING_MADE, STILL_BEING_MADE_EDIT,
+  REQUEST_KEY_REUSED, TOO_MANY_RECENT, TOO_MANY_TODAY, roofReportPhotoPath,
 } from '../../shared/roof-reports';
 import { requireAuth } from '../auth/middleware';
 import { sendFailure } from '../lib/failure';
@@ -45,7 +45,7 @@ import { brandFor } from './brand';
 import { GeocodeFailedError, liveDeps, modelKeysFromEnv, runGeneration, type GenerateDeps, type GenerateRequest } from './generate';
 import { authedPhotoRoutes, claimPhotos, linkedPhotoRoute, photosOfReport } from './photos';
 import { photoLinkPath, signPhotoLink } from './photo-links';
-import { beginRetry, effectiveState, failureSentence, insertGenerating, markFailed, reportsStartedToday, saveGenerated } from './store';
+import { beginRetry, effectiveState, failureSentence, markFailed, requestFingerprint, saveGenerated, startReport } from './store';
 import { PAGE_SIZE, parseGenerateBody, parseListQuery, parseUpdateBody, sanitizeReportJson, type UpdateFields } from './validate';
 import { requireRoofReportsOn } from './switch';
 
@@ -62,6 +62,13 @@ function kindOf(error: unknown): string {
   const code = e?.cause?.code ?? e?.code;
   if (typeof code === 'string' && /^[\w.-]{1,16}$/.test(code)) return code;
   return typeof e?.name === 'string' && /^\w{1,40}$/.test(e.name) ? e.name : 'unknown';
+}
+
+/** A request key: 8 to 200 plain characters. Absent is fine (no repeat protection); present and unusable is refused, never quietly ignored. */
+function readRequestKey(req: Request): { ok: true; key: string | null } | { ok: false } {
+  const raw = req.get('idempotency-key');
+  if (raw === undefined) return { ok: true, key: null };
+  return /^[A-Za-z0-9_.:-]{8,200}$/.test(raw) ? { ok: true, key: raw } : { ok: false };
 }
 
 const money = (v: string | null): number | null => (v === null ? null : Number(v));
@@ -185,8 +192,20 @@ export function registerRoofReportsRoutes(app: Express, options: RoofReportRoute
         if (!(await mayAttachJob(user, request.jobExternalId))) return notFound(res);
         job = request.jobExternalId;
       }
-      if ((await reportsStartedToday()) >= MAX_REPORTS_PER_DAY) return res.status(429).json({ error: TOO_MANY_TODAY });
-      const row = await insertGenerating({ req: request, memberId: await teamMemberIdByEmail(user.email), jobExternalId: job });
+      const requestKey = readRequestKey(req);
+      if (!requestKey.ok) return res.status(400).json({ error: BAD_REQUEST_KEY });
+      const started = await startReport({
+        req: request, memberId: await teamMemberIdByEmail(user.email), jobExternalId: job,
+        idempotencyKey: requestKey.key, requestHash: requestKey.key ? requestFingerprint({ ...request, jobExternalId: job }) : null,
+      });
+      if (started.kind === 'capped') return res.status(429).json({ error: TOO_MANY_TODAY });
+      if (started.kind === 'key_reused') return res.status(409).json({ error: REQUEST_KEY_REUSED });
+      if (started.kind === 'repeat') {
+        // The same submit again: the first report as it stands now, and nothing is started.
+        const state = effectiveState(started.row);
+        return res.json({ id: started.row.id, status: state.status, problem: state.problem });
+      }
+      const row = started.row;
       const claimed = await claimPhotos(user, row.id, request.photoIds);
       await run(res, user, row, { ...request, photoIds: claimed, jobExternalId: job ?? undefined });
     } catch (error) {
@@ -200,8 +219,8 @@ export function registerRoofReportsRoutes(app: Express, options: RoofReportRoute
       const found = await roofReportFor(user, req.params.id);
       if (!found || decisionFor(user.role, 'edit') === 'no') return notFound(res);
       if (effectiveState(found).status !== 'failed') return res.status(409).json({ error: ONLY_FAILED_RETRY });
-      if ((await reportsStartedToday()) >= MAX_REPORTS_PER_DAY) return res.status(429).json({ error: TOO_MANY_TODAY });
       const row = await beginRetry(found.id);
+      if (row === 'capped') return res.status(429).json({ error: TOO_MANY_TODAY });
       if (!row) return res.status(409).json({ error: ONLY_FAILED_RETRY });
       const kept = (row.reportJson as { retryInput?: { roofDetails?: unknown; damageCounts?: unknown; measurements?: unknown } } | null)?.retryInput ?? {};
       const photoIds = (await photosOfReport(row.id)).map((p) => p.id);

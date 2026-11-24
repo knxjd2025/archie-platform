@@ -57,6 +57,8 @@ export const CANT_CHANGE = 'That part of a report can\'t be changed here.';
 export const REPORT_DATA_BAD = 'The report\'s contents couldn\'t be saved. Please reload it and try again.';
 export const PAGE_NOT_SAFE = 'That page contains something that can\'t be saved.';
 export const PAGE_NOT_READY = 'This report isn\'t ready to show yet.';
+export const BAD_REQUEST_KEY = 'That request could not be used. Please try again.';
+export const REQUEST_KEY_REUSED = 'That was already used to make a different report. Please start the report again.';
 export const PICK_PHOTO_KIND = 'Pick what the photo shows from the list.';
 
 export const STILL_BEING_MADE_EDIT = 'This report is still being made. Please try again once it finishes.';

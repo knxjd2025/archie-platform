@@ -28,19 +28,29 @@ photo links inside a page are made against).
 
 ## Before this code is deployed
 
-Apply two migrations to the database, as the owner, before deploying code that
-reads them. Both are safe under the code that is live today (they only add
-tables nothing reads yet). Nothing in the build or deploy runs them.
+Apply three migrations to the database, as the owner, before deploying code that
+reads them. All three are safe under the code that is live today (0020 and 0021
+only add tables nothing reads yet; 0022 only adds columns the live code never
+names). Nothing in the build or deploy runs them. **0022 must be applied before
+the code that names its columns is deployed**: that code reads `roof_reports`
+with them, so deployed first it breaks every report read.
 
 | file | what it adds | sha256 |
 |---|---|---|
 | `migrations/0020_roof_reports.sql` | `roof_reports`, `roof_report_photos` | `ace7bc60ebc3fc5d0dc040fb8d79ceb5b4300d5d34b8b23831b95b21c72ed55d` |
 | `migrations/0021_model_costs.sql` | `model_costs` | `ca45ee62a6b90eaa514c94dca3bc702a4a679c93a36817b5aba80014a0b1a4a5` |
+| `migrations/0022_roof_report_starts.sql` | `roof_reports.started_at` (filled from `created_at`, then required), `idempotency_key`, `request_hash`, and two indexes | `3bdf415c35ed403d629df6b7f723fc119cd6ec5b4065b35270078c13678b1e2e` |
 
-Check the file you apply with `sha256sum` against the table. Both need `0008`
-(the system role): each table is protected with the function `0008` created, so
-each has exactly the two company policies. A migration is never edited once
-applied.
+Check the file you apply with `sha256sum` against the table. 0020 and 0021 need
+`0008` (the system role): each table is protected with the function `0008`
+created, so each has exactly the two company policies; 0022 needs `0020`. A
+migration is never edited once applied.
+
+0022 is safe on a live table: one transaction, with a five second lock timeout.
+The column is added with no default, filled from `created_at`, and only then
+given its default and made required, so no row is ever seen without a value. The
+table is young and small (the feature is off until it is switched on), so the
+backfill and the two index builds are brief.
 
 ## Who sees and does what
 
@@ -82,7 +92,7 @@ signed-in person, and a role that may use roof reports.
 | `POST /photos` | one raw JPEG body (`?category=`), cleaned and stored privately |
 | `GET /:id/photos/:photoId/:variant` | one photo copy (`working` or `thumb`), after the report's access rule |
 | `GET /linked-photo/:token` | one photo copy for a short signed link; no session, the signature is the check |
-| `POST /generate` | make a report; 40 a person every ten minutes, 200 a company a day |
+| `POST /generate` | make a report; 40 a person every ten minutes, 200 a company a day (a new report and a retry both count). An optional `Idempotency-Key` header makes a repeated submit return the first report and start nothing |
 | `GET /` | list (`search`, `kind`, `status`, `page`), 25 a page, only what the person may see |
 | `GET /:id` | one report with its photos, no share token |
 | `PUT /:id` | change the named fields only; anything else is refused |
@@ -125,6 +135,22 @@ storm fetch, every photo and the narrative. At most 40 photos, analysed three
 at a time with a pause between. Storm and photo analysis return what they have
 rather than throw; the narrative and the labels are non-fatal and get a minute
 each. A report that is missing part of itself says so in one plain sentence.
+
+The daily cap holds under parallel requests. Counting the day's starts and adding
+the new report happen in one transaction that first takes a lock on the company
+(`pg_advisory_xact_lock`), and what is counted is `started_at`, which a new
+report and every retry both set. A retry of a report first made on an earlier
+day therefore counts today, and a retry at a full day is refused and leaves the
+report as it was. (A report retried several times in one day counts once, since
+a row has one start time; each retry also needs a run that failed, and the
+per-person limit above applies.)
+
+A request key is 8 to 200 characters of letters, digits and `_ . : -`. The same
+person, in the same company, sending the same key with the same request gets the
+first report back (its state as it stands) and nothing is started or counted.
+The same key asking for something different (any change to what is asked,
+compared by a fingerprint of the parsed request) is refused with a plain
+sentence. A key that is not usable is refused, never quietly ignored.
 
 A report row exists from the start as `generating`. It becomes `ready` only
 through one statement that writes the whole report and its summary together,

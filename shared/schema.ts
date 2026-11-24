@@ -2304,10 +2304,18 @@ export const roofReports = pgTable('roof_reports', {
   problem: text('problem'),
   legacyId: text('legacy_id'),
   legacyExtra: jsonb('legacy_extra'),
+  /** When the latest generation of this report began: a new report and every retry set it. The daily cap counts on it (migration 0022). */
+  startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
+  /** The key a person's screen sent with the request that made this report, so a repeated submit finds it instead of making another (migration 0022). */
+  idempotencyKey: text('idempotency_key'),
+  /** A fingerprint of what that request asked for, so the same key asking for something else is told apart from a repeat. */
+  requestHash: text('request_hash'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({
   shareTokenUq: uniqueIndex('roof_reports_share_token_uq').on(t.shareToken),
+  startedIdx: index('roof_reports_company_started').on(t.companyId, t.startedAt),
+  idempotencyUq: uniqueIndex('roof_reports_idempotency_uq').on(t.companyId, t.createdByMemberId, t.idempotencyKey).where(sql`${t.idempotencyKey} IS NOT NULL`),
   legacyUq: uniqueIndex('roof_reports_legacy_uq').on(t.companyId, t.legacyId),
   createdIdx: index('roof_reports_company_created').on(t.companyId, t.createdAt),
   jobIdx: index('roof_reports_company_job').on(t.companyId, t.jobExternalId),

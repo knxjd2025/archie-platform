@@ -128,14 +128,14 @@ describe.skipIf(!local)('generation: saving, failing and metering (database)', a
       const running = await newReport(a);
       expect(await runAsCompany(a, () => store.beginRetry(running.id))).toBeNull();
       expect(await runAsCompany(a, () => store.markFailed(running.id, GENERATE_FAILED))).toBe(true);
-      const again = await runAsCompany(a, () => store.beginRetry(running.id));
+      const again = await runAsCompany(a, () => store.beginRetry(running.id)) as { status: string; problem: string | null } | null;
       expect(again?.status).toBe('generating');
       expect(again?.problem).toBeNull();
       // Two requests cannot both start it.
       expect(await runAsCompany(a, () => store.beginRetry(running.id))).toBeNull();
       // A run that was left behind long ago can be taken over.
       await runAsCompany(a, () => db.execute(sql`update roof_reports set updated_at = now() - interval '9 minutes' where id = ${running.id}`));
-      expect((await runAsCompany(a, () => store.beginRetry(running.id)))?.status).toBe('generating');
+      expect(((await runAsCompany(a, () => store.beginRetry(running.id))) as { status: string } | null)?.status).toBe('generating');
       await runAsCompany(a, () => store.saveGenerated(running.id, fakeReport(running.id), null));
       expect(await runAsCompany(a, () => store.beginRetry(running.id))).toBeNull();
       // Another company's report, never.
