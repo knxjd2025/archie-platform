@@ -52,9 +52,25 @@ export interface MotionRuntimeOptions {
    * blocked request. Without one, nothing changes.
    */
   nonce?: string;
+  /**
+   * With a nonce: the app's own folder the vendored library is served from, for
+   * example `https://app.example/roof-reports/motion`. The two files are loaded
+   * from there, each carrying the nonce. Only that exact folder is accepted (an
+   * http or https origin plus MOTION_PATH, nothing else), so the value can never
+   * open an attribute or send the page to another host. Ignored without a nonce.
+   */
+  assetBase?: string;
 }
 
-const GSAP_VERSION = '3.14.2';
+export const GSAP_VERSION = '3.14.2';
+/** Where the app serves its own copy of the library (client/public/roof-reports/motion, with a manifest). */
+export const MOTION_PATH = '/roof-reports/motion';
+const ASSET_BASE_RE = /^https?:\/\/[A-Za-z0-9.-]+(?::\d{1,5})?\/roof-reports\/motion$/;
+/** The folder address, or a refusal. */
+function checkedAssetBase(base: string): string {
+  if (typeof base !== 'string' || !ASSET_BASE_RE.test(base)) throw new Error('the motion asset address must be the app\'s own motion folder');
+  return base;
+}
 const GSAP_CDN = `https://cdn.jsdelivr.net/npm/gsap@${GSAP_VERSION}/dist/gsap.min.js`;
 const ST_CDN = `https://cdn.jsdelivr.net/npm/gsap@${GSAP_VERSION}/dist/ScrollTrigger.min.js`;
 
@@ -72,12 +88,14 @@ const ST_CDN = `https://cdn.jsdelivr.net/npm/gsap@${GSAP_VERSION}/dist/ScrollTri
  * every hidden state is gated on .gsap-anim, which is added only once GSAP runs,
  * so the report still reads in full without it.
  */
-const GSAP_INTEGRITY = 'sha384-sG0Hv1tP1lZCk9KQmrIbY/XNwi+OY84GQqhMscbnsoBFqAz8KNCil1kvfL3Hbbk2';
-const ST_INTEGRITY = 'sha384-xNHNOfrykny9oFwnmpfNbkSc6isny38d1GZvTRVuFV0l9fTMIZKhULvomyQJSMRl';
+export const GSAP_INTEGRITY = 'sha384-sG0Hv1tP1lZCk9KQmrIbY/XNwi+OY84GQqhMscbnsoBFqAz8KNCil1kvfL3Hbbk2';
+export const ST_INTEGRITY = 'sha384-xNHNOfrykny9oFwnmpfNbkSc6isny38d1GZvTRVuFV0l9fTMIZKhULvomyQJSMRl';
 
 export function motionRuntime(opts: MotionRuntimeOptions = {}): string {
-  const { enabled = true, intensity = 'standard', gsapSource, nonce } = opts;
+  const { enabled = true, intensity = 'standard', gsapSource, nonce, assetBase } = opts;
   const n = nonceAttr(nonce);
+  // Checked even when the feature is off, so a bad address is never carried quietly.
+  const base = assetBase !== undefined && nonce !== undefined ? checkedAssetBase(assetBase) : null;
   if (!enabled) return '';
 
   const dist = intensity === 'subtle' ? 24 : 40;
@@ -86,7 +104,9 @@ export function motionRuntime(opts: MotionRuntimeOptions = {}): string {
   const libTags = gsapSource
     ? `<script${n}>${gsapSource}</script>`
     : nonce !== undefined
-      ? ''
+      ? base
+        ? `<script${n} src="${base}/gsap-${GSAP_VERSION}.min.js"></script>\n<script${n} src="${base}/ScrollTrigger-${GSAP_VERSION}.min.js"></script>`
+        : ''
       : `<script src="${GSAP_CDN}" integrity="${GSAP_INTEGRITY}" crossorigin="anonymous"></script>\n<script src="${ST_CDN}" integrity="${ST_INTEGRITY}" crossorigin="anonymous"></script>`;
 
   return `

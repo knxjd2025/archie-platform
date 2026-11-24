@@ -45,6 +45,13 @@ export interface RenderReportOptions {
    * for a page that is stored or exported rather than served.
    */
   nonce?: string;
+  /**
+   * With a nonce: the app's own folder the classic document's motion library is
+   * served from (see report-motion.ts). Without it a served classic document has
+   * no motion at all, and reads in full just the same. The two scroll styles
+   * need no library and ignore it.
+   */
+  motionBase?: string;
 }
 
 export interface RenderedReport {
@@ -68,6 +75,7 @@ export async function renderReportHtml(
   // A nonce that is not a plain token fails here, before any style is picked.
   nonceAttr(options.nonce);
   const nonce = options.nonce === undefined ? {} : { nonce: options.nonce };
+  const classic = { ...nonce, ...(options.motionBase === undefined ? {} : { motionBase: options.motionBase }) };
   const requested = resolveVisualStyle(
     report.reportTemplate,
     report.reportVisualStyle ?? options.styleFallback,
@@ -87,7 +95,7 @@ export async function renderReportHtml(
       `A scroll flight needs at least ${flight.MIN_FLIGHT_PHOTOS} photos. ` +
       'This report has fewer, so it was rendered as a document.';
     return {
-      html: generateComprehensiveReportHTML(report, brandColors as never, nonce),
+      html: generateComprehensiveReportHTML(report, brandColors as never, classic),
       style: 'formal',
       downgradeReason,
     };
@@ -105,7 +113,7 @@ export async function renderReportHtml(
     // only two or three of them is a document with a sidebar bolted on, so send
     // the document rather than something worse than what it replaced.
     return {
-      html: generateComprehensiveReportHTML(report, brandColors as never, nonce),
+      html: generateComprehensiveReportHTML(report, brandColors as never, classic),
       style: 'formal',
       downgradeReason:
         `A presentation needs at least ${pres.MIN_PRESENTATION_CHAPTERS} chapters of real content. ` +
@@ -114,7 +122,7 @@ export async function renderReportHtml(
   }
 
   return {
-    html: generateComprehensiveReportHTML(report, brandColors as never, nonce),
+    html: generateComprehensiveReportHTML(report, brandColors as never, classic),
     style: requested,
   };
 }

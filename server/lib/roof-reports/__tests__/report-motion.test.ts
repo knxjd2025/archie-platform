@@ -75,3 +75,36 @@ describe('motionRuntime', () => {
     expect(out).toContain("addEventListener('load'");
   });
 });
+
+describe('motionRuntime under a nonce, with the app\'s own copy of the library', () => {
+  const NONCE = 'dGVzdC1ub25jZS0wMDAxLWFiY2RlZg==';
+  const BASE = 'https://app.example.test/roof-reports/motion';
+  const tags = (html: string) => [...html.matchAll(/<script\b([^>]*)>/g)].map((m) => m[1]);
+
+  it('loads both files from the app\'s own address, each with the nonce, and from nowhere else', () => {
+    const out = motionRuntime({ nonce: NONCE, assetBase: BASE });
+    const external = tags(out).filter((t) => /\ssrc=/.test(t));
+    expect(external).toHaveLength(2);
+    expect(external[0]).toContain(`src="${BASE}/gsap-3.14.2.min.js"`);
+    expect(external[1]).toContain(`src="${BASE}/ScrollTrigger-3.14.2.min.js"`);
+    for (const t of tags(out)) expect(t).toContain(`nonce="${NONCE}"`);
+    expect(out).not.toContain('cdn.jsdelivr.net');
+  });
+
+  it('writes no outside script when it has a nonce but no address for the app\'s copy', () => {
+    expect(tags(motionRuntime({ nonce: NONCE })).filter((t) => /\ssrc=/.test(t))).toEqual([]);
+  });
+
+  it('refuses an address that is not the app\'s own motion folder, so it can never open an attribute or point elsewhere', () => {
+    for (const bad of [
+      'javascript:alert(1)', 'https://app.example.test/other', 'https://app.example.test/roof-reports/motion/../x', 'https://app.example.test/roof-reports/motion"onload="x',
+      '//evil.example/roof-reports/motion', 'https://app.example.test/roof-reports/motion?x=1', 'ftp://app.example.test/roof-reports/motion', '',
+    ]) {
+      expect(() => motionRuntime({ nonce: NONCE, assetBase: bad }), bad).toThrow();
+    }
+  });
+
+  it('is ignored without a nonce (a stored or exported page keeps the pinned CDN copy with its integrity hashes)', () => {
+    expect(motionRuntime({ assetBase: BASE })).toContain('cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js');
+  });
+});

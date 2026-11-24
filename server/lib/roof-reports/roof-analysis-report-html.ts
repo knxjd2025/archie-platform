@@ -1001,7 +1001,7 @@ interface BrandColors {
 export function generateComprehensiveReportHTML(
   rawReport: ComprehensiveRoofReport,
   brandColors: BrandColors = {},
-  options: { nonce?: string } = {},
+  options: { nonce?: string; motionBase?: string } = {},
 ): string {
   // Checked first, so a nonce that is not a plain token fails before any page is built.
   const scriptNonce = nonceAttr(options.nonce);
@@ -1363,7 +1363,7 @@ export function generateComprehensiveReportHTML(
       if (button) button.addEventListener('click', function () { window.print(); });
     })();
   </script>
-  ${motionRuntime({ nonce: options.nonce })}
+  ${motionRuntime({ nonce: options.nonce, assetBase: options.motionBase })}
 </body>
 </html>
   `;

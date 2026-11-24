@@ -87,6 +87,7 @@ Never delete, skip or weaken these.
 | `server/roof-reports/__tests__/roof-report-roles.db.test.ts` | who sees and does what, for every Archie role and every Roof Lee role |
 | `server/lib/roof-reports/__tests__/module-boundary.test.ts` | the moved library stands alone, model ids live in one file, no Best Roofing Now value, US providers only |
 | `server/lib/roof-reports/__tests__/engine-unchanged.test.ts` | the vendored scroll engine is never edited |
+| `server/lib/roof-reports/__tests__/vendored-motion.test.ts` | the vendored motion library's bytes match the manifest and the hashes the page code carries |
 | `server/lib/roof-reports/__tests__/report-nonce.test.ts` | every script every renderer writes carries the response's nonce, written where the renderer writes it; no renderer uses an inline handler; a script or handler that gets in anyway carries no nonce |
 | `server/roof-reports/__tests__/html-page.db.test.ts` | the page route: a fresh nonce on every response, the same one on every script in it, the sandbox and the other policy rules, the response headers |
 | `server/crews/__tests__/crew-money-walk.db.test.ts` (existing) | crew are handed no money by any route; run it with the switch on to walk the roof report routes too |
@@ -132,8 +133,21 @@ can reach the app's cookies or API. The rules, in `server/roof-reports/page-poli
   renderer may use an inline event handler** (`onclick` and the rest): a nonce
   policy cannot allow one, so use a listener in the renderer's own nonce script.
   A nonce that is not a plain token is refused, so it can never open an attribute.
-- Under a nonce the renderers write no outside script (the CDN tags of the motion
-  layer are left out): the policy would block them anyway.
+- Under a nonce the renderers write no script from any outside host (the CDN
+  tags of the motion layer are left out): the policy would block them. The
+  classic document's motion is served by Archie itself instead. The animation
+  library the old program used (GSAP 3.14.2 and its ScrollTrigger, under
+  GreenSock's standard "no charge" licence) is vendored byte for byte into
+  `client/public/roof-reports/motion/`, with a `manifest.json` that records its
+  version, sizes and hashes; `vendored-motion.test.ts` holds that the bytes on
+  disk are the bytes recorded and are never edited. The page loads the two files
+  from the app's own address (`/roof-reports/motion`), each script carrying the
+  response's nonce, and `report-motion.ts` accepts only that exact folder. Motion
+  is an enhancement: every hidden starting state sits under a class only the
+  motion script adds, so a page whose scripts do not run hides nothing
+  (`motion-content-first.test.ts`). The two scroll styles need no library. A
+  stored or exported page (no nonce) keeps the pinned CDN copy with its integrity
+  hashes.
 - `connect-src 'none'`, `form-action 'none'`, `default-src 'none'`, `base-uri 'none'`.
 - **Images come only from the app** (photo links are absolute addresses on it),
   `data:`, `blob:`, and the one origin the company's logo is on when that is a

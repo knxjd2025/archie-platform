@@ -73,7 +73,25 @@ describe.skipIf(!localDb)('the report page route (database)', async () => {
         expect(scanHtml(r.text).tags.flatMap((t) => t.attrs.filter((a) => a.name.startsWith('on')))).toEqual([]);
       });
 
-      it('has a fresh nonce on every response, in the policy and in the page', async () => {
+      it('loads the classic page\'s motion library from the app\'s own address, each file under the nonce, and the policy lets nothing else run', async () => {
+    await h.put(`/api/roof-reports/${id}`, { visualStyle: 'formal' });
+    const r = await page();
+    const policy = r.headers.get('content-security-policy')!;
+    const nonce = nonceIn(policy);
+    const external = scanHtml(r.text).tags.filter((t) => t.name === 'script' && t.attrs.some((a) => a.name === 'src'));
+    expect(external.map((t) => t.attrs.find((a) => a.name === 'src')!.value)).toEqual([
+      `${h.base}/roof-reports/motion/gsap-3.14.2.min.js`, `${h.base}/roof-reports/motion/ScrollTrigger-3.14.2.min.js`,
+    ]);
+    for (const t of external) expect(t.attrs.find((a) => a.name === 'nonce')?.value).toBe(nonce);
+    // The policy is the same: the nonce and nothing else, so an outside address would not run.
+    expect(directive(policy, 'script-src')).toBe(`script-src 'nonce-${nonce}'`);
+    expect(r.text).not.toContain('cdn.jsdelivr.net');
+    await h.put(`/api/roof-reports/${id}`, { visualStyle: 'presentation' });
+    const p2 = await page();
+    expect(scanHtml(p2.text).tags.filter((t) => t.name === 'script' && t.attrs.some((a) => a.name === 'src'))).toEqual([]);
+  });
+
+  it('has a fresh nonce on every response, in the policy and in the page', async () => {
         const first = await page();
         const second = await page();
         const n1 = nonceIn(first.headers.get('content-security-policy')!);

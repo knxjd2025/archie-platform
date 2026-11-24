@@ -114,3 +114,23 @@ describe('a script or handler that gets in anyway does not carry the nonce', () 
     });
   }
 });
+
+describe('the classic document with the app\'s own copy of the motion library', () => {
+  const BASE = 'https://app.example.test/roof-reports/motion';
+
+  it('every script it writes carries the nonce, the two library files included, and both come from the app\'s own folder', async () => {
+    const out = await renderReportHtml(withStyle('formal'), richBrand() as never, { nonce: NONCE, motionBase: BASE });
+    const all = scripts(out.html);
+    const external = all.filter((t) => t.attrs.some((a) => a.name === 'src'));
+    expect(external.map((t) => t.attrs.find((a) => a.name === 'src')!.value)).toEqual([`${BASE}/gsap-3.14.2.min.js`, `${BASE}/ScrollTrigger-3.14.2.min.js`]);
+    expect(unapproved(out.html, NONCE)).toEqual([]);
+    expect(handlers(out.html)).toEqual([]);
+  });
+
+  it('the presentation and the flight write no outside script even when given the address (they need no library)', async () => {
+    for (const style of ['presentation', 'flight'] as const) {
+      const out = await renderReportHtml(withStyle(style), richBrand() as never, { nonce: NONCE, motionBase: BASE, pack: style === 'presentation' ? richPack() : null });
+      expect(scripts(out.html).filter((t) => t.attrs.some((a) => a.name === 'src')), style).toEqual([]);
+    }
+  });
+});

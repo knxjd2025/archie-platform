@@ -1,0 +1,22 @@
+{
+  "library": "gsap",
+  "version": "3.14.2",
+  "source": "npm package gsap@3.14.2: dist/gsap.min.js and dist/ScrollTrigger.min.js, copied byte for byte",
+  "license": "GreenSock standard \"no charge\" license (https://gsap.com/standard-license), named in the package and in each file's own banner",
+  "bannerKept": true,
+  "edited": false,
+  "files": [
+    {
+      "name": "gsap-3.14.2.min.js",
+      "bytes": 72779,
+      "sha256": "c174bfce53a729418d57a8ad8625e7247c793a22fef8e2851e3cfa3de9cd8280",
+      "sha384": "sha384-sG0Hv1tP1lZCk9KQmrIbY/XNwi+OY84GQqhMscbnsoBFqAz8KNCil1kvfL3Hbbk2"
+    },
+    {
+      "name": "ScrollTrigger-3.14.2.min.js",
+      "bytes": 44235,
+      "sha256": "45327f639648f7e8ea20e3789b59723cb8f6d4fcbb0024648cf65978ca323926",
+      "sha384": "sha384-xNHNOfrykny9oFwnmpfNbkSc6isny38d1GZvTRVuFV0l9fTMIZKhULvomyQJSMRl"
+    }
+  ]
+}

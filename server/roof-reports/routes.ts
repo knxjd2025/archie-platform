@@ -48,6 +48,7 @@ import { photoLinkPath, signPhotoLink } from './photo-links';
 import { beginRetry, effectiveState, failureSentence, markFailed, requestFingerprint, saveGenerated, startReport, statusFilter } from './store';
 import { PAGE_SIZE, parseGenerateBody, parseListQuery, parseUpdateBody, sanitizeReportJson, type UpdateFields } from './validate';
 import { newNonce, pagePolicy } from './page-policy';
+import { MOTION_PATH } from '../lib/roof-reports/report-motion.js';
 import { requireRoofReportsOn } from './switch';
 
 export interface RoofReportRouteOptions {
@@ -290,7 +291,7 @@ export function registerRoofReportsRoutes(app: Express, options: RoofReportRoute
         // The scroll pages carry the app's own scripts. They run in the sandbox, and only because
         // they carry this response's nonce: a script that got in any other way does not.
         const nonce = newNonce();
-        const rendered = await renderReportHtml(reportForPage(row, photos, link), brandFor(currentProfile()).brandColors, { nonce });
+        const rendered = await renderReportHtml(reportForPage(row, photos, link), brandFor(currentProfile()).brandColors, { nonce, motionBase: `${origin}${MOTION_PATH}` });
         html = rendered.html;
         policy = pagePolicy({ kind: 'built', nonce, appOrigin: origin, logoUrl });
       }
