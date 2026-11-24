@@ -44,6 +44,7 @@ export interface ReportDetail {
   customerPhone: string | null;
   inspectorNotes: string | null;
   jobExternalId: string | null;
+  inspectionDate: string | null;
   createdAt: string;
   /** The look the report is really shown in and, when that is not the one chosen, why, in one plain sentence. Null when the server said nothing. */
   look: { shown: VisualStyleValue; notice: string | null } | null;
@@ -87,6 +88,7 @@ export function readDetail(value: unknown): ReportDetail | null {
     customerPhone: textOrNull(value.customerPhone),
     inspectorNotes: textOrNull(value.inspectorNotes),
     jobExternalId: textOrNull(value.jobExternalId),
+    inspectionDate: textOrNull(value.inspectionDate),
     createdAt: typeof value.createdAt === 'string' ? value.createdAt : '',
     look: readLook(value.look),
     shareLinkOn: value.shareLinkOn === true,

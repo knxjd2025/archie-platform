@@ -327,6 +327,42 @@ and nothing runs on a schedule (`send.db.test.ts` holds this).
 - **Tests never send**: the route takes the sender as an option, and every test hands
   in a fake. The repo's email sender has no test sink of its own.
 
+## The PDF
+
+"Download PDF" in the editor makes a printable copy **on the person's own device**:
+the server is not asked to make it. The button answers in the same frame
+("Preparing PDF...") and says one plain sentence if it fails; a second press while
+it is preparing does nothing.
+
+- **The library loads only on that click.** `@react-pdf/renderer` is pinned to
+  exactly `4.5.1` (the version the old program ran) and is reached by one dynamic
+  import (`client/src/roof-reports/pdf-loader.ts`); nothing else imports it or the
+  `pdf/` folder in the ordinary way (`pdf-lazy.test.ts` reads the source and fails if
+  anything does). Built sizes, checked by hand: the page everyone opens
+  (`index-*.js`) was 1,555.75 kB before the PDF work and is 1,558.93 kB after (the
+  button, its small model and its words, +3.2 kB); the PDF library and the document
+  are a separate chunk of 1,467.59 kB that is fetched only on the click.
+- **No network is used to make it.** The PDF's own built-in fonts (Helvetica) are
+  used. The old program fetched five font families from a font host at run time; that
+  is not carried over.
+- **Photos** are fetched from this report's own signed-in photo route, the small copy
+  of each (480 pixels), a few at a time. Only an address of exactly the form
+  `/api/roof-reports/<this report>/photos/<photo>/thumb` or `/working` is ever
+  fetched, and the reply must be a JPEG or PNG; a photo that fails is left out and the
+  rest go in.
+- **Charts** (`pdf/chart-capture.ts`) are two plain canvas bar charts, not a chart
+  library: storm events by year and damage found by kind. They draw only from report
+  numbers: every text on a chart is a count (0 to 99,999), a four digit year or one of
+  a fixed set of words in that file; a damage kind with no word there is "Other".
+- **Everything written in the report** (summary, findings, notes, captions, a
+  company's name) is cleaned and cut to length before it is drawn (`pdfText`): no
+  control or invisible characters, no emoji, no em dash, one kind of line break.
+- **What the PDF holds**: a cover, then only the sections the report has (summary,
+  findings, damage found, storm history, estimate, measurements, photos, notes) and
+  a plain note that it is not a guarantee of insurance coverage. The old program's
+  longer layout (fifteen sections, lifespan gauge, radar, ROI and bubble charts,
+  replacement tiers) is not carried over.
+
 ## Photos
 
 Report photos are kept in Archie's private photo store under

@@ -7,6 +7,9 @@ import {
   type FieldKey, type FieldsState, type ReportDetail,
 } from './editor-model';
 import { partialNotes, type PartialNote } from './generate-flow';
+import { useCompany } from '../lib/company';
+import { loadPdfBuilder } from './pdf-loader';
+import { initialPdf, pdfFileName, pdfReducer, runPdf, saveFile, type PdfState } from './pdf-model';
 import { SendDialog } from './SendDialog';
 import { initialSend, makeSendKey, sendReducer, sendsAllowed, sentLine, submitSend, type SendField, type SendState } from './send-model';
 import { copyLink, initialShare, shareReducer, turnLinkOff, type ShareState } from './share-model';
@@ -31,6 +34,8 @@ export interface EditorViewProps {
   share: ShareState;
   onCopyLink: () => void;
   onTurnLinkOff: () => void;
+  pdf: PdfState;
+  onPdf: () => void;
   send: SendState;
   onOpenSend: () => void;
   onEditSend: (field: SendField, text: string) => void;
@@ -121,6 +126,18 @@ function ShareControls({ share, onCopyLink, onTurnLinkOff }: { share: ShareState
 }
 
 /** The email button and what has already been sent. The dialog itself is drawn at the end of the editor. */
+function PdfControls({ pdf, onPdf }: { pdf: PdfState; onPdf: () => void }) {
+  const preparing = pdf.phase === 'preparing';
+  return (
+    <div className="space-y-2">
+      <h4 className="text-sm font-semibold text-gray-900">{RR.pdf.title}</h4>
+      <p className="text-sm text-gray-600">{RR.pdf.help}</p>
+      <button type="button" onClick={onPdf} disabled={preparing} aria-busy={preparing || undefined} className={BUTTON}>{preparing ? RR.pdf.preparing : RR.pdf.button}</button>
+      {pdf.error && <p role="alert" className="text-xs text-red-600">{pdf.error}</p>}
+    </div>
+  );
+}
+
 function SendControls({ detail, onOpen }: { detail: ReportDetail; onOpen: () => void }) {
   const line = sentLine(detail.emailSentCount, detail.emailSentAt);
   return (
@@ -195,6 +212,7 @@ export function EditorView(p: EditorViewProps) {
 
           {sharesAllowed(p.role) && <ShareControls share={p.share} onCopyLink={p.onCopyLink} onTurnLinkOff={p.onTurnLinkOff} />}
           {sendsAllowed(p.role) && <SendControls detail={p.detail} onOpen={p.onOpenSend} />}
+          <PdfControls pdf={p.pdf} onPdf={p.onPdf} />
 
           <div className="space-y-3">
             <h4 className="text-sm font-semibold text-gray-900">{RR.editor.findingsTitle}</h4>
@@ -269,6 +287,10 @@ export default function Editor({ id, role, onBack, onArchived }: { id: string; r
   const [style, setStyle] = useState<{ template: StyleState; visualStyle: StyleState }>({ template: { busy: false, error: null }, visualStyle: { busy: false, error: null } });
   const [archive, setArchive] = useState<ArchiveState>({ phase: 'idle', error: null });
   const [share, dispatchShare] = useReducer(shareReducer, initialShare(false));
+  const [pdfState, dispatchPdf] = useReducer(pdfReducer, initialPdf());
+  const pdfRef = useRef(pdfState);
+  pdfRef.current = pdfState;
+  const company = useCompany();
   const [send, dispatchSend] = useReducer(sendReducer, initialSend());
   const sendRef = useRef(send);
   sendRef.current = send;
@@ -365,6 +387,22 @@ export default function Editor({ id, role, onBack, onArchived }: { id: string; r
       });
   };
 
+  // The PDF code is fetched by this click and by nothing else. The button answers in the same frame (Preparing PDF...).
+  const doPdf = () => {
+    if (!detail || pdfRef.current.phase === 'preparing') return;
+    dispatchPdf({ type: 'start' });
+    void runPdf({
+      build: async () => {
+        const { buildReportPdf } = await loadPdfBuilder();
+        return buildReportPdf(
+          { id, title: detail.title, address: detail.address, city: detail.city, state: detail.state, zip: detail.zip, customerName: detail.customerName, inspectionDate: detail.inspectionDate, inspectorNotes: detail.inspectorNotes, report: confirmed.current ?? detail.report, photos: detail.photos },
+          { name: company.displayName, phone: company.phone, email: company.email, website: company.websiteLabel },
+        );
+      },
+      save: saveFile,
+    }, pdfFileName(detail.address, new Date())).then((action) => { if (alive.current) dispatchPdf(action); });
+  };
+
   const doArchive = () => {
     setArchive({ phase: 'busy', error: null });
     archiveReport(id)
@@ -390,6 +428,8 @@ export default function Editor({ id, role, onBack, onArchived }: { id: string; r
       share={share}
       onCopyLink={doCopyLink}
       onTurnLinkOff={doTurnLinkOff}
+      pdf={pdfState}
+      onPdf={doPdf}
       send={send}
       onOpenSend={openSend}
       onEditSend={(field, text) => dispatchSend({ type: 'edit', field, text })}

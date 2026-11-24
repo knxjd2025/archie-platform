@@ -197,6 +197,13 @@ export const RR = {
     emailedTimes: (n: number) => `Emailed ${n} times.`,
     lastSent: (date: string) => `Last sent ${date}.`,
   },
+  pdf: {
+    title: 'Printable copy',
+    button: 'Download PDF',
+    preparing: 'Preparing PDF...',
+    failed: 'The PDF could not be made. Please try again.',
+    help: 'A printable copy of this report, made on your device.',
+  },
   job: {
     title: 'Roof inspection reports',
     help: 'Inspections, measurements and storm history made from this job\'s address.',

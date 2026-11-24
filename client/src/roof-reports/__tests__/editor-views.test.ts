@@ -6,6 +6,7 @@ import { initialFields, readDetail, valuesOf, fieldReducer, type ReportDetail } 
 import { partialNotes } from '../generate-flow';
 import { initialShare, type ShareState } from '../share-model';
 import { initialSend, sendReducer } from '../send-model';
+import { initialPdf, pdfReducer } from '../pdf-model';
 import { WARN_OUT_OF_TIME, warnSomePhotos } from '../../../../shared/roof-reports';
 
 const BANNED = new RegExp(`${String.fromCharCode(0x2014)}|✨|🪄`, 'u');
@@ -24,7 +25,7 @@ const view = (over: Partial<EditorViewProps> = {}) => render(createElement(Edito
   role: 'admin', detail: detail(), fields: initialFields(valuesOf(detail())), previewVersion: 1, previewLoading: false, partial: [],
   style: { template: { busy: false, error: null }, visualStyle: { busy: false, error: null } }, archive: { phase: 'idle', error: null },
   share: initialShare(false), onCopyLink: noop, onTurnLinkOff: noop,
-  send: initialSend(), onOpenSend: noop, onEditSend: noop, onSend: noop, onCloseSend: noop,
+  pdf: initialPdf(), onPdf: noop, send: initialSend(), onOpenSend: noop, onEditSend: noop, onSend: noop, onCloseSend: noop,
   onBack: noop, onEdit: noop, onSave: noop, onTemplate: noop, onVisualStyle: noop, onAskArchive: noop, onCancelArchive: noop, onArchive: noop, onPreviewLoaded: noop, ...over,
 }));
 
@@ -231,6 +232,35 @@ describe('the editor: emailing the report', () => {
     expect(read({ ...base, emailSentCount: 3, emailSentAt: '2026-11-24T15:00:00.000Z' })).toMatchObject({ emailSentCount: 3, emailSentAt: '2026-11-24T15:00:00.000Z' });
     expect(read(base)).toMatchObject({ emailSentCount: 0, emailSentAt: null });
     expect(read({ ...base, emailSentCount: 'lots' })).toMatchObject({ emailSentCount: 0 });
+  });
+});
+
+describe('the editor: the PDF button', () => {
+  it('is there for anyone who can open the report, saying Download PDF', () => {
+    for (const role of ['admin', 'sales', 'customer_service'] as const) expect(view({ role })).toContain('Download PDF');
+    expect(view()).not.toContain('Preparing PDF...');
+  });
+
+  it('answers the press in the same frame: Preparing PDF..., busy, and not pressable again', () => {
+    const h = view({ pdf: pdfReducer(initialPdf(), { type: 'start' }) });
+    expect(h).toContain('Preparing PDF...');
+    expect(h).not.toContain('>Download PDF<');
+    expect(h).toMatch(/<button[^>]*disabled=""[^>]*aria-busy="true"|<button[^>]*aria-busy="true"[^>]*disabled=""/);
+  });
+
+  it('says in one plain sentence when it failed, and lets them press again', () => {
+    const failed = pdfReducer(pdfReducer(initialPdf(), { type: 'start' }), { type: 'failed', error: 'The PDF could not be made. Please try again.' });
+    const h = view({ pdf: failed });
+    expect(h).toContain('role="alert"');
+    expect(h).toContain('The PDF could not be made. Please try again.');
+    expect(h).toContain('Download PDF');
+  });
+
+  it('reads the inspection day from the server\'s answer', async () => {
+    const { readDetail: read } = await import('../editor-model');
+    const base = { id: ID, status: 'ready', address: '12 Elm Street' };
+    expect(read({ ...base, inspectionDate: '2026-11-20T00:00:00.000Z' })?.inspectionDate).toBe('2026-11-20T00:00:00.000Z');
+    expect(read(base)?.inspectionDate).toBeNull();
   });
 });
 
