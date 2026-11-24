@@ -18,8 +18,12 @@
  * logo is on. An injected image therefore cannot carry anything out to a host
  * of its own choosing.
  *
- * Styles and fonts are still allowed from any https address (the pages use
- * Google Fonts), and inline styles are allowed; neither can run script.
+ * For the built kind, styles and fonts are allowed from any https address (the
+ * pages the app builds use Google Fonts), and inline styles are allowed;
+ * neither can run script. For the saved kind they are narrowed to Google Fonts
+ * alone (styles from fonts.googleapis.com, fonts from fonts.gstatic.com), because
+ * a stylesheet or font on any other host is a beacon that reports who opened a
+ * page a person edited.
  */
 import { randomBytes } from 'node:crypto';
 
@@ -54,11 +58,16 @@ export function pagePolicy(input: PolicyInput): string {
   if (!app) throw new Error('the app origin is not a plain origin');
   const logo = /^https:\/\//.test(input.logoUrl) ? plainOrigin(input.logoUrl) : null;
   const images = ['img-src', app, ...(logo && logo !== app ? [logo] : []), 'data:', 'blob:'].join(' ');
+  // A page a person saved may take its styles only from Google Fonts and its fonts only from Google's font host: a stylesheet
+  // anywhere else would tell its owner who opened the page (page-links.ts refuses such a link when the page is saved).
+  const saved = input.kind === 'saved';
   const common = [
-    "default-src 'none'", images, "style-src 'unsafe-inline' https:", 'font-src https: data:',
+    "default-src 'none'", images,
+    saved ? "style-src 'unsafe-inline' https://fonts.googleapis.com" : "style-src 'unsafe-inline' https:",
+    saved ? 'font-src https://fonts.gstatic.com data:' : 'font-src https: data:',
     "base-uri 'none'", "form-action 'none'", "frame-ancestors 'self'",
   ];
-  if (input.kind === 'saved') return ['sandbox', ...common].join('; ');
+  if (saved) return ['sandbox', ...common].join('; ');
   if (typeof input.nonce !== 'string' || !NONCE_RE.test(input.nonce)) throw new Error('a page nonce must be a plain base64 token');
   return ['sandbox allow-scripts', ...common, `script-src 'nonce-${input.nonce}'`, "connect-src 'none'"].join('; ');
 }

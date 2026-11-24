@@ -4,6 +4,7 @@
  * scripts, under a nonce that is fresh for every response.
  * Fictional company: Summit Ridge Roofing in Cedar Falls.
  */
+import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setPhotoStoreForTests } from '../../photos/store';
 import { makeJpeg } from '../../photos/__tests__/jpeg-fixtures';
@@ -159,5 +160,38 @@ describe.skipIf(!localDb)('the report page route (database)', async () => {
     expect(r.headers.get('x-content-type-options')).toBe('nosniff');
     expect(r.headers.get('cache-control')).toBe('private, no-store');
     await h.put(`/api/roof-reports/${id}`, { editedHtml: null });
+  });
+  describe('where a saved page may point', () => {
+    const BAD = '<!doctype html><html><head><link rel="stylesheet" href="https://tracker.example/x.css"><style>p{background:url(https://tracker.example/t.gif)}</style></head><body><h1>My edit</h1><a href="https://evil.example/login">Pay now</a><a href="tel:5550100142">Call</a></body></html>';
+
+    it('refuses to save a page that links to another host, with a sentence that names it', async () => {
+      const r = await h.put(`/api/roof-reports/${id}`, { editedHtml: BAD });
+      expect(r.status).toBe(400);
+      expect(r.body.error).toContain('tracker.example');
+      expect((await h.get(`/api/roof-reports/${id}`)).body.editedHtml ?? null).toBeNull();
+    });
+
+    it('saves the same page once the link is the company\'s own, the app or a phone number', async () => {
+      const r = await h.put(`/api/roof-reports/${id}`, { editedHtml: '<!doctype html><html><body><h1>My edit</h1><a href="tel:5550100142">Call</a><a href="#top">Top</a></body></html>' });
+      expect(r.status).toBe(200);
+      await h.put(`/api/roof-reports/${id}`, { editedHtml: null });
+    });
+
+    it('takes the link out when it serves a page that was saved before the rule', async () => {
+      await h.runAsCompany(co.id, () => h.db.update(h.schema.roofReports).set({ editedHtml: BAD }).where(eq(h.schema.roofReports.id, id)));
+      try {
+        const r = await page();
+        expect(r.status).toBe(200);
+        expect(r.text).not.toMatch(/evil\.example|tracker\.example/);
+        expect(r.text).toContain('<h1>My edit</h1>');
+        expect(r.text).toContain('Pay now');
+        expect(r.text).toContain('href="tel:5550100142"');
+        const policy = r.headers.get('content-security-policy')!;
+        expect(directive(policy, 'style-src')).toBe("style-src 'unsafe-inline' https://fonts.googleapis.com");
+        expect(directive(policy, 'font-src')).toBe('font-src https://fonts.gstatic.com data:');
+      } finally {
+        await h.runAsCompany(co.id, () => h.db.update(h.schema.roofReports).set({ editedHtml: null }).where(eq(h.schema.roofReports.id, id)));
+      }
+    });
   });
 });

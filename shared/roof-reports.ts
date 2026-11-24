@@ -56,6 +56,11 @@ export const NOTHING_TO_CHANGE = 'There was nothing to change.';
 export const CANT_CHANGE = 'That part of a report can\'t be changed here.';
 export const REPORT_DATA_BAD = 'The report\'s contents couldn\'t be saved. Please reload it and try again.';
 export const PAGE_NOT_SAFE = 'That page contains something that can\'t be saved.';
+/** A saved page may link only to this app, a phone number, an email address, the company's own website and Google Fonts. `host` is the plain host that was found, when there was one. */
+export const pageLinkNotAllowed = (host: string | null): string =>
+  host
+    ? `That page links to ${host}. A saved page can only link to this app, your own website, phone numbers and email addresses. Please take that link out.`
+    : 'That page has a link or form that can\'t be saved. A saved page can only link to this app, your own website, phone numbers and email addresses.';
 export const PAGE_NOT_READY = 'This report isn\'t ready to show yet.';
 export const BAD_REQUEST_KEY = 'That request could not be used. Please try again.';
 export const REQUEST_KEY_REUSED = 'That was already used to make a different report. Please start the report again.';

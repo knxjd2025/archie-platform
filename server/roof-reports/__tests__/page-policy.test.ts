@@ -73,3 +73,15 @@ describe('the policy of a page a person saved', () => {
     expect(directive(policy, 'img-src')).toBe('img-src https://app.example.test data: blob:');
   });
 });
+
+describe('the policy of a page a person saved', () => {
+  const policy = pagePolicy({ kind: 'saved', appOrigin: 'https://app.example.test', logoUrl: '' });
+  it('takes styles and fonts only from the page itself and from Google Fonts, never from any https address', () => {
+    expect(directive(policy, 'style-src')).toBe("style-src 'unsafe-inline' https://fonts.googleapis.com");
+    expect(directive(policy, 'font-src')).toBe('font-src https://fonts.gstatic.com data:');
+    expect(policy).not.toMatch(/\bhttps:(?!\/\/)/);
+  });
+  it('still runs no script', () => {
+    expect(policy).not.toMatch(/script-src|allow-scripts/);
+  });
+});

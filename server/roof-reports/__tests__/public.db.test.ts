@@ -338,6 +338,25 @@ describe.skipIf(!localDb)('the share link (database)', async () => {
     });
   });
 
+  describe('a page saved before links were limited', () => {
+    it('is served to the customer with the link to another host taken out', async () => {
+      h.as(a, 'repa');
+      const token = tokenOf((await create()).body.url);
+      const html = '<!doctype html><html><head><link rel="stylesheet" href="https://tracker.example/x.css"></head><body><h1>My edit</h1><a href="https://evil.example/login">Pay now</a><a href="tel:5550100142">Call</a></body></html>';
+      await h.runAsCompany(a.id, () => h.db.update(h.schema.roofReports).set({ editedHtml: html }).where(eq(h.schema.roofReports.id, report)));
+      try {
+        const r = await open(`/r/roof/${token}`);
+        expect(r.status).toBe(200);
+        expect(r.text).not.toMatch(/evil\.example|tracker\.example/);
+        expect(r.text).toContain('Pay now');
+        expect(r.text).toContain('href="tel:5550100142"');
+        expect(directive(r.headers.get('content-security-policy')!, 'style-src')).toBe("style-src 'unsafe-inline' https://fonts.googleapis.com");
+      } finally {
+        await h.runAsCompany(a.id, () => h.db.update(h.schema.roofReports).set({ editedHtml: null }).where(eq(h.schema.roofReports.id, report)));
+      }
+    });
+  });
+
   describe('how often a page may be asked for', () => {
     it('lets one address ask a lot and then answers a plain page to wait, with Retry-After, and counts photos apart from pages', async () => {
       h.as(a, 'repa');

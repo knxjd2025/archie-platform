@@ -11,12 +11,13 @@
  */
 import {
   BAD_DATE, BAD_EMAIL, CANT_CHANGE, MAX_REPORT_PHOTOS, NEEDS_ADDRESS, NEEDS_CITY_STATE, NOTHING_TO_CHANGE, NOT_A_KIND, NOT_A_STYLE,
-  NOT_A_TEMPLATE, NOT_TEXT, PAGE_NOT_SAFE, PICK_A_KIND, REPORT_DATA_BAD, REPORT_KINDS, TEMPLATES, TEXT_TOO_LONG, TOO_MANY_PHOTOS, VISUAL_STYLES,
+  NOT_A_TEMPLATE, NOT_TEXT, PAGE_NOT_SAFE, pageLinkNotAllowed, PICK_A_KIND, REPORT_DATA_BAD, REPORT_KINDS, TEMPLATES, TEXT_TOO_LONG, TOO_MANY_PHOTOS, VISUAL_STYLES,
   roofReportPhotoPath, type ReportKindValue, type TemplateValue, type VisualStyleValue,
 } from '../../shared/roof-reports';
 import { normalizeReportNumbers } from '../lib/roof-reports/report-normalize.js';
 import type { ComprehensiveRoofReport } from '../lib/roof-reports/comprehensive-roof-report.js';
 import type { GenerateRequest } from './generate';
+import { findPageLinkProblems, type PageLinkContext } from './page-links';
 import { cleanDamageCounts, cleanMeasurements, cleanRoofDetails } from './inputs';
 
 export type Checked<T> = { ok: true; value: T } | { ok: false; error: string };
@@ -149,7 +150,10 @@ function optionalText(v: unknown, max: number): Checked<string | null> {
   return t.ok ? { ok: true, value: t.value || null } : t;
 }
 
-export function parseUpdateBody(body: unknown): Checked<UpdateFields> {
+/** Where a saved page may point when the caller gives no origins: only the page's own relative addresses, fragments, phone numbers and email addresses. */
+const NO_ORIGINS: PageLinkContext = { appOrigin: '', website: '', logoUrl: '' };
+
+export function parseUpdateBody(body: unknown, page: PageLinkContext = NO_ORIGINS): Checked<UpdateFields> {
   if (!isObject(body)) return fail(NOTHING_TO_CHANGE);
   const keys = Object.keys(body);
   if (keys.length === 0) return fail(NOTHING_TO_CHANGE);
@@ -204,7 +208,12 @@ export function parseUpdateBody(body: unknown): Checked<UpdateFields> {
     else if (typeof body.editedHtml !== 'string') return fail(NOT_TEXT);
     else if (Buffer.byteLength(body.editedHtml) > MAX_EDITED_HTML_BYTES) return fail(TEXT_TOO_LONG);
     else if (!checkEditedHtml(body.editedHtml)) return fail(PAGE_NOT_SAFE);
-    else out.editedHtml = body.editedHtml;
+    else {
+      // Where the page points is judged after what can run: a link to another host is refused, never quietly taken out of what was typed.
+      const [problem] = findPageLinkProblems(body.editedHtml, page);
+      if (problem) return fail(pageLinkNotAllowed(problem.host));
+      out.editedHtml = body.editedHtml;
+    }
   }
   return { ok: true, value: out };
 }

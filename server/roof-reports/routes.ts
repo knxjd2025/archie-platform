@@ -303,7 +303,8 @@ export function registerRoofReportsRoutes(app: Express, options: RoofReportRoute
       const row = await roofReportFor(user, req.params.id);
       if (!row || decisionFor(user.role, 'edit') === 'no') return notFound(res);
       if (effectiveState(row).status === 'generating') return res.status(409).json({ error: STILL_BEING_MADE_EDIT });
-      const parsed = parseUpdateBody(req.body);
+      const profile = currentProfile();
+      const parsed = parseUpdateBody(req.body, { appOrigin: appOrigin(req), website: profile.website, logoUrl: profile.logoUrl });
       if (!parsed.ok) return res.status(400).json({ error: parsed.error });
       const fields: UpdateFields = parsed.value;
       // Moving a report to another job, or off its job, takes more than being able to edit it (see mayChangeJob).

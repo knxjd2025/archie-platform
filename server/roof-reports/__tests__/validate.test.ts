@@ -13,7 +13,7 @@ import {
 } from '../validate';
 import {
   BAD_DATE, BAD_EMAIL, CANT_CHANGE, NEEDS_ADDRESS, NEEDS_CITY_STATE, NOTHING_TO_CHANGE, NOT_A_KIND, NOT_A_STYLE, NOT_A_TEMPLATE,
-  PAGE_NOT_SAFE, PICK_A_KIND, REPORT_DATA_BAD, TEXT_TOO_LONG, TOO_MANY_PHOTOS, NOT_TEXT, roofReportPhotoPath,
+  PAGE_NOT_SAFE, PICK_A_KIND, pageLinkNotAllowed, REPORT_DATA_BAD, TEXT_TOO_LONG, TOO_MANY_PHOTOS, NOT_TEXT, roofReportPhotoPath,
 } from '../../../shared/roof-reports';
 
 const REPORT = 'a1b2c3d4-0000-4000-8000-000000000001';
@@ -141,6 +141,29 @@ describe('checkEditedHtml', () => {
       '<a href="data:text/html;base64,PHNjcmlwdD4=">x</a>', '<svg><script>1</script></svg>',
     ]) expect(checkEditedHtml(bad), bad).toBe(false);
     expect(PAGE_NOT_SAFE).toBeTruthy();
+  });
+});
+
+describe('a saved page and where it points', () => {
+  const links = { appOrigin: 'https://app.example.test', website: 'https://summitridge.example', logoUrl: '' };
+  const err = (html: string, ctx = links) => { const r = parseUpdateBody({ editedHtml: html }, ctx); return r.ok ? null : r.error; };
+
+  it('is refused with a sentence that names the host, and nothing is stored', () => {
+    expect(err('<p>Pay <a href="https://evil.example/login">here</a></p>')).toBe(pageLinkNotAllowed('evil.example'));
+    expect(pageLinkNotAllowed('evil.example')).toContain('evil.example');
+    expect(err('<link rel="stylesheet" href="https://tracker.example/x.css">')).toBe(pageLinkNotAllowed('tracker.example'));
+    expect(err('<a href="//evil.example/x">x</a>')).toBe(pageLinkNotAllowed('evil.example'));
+  });
+  it('is refused with the general sentence for a form, a base or a refresh, and by default when no origins are given', () => {
+    expect(err('<a href="javascript:alert(1)">x</a>')).toBe(PAGE_NOT_SAFE);
+    expect(parseUpdateBody({ editedHtml: '<a href="https://summitridge.example/">x</a>' }).ok).toBe(false);
+    expect(pageLinkNotAllowed(null)).not.toContain('null');
+  });
+  it('lets the company\'s own website, the app, a phone number and an email address through', () => {
+    expect(err('<a href="https://summitridge.example/contact">x</a><a href="tel:5550100142">y</a><a href="mailto:a@summitridge.example">z</a><a href="https://app.example.test/x">q</a>')).toBeNull();
+  });
+  it('is checked only when the page is part of the update', () => {
+    expect(parseUpdateBody({ title: 'A' }).ok).toBe(true);
   });
 });
 

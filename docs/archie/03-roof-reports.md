@@ -171,7 +171,28 @@ can reach the app's cookies or API. The rules, in `server/roof-reports/page-poli
 - `Referrer-Policy: no-referrer`, `X-Content-Type-Options: nosniff`,
   `Cache-Control: private, no-store`.
 - A page a person saved runs nothing: a bare `sandbox`, no `script-src`, and the
-  same image and header rules.
+  same image and header rules. Its styles may come only from
+  `https://fonts.googleapis.com` and its fonts only from `https://fonts.gstatic.com`
+  (and `data:`), never from any https address: a stylesheet elsewhere is a beacon.
+  (A page the app builds keeps `https:` for both; it is made by the escaped
+  renderers, not by a person.)
+- **Where a saved page may point** (`server/roof-reports/page-links.ts`). The page
+  is served at the share address under the company's brand, so a link in it to a
+  host of someone's choosing is a phishing link wearing that name. A saved page
+  may point only at: the app's own origin (or a relative address), a fragment,
+  `tel:`, `mailto:`, the company's own website (exact origin from its brand
+  record, scheme and port included), Google Fonts for styles and fonts, and for
+  pictures also the company's logo origin and a small inline picture. It may not
+  hold a `<base>`, a refresh `<meta>`, a `<form>`, a `ping`, a `formaction`, a
+  script scheme, a `data:` page, or a `url()`, `@import` or `image-set()` that
+  breaks the same rule in a style block or style attribute. The reader decodes
+  character references and CSS escapes first, drops tabs and newlines the way a
+  browser does, and resolves every address against the app's origin so `//host`,
+  double backslashes and `/\host` are seen as the host they are. The rule runs twice: on
+  save (`PUT /:id`, refused with a plain sentence that names the host, never a
+  silent strip of what someone typed) and on every serve (`servedPage`, taking
+  the piece out and keeping the rest, for pages saved before the rule). The
+  sentence is `pageLinkNotAllowed` in `shared/roof-reports.ts`.
 
 ## Looks: document, presentation, flight
 

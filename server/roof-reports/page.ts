@@ -18,6 +18,7 @@ import type { RoofReport, RoofReportPhoto } from '../../shared/schema';
 import { currentProfile } from '../tenant/context';
 import { brandFor } from './brand';
 import { packForCurrentCompany } from './packs';
+import { stripPageLinks } from './page-links';
 import { newNonce, pagePolicy } from './page-policy';
 
 /** The address the app is reached at, for the links inside a page. */
@@ -71,7 +72,11 @@ export async function servedPage(args: {
   const brand = brandFor(currentProfile());
   const logoUrl = brand.brandColors.companyLogo;
   if (row.editedHtml) {
-    return { html: args.savedPage ? args.savedPage(row.editedHtml) : row.editedHtml, policy: pagePolicy({ kind: 'saved', appOrigin: origin, logoUrl }) };
+    // Where a page points is judged again here, so a page saved before the rule (or by any other road) never sends a reader elsewhere.
+    const profile = currentProfile();
+    const text = args.savedPage ? args.savedPage(row.editedHtml) : row.editedHtml;
+    const html = stripPageLinks(text, { appOrigin: origin, website: profile.website, logoUrl: profile.logoUrl });
+    return { html, policy: pagePolicy({ kind: 'saved', appOrigin: origin, logoUrl }) };
   }
   // The scroll pages carry the app's own scripts. They run in the sandbox, and only because
   // they carry this response's nonce: a script that got in any other way does not.
