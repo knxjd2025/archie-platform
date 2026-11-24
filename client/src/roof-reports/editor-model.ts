@@ -49,6 +49,9 @@ export interface ReportDetail {
   look: { shown: VisualStyleValue; notice: string | null } | null;
   /** Whether a customer link is on. Only that: the address is made and shown by its own call, never listed. */
   shareLinkOn: boolean;
+  /** How many times it was emailed to the customer, and when it last was. */
+  emailSentCount: number;
+  emailSentAt: string | null;
   /** The report's contents when it is ready, else null. */
   report: Record<string, unknown> | null;
   photos: ReportPhotoRef[];
@@ -87,6 +90,8 @@ export function readDetail(value: unknown): ReportDetail | null {
     createdAt: typeof value.createdAt === 'string' ? value.createdAt : '',
     look: readLook(value.look),
     shareLinkOn: value.shareLinkOn === true,
+    emailSentCount: typeof value.emailSentCount === 'number' && Number.isFinite(value.emailSentCount) ? value.emailSentCount : 0,
+    emailSentAt: textOrNull(value.emailSentAt),
     report: isObject(value.report) ? value.report : null,
     photos: Array.isArray(value.photos)
       ? value.photos.filter(isObject).map((p) => ({ id: String(p.id), category: textOrNull(p.category), thumbUrl: String(p.thumbUrl ?? '') }))

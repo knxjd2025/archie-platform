@@ -71,8 +71,8 @@ export async function startRoofApp(tag: string, mount: (app: express.Express) =>
   };
   const signedOut = () => { sessionUser = undefined; };
 
-  const send = async (method: string, path: string, body?: unknown, opts: { raw?: Buffer; contentType?: string } = {}) => {
-    const headers: Record<string, string> = {};
+  const send = async (method: string, path: string, body?: unknown, opts: { raw?: Buffer; contentType?: string; headers?: Record<string, string> } = {}) => {
+    const headers: Record<string, string> = { ...(opts.headers ?? {}) };
     let payload: any;
     if (opts.raw !== undefined) { headers['content-type'] = opts.contentType ?? 'image/jpeg'; payload = opts.raw; }
     else if (body !== undefined) { headers['content-type'] = 'application/json'; payload = JSON.stringify(body); }

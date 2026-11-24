@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { TeamRole } from '../../../shared/rbac';
 import { TEMPLATES, VISUAL_STYLES } from '../../../shared/roof-reports';
-import { archiveReport, createShareLink, fetchReport, revokeShareLink, updateReport } from './api';
+import { archiveReport, createShareLink, fetchReport, revokeShareLink, sendReportEmail, updateReport } from './api';
 import {
   FRAME_SANDBOX, SaveChain, editsAllowed, emptyValues, fieldReducer, initialFields, previewSrc, readDetail, requestFor, sharesAllowed, valueOf, valuesOf,
   type FieldKey, type FieldsState, type ReportDetail,
 } from './editor-model';
 import { partialNotes, type PartialNote } from './generate-flow';
+import { SendDialog } from './SendDialog';
+import { initialSend, makeSendKey, sendReducer, sendsAllowed, sentLine, submitSend, type SendField, type SendState } from './send-model';
 import { copyLink, initialShare, shareReducer, turnLinkOff, type ShareState } from './share-model';
 import { RR, plainMessage } from './words';
 
@@ -29,6 +31,11 @@ export interface EditorViewProps {
   share: ShareState;
   onCopyLink: () => void;
   onTurnLinkOff: () => void;
+  send: SendState;
+  onOpenSend: () => void;
+  onEditSend: (field: SendField, text: string) => void;
+  onSend: () => void;
+  onCloseSend: () => void;
   onBack: () => void;
   onEdit: (key: FieldKey, text: string) => void;
   /** The person left the field, or pressed Try again. */
@@ -113,6 +120,20 @@ function ShareControls({ share, onCopyLink, onTurnLinkOff }: { share: ShareState
   );
 }
 
+/** The email button and what has already been sent. The dialog itself is drawn at the end of the editor. */
+function SendControls({ detail, onOpen }: { detail: ReportDetail; onOpen: () => void }) {
+  const line = sentLine(detail.emailSentCount, detail.emailSentAt);
+  return (
+    <div className="space-y-3">
+      <h4 className="text-sm font-semibold text-gray-900">{RR.send.title}</h4>
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" onClick={onOpen} className={BUTTON}>{RR.send.open}</button>
+      </div>
+      {line && <p className="text-sm text-gray-600">{line}</p>}
+    </div>
+  );
+}
+
 /** The editor as it looks for the state it is handed. All the saving and waiting lives in Editor below. */
 export function EditorView(p: EditorViewProps) {
   const editable = editsAllowed(p.role);
@@ -173,6 +194,7 @@ export function EditorView(p: EditorViewProps) {
           </div>
 
           {sharesAllowed(p.role) && <ShareControls share={p.share} onCopyLink={p.onCopyLink} onTurnLinkOff={p.onTurnLinkOff} />}
+          {sendsAllowed(p.role) && <SendControls detail={p.detail} onOpen={p.onOpenSend} />}
 
           <div className="space-y-3">
             <h4 className="text-sm font-semibold text-gray-900">{RR.editor.findingsTitle}</h4>
@@ -212,6 +234,7 @@ export function EditorView(p: EditorViewProps) {
           />
         </div>
       </div>
+      <SendDialog state={p.send} onEdit={p.onEditSend} onSend={p.onSend} onClose={p.onCloseSend} />
     </section>
   );
 }
@@ -246,6 +269,9 @@ export default function Editor({ id, role, onBack, onArchived }: { id: string; r
   const [style, setStyle] = useState<{ template: StyleState; visualStyle: StyleState }>({ template: { busy: false, error: null }, visualStyle: { busy: false, error: null } });
   const [archive, setArchive] = useState<ArchiveState>({ phase: 'idle', error: null });
   const [share, dispatchShare] = useReducer(shareReducer, initialShare(false));
+  const [send, dispatchSend] = useReducer(sendReducer, initialSend());
+  const sendRef = useRef(send);
+  sendRef.current = send;
   const confirmed = useRef<Record<string, unknown> | null>(null);
   const chain = useRef(new SaveChain());
   const fieldsRef = useRef(fields);
@@ -321,6 +347,24 @@ export default function Editor({ id, role, onBack, onArchived }: { id: string; r
       .then((action) => { if (alive.current) dispatchShare(action); });
   };
 
+  // Opening the dialog starts a try with its own request key; pressing Send answers in the same frame (Sending...), and a second press while it is sending does nothing.
+  const openSend = () => { if (detail) dispatchSend({ type: 'open', email: detail.customerEmail ?? '', name: detail.customerName ?? '', key: makeSendKey() }); };
+  const doSend = () => {
+    const now = sendRef.current;
+    if (now.phase === 'sending' || now.phase === 'sent' || now.phase === 'closed') return;
+    dispatchSend({ type: 'sending' });
+    void submitSend({ send: (body, key) => sendReportEmail(id, body, key) }, now)
+      .then((action) => {
+        if (!alive.current) return;
+        dispatchSend(action);
+        // The server counted it and a link is now on, so the screen says so without asking again.
+        if (action.type === 'sent') {
+          setDetail((d) => (d ? { ...d, emailSentCount: d.emailSentCount + 1, emailSentAt: new Date().toISOString(), shareLinkOn: true } : d));
+          dispatchShare({ type: 'reset', on: true });
+        }
+      });
+  };
+
   const doArchive = () => {
     setArchive({ phase: 'busy', error: null });
     archiveReport(id)
@@ -346,6 +390,11 @@ export default function Editor({ id, role, onBack, onArchived }: { id: string; r
       share={share}
       onCopyLink={doCopyLink}
       onTurnLinkOff={doTurnLinkOff}
+      send={send}
+      onOpenSend={openSend}
+      onEditSend={(field, text) => dispatchSend({ type: 'edit', field, text })}
+      onSend={doSend}
+      onCloseSend={() => dispatchSend({ type: 'close' })}
       onBack={onBack}
       onEdit={(key, text) => dispatch({ type: 'edit', key, text })}
       onSave={save}

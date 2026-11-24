@@ -47,11 +47,16 @@ import { PAGE_SIZE, parseGenerateBody, parseListQuery, parseUpdateBody, sanitize
 import { brandFor } from './brand';
 import { appOrigin, reportForPage, servedPage } from './page';
 import { registerPublicShareRoutes } from './public';
+import { registerSendRoute, type MailSender, type SendCaps } from './send';
 import { requireRoofReportsOn } from './switch';
 
 export interface RoofReportRouteOptions {
   /** The real storm sources, models and photo store, unless a test hands in fakes. */
   deps?: (reportId: string) => GenerateDeps;
+  /** What emails a report to a customer. Only a test replaces it, with a fake: no email is ever sent from a test. */
+  mail?: MailSender;
+  /** The daily send limits, read on every request. Only a test replaces it. */
+  sendCaps?: () => SendCaps;
 }
 
 const notFound = (res: Response) => res.status(404).json({ error: NOT_FOUND });
@@ -368,6 +373,9 @@ export function registerRoofReportsRoutes(app: Express, options: RoofReportRoute
       sendFailure(res, error, 'DELETE /api/roof-reports/:id/share-link');
     }
   });
+
+  // Emailing a report: a person's click only, never a schedule.
+  registerSendRoute(router, { mail: options.mail, caps: options.sendCaps });
 
   app.use('/api/roof-reports', router);
   // The customer's link is outside /api: it needs no sign-in, and /r/* already reaches the server on the hosting.

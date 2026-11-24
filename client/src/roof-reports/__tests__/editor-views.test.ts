@@ -5,6 +5,7 @@ import { EditorView, EditorMessage, type EditorViewProps } from '../Editor';
 import { initialFields, readDetail, valuesOf, fieldReducer, type ReportDetail } from '../editor-model';
 import { partialNotes } from '../generate-flow';
 import { initialShare, type ShareState } from '../share-model';
+import { initialSend, sendReducer } from '../send-model';
 import { WARN_OUT_OF_TIME, warnSomePhotos } from '../../../../shared/roof-reports';
 
 const BANNED = new RegExp(`${String.fromCharCode(0x2014)}|✨|🪄`, 'u');
@@ -23,6 +24,7 @@ const view = (over: Partial<EditorViewProps> = {}) => render(createElement(Edito
   role: 'admin', detail: detail(), fields: initialFields(valuesOf(detail())), previewVersion: 1, previewLoading: false, partial: [],
   style: { template: { busy: false, error: null }, visualStyle: { busy: false, error: null } }, archive: { phase: 'idle', error: null },
   share: initialShare(false), onCopyLink: noop, onTurnLinkOff: noop,
+  send: initialSend(), onOpenSend: noop, onEditSend: noop, onSend: noop, onCloseSend: noop,
   onBack: noop, onEdit: noop, onSave: noop, onTemplate: noop, onVisualStyle: noop, onAskArchive: noop, onCancelArchive: noop, onArchive: noop, onPreviewLoaded: noop, ...over,
 }));
 
@@ -199,6 +201,36 @@ describe('the editor as drawn', () => {
     expect(h).toContain('focus-visible:ring-2');
     expect(h).not.toMatch(BANNED);
     expect(h).not.toMatch(/sparkle|wand|magic/i);
+  });
+});
+
+describe('the editor: emailing the report', () => {
+  it('shows the email button to a role that may send, and not to crew', () => {
+    expect(view({ role: 'admin' })).toContain('Email this report');
+    expect(view({ role: 'sales' })).toContain('Email this report');
+    expect(view({ role: 'production' })).not.toContain('Email this report');
+  });
+
+  it('says how many times it was emailed, and when, only when it was', () => {
+    expect(view()).not.toContain('Emailed');
+    const d = { ...detail(), emailSentCount: 2, emailSentAt: '2026-11-24T15:00:00.000Z' };
+    expect(view({ detail: d })).toContain('Emailed 2 times. Last sent Nov 24, 2026.');
+  });
+
+  it('draws the dialog only once it is opened, with the customer\'s address in it', () => {
+    expect(view()).not.toContain('role="dialog"');
+    const open = sendReducer(initialSend(), { type: 'open', email: 'dana@example.com', name: 'Dana Whitfield', key: 'send-aaaaaaaa' });
+    const h = view({ send: open });
+    expect(h).toContain('role="dialog"');
+    expect(h).toContain('value="dana@example.com"');
+  });
+
+  it('reads the counts from the server\'s answer, and a missing count is none', async () => {
+    const { readDetail: read } = await import('../editor-model');
+    const base = { id: ID, status: 'ready', address: '12 Elm Street' };
+    expect(read({ ...base, emailSentCount: 3, emailSentAt: '2026-11-24T15:00:00.000Z' })).toMatchObject({ emailSentCount: 3, emailSentAt: '2026-11-24T15:00:00.000Z' });
+    expect(read(base)).toMatchObject({ emailSentCount: 0, emailSentAt: null });
+    expect(read({ ...base, emailSentCount: 'lots' })).toMatchObject({ emailSentCount: 0 });
   });
 });
 

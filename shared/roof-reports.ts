@@ -89,6 +89,21 @@ export const SHARE_UNAVAILABLE = 'This report is not available.';
 export const SHARE_BUSY = 'This report has been opened a lot in the last few minutes. Wait a little and reload the page.';
 export const SHARE_FAILED = 'This report could not be opened right now. Please try again.';
 
+/** Emailing a report to the customer: the limits, and every sentence a person may be told. */
+export const MAX_SENDS_PER_REPORT_PER_DAY = 5;
+export const MAX_SENDS_PER_COMPANY_PER_DAY = 100;
+export const MAX_SEND_MESSAGE = 1000;
+export const SEND_BAD_NAME = 'That name can\'t be used. Please keep it to one line.';
+export const SEND_MESSAGE_TOO_LONG = `That message is too long. Please keep it under ${MAX_SEND_MESSAGE.toLocaleString('en-US')} characters.`;
+export const SEND_NOT_READY = 'A report can be emailed once it is finished.';
+export const SEND_FAILED = 'The email could not be sent. Please try again.';
+export const SEND_NOT_SET_UP = 'Email is not set up for your company yet. Please ask your administrator to connect it.';
+export const SEND_REPORT_CAPPED = 'This report has been emailed several times today. Please try again tomorrow.';
+export const SEND_COMPANY_CAPPED = 'Your company has sent a lot of report emails today. Please try again tomorrow.';
+export const SEND_TOO_FAST = 'You have sent a lot of emails in the last few minutes. Please wait a little and try again.';
+export const SEND_KEY_REUSED = 'That was already used to send a different email. Please send it again.';
+export const SEND_SENDING = 'This email is already on its way.';
+
 export const STILL_BEING_MADE_EDIT = 'This report is still being made. Please try again once it finishes.';
 export const TOO_MANY_RECENT = 'You have made a lot of reports in the last few minutes. Please wait a little and try again.';
 

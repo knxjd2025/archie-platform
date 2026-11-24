@@ -50,3 +50,7 @@ export const createShareLink = (id: string): Promise<{ url: string }> =>
 /** Turns the customer's link off for good. A link made later is a different one. */
 export const revokeShareLink = (id: string): Promise<{ shareLinkOn: boolean }> =>
   api.delete(`/api/roof-reports/${encodeURIComponent(id)}/share-link`, { timeoutMs: 20_000 });
+
+/** Emails the report's link to the customer. One request key for each try, so a double press sends once. */
+export const sendReportEmail = (id: string, body: { email: string; customerName?: string; message?: string }, key: string): Promise<unknown> =>
+  api.post(`/api/roof-reports/${encodeURIComponent(id)}/send`, body, { timeoutMs: 60_000, headers: { 'Idempotency-Key': key } });

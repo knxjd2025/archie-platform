@@ -2377,6 +2377,35 @@ export const modelCosts = pgTable('model_costs', {
 export type ModelCost = typeof modelCosts.$inferSelect;
 
 /**
+ * One row for each time a person pressed "Send" (email a report) or "Rewrite"
+ * (migration 0024, server/roof-reports/uses.ts). The daily limits are counted
+ * from it, and the request key makes a double click send once. It holds no
+ * address, name or text: the report, the kind, who pressed it, the key and a
+ * fingerprint of what was asked. No foreign key to roof_reports (it would skip
+ * row level security): the code looks the report up as the company first.
+ */
+export const roofReportUses = pgTable('roof_report_uses', {
+  companyId: companyId(),
+  id: uuid('id').primaryKey().defaultRandom(),
+  reportId: uuid('report_id').notNull(),
+  kind: text('kind').notNull(),                       // send | rewrite
+  memberId: integer('member_id'),                     // team_members.id of the person who pressed it
+  idempotencyKey: text('idempotency_key'),
+  requestHash: text('request_hash'),
+  status: text('status').notNull().default('reserved'), // reserved | done | failed | unused
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  finishedAt: timestamp('finished_at', { withTimezone: true }),
+}, (t) => ({
+  kindCreatedIdx: index('roof_report_uses_company_kind_created').on(t.companyId, t.kind, t.createdAt),
+  reportKindCreatedIdx: index('roof_report_uses_company_report_kind_created').on(t.companyId, t.reportId, t.kind, t.createdAt),
+  keyUq: uniqueIndex('roof_report_uses_key_uq').on(t.companyId, t.reportId, t.kind, t.idempotencyKey).where(sql`${t.idempotencyKey} IS NOT NULL AND ${t.status} IN ('reserved','done')`),
+  kindCheck: check('roof_report_uses_kind_check', sql`${t.kind} IN ('send','rewrite')`),
+  statusCheck: check('roof_report_uses_status_check', sql`${t.status} IN ('reserved','done','failed','unused')`),
+}));
+
+export type RoofReportUse = typeof roofReportUses.$inferSelect;
+
+/**
  * One company's own presentation chapters (migration 0023): how its crew works,
  * what its warranty covers, in the company's words. Company DATA, never code and
  * never matched by name: the row belongs to the company in `company_id`, the app

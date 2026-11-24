@@ -7,9 +7,11 @@ an inspection, a measurement, a storm history, or any mix. Archie's own
 documents (Inspection, Estimate, Proposal, Presentation, Combined) are not
 changed; roof reports are their own family beside them.
 
-This page covers what Stage B built: the tables, the photos, the generation,
-the routes and the rules around them. The screens, the presentation styles, the
-PDF, the email and share link and the copy of old reports come in later stages.
+This page covers what has been built so far: the tables, the photos, the
+generation, the routes and the rules around them, the screens, the three looks,
+the share link, emailing a report and (below) the PDF and rewriting a finding.
+Comparison, satellite measurement and the copy of old reports come in later
+stages.
 
 ## The switch
 
@@ -28,9 +30,9 @@ photo links inside a page are made against).
 
 ## Before this code is deployed
 
-Apply four migrations to the database, as the owner, before deploying code that
-reads them. All four are safe under the code that is live today (0020, 0021 and
-0023 only add tables nothing reads yet; 0022 only adds columns the live code never
+Apply five migrations to the database, as the owner, before deploying code that
+reads them. All five are safe under the code that is live today (0020, 0021, 0023
+and 0024 only add tables nothing reads yet; 0022 only adds columns the live code never
 names). Nothing in the build or deploy runs them. **0022 must be applied before
 the code that names its columns is deployed**: that code reads `roof_reports`
 with them, so deployed first it breaks every report read. 0023 should be applied
@@ -44,8 +46,9 @@ is treated as no pack), never an error, but apply it first anyway.
 | `migrations/0021_model_costs.sql` | `model_costs` | `ca45ee62a6b90eaa514c94dca3bc702a4a679c93a36817b5aba80014a0b1a4a5` |
 | `migrations/0022_roof_report_starts.sql` | `roof_reports.started_at` (filled from `created_at`, then required), `idempotency_key`, `request_hash`, and two indexes | `3bdf415c35ed403d629df6b7f723fc119cd6ec5b4065b35270078c13678b1e2e` |
 | `migrations/0023_presentation_chapter_packs.sql` | `presentation_chapter_packs` (a new table only, one row a company) and the trigger that keeps the app from writing it | `5c2eeb75ec1f332563fc0294a78e0addd6b45191df479f4e4f5545080aab4c45` |
+| `migrations/0024_roof_report_uses.sql` | `roof_report_uses` (a new table only: the record of each Send and each Rewrite, for the daily limits and the double click) | `c4d0d4a747bf6f9be230a1b18aeb5c384791a11feb4e9371bb010e7ac99d283a` |
 
-Check the file you apply with `sha256sum` against the table. 0020, 0021 and 0023
+Check the file you apply with `sha256sum` against the table. 0020, 0021, 0023 and 0024
 need `0008` (the system role): each table is protected with the function `0008`
 created, so each has exactly the two company policies; 0022 needs `0020`. A
 migration is never edited once applied.
@@ -120,6 +123,7 @@ signed-in person, and a role that may use roof reports.
 | `GET /api/clients/:externalId/roof-reports` | a job's reports, after the check that opens the job |
 | `POST /:id/share-link` | makes the customer's link for a finished report (or gives the one it has) and answers its address; needs the `share` decision |
 | `DELETE /:id/share-link` | turns the link off for good; needs the `unshare` decision. Fine to ask twice |
+| `POST /:id/send` | emails the customer a short note with the report's link (see "Emailing a report"); needs the `send` decision and an `Idempotency-Key` header |
 | `GET /r/roof/:token` | the shared report's page. No sign-in: the token is the key (see "The share link") |
 | `GET /r/roof/:token/photos/:photoId/:variant` | one photo copy of that report only |
 
@@ -282,6 +286,46 @@ off..."). Nothing is ever sent to the customer by it.
   routes are walked by `route-walk.db.test.ts` (with the switch off, as another
   company, as crew and as a salesperson who does not own the report);
   `share` and `unshare` have their rows in `roof-report-roles.db.test.ts`.
+
+## Emailing a report
+
+A person who may send a report (`send` in `ROOF_REPORT_RULES`: everything, a
+leader's team, or their own) presses "Email this report" in the editor, checks
+the customer's address and the optional note, and presses "Send email". Nothing
+else sends: making, opening, editing, sharing and archiving a report never email,
+and nothing runs on a schedule (`send.db.test.ts` holds this).
+
+- **What is sent** is short and plain: a greeting, the company's name, the
+  person's note (plain text, up to 1,000 characters, escaped, its line breaks
+  kept) and one button with the report's share link. The link is made through the
+  very same code as "Copy link" when none is on (`ensureShareToken`), so the two
+  always give the same address. Never the report's contents, never a photo, never
+  an attachment. It goes through the company's own email (`sendCompanyEmail`), from the
+  person who pressed the button.
+- **The address** comes from the request, is checked (one plain address: no names,
+  brackets, quotes, lists or line breaks), and is used only to call the sender. It
+  is never logged, never stored (the use record has no address column) and never put
+  in an error: every failure is one of a few plain sentences, and a log line says only
+  the kind of failure. The name and the address are refused if they hold a line break
+  or a control character, so nothing typed can add a header to the email.
+- **Counters** (`email_sent_count`, `email_sent_at`) change only after the sender
+  hands back a message id, in the same step that closes the use record. A send that
+  threw, or answered with no id, changes nothing and gives its place back.
+- **A double click sends once.** The screen makes one request key for each try and
+  sends it as `Idempotency-Key` (needed: no key is a 400). The second request with
+  the same key finds the first and sends nothing; the same key asking for a
+  different email is refused with a plain sentence.
+- **Limits**: 5 a day for a report, 100 a day for a company, 20 a person in ten
+  minutes. The daily two are counted from `roof_report_uses` and a place is taken in
+  one transaction that first locks the company (the same approach as the cap on
+  starting a report), so requests that arrive together cannot overrun them. Each
+  refusal is a plain sentence.
+- **Who**: crew and any role nobody decided are refused (the report is simply not
+  there for them); a salesperson only for a report they may see; another company's
+  report is "not found". The route is in the route walk and `send` has its row in
+  the permanent roles test.
+- **Tests never send**: the route takes the sender as an option, and every test hands
+  in a fake. The repo's email sender has no test sink of its own.
 
 ## Photos
 
