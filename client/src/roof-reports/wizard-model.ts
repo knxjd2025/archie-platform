@@ -4,9 +4,9 @@
  * which picked files become photos and how many fit, and the state of each
  * photo's tile from the moment it is picked. The screens only draw this.
  */
-import { MAX_DAMAGE_COUNT, MAX_REPORT_PHOTOS, NEEDS_ADDRESS, NEEDS_CITY_STATE, ROOF_SQUARES_MAX, type ReportPhotoCategory } from '../../../shared/roof-reports';
+import { MAX_DAMAGE_COUNT, MAX_REPORT_PHOTOS, NEEDS_ADDRESS, NEEDS_CITY_STATE, NOT_FOUND, ROOF_SQUARES_MAX, type ReportPhotoCategory } from '../../../shared/roof-reports';
 import { LAST_STEP, type DamageDraft, type DraftPhoto, type RoofDraft, type WhereDraft, type WizardDraft } from './draft';
-import { RR } from './words';
+import { RR, plainMessage } from './words';
 
 export const STEPS = [
   { key: 'where', label: 'Where' },
@@ -29,7 +29,8 @@ export function checkWhere(w: WhereDraft): string | null {
 
 // ---------------------------------------------------------------- step 2: photos
 
-export type TileState = 'preparing' | 'uploading' | 'done' | 'failed';
+/** `removing`: the server is being asked to take a saved photo back. It still counts toward the cap until it is gone. */
+export type TileState = 'preparing' | 'uploading' | 'done' | 'failed' | 'removing';
 
 /** One photo on the photo step. `preview` exists only while this page is open; it is never kept. */
 export interface PhotoTile {
@@ -85,6 +86,8 @@ export type PhotoAction =
   | { type: 'failed'; key: string; error: string }
   | { type: 'retry'; key: string }
   | { type: 'remove'; key: string }
+  | { type: 'removing'; key: string }
+  | { type: 'removeFailed'; key: string; error: string }
   | { type: 'reset'; tiles: PhotoTile[] };
 
 const inFlight = (t: PhotoTile) => t.state === 'preparing' || t.state === 'uploading';
@@ -98,23 +101,33 @@ export function photosReducer(tiles: PhotoTile[], a: PhotoAction): PhotoTile[] {
     case 'progress': return tiles.map((t) => (t.key === a.key && inFlight(t) ? { ...t, state: 'uploading', percent: Math.max(0, Math.min(99, Math.round(a.percent))) } : t));
     case 'done': return tiles.map((t) => (t.key === a.key && inFlight(t) ? { ...t, state: 'done', percent: 100, id: a.id, error: null } : t));
     case 'failed': return tiles.map((t) => (t.key === a.key && inFlight(t) ? { ...t, state: 'failed', error: a.error } : t));
+    case 'removing': return tiles.map((t) => (t.key === a.key && t.state === 'done' && t.id ? { ...t, state: 'removing', error: null } : t));
+    case 'removeFailed': return tiles.map((t) => (t.key === a.key && t.state === 'removing' ? { ...t, state: 'done', error: a.error } : t));
     case 'retry': return tiles.map((t) => (t.key === a.key && t.state === 'failed' ? { ...t, state: 'preparing', percent: 0, error: null } : t));
   }
 }
 
 export const tileLabel = (t: Pick<PhotoTile, 'state' | 'percent'>): string =>
-  t.state === 'preparing' ? RR.photos.gettingReady : t.state === 'uploading' ? RR.photos.uploading(t.percent) : t.state === 'done' ? RR.photos.done : RR.photos.failed;
+  t.state === 'preparing' ? RR.photos.gettingReady : t.state === 'uploading' ? RR.photos.uploading(t.percent) : t.state === 'removing' ? RR.photos.removing : t.state === 'done' ? RR.photos.done : RR.photos.failed;
 
 /** How the photos are going, in one plain line. Empty with none. */
 export function progressLine(tiles: readonly PhotoTile[]): string {
   if (tiles.length === 0) return '';
   const failed = tiles.filter((t) => t.state === 'failed').length;
-  const done = tiles.filter((t) => t.state === 'done').length;
+  const done = tiles.filter((t) => t.state === 'done' || t.state === 'removing').length;
   if (failed > 0 && !tiles.some(inFlight)) return RR.photos.failedLine(failed);
   return RR.photos.progress(done, tiles.length);
 }
 
 export const photosInFlight = (tiles: readonly PhotoTile[]): boolean => tiles.some(inFlight);
+export const photosRemoving = (tiles: readonly PhotoTile[]): boolean => tiles.some((t) => t.state === 'removing');
+
+/** What an answer to "take this photo back" means: the photo is gone (also when the server says it was already not there), or a sentence to show. */
+export function readRemoveError(error: unknown): { gone: true } | { gone: false; error: string } {
+  const message = error && typeof error === 'object' && 'message' in error ? (error as { message: unknown }).message : null;
+  if (message === NOT_FOUND) return { gone: true };
+  return { gone: false, error: plainMessage(error, RR.photos.notRemoved) };
+}
 
 /** The photos the draft keeps: only those the server has, as its ids. */
 export const draftPhotosFromTiles = (tiles: readonly PhotoTile[]): DraftPhoto[] =>

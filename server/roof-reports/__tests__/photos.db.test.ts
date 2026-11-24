@@ -14,7 +14,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { PHOTO_NOT_JPEG, PHOTO_STORE_OFF, PHOTO_TOO_LARGE, PHOTO_UNREADABLE, PHOTO_MISSING, MAX_PHOTO_BYTES } from '../../photos/native';
 import { setPhotoStoreForTests } from '../../photos/store';
-import { MAX_WAITING_PHOTOS, TOO_MANY_WAITING, NOT_FOUND } from '../../../shared/roof-reports';
+import { MAX_WAITING_PHOTOS, TOO_MANY_WAITING, NOT_FOUND, PHOTO_IN_REPORT, PHOTO_NOT_REMOVED } from '../../../shared/roof-reports';
 import { makeJpeg } from '../../photos/__tests__/jpeg-fixtures';
 import { fakeStore, localDb, startRoofApp, type Co } from './harness';
 
@@ -142,6 +142,105 @@ describe.skipIf(!localDb)('report photos (database)', async () => {
     expect((await h.get(`/api/roof-reports/${reportOf.a}/photos/${own}/thumb`)).status).toBe(404);
     h.signedOut();
     expect((await h.upload('/api/roof-reports/photos', makeJpeg())).status).toBe(401);
+  });
+
+  describe('taking back a photo that is not in a report yet', () => {
+    const removeAs = async (co: Co, who: string, id: string) => { h.as(co, who); return h.del(`/api/roof-reports/photos/${id}`); };
+    const keysOf = (id: string) => [...store.objects.keys()].filter((k) => k.includes(`/${id}/`));
+
+    it('removes the row and both stored copies of an unused photo, for the person who uploaded it, and says so plainly', async () => {
+      const id = (await upload(a, 'repA', makeJpeg())).body.id as string;
+      expect(keysOf(id)).toHaveLength(2);
+      const r = await removeAs(a, 'repA', id);
+      expect(r.status).toBe(200);
+      expect(r.body).toEqual({ id, removed: true });
+      expect((await rowsOf(a)).some((x) => x.id === id)).toBe(false);
+      expect(keysOf(id)).toEqual([]);
+      // Taking it back again is the same "not found" as a photo that never was.
+      expect((await removeAs(a, 'repA', id)).status).toBe(404);
+    });
+
+    it('frees the place it held in the day\'s waiting count', async () => {
+      const [m] = await runAsCompany(a.id, () => db.insert(schema.teamMembers).values({ name: 'Wait Test', email: `${tag}-wait@example.test`.toLowerCase(), role: 'sales', canLogin: true, active: true } as any).returning());
+      a.people.wait = { id: m.id, email: m.email!, name: 'Wait Test', role: 'sales' };
+      const ids: string[] = [];
+      for (let i = 0; i < 3; i++) ids.push((await upload(a, 'wait', makeJpeg())).body.id);
+      const waiting = async () => (await rowsOf(a)).filter((x) => x.reportId === null && x.uploadedByMemberId === m.id).length;
+      expect(await waiting()).toBe(3);
+      await removeAs(a, 'wait', ids[0]);
+      expect(await waiting()).toBe(2);
+    });
+
+    it('lets a role that sees every report remove anyone\'s unused photo, and no one else but the uploader', async () => {
+      const mine = (await upload(a, 'repA', makeJpeg())).body.id as string;
+      // Another rep, and a manager who did not upload it, are told it is not there; it stays.
+      expect((await removeAs(a, 'repB', mine)).status).toBe(404);
+      expect((await rowsOf(a)).some((x) => x.id === mine)).toBe(true);
+      expect(keysOf(mine)).toHaveLength(2);
+      expect((await removeAs(a, 'admin', mine)).status).toBe(200);
+      expect(keysOf(mine)).toEqual([]);
+    });
+
+    it('answers crew, another company, a made-up id and a bad id with the same "not found", and changes nothing', async () => {
+      const id = (await upload(a, 'repA', makeJpeg())).body.id as string;
+      const before = { rows: (await rowsOf(a)).length, objects: store.objects.size };
+      for (const [co, who] of [[a, 'crew'], [b, 'admin']] as Array<[Co, string]>) {
+        const r = await removeAs(co, who, id);
+        expect(r.status, who).toBe(404);
+        expect(r.text).toContain(NOT_FOUND);
+        expect(r.text).not.toContain(id);
+      }
+      expect((await removeAs(a, 'admin', crypto.randomUUID())).status).toBe(404);
+      expect((await removeAs(a, 'admin', 'not-an-id')).status).toBe(404);
+      h.signedOut();
+      expect((await h.del(`/api/roof-reports/photos/${id}`)).status).toBe(401);
+      expect({ rows: (await rowsOf(a)).length, objects: store.objects.size }).toEqual(before);
+    });
+
+    it('refuses a photo that is already in a report, with a plain sentence, and keeps it (reports and their photos are archived, never deleted)', async () => {
+      const report = await reportFor(a, 'repA');
+      const id = (await upload(a, 'repA', makeJpeg())).body.id as string;
+      await runAsCompany(a.id, () => photos.claimPhotos({ email: a.people.repA.email, name: 'a', role: 'sales' }, report, [id]));
+      for (const who of ['repA', 'admin']) {
+        const r = await removeAs(a, who, id);
+        expect(r.status, who).toBe(409);
+        expect(r.body).toEqual({ error: PHOTO_IN_REPORT });
+      }
+      expect((await rowsOf(a)).find((x) => x.id === id)!.reportId).toBe(report);
+      expect(keysOf(id)).toHaveLength(2);
+    });
+
+    it('keeps the row when the store cannot remove the copies, so it can be tried again, and never shows why', async () => {
+      const id = (await upload(a, 'repA', makeJpeg())).body.id as string;
+      const failing = { ...store, delete: async () => { throw Object.assign(new Error('secret bucket detail c/abc'), { name: 'AccessDenied' }); } };
+      setPhotoStoreForTests(failing);
+      const r = await removeAs(a, 'repA', id);
+      expect(r.status).toBe(502);
+      expect(r.body).toEqual({ error: PHOTO_NOT_REMOVED });
+      expect(r.text).not.toMatch(/secret|bucket|c\//);
+      expect((await rowsOf(a)).some((x) => x.id === id)).toBe(true);
+      setPhotoStoreForTests(store);
+      expect((await removeAs(a, 'repA', id)).status).toBe(200);
+    });
+
+    it('is a bare 404 while the switch is off, and 503 in plain words when the store is off', async () => {
+      const id = (await upload(a, 'repA', makeJpeg())).body.id as string;
+      process.env.ARCHIE_ROOF_REPORTS = 'off';
+      const off = await removeAs(a, 'repA', id);
+      expect(off.status).toBe(404);
+      expect(off.text).toBe('');
+      process.env.ARCHIE_ROOF_REPORTS = 'on';
+      setPhotoStoreForTests(null);
+      const saved = Object.fromEntries(['ARCHIE_PHOTOS_ACCOUNT_ID', 'ARCHIE_PHOTOS_ACCESS_KEY_ID', 'ARCHIE_PHOTOS_SECRET_ACCESS_KEY', 'ARCHIE_PHOTOS_BUCKET'].map((k) => [k, process.env[k]]));
+      for (const k of Object.keys(saved)) delete process.env[k];
+      try {
+        expect((await removeAs(a, 'repA', id)).status).toBe(503);
+      } finally {
+        for (const [k, v] of Object.entries(saved)) if (v !== undefined) process.env[k] = v;
+        setPhotoStoreForTests(store);
+      }
+      expect((await rowsOf(a)).some((x) => x.id === id)).toBe(true);
+    });
   });
 
   describe('belonging to one report of one company', () => {

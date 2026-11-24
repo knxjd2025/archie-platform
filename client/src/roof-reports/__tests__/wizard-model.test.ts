@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   STEPS, checkWhere, countedPhotos, draftPhotosFromTiles, leftOutLine, photoCountLine, photoIdsForReport, photosReducer, planAdditions,
-  progressLine, tileLabel, tilesFromDraft, tryAdvance, type PhotoTile,
+  photosInFlight, photosRemoving, progressLine, readRemoveError, tileLabel, tilesFromDraft, tryAdvance, type PhotoTile,
 } from '../wizard-model';
+import { NOT_FOUND, PHOTO_IN_REPORT } from '../../../../shared/roof-reports';
 import { emptyDraft } from '../draft';
 
 const ID = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -102,6 +103,38 @@ describe('a photo\'s tile', () => {
     const tiles = [tile({ key: 'a' }), tile({ key: 'b', state: 'done', id: ID(2) })];
     expect(photosReducer(tiles, { type: 'remove', key: 'a' }).map((t) => t.key)).toEqual(['b']);
     expect(photosReducer(tiles, { type: 'remove', key: 'nope' })).toEqual(tiles);
+  });
+
+  it('says "Removing..." while the server takes a saved photo back, still counts it, and puts it back with a sentence if that fails', () => {
+    let tiles = [tile({ key: 'a', state: 'done', id: ID(1) }), tile({ key: 'b', state: 'failed' })];
+    tiles = photosReducer(tiles, { type: 'removing', key: 'a' });
+    expect(tiles[0].state).toBe('removing');
+    expect(tileLabel(tiles[0])).toBe('Removing...');
+    expect(photosRemoving(tiles)).toBe(true);
+    expect(photosInFlight(tiles)).toBe(false);
+    expect(countedPhotos(tiles)).toBe(1);
+    expect(draftPhotosFromTiles(tiles)).toEqual([]);
+    expect(photoIdsForReport(tiles)).toEqual([]);
+    expect(progressLine([tile({ state: 'removing', id: ID(1) }), tile({ state: 'done', id: ID(2) })])).toBe('2 of 2 photos added.');
+    const failed = photosReducer(tiles, { type: 'removeFailed', key: 'a', error: 'The photo could not be removed. Please try again.' });
+    expect(failed[0]).toMatchObject({ state: 'done', error: 'The photo could not be removed. Please try again.' });
+    expect(photosRemoving(failed)).toBe(false);
+    expect(photosReducer(failed, { type: 'remove', key: 'a' }).map((t) => t.key)).toEqual(['b']);
+  });
+
+  it('only asks the server to take back a photo the server has', () => {
+    const tiles = [tile({ key: 'a', state: 'uploading' }), tile({ key: 'b', state: 'failed' })];
+    expect(photosReducer(tiles, { type: 'removing', key: 'a' })).toEqual(tiles);
+    expect(photosReducer(tiles, { type: 'removing', key: 'b' })).toEqual(tiles);
+    expect(photosReducer(tiles, { type: 'removeFailed', key: 'a', error: 'x' })).toEqual(tiles);
+  });
+
+  it('reads the answer to a removal: a photo the server no longer has is gone, a refusal is a plain sentence, anything else is the fallback', () => {
+    expect(readRemoveError(new Error(NOT_FOUND))).toEqual({ gone: true });
+    expect(readRemoveError(new Error(PHOTO_IN_REPORT))).toEqual({ gone: false, error: PHOTO_IN_REPORT });
+    expect(readRemoveError(new Error('HTTP 502'))).toEqual({ gone: false, error: 'The photo could not be removed. Please try again.' });
+    expect(readRemoveError(new Error('Request timed out — try again.'))).toEqual({ gone: false, error: 'The photo could not be removed. Please try again.' });
+    expect(readRemoveError(null)).toEqual({ gone: false, error: 'The photo could not be removed. Please try again.' });
   });
 
   it('names its state in plain words', () => {

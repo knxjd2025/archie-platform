@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { REPORT_PHOTO_CATEGORIES, type ReportPhotoCategory } from '../../../shared/roof-reports';
+import { removeReportPhoto } from './api';
 import { prepareJpeg } from './photo-prepare';
 import { UPLOADS_AT_ONCE, runLimited, uploadJpeg } from './upload';
-import { countedPhotos, leftOutLine, photosReducer, planAdditions, type PhotoTile } from './wizard-model';
+import { countedPhotos, leftOutLine, photosReducer, planAdditions, readRemoveError, type PhotoTile } from './wizard-model';
 import { RR, plainMessage } from './words';
 
 const asCategory = (v: string): ReportPhotoCategory | null => ((REPORT_PHOTO_CATEGORIES as readonly string[]).includes(v) ? (v as ReportPhotoCategory) : null);
@@ -28,6 +29,8 @@ export function usePhotoUploads(initial: PhotoTile[]) {
       dispatch({ type: 'progress', key, percent: 0 });
       const id = await uploadJpeg(jpeg, entry.category, (percent) => dispatch({ type: 'progress', key, percent }));
       files.current.delete(key);
+      // Taken off the screen while it was still going: it arrived, but nobody wants it, so it is taken back.
+      if (!live.current.some((t) => t.key === key)) { void removeReportPhoto(id).catch(() => { /* waits unused; the person can do no more about it */ }); return; }
       dispatch({ type: 'done', key, id });
     } catch (e) {
       dispatch({ type: 'failed', key, error: plainMessage(e, RR.photos.notSaved) });
@@ -57,9 +60,22 @@ export function usePhotoUploads(initial: PhotoTile[]) {
 
   const remove = useCallback((key: string) => {
     const tile = live.current.find((t) => t.key === key);
-    if (tile?.preview) URL.revokeObjectURL(tile.preview);
-    files.current.delete(key);
-    dispatch({ type: 'remove', key });
+    if (!tile || tile.state === 'removing') return;
+    const drop = () => {
+      if (tile.preview) URL.revokeObjectURL(tile.preview);
+      files.current.delete(key);
+      dispatch({ type: 'remove', key });
+    };
+    if (tile.state === 'done' && tile.id) {
+      // The server holds a copy: it is asked to take it back, and the tile says "Removing..." in the same frame as the click.
+      dispatch({ type: 'removing', key });
+      removeReportPhoto(tile.id).then(drop).catch((e) => {
+        const outcome = readRemoveError(e);
+        if (outcome.gone) drop(); else dispatch({ type: 'removeFailed', key, error: outcome.error });
+      });
+      return;
+    }
+    drop();
   }, []);
 
   const reset = useCallback(() => {

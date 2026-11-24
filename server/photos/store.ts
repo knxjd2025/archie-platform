@@ -30,6 +30,12 @@ export interface PhotoStore {
   put(key: string, body: Buffer, contentType: string): Promise<void>;
   /** Read an object back, or null when it is not there. */
   get(key: string): Promise<{ body: Readable; length: number | null } | null>;
+  /**
+   * Remove one object. Removing one that is not there is not an error. Only a
+   * roof report photo that was never put in a report is ever removed. Absent on
+   * a store that cannot remove, which the caller treats as "could not".
+   */
+  delete?(key: string): Promise<void>;
 }
 
 const SETTINGS = ['ARCHIE_PHOTOS_ACCOUNT_ID', 'ARCHIE_PHOTOS_ACCESS_KEY_ID', 'ARCHIE_PHOTOS_SECRET_ACCESS_KEY', 'ARCHIE_PHOTOS_BUCKET'] as const;
@@ -146,6 +152,12 @@ function r2PhotoStore(s: R2Settings): PhotoStore {
         if (e?.name === 'NoSuchKey' || e?.$metadata?.httpStatusCode === 404) return null;
         throw e;
       }
+    },
+    async delete(key) {
+      // Only a roof report photo's own key may be removed, never a job photo's.
+      if (!REPORT_KEY_RE.test(key)) throw new Error('photo key refused');
+      const { send, lib } = await connect();
+      await send(new lib.DeleteObjectCommand({ Bucket: s.bucket, Key: key }));
     },
   };
 }

@@ -27,6 +27,7 @@ export function fakeStore() {
     objects,
     put: async (key: string, body: Buffer) => { objects.set(key, Buffer.from(body)); },
     get: async (key: string) => { const b = objects.get(key); return b ? { body: Readable.from(b), length: b.length } : null; },
+    delete: async (key: string) => { objects.delete(key); },
   };
 }
 

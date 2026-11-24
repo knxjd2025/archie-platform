@@ -100,6 +100,7 @@ signed-in person, and a role that may use roof reports.
 |---|---|
 | `GET /status` | `{ on, photoStore, analysis }`, never which keys are set |
 | `POST /photos` | one raw JPEG body (`?category=`), cleaned and stored privately |
+| `DELETE /photos/:photoId` | takes back a photo that is not in a report yet: its row and both stored copies. By the person who uploaded it, or a role that sees every report; anyone else, another company and a missing id are all "not found". A photo already in a report is refused with a plain sentence (409): reports and their photos are archived, never deleted. If the store cannot remove the copies the row stays, so it can be tried again |
 | `GET /:id/photos/:photoId/:variant` | one photo copy (`working` or `thumb`), after the report's access rule |
 | `GET /linked-photo/:token` | one photo copy for a short signed link; no session, the signature is the check |
 | `POST /generate` | make a report; 40 a person every ten minutes, 200 a company a day (a new report and a retry both count). An optional `Idempotency-Key` header makes a repeated submit return the first report and start nothing |

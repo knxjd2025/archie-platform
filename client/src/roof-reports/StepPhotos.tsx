@@ -21,11 +21,12 @@ export interface PhotosViewProps {
 
 function Tile({ tile, onRemove, onRetry }: { tile: PhotoTile; onRemove: (key: string) => void; onRetry: (key: string) => void }) {
   const working = tile.state === 'preparing' || tile.state === 'uploading';
+  const removing = tile.state === 'removing';
   return (
-    <li className="relative">
+    <li className="relative" aria-busy={removing || undefined}>
       <div className={`relative aspect-square rounded-lg overflow-hidden border ${tile.state === 'failed' ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-gray-100'}`}>
         {tile.preview ? (
-          <img src={tile.preview} alt="" className={`w-full h-full object-cover ${working ? 'opacity-60' : ''}`} />
+          <img src={tile.preview} alt="" className={`w-full h-full object-cover ${working || removing ? 'opacity-50' : ''}`} />
         ) : (
           <p className="p-2 text-xs text-gray-500 break-all">{tile.name}</p>
         )}
@@ -43,17 +44,20 @@ function Tile({ tile, onRemove, onRetry }: { tile: PhotoTile; onRemove: (key: st
               <div className="h-full bg-white rounded" style={{ width: `${tile.percent}%` }} />
             </div>
           )}
+          {removing && <div className="mt-1 h-1 rounded bg-white/30 overflow-hidden"><div className="h-full w-1/3 bg-white rounded animate-pulse" /></div>}
           {tile.state === 'preparing' && <div className="mt-1 h-1 rounded bg-white/30 overflow-hidden"><div className="h-full w-1/3 bg-white rounded animate-pulse" /></div>}
         </div>
         <button
           type="button"
           onClick={() => onRemove(tile.key)}
+          disabled={removing}
           aria-label={RR.photos.removeFor(tile.name)}
           className={`absolute top-1 right-1 w-7 h-7 rounded-full bg-white/90 text-gray-700 text-sm leading-none ${FOCUS}`}
         >
           <span aria-hidden>✕</span>
         </button>
       </div>
+      {tile.state === 'done' && tile.error && <p role="alert" className="mt-1 text-xs text-red-600">{tile.error}</p>}
       {tile.state === 'failed' && (
         <div className="mt-1">
           {tile.error && <p role="alert" className="text-xs text-red-600">{tile.error}</p>}

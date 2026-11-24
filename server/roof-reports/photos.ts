@@ -28,7 +28,7 @@ import { and, asc, count, eq, gte, inArray, isNull } from 'drizzle-orm';
 import { db } from '../db';
 import { roofReportPhotos, roofReports, type RoofReportPhoto } from '../../shared/schema';
 import {
-  MAX_WAITING_PHOTOS, NOT_FOUND, PICK_PHOTO_KIND, REPORT_PHOTO_CATEGORIES, TOO_MANY_WAITING,
+  MAX_WAITING_PHOTOS, NOT_FOUND, PHOTO_IN_REPORT, PHOTO_NOT_REMOVED, PICK_PHOTO_KIND, REPORT_PHOTO_CATEGORIES, TOO_MANY_WAITING,
   type ReportPhotoCategory,
 } from '../../shared/roof-reports';
 import { teamMemberIdByEmail, type SessionUser } from '../access/rep-scope';
@@ -95,6 +95,52 @@ export async function addReportPhoto(user: SessionUser, bytes: Buffer, category:
   await db.insert(roofReportPhotos).values({ id, uploadedByMemberId: memberId, category: kind, workingKey, thumbKey });
   await logWrite({ actor: user.email, system: 'archie', action: 'upload_roof_report_photo', targetId: id, summary: `report photo, ${Math.round(clean.jpeg.length / 1024)} KB`, ok: true, error: null });
   return { status: 200, body: { id } };
+}
+
+class PhotoGone extends Error {}
+
+/**
+ * Takes back a photo that was uploaded and never put in a report: its row and
+ * both stored copies. Reports and their photos are archived, never deleted, so
+ * a photo that is already in a report is refused with a plain sentence.
+ *
+ * Who: the person who uploaded it, or a role that sees every report. Anyone
+ * else, another company's person and a photo that is not there all get the same
+ * "not found". The row goes first, inside a transaction that also removes the
+ * copies: if the store cannot remove them the row comes back and the person
+ * can try again, and a claim racing this finds the row locked and then gone.
+ * Removing the copies is safe to repeat.
+ */
+export async function removeReportPhoto(user: SessionUser, photoId: string, store: PhotoStore | null): Promise<Answer> {
+  if (!isId(photoId) || decisionFor(user.role, 'remove_photo') === 'no') return { status: 404, body: { error: NOT_FOUND } };
+  const memberId = await teamMemberIdByEmail(user.email);
+  if (memberId === null) return { status: 404, body: { error: NOT_FOUND } };
+  const [photo] = await db.select().from(roofReportPhotos).where(eq(roofReportPhotos.id, photoId)).limit(1);
+  if (!photo) return { status: 404, body: { error: NOT_FOUND } };
+  if (decisionFor(user.role, 'remove_photo') !== 'all' && photo.uploadedByMemberId !== memberId) return { status: 404, body: { error: NOT_FOUND } };
+  if (photo.reportId !== null) return { status: 409, body: { error: PHOTO_IN_REPORT } };
+  if (!store) return { status: 503, body: { error: PHOTO_STORE_OFF } };
+  const remove = store.delete?.bind(store);
+  if (!remove) return { status: 502, body: { error: PHOTO_NOT_REMOVED } };
+  try {
+    await db.transaction(async (tx) => {
+      const gone = await tx.delete(roofReportPhotos).where(and(eq(roofReportPhotos.id, photoId), isNull(roofReportPhotos.reportId)))
+        .returning({ workingKey: roofReportPhotos.workingKey, thumbKey: roofReportPhotos.thumbKey });
+      if (!gone.length) throw new PhotoGone();
+      await remove(gone[0].workingKey);
+      await remove(gone[0].thumbKey);
+    });
+  } catch (e) {
+    if (e instanceof PhotoGone) {
+      // Taken into a report a moment ago, or already removed.
+      const [now] = await db.select({ reportId: roofReportPhotos.reportId }).from(roofReportPhotos).where(eq(roofReportPhotos.id, photoId)).limit(1);
+      return now ? { status: 409, body: { error: PHOTO_IN_REPORT } } : { status: 404, body: { error: NOT_FOUND } };
+    }
+    await logWrite({ actor: user.email, system: 'archie', action: 'remove_roof_report_photo', targetId: photoId, summary: 'a report photo was not removed', ok: false, error: describeStoreError(e) });
+    return { status: 502, body: { error: PHOTO_NOT_REMOVED } };
+  }
+  await logWrite({ actor: user.email, system: 'archie', action: 'remove_roof_report_photo', targetId: photoId, summary: 'an unused report photo was removed', ok: true, error: null });
+  return { status: 200, body: { id: photoId, removed: true } };
 }
 
 /**
@@ -202,6 +248,7 @@ function readUpload(req: Request, res: Response, next: NextFunction): void {
  *   linkedPhotoRoute  GET /linked-photo/:token  a short signed link; no session; the signature IS the check
  *   authedPhotoRoutes (after the sign-in and role check)
  *                     POST /photos                         a raw JPEG body, ?category=
+ *                     DELETE /photos/:photoId              takes back a photo not yet in a report
  *                     GET  /:id/photos/:photoId/:variant   through the report's own access rule
  */
 export function linkedPhotoRoute(router: Router): void {
@@ -233,6 +280,16 @@ export function authedPhotoRoutes(router: Router): void {
       res.status(r.status).json(r.body);
     } catch (error) {
       sendFailure(res, error, 'roof reports: POST photos');
+    }
+  });
+
+  router.delete('/photos/:photoId', async (req, res) => {
+    try {
+      const user = roofReportUser(req)!;
+      const r = await removeReportPhoto(user, req.params.photoId, photoStore());
+      res.status(r.status).json(r.body);
+    } catch (error) {
+      sendFailure(res, error, 'roof reports: DELETE photo');
     }
   });
 

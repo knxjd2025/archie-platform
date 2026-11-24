@@ -57,6 +57,10 @@ describe('the wizard frame', () => {
     expect(h).toContain('Please enter the street address.');
   });
 
+  it('says photos are still being removed when that is what it waits on', () => {
+    expect(frame({ busy: true, busyNote: 'Photos are still being removed.' })).toContain('Photos are still being removed.');
+  });
+
   it('will not close while photos are still being added, and says why', () => {
     const h = frame({ busy: true });
     expect(h).toMatch(/<button[^>]*disabled=""[^>]*>Close<\/button>/);
@@ -169,6 +173,21 @@ describe('step 2, photos', () => {
   it('lets a photo be removed, and names which photo the button is about', () => {
     const h = photos({ tiles: [tile({ name: 'IMG_0412.jpg' })] });
     expect(h).toContain('aria-label="Remove photo IMG_0412.jpg"');
+  });
+
+  it('shows a photo being taken back with "Removing...", dimmed, with its remove button off', () => {
+    const h = photos({ tiles: [tile({ name: 'IMG_0412.jpg', state: 'removing' })] });
+    expect(h).toContain('Removing...');
+    expect(h).toContain('aria-busy="true"');
+    expect(h).toMatch(/<button[^>]*disabled=""[^>]*aria-label="Remove photo IMG_0412.jpg"|<button[^>]*aria-label="Remove photo IMG_0412.jpg"[^>]*disabled=""/);
+    expect(h).not.toContain('>Added<');
+  });
+
+  it('says why a photo could not be taken back, on that photo, and keeps its remove button', () => {
+    const h = photos({ tiles: [tile({ name: 'IMG_0412.jpg', state: 'done', error: 'The photo could not be removed. Please try again.' })] });
+    expect(h).toContain('The photo could not be removed. Please try again.');
+    expect(h).toContain('role="alert"');
+    expect(h).not.toMatch(/<button[^>]*disabled=""[^>]*aria-label="Remove photo/);
   });
 
   it('shows a photo that did not save, why, and how to try again or drop it', () => {

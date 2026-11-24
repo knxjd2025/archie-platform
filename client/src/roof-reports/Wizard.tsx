@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useAuth } from '../lib/auth';
 import { useCompany } from '../lib/company';
 import { LAST_STEP, agoText, browserStorage, clearDraft, draftKey, emptyDraft, isEmptyDraft, readDraft, writeDraft, type WizardDraft } from './draft';
-import { STEPS, draftPhotosFromTiles, photosInFlight, tilesFromDraft, tryAdvance } from './wizard-model';
+import { STEPS, draftPhotosFromTiles, photosInFlight, photosRemoving, tilesFromDraft, tryAdvance } from './wizard-model';
 import { usePhotoUploads } from './photo-uploads';
 import StepWhere from './StepWhere';
 import StepPhotos from './StepPhotos';
@@ -21,8 +21,10 @@ export interface WizardFrameProps {
   restoredNote: string | null;
   /** The draft has been kept on this device. */
   saved: boolean;
-  /** Photos are still on their way: the wizard cannot be closed yet. */
+  /** Photos are still on their way, or being taken back: the wizard cannot be closed yet. */
   busy: boolean;
+  /** Why it cannot be closed, when that is not "photos are still being added". */
+  busyNote?: string;
   onBack: () => void;
   onNext: () => void;
   onClose: () => void;
@@ -49,7 +51,7 @@ export function WizardFrame(p: WizardFrameProps) {
         </div>
         <div className="text-right">
           <button type="button" onClick={p.onClose} disabled={p.busy} className={BUTTON}>{RR.wizard.close}</button>
-          {p.busy && <p className="mt-1 text-xs text-gray-500">{RR.wizard.photosBusy}</p>}
+          {p.busy && <p className="mt-1 text-xs text-gray-500">{p.busyNote ?? RR.wizard.photosBusy}</p>}
         </div>
       </div>
 
@@ -123,7 +125,8 @@ export default function Wizard({ onClose }: { onClose: () => void }) {
   }, [current, keep]);
 
   const patch = (next: Partial<WizardDraft>) => { setError(null); setDraft((d) => ({ ...d, ...next })); };
-  const busy = photosInFlight(uploads.tiles);
+  const removing = photosRemoving(uploads.tiles);
+  const busy = photosInFlight(uploads.tiles) || removing;
 
   const next = () => {
     if (current.step >= LAST_STEP) {
@@ -158,6 +161,7 @@ export default function Wizard({ onClose }: { onClose: () => void }) {
       restoredNote={restoredNote}
       saved={saved}
       busy={busy}
+      busyNote={removing && !photosInFlight(uploads.tiles) ? RR.photos.removeBusy : undefined}
       onBack={() => patch({ step: Math.max(1, draft.step - 1) })}
       onNext={next}
       onClose={close}

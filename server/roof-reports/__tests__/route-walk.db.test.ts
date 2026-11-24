@@ -168,7 +168,7 @@ describe.skipIf(!localDb)('every roof report route, walked (PERMANENT)', async (
     ]));
     // Written out by hand, so a route added or removed is seen and decided on purpose.
     expect(lines.sort()).toEqual([
-      'GET /api/clients/:externalId/roof-reports', 'GET /api/roof-reports', 'GET /api/roof-reports/:id', 'GET /api/roof-reports/:id/html',
+      'DELETE /api/roof-reports/photos/:photoId', 'GET /api/clients/:externalId/roof-reports', 'GET /api/roof-reports', 'GET /api/roof-reports/:id', 'GET /api/roof-reports/:id/html',
       'GET /api/roof-reports/:id/photos/:photoId/:variant', 'GET /api/roof-reports/linked-photo/:token', 'GET /api/roof-reports/status',
       'POST /api/roof-reports/:id/archive', 'POST /api/roof-reports/:id/retry', 'POST /api/roof-reports/generate', 'POST /api/roof-reports/photos',
       'PUT /api/roof-reports/:id',

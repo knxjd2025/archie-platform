@@ -17,3 +17,7 @@ export const archiveReport = (id: string): Promise<{ id: string; status: string 
 export interface JobResult { externalId: string | null; name: string; location: string | null }
 
 export const searchJobs = (q: string): Promise<{ results: JobResult[] }> => api.get(`/api/search?q=${encodeURIComponent(q.trim())}`);
+
+/** Takes back a photo that was saved but is not in a report yet, so its stored copy goes and it stops counting toward the day's waiting photos. */
+export const removeReportPhoto = (photoId: string): Promise<{ id: string; removed: boolean }> =>
+  api.delete(`/api/roof-reports/photos/${encodeURIComponent(photoId)}`, { timeoutMs: 20_000 });
