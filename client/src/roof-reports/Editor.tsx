@@ -86,7 +86,7 @@ export function EditorView(p: EditorViewProps) {
     <Field key={k} fields={p.fields} k={k} label={label} max={o.max ?? 200} onEdit={p.onEdit} onSave={p.onSave} editable={editable} {...o} />
   );
   return (
-    <section className="space-y-4" aria-label={p.detail.title || p.detail.address}>
+    <section className="space-y-4 pb-24" aria-label={p.detail.title || p.detail.address}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <button type="button" onClick={p.onBack} className={BUTTON}>{RR.editor.back}</button>
         <h3 className="text-lg font-semibold text-gray-900 min-w-0 truncate">{p.detail.title || p.detail.address}</h3>

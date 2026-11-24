@@ -41,6 +41,10 @@ describe('the editor as drawn', () => {
     expect(view()).not.toContain('Updating the preview...');
   });
 
+  it('leaves room under its last control, so the floating bug button and the phone menu never sit on Archive', () => {
+    expect(view()).toMatch(/<section class="[^"]*\bpb-24\b/);
+  });
+
   it('has a way back, and names the report', () => {
     const h = view();
     expect(h).toContain('Back to reports');
