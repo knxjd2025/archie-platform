@@ -4,6 +4,7 @@ import { applyBrandTheme } from './brand';
 import { isSetPasswordPath } from './password-pages';
 import { setTimeZoneProvider } from '../../../shared/schedule-board';
 import type { TeamRole } from '../../../shared/rbac';
+import { forgetRoofReportDrafts, forgetRoofReportDraftsOfOthers } from '../roof-reports/draft-clean';
 import { COMPANY_INACTIVE_CODE, type CompanyProfile } from '../../../shared/company';
 
 export interface AuthUser { email: string; name: string; role: TeamRole }
@@ -133,6 +134,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const reason = (e as CustomEvent<{ reason?: string } | undefined>).detail?.reason ?? null;
       setUser(null); setProfile(null); setIsOperator(false); setRoofReports(false); setNotice(reason); setExpired(!reason); setOffline(false);
       writeCachedUser(null); writeCachedProfile(null);
+      // A homeowner's details in a half-made report do not outlive the sign-in.
+      forgetRoofReportDrafts();
     };
     window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
     return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
@@ -158,7 +161,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setOffline(false);
           writeCachedUser(u);
           writeCachedProfile(p);
-          if (u) { setExpired(false); resetSessionExpiredNotice(); }
+          if (u) { setExpired(false); resetSessionExpiredNotice(); forgetRoofReportDraftsOfOthers(u.email); }
           return;
         }
         if (r.status === 401 || r.status === 403) {
@@ -174,6 +177,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setOffline(false);
           writeCachedUser(null);
           writeCachedProfile(null);
+          forgetRoofReportDrafts();
           return;
         }
         // A 502 or 503 while a deploy rolls out or the server cold-starts is
@@ -221,6 +225,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     writeCachedUser(null);
     writeCachedProfile(null);
     resetSessionExpiredNotice();
+    forgetRoofReportDrafts();
   }
 
   // The company's colors on every brand-* class, and its chosen main color on

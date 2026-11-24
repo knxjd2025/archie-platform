@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { TeamRole } from '../../../shared/rbac';
 import { decisionFor } from '../../../shared/roof-reports';
 import { useAuth } from '../lib/auth';
 import { useCompany } from '../lib/company';
+import { sweepExpiredRoofReportDrafts } from '../roof-reports/draft-clean';
 import { browserStorage, draftKey, markWizardOpen, readDraft, tabStorage, wasWizardOpen } from '../roof-reports/draft';
 import Editor from '../roof-reports/Editor';
 import type { JobStart } from '../roof-reports/job-prefill';
@@ -36,6 +37,8 @@ export default function RoofReportsPage({ role, prefill, openId }: { role: TeamR
     if (key) markWizardOpen(tabStorage(), key, open);
     setView(open ? { kind: 'wizard' } : { kind: 'list', notice: null });
   };
+  // Any draft past its day, of anyone who used this browser, is cleared whenever this page loads.
+  useEffect(() => { sweepExpiredRoofReportDrafts(); }, []);
   const mayMake = decisionFor(role, 'make') !== 'no';
   return (
     <div className="space-y-6">

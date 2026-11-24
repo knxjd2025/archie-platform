@@ -425,6 +425,21 @@ it is preparing does nothing.
   longer layout (fifteen sections, lifespan gauge, radar, ROI and bubble charts,
   replacement tiers) is not carried over.
 
+## The wizard's draft in the browser
+
+The wizard keeps a draft in the browser (`client/src/roof-reports/draft.ts`) for
+24 hours so a refresh does not lose work. It holds a homeowner's name, email,
+phone and address and the inspector's notes, so it never outlives the sign-in
+(`draft-clean.ts`, called from `client/src/lib/auth.tsx`): every key starting
+`archie.roofReportDraft.` (the drafts in local storage and the "wizard was open"
+markers in session storage) is removed on sign-out, when the session ends (the
+expiry event and a 401 or 403 from the session check), and, on any sign-in, the
+drafts of everyone but the person who just signed in. Whenever the roof reports
+page loads, every draft of anyone that is past its day, from a clock far ahead,
+not readable or of another version is removed too. Blocked storage means nothing
+to clear, said to nobody. The functions are pure over a storage and are tested
+in `draft-clean.test.ts`.
+
 ## Photos
 
 Report photos are kept in Archie's private photo store under

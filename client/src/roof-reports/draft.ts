@@ -12,14 +12,14 @@
  *    to nobody.
  */
 import { MAX_REPORT_PHOTOS, REPORT_KINDS, REPORT_PHOTO_CATEGORIES, TEMPLATES, type ReportKindValue, type ReportPhotoCategory, type TemplateValue } from '../../../shared/roof-reports';
+import { DRAFT_PREFIX, DRAFT_TTL_MS, DRAFT_VERSION, FUTURE_SLACK_MS } from './draft-clean';
 
-export const DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
+export { DRAFT_TTL_MS };
+
 /** Where, Photos, Roof, Damage, Review, Make. The last is the waiting step, reached only by making the report. */
 export const LAST_STEP = 6;
 export const REVIEW_STEP = 5;
-const VERSION = 1;
-/** A draft saved by a clock this far ahead of ours is not believed. */
-const FUTURE_SLACK_MS = 5 * 60 * 1000;
+const VERSION = DRAFT_VERSION;
 const KEY_RE = /^[A-Za-z0-9_.:-]{8,200}$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -79,7 +79,7 @@ export const isEmptyDraft = (d: WizardDraft): boolean => JSON.stringify(d) === J
 export function draftKey(companyId: string | null | undefined, email: string | null | undefined): string | null {
   const c = (companyId ?? '').trim();
   const e = (email ?? '').trim().toLowerCase();
-  return c && e ? `archie.roofReportDraft.v${VERSION}.${c}.${e}` : null;
+  return c && e ? `${DRAFT_PREFIX}v${VERSION}.${c}.${e}` : null;
 }
 
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
